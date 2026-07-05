@@ -65,7 +65,20 @@ All four blocks are built, tested (58/58 e2e across 4 suites) and committed:
 
 Key gotchas learned (respect these): FOR UPDATE requires UPDATE policies under RLS → suppliers must serialize via advisory locks; owner-run SECURITY DEFINER functions are the sanctioned RLS bypass seam; org FKs must be ON DELETE CASCADE; two jest runs against one DB interfere — run the suite once.
 
-## 5. Remaining work — PHASE 3 candidates (not started)
+## 4c. PHASE 3 (started) + hardening — DONE
+
+- **Security audit** (`SECURITY.md`): no RLS bypass / no SQL injection / sealed-bid
+  integrity confirmed. Fixes applied & verified live: `@nestjs/throttler` (global 300/min,
+  login 10/min), `helmet`, CORS `WEB_ORIGIN` allow-list, documents download `@Param` fix.
+- **AI scoring** (`common/ai/ai-scorer.ts`): `AiScorer` provider seam + `HeuristicScorer`
+  (explainable weighted ranking + reliability index from scorecards). `GET /events/:id/ai-recommendation`.
+  Phase-3 swap = FastAPI AI Orchestrator (LLM + pgvector) behind the same interface.
+- **Logistics** (migration 0008, `modules/logistics`): `shipments` + `shipment_events`,
+  cross-org RLS; milestones walk the PO chain via per-step SAVEPOINTs (best-effort sync).
+- Tests: **61/61** across 4 suites. New RLS gotcha: a SECURITY DEFINER function that
+  RAISEs inside the request tx aborts it — wrap best-effort calls in SAVEPOINT/ROLLBACK TO.
+
+## 5. Remaining work — PHASE 3 remainder (not started)
 
 1. **Suppliers** (`modules/suppliers`): buyer registry of suppliers — list global `supplier_profiles`, invite/approve/block via `supplier_relationships` (RLS by `buyer_org_id`). `@Roles('BUYER_ADMIN','BUYER_APPROVER')` for mutations.
 2. **Requests** (`modules/requests`): request CRUD + `request_items`; `submit`/`approve`/`reject`; **server-side total recompute** from items; resolve `procurement_method_policies` (value bands → DIRECT/RFQ/OPEN_TENDER) into `method_resolved`. Audit each transition.
