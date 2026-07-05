@@ -80,7 +80,7 @@ Key gotchas learned (respect these): FOR UPDATE requires UPDATE policies under R
 
 ## 4d. ROADMAP groups 1–4 — DONE
 
-All functional roadmap blocks are built and green (**85 e2e, 9 suites**):
+All functional roadmap blocks are built and green (**86 e2e, 9 suites**):
 - **Group 1**: bid attachments (mig 0011, cross-org, buyer-after-opening), goods
   receipt/GRN (0012, partial→auto-accept), multi-lot award (per-lot totals),
   multi-step approval (0013, value-banded chains).
@@ -95,6 +95,22 @@ All functional roadmap blocks are built and green (**85 e2e, 9 suites**):
 column off it; SELECT the value first (bit us in verification `decide`). Also: stop the
 `nest --watch` preview server before running the e2e suite — its connection pool starves
 the 9 test apps and makes them time out (looks like failures, is contention).
+
+**Gotcha — writes on the throw path get rolled back.** `TransactionInterceptor` runs each
+request in a tx and **rolls back on any thrown error**. So a handler that writes and then
+throws (e.g. refresh-token reuse detection revoking the session family, then throwing 401)
+has its write undone — the security response becomes a silent no-op. When a write MUST
+persist despite the request failing, run it on a separate connection (`this.ds.query(...)`
+on the injected `DataSource`, autocommit), not on `this.rc.manager`. See
+`IdentityService.refresh` breach-nuke.
+
+**Auth gotcha — rotating refresh needs a reuse-leeway.** Refresh rotation with strict
+reuse-detection nukes the session on the *normal* SPA double-refresh race (page reload
+loses the in-memory access token → bootstrap via `/auth/refresh`; StrictMode double-mount
++ concurrent 401s present the same cookie twice). `sessions.revoked_at` + a leeway window
+(mig 0017) tolerates a replay within `JWT_REFRESH_REUSE_LEEWAY_MS`; only stale reuse trips
+the breach nuke. Non-rotation revokes (theft, logout, reset) set `revoked_at = NULL` so
+they're never benign-replayable. Client coalesces concurrent refreshes into one promise.
 
 ## 5. Remaining work — PHASE 3 remainder (not started)
 
