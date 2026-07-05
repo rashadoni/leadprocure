@@ -11,6 +11,7 @@ import Settings from './pages/buyer/Settings';
 import Logistics from './pages/buyer/Logistics';
 import Catalogs from './pages/buyer/Catalogs';
 import Verification from './pages/Verification';
+import Invoices from './pages/Invoices';
 import Contracts from './pages/buyer/Contracts';
 import Orders from './pages/supplier/Orders';
 import Requests from './pages/buyer/Requests';
@@ -45,6 +46,8 @@ const router = createBrowserRouter([
       { path: '/supplier/catalogs', element: <Protected roles={SUPPLIER}><Catalogs /></Protected> },
       { path: '/buyer/verification', element: <Protected roles={BUYER}><Verification /></Protected> },
       { path: '/supplier/verification', element: <Protected roles={SUPPLIER}><Verification /></Protected> },
+      { path: '/buyer/invoices', element: <Protected roles={BUYER}><Invoices /></Protected> },
+      { path: '/supplier/invoices', element: <Protected roles={SUPPLIER}><Invoices /></Protected> },
       { path: '/buyer/contracts', element: <Protected roles={BUYER}><Contracts /></Protected> },
       { path: '/supplier/orders', element: <Protected roles={SUPPLIER}><Orders /></Protected> },
       { path: '/supplier/contracts', element: <Protected roles={SUPPLIER}><Contracts /></Protected> },

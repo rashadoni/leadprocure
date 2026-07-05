@@ -35,6 +35,7 @@ export const FEATURE_KEYS = [
   'realtime.updates',
   'contracts.catalog',
   'suppliers.verification',
+  'p2p.invoicing',
 ] as const;
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
 
@@ -206,7 +207,13 @@ export const AUDIT_ACTIONS = [
   'VERIFICATION_OPENED',
   'VERIFICATION_DOC_UPLOADED',
   'VERIFICATION_DECIDED',
+  'INVOICE_SUBMITTED',
+  'INVOICE_STATUS_CHANGED',
 ] as const;
+
+// ---------------- Invoices (P2P) ----------------
+export const INVOICE_STATUSES = ['SUBMITTED', 'MATCHED', 'DISPUTED', 'APPROVED', 'PAID', 'REJECTED'] as const;
+export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 
 // ---------------- Supplier verification (KYC) ----------------
 export const VERIFICATION_STATUSES = ['NEW', 'IN_REVIEW', 'APPROVED', 'REJECTED'] as const;

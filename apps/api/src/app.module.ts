@@ -28,6 +28,7 @@ import { AiScorerModule } from './common/ai/ai-scorer';
 import { LogisticsModule } from './modules/logistics/logistics.module';
 import { CatalogsModule } from './modules/catalogs/catalogs.module';
 import { VerificationModule } from './modules/verification/verification.module';
+import { InvoicesModule } from './modules/invoices/invoices.module';
 import { MailModule } from './common/mail/mail.module';
 
 @Module({
@@ -56,6 +57,7 @@ import { MailModule } from './common/mail/mail.module';
     LogisticsModule,
     CatalogsModule,
     VerificationModule,
+    InvoicesModule,
   ],
   controllers: [HealthController],
   providers: [

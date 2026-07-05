@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { PO_SUPPLIER_TRANSITIONS, SHIPMENT_STATUSES } from '@leadprocure/shared';
@@ -7,6 +8,7 @@ import { PO_SUPPLIER_TRANSITIONS, SHIPMENT_STATUSES } from '@leadprocure/shared'
 // CONFIRMED → PACKED → SHIPPED → DELIVERED; transitions are validated by the DB seam.
 export default function Orders() {
   const { t } = useI18n();
+  const nav = useNavigate();
   const [orders, setOrders] = useState<any[]>([]);
 
   const load = () => api.get('/orders').then((r) => setOrders(r.data));
@@ -17,6 +19,22 @@ export default function Orders() {
   const advance = async (id: string, next: string) => {
     try { await api.post(`/orders/${id}/status`, { status: next }); load(); }
     catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  };
+
+  const submitInvoice = async (poId: string) => {
+    try {
+      const [{ data: po }, { data: rec }] = await Promise.all([
+        api.get(`/orders/${poId}`), api.get(`/orders/${poId}/receipts`),
+      ]);
+      const received: Record<string, number> = Object.fromEntries(rec.summary.map((s: any) => [s.po_item_id, Number(s.received)]));
+      const items = po.items.map((i: any) => ({
+        poItemId: i.id,
+        qty: received[i.id] > 0 ? received[i.id] : Number(i.qty),
+        unitPriceMinor: Number(i.unit_price_minor),
+      }));
+      await api.post(`/invoices/from-po/${poId}`, { items });
+      nav('/supplier/invoices');
+    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
   const loadShip = async (poId: string) => {
@@ -53,7 +71,12 @@ export default function Orders() {
                   <td>{p.buyer_name}</td>
                   <td>{fmtMoney(p.total_minor, p.currency)}</td>
                   <td><span className={`badge ${p.status}`}>{p.status}</span></td>
-                  <td>{next && <button className="btn small" onClick={() => advance(p.id, next)}>→ {next}</button>}</td>
+                  <td>
+                    {next && <button className="btn small" onClick={() => advance(p.id, next)}>→ {next}</button>}{' '}
+                    {['DELIVERED', 'ACCEPTED'].includes(p.status) && (
+                      <button className="btn small ghost" onClick={() => submitInvoice(p.id)}>🧾 {t('invoice')}</button>
+                    )}
+                  </td>
                   <td>
                     {s === undefined && <button className="btn small ghost" onClick={() => loadShip(p.id)}>🚚</button>}
                     {s && !s.shipment && ['CONFIRMED', 'PACKED', 'SHIPPED'].includes(p.status) && (
