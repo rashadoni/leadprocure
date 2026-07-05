@@ -186,6 +186,12 @@ export const AUDIT_ACTIONS = [
   'CONTRACT_ACTIVATED',
   'PO_CREATED',
   'PO_STATUS_CHANGED',
+  'AUCTION_BID_PLACED',
+  'AUCTION_EXTENDED',
+  'AUCTION_FINALIZED',
+  'QNA_POSTED',
+  'QNA_ANSWERED',
+  'ADDENDUM_PUBLISHED',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

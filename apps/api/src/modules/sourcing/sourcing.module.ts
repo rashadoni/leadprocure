@@ -5,6 +5,7 @@ import { DataSource } from 'typeorm';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
 import type { AccessTokenPayload } from '@leadprocure/shared';
 import { SourcingService } from './sourcing.service';
+import { AuctionService, QnaService } from './auction.service';
 
 // Deadline scheduler. Runs with no request context, so it goes through the
 // SECURITY DEFINER close_due_events() seam instead of RLS-scoped queries.
@@ -116,8 +117,79 @@ export class SourcingController {
   }
 }
 
+@Controller('events')
+@RequiresFeature('sourcing.reverse_auction')
+export class AuctionController {
+  constructor(private readonly auction: AuctionService) {}
+
+  @Post('reverse/from-request/:requestId')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  create(
+    @Param('requestId') requestId: string,
+    @Body() body: { title?: string; closeAt: string; visibility?: 'PUBLIC' | 'INVITED';
+                    startPriceMinor: number; minDecrementMinor: number; qnaCutoffAt?: string },
+    @CurrentUser() auth: AccessTokenPayload,
+  ) {
+    return this.auction.createFromRequest(requestId, body, auth);
+  }
+
+  @Get(':id/auction/state')
+  state(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
+    return this.auction.state(id, auth);
+  }
+
+  @Post(':id/auction/bids')
+  @Roles('SUPPLIER_USER')
+  bid(
+    @Param('id') id: string,
+    @Body() body: { items: Array<{ eventItemId: string; unitPriceMinor: number }>; idempotencyKey?: string },
+    @CurrentUser() auth: AccessTokenPayload,
+  ) {
+    return this.auction.placeBid(id, body, auth);
+  }
+
+  @Post(':id/auction/finalize')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  finalize(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
+    return this.auction.finalize(id, auth);
+  }
+}
+
+@Controller('events')
+export class QnaController {
+  constructor(private readonly qna: QnaService) {}
+
+  @Get(':id/qna')
+  list(@Param('id') id: string) {
+    return this.qna.list(id);
+  }
+
+  @Post(':id/qna')
+  @Roles('SUPPLIER_USER')
+  ask(@Param('id') id: string, @Body() body: { question: string }, @CurrentUser() auth: AccessTokenPayload) {
+    return this.qna.ask(id, body.question, auth);
+  }
+
+  @Post(':id/qna/:qnaId/answer')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  answer(
+    @Param('id') id: string,
+    @Param('qnaId') qnaId: string,
+    @Body() body: { answer: string },
+    @CurrentUser() auth: AccessTokenPayload,
+  ) {
+    return this.qna.answer(id, qnaId, body.answer, auth);
+  }
+
+  @Post(':id/addenda')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  addendum(@Param('id') id: string, @Body() body: { text: string }, @CurrentUser() auth: AccessTokenPayload) {
+    return this.qna.addendum(id, body.text, auth);
+  }
+}
+
 @Module({
-  controllers: [SourcingController],
-  providers: [SourcingService, SourcingScheduler],
+  controllers: [SourcingController, AuctionController, QnaController],
+  providers: [SourcingService, SourcingScheduler, AuctionService, QnaService],
 })
 export class SourcingModule {}
