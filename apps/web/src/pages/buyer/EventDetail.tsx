@@ -122,16 +122,63 @@ export default function EventDetail() {
       {ev.format === 'REVERSE' && <AuctionPanel eventId={id!} />}
 
       <div className="card">
-        <h3>{t('items')}</h3>
+        <h3>{t('items')} · {t('lots')}</h3>
+        {ev.status === 'DRAFT' && (
+          <button className="btn small ghost" style={{ marginBottom: 8 }}
+            onClick={async () => { const title = prompt(`${t('lots')}:`, `Lot ${ev.lots.length + 1}`); if (title) { await api.post(`/events/${id}/lots`, { title }); load(); } }}>
+            + {t('lots')}
+          </button>
+        )}
         <table>
-          <thead><tr><th>{t('name')}</th><th>{t('qty')}</th><th>Est. {t('unit_price')}</th></tr></thead>
+          <thead><tr><th>{t('name')}</th><th>{t('qty')}</th><th>Est. {t('unit_price')}</th><th>{t('lots')}</th></tr></thead>
           <tbody>
             {ev.items.map((i: any) => (
-              <tr key={i.id}><td>{i.name}</td><td>{Number(i.qty)}</td><td>{fmtMoney(i.est_unit_price_minor, ev.evaluation_currency)}</td></tr>
+              <tr key={i.id}>
+                <td>{i.name}</td><td>{Number(i.qty)}</td><td>{fmtMoney(i.est_unit_price_minor, ev.evaluation_currency)}</td>
+                <td>
+                  {ev.status === 'DRAFT' && ev.lots.length > 1 ? (
+                    <select value={i.lot_id ?? ''} onChange={async (e) => { await api.put(`/events/${id}/items/${i.id}/lot`, { lotId: e.target.value }); load(); }}>
+                      {ev.lots.map((l: any) => <option key={l.id} value={l.id}>{l.title}</option>)}
+                    </select>
+                  ) : (
+                    ev.lots.find((l: any) => l.id === i.lot_id)?.title ?? '—'
+                  )}
+                </td>
+              </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {ev.status === 'EVALUATION' && ev.lots.length > 0 && (
+        <div className="card" style={{ borderColor: 'var(--ok)' }}>
+          <h3>{t('award')} · {t('lots')}</h3>
+          {ev.lots.map((l: any) => {
+            const awarded = (ev.awards ?? []).find((a: any) => a.lot_id === l.id);
+            const totals = (ev.lot_bid_totals ?? [])
+              .filter((t2: any) => t2.lot_id === l.id)
+              .sort((a: any, b: any) => Number(a.total_minor) - Number(b.total_minor));
+            return (
+              <div key={l.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                <b>{l.title}</b> {awarded && <span className="badge AWARDED">🏆 awarded</span>}
+                {!awarded && (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                    {totals.map((t2: any, idx: number) => {
+                      const bid = (ev.bids ?? []).find((b: any) => b.id === t2.bid_id);
+                      return (
+                        <button key={t2.bid_id} className={`btn small ${idx === 0 ? '' : 'ghost'}`}
+                          onClick={() => act('award', { lotId: l.id, bidId: t2.bid_id })}>
+                          {bid?.supplier_name} · {fmtMoney(t2.total_minor, ev.evaluation_currency)}{idx === 0 ? ' ⭐' : ''}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className="card">
         <h3>Bids {!ev.amounts_visible && <span className="sealed">🔒 {t('amounts_hidden')}</span>}</h3>
@@ -155,9 +202,6 @@ export default function EventDetail() {
                         onChange={(e) => setScores({ ...scores, [b.id]: { ...(scores[b.id] ?? { delivery: 50 }), price: Number(e.target.value) } })} />
                       <input style={{ width: 64 }} type="number" placeholder="deliv" min={0} max={100}
                         onChange={(e) => setScores({ ...scores, [b.id]: { ...(scores[b.id] ?? { price: 50 }), delivery: Number(e.target.value) } })} />
-                      {!awardedBidId && lot && (
-                        <button className="btn small" onClick={() => act('award', { lotId: lot.id, bidId: b.id })}>{t('award')}</button>
-                      )}
                     </span>
                   )}
                 </td>

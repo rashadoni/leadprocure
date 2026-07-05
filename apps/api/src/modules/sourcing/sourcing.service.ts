@@ -106,6 +106,32 @@ export class SourcingService {
     return this.detail(eventId, auth);
   }
 
+  // ---- multi-lot: split a DRAFT event's items into lots (award is already per-lot) ----
+
+  async addLot(eventId: string, title: string) {
+    await this.requireEvent(eventId, ['DRAFT']);
+    const m = this.rc.manager;
+    const lotNo = (await m.query(`SELECT COALESCE(MAX(lot_no),0)+1 AS n FROM event_lots WHERE event_id=$1`, [eventId]))[0].n;
+    const lot = (
+      await m.query(`INSERT INTO event_lots(event_id, lot_no, title) VALUES ($1,$2,$3) RETURNING id, lot_no, title`, [
+        eventId, lotNo, title,
+      ])
+    )[0];
+    return lot;
+  }
+
+  async assignItemToLot(eventId: string, itemId: string, lotId: string) {
+    await this.requireEvent(eventId, ['DRAFT']);
+    const m = this.rc.manager;
+    const lot = await m.query(`SELECT id FROM event_lots WHERE id=$1 AND event_id=$2`, [lotId, eventId]);
+    if (!lot.length) throw new NotFoundException('Lot not found on this event');
+    const upd = await m.query(`UPDATE event_items SET lot_id=$3 WHERE id=$1 AND event_id=$2 RETURNING id`, [
+      itemId, eventId, lotId,
+    ]);
+    if (!upd.length) throw new NotFoundException('Item not found on this event');
+    return { ok: true };
+  }
+
   async invite(eventId: string, supplierOrgId: string) {
     const m = this.rc.manager;
     await this.requireEvent(eventId, ['DRAFT', 'OPEN']);
@@ -194,9 +220,19 @@ export class SourcingService {
       delivery_days: amountsVisible ? b.delivery_days : null,
     }));
     let bidItems: any[] = [];
+    let lotBidTotals: any[] = [];
     if (amountsVisible) {
       bidItems = await m.query(
-        `SELECT bi.* FROM bid_items bi JOIN bids b ON b.id = bi.bid_id WHERE b.event_id = $1`,
+        `SELECT bi.*, ei.lot_id FROM bid_items bi
+         JOIN bids b ON b.id = bi.bid_id JOIN event_items ei ON ei.id = bi.event_item_id
+         WHERE b.event_id = $1`,
+        [eventId],
+      );
+      // Per-lot total for each bid → lets the buyer award each lot to the best bid.
+      lotBidTotals = await m.query(
+        `SELECT ei.lot_id, bi.bid_id, SUM(bi.line_total_minor)::bigint AS total_minor
+         FROM bid_items bi JOIN bids b ON b.id = bi.bid_id JOIN event_items ei ON ei.id = bi.event_item_id
+         WHERE b.event_id = $1 GROUP BY ei.lot_id, bi.bid_id`,
         [eventId],
       );
     }
@@ -206,7 +242,7 @@ export class SourcingService {
       [eventId],
     );
     const awards = await m.query(`SELECT * FROM awards WHERE event_id = $1`, [eventId]);
-    return { ...ev, lots, items, bids: safeBids, bid_items: bidItems, scores, awards, amounts_visible: amountsVisible };
+    return { ...ev, lots, items, bids: safeBids, bid_items: bidItems, lot_bid_totals: lotBidTotals, scores, awards, amounts_visible: amountsVisible };
   }
 
   // ---------- supplier: sealed bid ----------

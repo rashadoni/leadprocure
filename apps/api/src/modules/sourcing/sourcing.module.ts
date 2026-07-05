@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Injectable, Logger, Module, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Injectable, Logger, Module, Param, Post, Put } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DataSource } from 'typeorm';
@@ -66,6 +66,18 @@ export class SourcingController {
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   invite(@Param('id') id: string, @Body() body: { supplierOrgId: string }) {
     return this.sourcing.invite(id, body.supplierOrgId);
+  }
+
+  @Post(':id/lots')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  addLot(@Param('id') id: string, @Body() body: { title: string }) {
+    return this.sourcing.addLot(id, body.title);
+  }
+
+  @Put(':id/items/:itemId/lot')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  assignLot(@Param('id') id: string, @Param('itemId') itemId: string, @Body() body: { lotId: string }) {
+    return this.sourcing.assignItemToLot(id, itemId, body.lotId);
   }
 
   @Post(':id/bid')
