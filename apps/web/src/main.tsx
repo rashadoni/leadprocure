@@ -7,6 +7,7 @@ import Shell from './layouts/Shell';
 import Login from './pages/Login';
 import Dashboard from './pages/buyer/Dashboard';
 import Settings from './pages/buyer/Settings';
+import Logistics from './pages/buyer/Logistics';
 import Contracts from './pages/buyer/Contracts';
 import Orders from './pages/supplier/Orders';
 import Requests from './pages/buyer/Requests';
@@ -35,6 +36,7 @@ const router = createBrowserRouter([
     children: [
       { path: '/buyer/dashboard', element: <Protected roles={BUYER}><Dashboard /></Protected> },
       { path: '/buyer/settings', element: <Protected roles={BUYER}><Settings /></Protected> },
+      { path: '/buyer/logistics', element: <Protected roles={BUYER}><Logistics /></Protected> },
       { path: '/buyer/contracts', element: <Protected roles={BUYER}><Contracts /></Protected> },
       { path: '/supplier/orders', element: <Protected roles={SUPPLIER}><Orders /></Protected> },
       { path: '/supplier/contracts', element: <Protected roles={SUPPLIER}><Contracts /></Protected> },

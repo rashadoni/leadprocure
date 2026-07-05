@@ -194,7 +194,15 @@ export const AUDIT_ACTIONS = [
   'ADDENDUM_PUBLISHED',
   'ROLE_CHANGED',
   'SCORECARD_ENTRY_ADDED',
+  'SHIPMENT_CREATED',
+  'SHIPMENT_EVENT_ADDED',
 ] as const;
+
+// ---------------- Logistics ----------------
+export const SHIPMENT_STATUSES = [
+  'CREATED', 'PICKED_UP', 'IN_TRANSIT', 'CUSTOMS', 'ARRIVED', 'DELIVERED', 'EXCEPTION',
+] as const;
+export type ShipmentStatus = (typeof SHIPMENT_STATUSES)[number];
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 // ---------------- Auth payloads ----------------

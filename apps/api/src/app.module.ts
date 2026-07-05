@@ -25,6 +25,7 @@ import { ContractsModule } from './modules/contracts/contracts.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { AiScorerModule } from './common/ai/ai-scorer';
+import { LogisticsModule } from './modules/logistics/logistics.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { AiScorerModule } from './common/ai/ai-scorer';
     ContractsModule,
     DashboardModule,
     SettingsModule,
+    LogisticsModule,
   ],
   controllers: [HealthController],
   providers: [

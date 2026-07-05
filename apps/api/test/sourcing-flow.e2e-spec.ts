@@ -319,6 +319,37 @@ describe('sealed RFQ end-to-end flow', () => {
     await http().get(`/orders/${poId}`).set('Authorization', `Bearer ${supplier2Token}`).expect(404);
   });
 
+  it('logistics: supplier ships the PO, buyer tracks it, PO auto-syncs to DELIVERED', async () => {
+    const bearer = (tok: string) => ['Authorization', `Bearer ${tok}`] as [string, string];
+    // fresh PO for the logistics leg (previous PO already ACCEPTED)
+    const po = await http().post(`/contracts/${contractId}/orders`).set(...bearer(buyerToken)).expect(201);
+    const poId = po.body.id;
+    await http().post(`/orders/${poId}/status`).set(...bearer(buyerToken)).send({ status: 'ISSUED' }).expect(201);
+    await http().post(`/orders/${poId}/status`).set(...bearer(supplierToken)).send({ status: 'CONFIRMED' }).expect(201);
+
+    // supplier creates a shipment + tracking events
+    await http().post(`/logistics/po/${poId}/shipment`).set(...bearer(supplierToken))
+      .send({ carrier: 'AzərPost', trackingNo: 'AZ12345', origin: 'Baku', destination: 'Ganja' }).expect(201);
+    await http().post(`/logistics/po/${poId}/events`).set(...bearer(supplierToken))
+      .send({ status: 'PICKED_UP', location: 'Baku' }).expect(201);
+    await http().post(`/logistics/po/${poId}/events`).set(...bearer(supplierToken))
+      .send({ status: 'IN_TRANSIT', location: 'Kürdəmir' }).expect(201);
+    const delivered = await http().post(`/logistics/po/${poId}/events`).set(...bearer(supplierToken))
+      .send({ status: 'DELIVERED', location: 'Ganja' }).expect(201);
+    expect(delivered.body.shipment.status).toBe('DELIVERED');
+    expect(delivered.body.events).toHaveLength(3);
+
+    // buyer can track the shipment (cross-org read) and the PO auto-advanced
+    const buyerView = await http().get(`/logistics/po/${poId}`).set(...bearer(buyerToken)).expect(200);
+    expect(buyerView.body.shipment.tracking_no).toBe('AZ12345');
+    const poNow = await http().get(`/orders/${poId}`).set(...bearer(buyerToken)).expect(200);
+    expect(poNow.body.status).toBe('DELIVERED');
+
+    // foreign supplier cannot see the shipment
+    await http().get(`/logistics/po/${poId}`).set(...bearer(supplier2Token)).expect(200)
+      .then((r) => expect(r.body.shipment).toBeNull());
+  });
+
   it('audit hash-chain for the buyer org is intact and linked', async () => {
     await db.query(`SELECT set_config('app.org_id', $1, false), set_config('app.role','BUYER_ADMIN', false)`, [buyerOrgId]);
     const rows = (
