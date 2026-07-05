@@ -28,7 +28,7 @@ export class SuppliersService {
        FROM supplier_relationships r
        JOIN organizations o ON o.id = r.supplier_org_id
        LEFT JOIN supplier_profiles sp ON sp.org_id = r.supplier_org_id
-       ORDER BY r.created_at DESC`,
+       ORDER BY r.created_at DESC LIMIT 200`,
     );
   }
 

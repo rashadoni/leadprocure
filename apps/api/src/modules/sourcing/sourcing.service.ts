@@ -175,7 +175,7 @@ export class SourcingService {
               e.open_at, e.close_at, e.awarded_at, e.created_at, o.legal_name AS buyer_name,
               (SELECT count(*)::int FROM bids b WHERE b.event_id = e.id AND b.state <> 'DRAFT') AS bid_count
        FROM sourcing_events e JOIN organizations o ON o.id = e.buyer_org_id
-       ORDER BY e.created_at DESC`,
+       ORDER BY e.created_at DESC LIMIT 200`,
     );
     if (auth.role === 'SUPPLIER_USER') {
       // annotate with "did I bid" (bids RLS shows only own rows to suppliers)

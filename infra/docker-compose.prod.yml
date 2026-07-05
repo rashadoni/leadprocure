@@ -47,6 +47,15 @@ services:
     volumes:
       - clamav:/var/lib/clamav
 
+  ai-orchestrator:
+    build:
+      context: ../services/ai-orchestrator
+    restart: unless-stopped
+    environment:
+      # Optional: set to enable LLM rationales (Claude); empty = transparent heuristic.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5}
+
   api:
     build:
       context: ..
@@ -73,6 +82,7 @@ services:
       S3_FORCE_PATH_STYLE: "true"
       CLAMAV_ENABLED: ${CLAMAV_ENABLED:-false}
       CLAMAV_HOST: clamav
+      AI_ORCHESTRATOR_URL: http://ai-orchestrator:8000
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}

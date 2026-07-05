@@ -104,9 +104,85 @@ export class HeuristicScorer extends AiScorer {
   }
 }
 
+// Calls the separate FastAPI AI Orchestrator (V3 architecture). Falls back to the local
+// heuristic when the service is unreachable — the platform never depends on it being up.
+@Injectable()
+export class HttpAiScorer extends AiScorer {
+  readonly model = 'ai-orchestrator';
+  constructor(
+    private readonly rc: RequestContextService,
+    private readonly local: HeuristicScorer,
+    private readonly baseUrl: string,
+  ) {
+    super();
+  }
+
+  async recommend(eventId: string): Promise<Recommendation> {
+    try {
+      const m = this.rc.manager;
+      const bids = await m.query(
+        `SELECT b.id, s.legal_name AS supplier_name, b.total_minor, b.delivery_days, b.supplier_org_id
+         FROM bids b JOIN organizations s ON s.id = b.supplier_org_id
+         WHERE b.event_id = $1 AND b.state = 'OPENED' AND b.total_minor IS NOT NULL`,
+        [eventId],
+      );
+      if (!bids.length) return this.local.recommend(eventId);
+      const rel = await m.query(
+        `SELECT supplier_org_id, round(avg(score))::int AS score FROM supplier_scorecard_entries
+         WHERE supplier_org_id = ANY($1::uuid[]) GROUP BY supplier_org_id`,
+        [bids.map((b: any) => b.supplier_org_id)],
+      );
+      const relById = new Map<string, number>(rel.map((r: any) => [r.supplier_org_id, Number(r.score)]));
+      const ev = (await m.query(`SELECT evaluation_currency FROM sourcing_events WHERE id=$1`, [eventId]))[0];
+
+      const res = await fetch(`${this.baseUrl}/recommend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(25_000),
+        body: JSON.stringify({
+          currency: ev?.evaluation_currency ?? 'AZN',
+          bids: bids.map((b: any) => ({
+            bid_id: b.id,
+            supplier_name: b.supplier_name,
+            total_minor: Number(b.total_minor),
+            delivery_days: b.delivery_days == null ? null : Number(b.delivery_days),
+            reliability: relById.get(b.supplier_org_id) ?? 60,
+          })),
+        }),
+      });
+      if (!res.ok) throw new Error(`orchestrator ${res.status}`);
+      const data = (await res.json()) as any;
+      return {
+        model: data.model,
+        weights: data.weights,
+        ranking: data.ranking.map((r: any) => ({
+          bidId: r.bidId, supplierOrgId: bids.find((b: any) => b.id === r.bidId)?.supplier_org_id ?? '',
+          supplierName: r.supplierName, totalMinor: r.totalMinor, deliveryDays: r.deliveryDays,
+          priceScore: r.priceScore, deliveryScore: r.deliveryScore, reliabilityScore: r.reliabilityScore,
+          weightedTotal: r.weightedTotal, reasons: r.reasons,
+        })),
+        recommendedBidId: data.recommendedBidId,
+        rationale: data.rationale,
+      };
+    } catch {
+      return this.local.recommend(eventId); // service down → local heuristic
+    }
+  }
+}
+
 @Global()
 @Module({
-  providers: [{ provide: AiScorer, useClass: HeuristicScorer }],
+  providers: [
+    HeuristicScorer,
+    {
+      provide: AiScorer,
+      useFactory: (rc: RequestContextService, local: HeuristicScorer) => {
+        const url = process.env.AI_ORCHESTRATOR_URL;
+        return url ? new HttpAiScorer(rc, local, url.replace(/\/$/, '')) : local;
+      },
+      inject: [RequestContextService, HeuristicScorer],
+    },
+  ],
   exports: [AiScorer],
 })
 export class AiScorerModule {}

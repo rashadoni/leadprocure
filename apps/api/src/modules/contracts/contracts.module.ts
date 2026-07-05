@@ -125,7 +125,7 @@ export class ContractsService {
        FROM contracts c
        JOIN organizations ob ON ob.id = c.buyer_org_id
        JOIN organizations os ON os.id = c.supplier_org_id
-       ORDER BY c.created_at DESC`,
+       ORDER BY c.created_at DESC LIMIT 200`,
     );
   }
 
@@ -199,7 +199,7 @@ export class ContractsService {
        FROM purchase_orders p
        JOIN organizations ob ON ob.id = p.buyer_org_id
        JOIN organizations os ON os.id = p.supplier_org_id
-       ORDER BY p.created_at DESC`,
+       ORDER BY p.created_at DESC LIMIT 200`,
     );
   }
 

@@ -113,7 +113,7 @@ export class LogisticsService {
        JOIN purchase_orders p ON p.id = s.po_id
        JOIN organizations ob ON ob.id = s.buyer_org_id
        JOIN organizations os ON os.id = s.supplier_org_id
-       ORDER BY s.updated_at DESC`,
+       ORDER BY s.updated_at DESC LIMIT 200`,
     );
   }
 }

@@ -95,7 +95,7 @@ export class CatalogsService {
        FROM catalogs c
        JOIN organizations ob ON ob.id = c.buyer_org_id
        JOIN organizations os ON os.id = c.supplier_org_id
-       ORDER BY c.created_at DESC`,
+       ORDER BY c.created_at DESC LIMIT 200`,
     );
   }
 

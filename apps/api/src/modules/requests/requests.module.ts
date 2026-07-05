@@ -51,7 +51,7 @@ export class RequestsService {
                ORDER BY s.step_no LIMIT 1) AS current_role
        FROM procurement_requests pr
        WHERE ($1::text IS NULL OR pr.title ILIKE '%' || $1 || '%' OR pr.request_no ILIKE '%' || $1 || '%')
-       ORDER BY pr.created_at DESC`,
+       ORDER BY pr.created_at DESC LIMIT 200`,
       [q ?? null],
     );
   }

@@ -8,7 +8,9 @@ import {
   NotFoundException,
   Param,
   Post,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import type { AccessTokenPayload, InvoiceStatus } from '@leadprocure/shared';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
@@ -92,7 +94,7 @@ export class InvoicesService {
        JOIN organizations ob ON ob.id = i.buyer_org_id
        JOIN organizations os ON os.id = i.supplier_org_id
        JOIN purchase_orders p ON p.id = i.po_id
-       ORDER BY i.created_at DESC`,
+       ORDER BY i.created_at DESC LIMIT 200`,
     );
   }
 
@@ -101,6 +103,72 @@ export class InvoicesService {
     if (!inv) throw new NotFoundException('Invoice not found');
     const items = await this.rc.manager.query(`SELECT * FROM invoice_items WHERE invoice_id = $1`, [id]);
     return { ...inv, items };
+  }
+
+  // Peppol BIS Billing 3.0-shaped UBL 2.1 Invoice XML. Real Peppol transmission needs an
+  // Access Point provider (external onboarding); this export is the document seam.
+  async ublXml(id: string): Promise<string> {
+    const m = this.rc.manager;
+    const inv = (
+      await m.query(
+        `SELECT i.*, ob.legal_name AS buyer_name, ob.voen AS buyer_voen,
+                os.legal_name AS supplier_name, os.voen AS supplier_voen, p.po_no
+         FROM invoices i
+         JOIN organizations ob ON ob.id = i.buyer_org_id
+         JOIN organizations os ON os.id = i.supplier_org_id
+         JOIN purchase_orders p ON p.id = i.po_id
+         WHERE i.id = $1`,
+        [id],
+      )
+    )[0];
+    if (!inv) throw new NotFoundException('Invoice not found');
+    const items = await m.query(
+      `SELECT ii.*, poi.name, poi.uom FROM invoice_items ii
+       JOIN purchase_order_items poi ON poi.id = ii.po_item_id WHERE ii.invoice_id = $1`,
+      [id],
+    );
+    const money = (minor: number | string) => (Number(minor) / 100).toFixed(2);
+    const esc = (s: string) => String(s ?? '').replace(/[<>&'"]/g, (c) =>
+      ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c] as string));
+    const lines = items.map((it: any, i: number) => `
+  <cac:InvoiceLine>
+    <cbc:ID>${i + 1}</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="C62">${Number(it.qty)}</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="${inv.currency}">${money(it.line_total_minor)}</cbc:LineExtensionAmount>
+    <cac:Item><cbc:Name>${esc(it.name)}</cbc:Name>
+      <cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>18</cbc:Percent>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item>
+    <cac:Price><cbc:PriceAmount currencyID="${inv.currency}">${money(it.unit_price_minor)}</cbc:PriceAmount></cac:Price>
+  </cac:InvoiceLine>`).join('');
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID>
+  <cbc:ProfileID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0</cbc:ProfileID>
+  <cbc:ID>${esc(inv.invoice_no)}</cbc:ID>
+  <cbc:IssueDate>${new Date(inv.issued_at).toISOString().slice(0, 10)}</cbc:IssueDate>
+  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
+  <cbc:DocumentCurrencyCode>${inv.currency}</cbc:DocumentCurrencyCode>
+  <cac:OrderReference><cbc:ID>${esc(inv.po_no)}</cbc:ID></cac:OrderReference>
+  <cac:AccountingSupplierParty><cac:Party>
+    <cac:PartyName><cbc:Name>${esc(inv.supplier_name)}</cbc:Name></cac:PartyName>
+    <cac:PartyTaxScheme><cbc:CompanyID>${esc(inv.supplier_voen ?? '')}</cbc:CompanyID>
+      <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
+  </cac:Party></cac:AccountingSupplierParty>
+  <cac:AccountingCustomerParty><cac:Party>
+    <cac:PartyName><cbc:Name>${esc(inv.buyer_name)}</cbc:Name></cac:PartyName>
+    <cac:PartyTaxScheme><cbc:CompanyID>${esc(inv.buyer_voen ?? '')}</cbc:CompanyID>
+      <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
+  </cac:Party></cac:AccountingCustomerParty>
+  <cac:TaxTotal><cbc:TaxAmount currencyID="${inv.currency}">${money(inv.vat_minor)}</cbc:TaxAmount></cac:TaxTotal>
+  <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="${inv.currency}">${money(inv.net_minor)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="${inv.currency}">${money(inv.net_minor)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="${inv.currency}">${money(inv.gross_minor)}</cbc:TaxInclusiveAmount>
+    <cbc:PayableAmount currencyID="${inv.currency}">${money(inv.gross_minor)}</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>${lines}
+</Invoice>`;
   }
 
   async setStatus(id: string, status: InvoiceStatus, auth: AccessTokenPayload) {
@@ -128,6 +196,14 @@ export class InvoicesController {
   @Get(':id')
   get(@Param('id') id: string) {
     return this.invoices.get(id);
+  }
+
+  @Get(':id/ubl')
+  async ubl(@Param('id') id: string, @Res() res: Response) {
+    const xml = await this.invoices.ublXml(id);
+    res.setHeader('Content-Type', 'application/xml');
+    res.setHeader('Content-Disposition', `attachment; filename="invoice-${id}.xml"`);
+    res.send(xml);
   }
 
   @Post('from-po/:poId')

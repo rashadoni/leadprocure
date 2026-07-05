@@ -15,3 +15,5 @@ infra/secrets/
 *.license
 .env.prod
 infra/.env.prod
+license-private.pem
+.venv/
