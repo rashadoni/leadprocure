@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { DatabaseModule } from './common/db/database.module';
 import { TransactionInterceptor } from './common/db/transaction.interceptor';
 import { AuthModule } from './common/auth/auth.module';
@@ -28,6 +29,7 @@ import { SettingsModule } from './modules/settings/settings.module';
   imports: [
     EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 300 }]),
     DatabaseModule,
     AuthModule,
     AuditModule,
@@ -47,7 +49,8 @@ import { SettingsModule } from './modules/settings/settings.module';
   ],
   controllers: [HealthController],
   providers: [
-    // Order matters: authenticate, then role check, then feature gate.
+    // Rate limiting first, then authenticate, role check, feature gate.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_GUARD, useClass: FeatureGuard },

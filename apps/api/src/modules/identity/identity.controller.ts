@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { CurrentUser, Public } from '../../common/auth/decorators';
 import type { AccessTokenPayload } from '@leadprocure/shared';
@@ -28,6 +29,7 @@ export class IdentityController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } }) // brute-force / argon2-DoS guard
   @Post('login')
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     return this.finish(await this.identity.login(dto), res);

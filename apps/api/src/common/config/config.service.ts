@@ -43,4 +43,11 @@ export class AppConfig {
   readonly clamavEnabled = bool('CLAMAV_ENABLED', false);
   readonly clamavHost = opt('CLAMAV_HOST', 'localhost');
   readonly clamavPort = int('CLAMAV_PORT', 3310);
+
+  // Comma-separated allowed browser origins for CORS (credentials mode requires
+  // an explicit origin, never a wildcard).
+  readonly webOrigins = opt('WEB_ORIGIN', 'http://localhost:5173')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }

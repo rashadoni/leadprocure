@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Global, Injectable, Module, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Global, Injectable, Module, Param, Post, Query } from '@nestjs/common';
 import { PutObjectCommand, GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
@@ -110,7 +110,7 @@ export class DocumentsController {
   }
 
   @Get(':id/download')
-  download(@Query('id') id: string) {
+  download(@Param('id') id: string) {
     return this.docs.downloadUrl(id);
   }
 }
