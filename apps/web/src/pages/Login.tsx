@@ -24,7 +24,7 @@ export default function Login() {
   };
 
   const go = (s: Session) =>
-    nav(s.org.kind === 'SUPPLIER' ? '/supplier/market' : '/buyer/requests');
+    nav(s.org.kind === 'SUPPLIER' ? '/supplier/dashboard' : '/buyer/requests');
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();

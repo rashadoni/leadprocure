@@ -28,6 +28,7 @@ export default function Shell() {
           </>
         ) : (
           <>
+            <NavLink to="/supplier/dashboard">{t('dashboard')}</NavLink>
             <NavLink to="/supplier/market">{t('market')}</NavLink>
             <NavLink to="/supplier/orders">{t('my_orders')}</NavLink>
             <NavLink to="/supplier/contracts">{t('contracts')}</NavLink>

@@ -42,6 +42,38 @@ export class DashboardService {
 
     return { awardedSpend, savings, activeEvents, pendingApprovals, unreadNotifications, openPos, tasks };
   }
+
+  // Supplier KPIs — all RLS-scoped to the supplier org.
+  async supplier() {
+    const m = this.rc.manager;
+    const one = async (sql: string) => Number((await m.query(sql))[0]?.v ?? 0);
+
+    const [openTenders, myActiveBids, contractsWon, ordersInProgress, invoicesPending, unread] = await Promise.all([
+      one(`SELECT count(*)::int AS v FROM sourcing_events WHERE status = 'OPEN'`),
+      one(`SELECT count(*)::int AS v FROM bids WHERE state IN ('SUBMITTED','OPENED')`),
+      one(`SELECT count(*)::int AS v FROM contracts`),
+      one(`SELECT count(*)::int AS v FROM purchase_orders WHERE status NOT IN ('ACCEPTED','REJECTED','CANCELLED')`),
+      one(`SELECT count(*)::int AS v FROM invoices WHERE status NOT IN ('PAID','REJECTED')`),
+      one(`SELECT count(*)::int AS v FROM notifications WHERE read_at IS NULL`),
+    ]);
+    const ver = await m.query(`SELECT status FROM supplier_verification_cases ORDER BY created_at DESC LIMIT 1`);
+
+    const tasks = await m.query(`
+      SELECT 'BID' AS kind, e.id, e.title, e.close_at AS at FROM sourcing_events e
+        WHERE e.status = 'OPEN' AND NOT EXISTS (SELECT 1 FROM bids b WHERE b.event_id = e.id)
+      UNION ALL
+      SELECT 'ADVANCE_DELIVERY', p.id, p.po_no, p.updated_at FROM purchase_orders p
+        WHERE p.status IN ('ISSUED','CONFIRMED','PACKED','SHIPPED')
+      UNION ALL
+      SELECT 'INVOICE', p.id, p.po_no, p.updated_at FROM purchase_orders p
+        WHERE p.status = 'ACCEPTED' AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.po_id = p.id)
+      ORDER BY 4 DESC LIMIT 10`);
+
+    return {
+      openTenders, myActiveBids, contractsWon, ordersInProgress, invoicesPending,
+      unreadNotifications: unread, verificationStatus: ver[0]?.status ?? null, tasks,
+    };
+  }
 }
 
 @Controller('dashboard')
@@ -52,6 +84,12 @@ export class DashboardController {
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
   buyer() {
     return this.dashboard.buyer();
+  }
+
+  @Get('supplier')
+  @Roles('SUPPLIER_USER')
+  supplier() {
+    return this.dashboard.supplier();
   }
 }
 

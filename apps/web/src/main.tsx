@@ -14,6 +14,7 @@ import Verification from './pages/Verification';
 import Invoices from './pages/Invoices';
 import Contracts from './pages/buyer/Contracts';
 import Orders from './pages/supplier/Orders';
+import SupplierDashboard from './pages/supplier/Dashboard';
 import Requests from './pages/buyer/Requests';
 import Events from './pages/buyer/Events';
 import EventDetail from './pages/buyer/EventDetail';
@@ -26,7 +27,7 @@ function Home() {
   const { session, loading } = useAuth();
   if (loading) return <div className="center">…</div>;
   if (!session) return <Navigate to="/login" replace />;
-  return <Navigate to={session.org.kind === 'SUPPLIER' ? '/supplier/market' : '/buyer/requests'} replace />;
+  return <Navigate to={session.org.kind === 'SUPPLIER' ? '/supplier/dashboard' : '/buyer/requests'} replace />;
 }
 
 const BUYER = ['BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER'];
@@ -55,6 +56,7 @@ const router = createBrowserRouter([
       { path: '/buyer/events', element: <Protected roles={BUYER}><Events /></Protected> },
       { path: '/buyer/events/:id', element: <Protected roles={BUYER}><EventDetail /></Protected> },
       { path: '/buyer/suppliers', element: <Protected roles={BUYER}><Suppliers /></Protected> },
+      { path: '/supplier/dashboard', element: <Protected roles={SUPPLIER}><SupplierDashboard /></Protected> },
       { path: '/supplier/market', element: <Protected roles={SUPPLIER}><Market /></Protected> },
       { path: '/supplier/events/:id', element: <Protected roles={SUPPLIER}><SupplierEvent /></Protected> },
     ],
