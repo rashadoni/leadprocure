@@ -78,6 +78,24 @@ Key gotchas learned (respect these): FOR UPDATE requires UPDATE policies under R
 - Tests: **61/61** across 4 suites. New RLS gotcha: a SECURITY DEFINER function that
   RAISEs inside the request tx aborts it — wrap best-effort calls in SAVEPOINT/ROLLBACK TO.
 
+## 4d. ROADMAP groups 1–4 — DONE
+
+All functional roadmap blocks are built and green (**85 e2e, 9 suites**):
+- **Group 1**: bid attachments (mig 0011, cross-org, buyer-after-opening), goods
+  receipt/GRN (0012, partial→auto-accept), multi-lot award (per-lot totals),
+  multi-step approval (0013, value-banded chains).
+- **Group 2**: catalogs + agreed-price matrix (0014, from-contract seed, MOQ,
+  instant order→PO), feature `contracts.catalog`.
+- **Group 3**: supplier verification/KYC (0015), feature `suppliers.verification`.
+- **Group 4**: P2P invoices + 3-way match + pay (0016, DEFINER `invoice_set_status`),
+  feature `p2p.invoicing`.
+- Cross-org notifications via `app_notify` DEFINER (0010); DIRECT purchase→PO.
+
+**Gotcha learned:** TypeORM `UPDATE … RETURNING` yields `[rows, count]` — never read a
+column off it; SELECT the value first (bit us in verification `decide`). Also: stop the
+`nest --watch` preview server before running the e2e suite — its connection pool starves
+the 9 test apps and makes them time out (looks like failures, is contention).
+
 ## 5. Remaining work — PHASE 3 remainder (not started)
 
 1. **Suppliers** (`modules/suppliers`): buyer registry of suppliers — list global `supplier_profiles`, invite/approve/block via `supplier_relationships` (RLS by `buyer_org_id`). `@Roles('BUYER_ADMIN','BUYER_APPROVER')` for mutations.

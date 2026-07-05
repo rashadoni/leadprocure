@@ -1,4 +1,12 @@
-# Leadprocure — functional roadmap (remaining work)
+# Leadprocure — functional roadmap
+
+> **STATUS: all blocks below are BUILT and green (85 e2e tests, 9 suites).**
+> Group 1 (attachments 0011, GRN 0012, multi-lot, approvals 0013), Group 2
+> (catalogs 0014), Group 3 (KYC 0015), Group 4 (P2P invoices 0016) — done.
+> This file is kept as the design record. Next candidates: FastAPI AI Orchestrator
+> (real LLM), Peppol e-invoicing, on-prem federation, carrier/ERP integrations.
+
+
 
 Implementation plan for the un-built functional blocks. **Follow the conventions in
 `AGENTS.md` §3** for everything below: raw SQL via `rc.manager`, integer minor units +
