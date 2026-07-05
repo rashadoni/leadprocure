@@ -26,6 +26,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { AiScorerModule } from './common/ai/ai-scorer';
 import { LogisticsModule } from './modules/logistics/logistics.module';
+import { MailModule } from './common/mail/mail.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { LogisticsModule } from './modules/logistics/logistics.module';
     SealedCryptoModule,
     SignatureModule,
     AiScorerModule,
+    MailModule,
     NotifyModule,
     DocumentsModule,
     RealtimeModule,

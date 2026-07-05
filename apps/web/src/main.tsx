@@ -5,6 +5,7 @@ import { AuthProvider, Protected, useAuth } from './auth/auth';
 import { I18nProvider } from './i18n';
 import Shell from './layouts/Shell';
 import Login from './pages/Login';
+import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/buyer/Dashboard';
 import Settings from './pages/buyer/Settings';
 import Logistics from './pages/buyer/Logistics';
@@ -30,6 +31,7 @@ const SUPPLIER = ['SUPPLIER_USER'];
 
 const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
+  { path: '/reset', element: <ResetPassword /> },
   { path: '/', element: <Home /> },
   {
     element: <Protected><Shell /></Protected>,

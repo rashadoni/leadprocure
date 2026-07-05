@@ -42,6 +42,20 @@ export class IdentityController {
     return this.identity.refresh(token);
   }
 
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Post('forgot-password')
+  forgotPassword(@Body() body: { email: string }) {
+    return this.identity.forgotPassword(body.email);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('reset-password')
+  resetPassword(@Body() body: { token: string; password: string }) {
+    return this.identity.resetPassword(body.token, body.password);
+  }
+
   @Post('logout')
   logout(@Res({ passthrough: true }) res: Response) {
     res.clearCookie(this.cfg.refreshCookieName);

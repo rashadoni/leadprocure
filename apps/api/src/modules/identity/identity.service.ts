@@ -1,15 +1,18 @@
 import { createHash, randomUUID } from 'crypto';
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import type { AccessTokenPayload, MembershipRole, OrganizationKind } from '@leadprocure/shared';
+import { randomBytes } from 'crypto';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { TokenService } from '../../common/auth/token.service';
 import { AppConfig } from '../../common/config/config.service';
 import { AuditService } from '../../common/audit/audit.service';
+import { MailProvider } from '../../common/mail/mail.module';
 import { RegisterOrgDto, LoginDto } from './dto';
 
 interface UserRow {
@@ -41,7 +44,52 @@ export class IdentityService {
     private readonly tokens: TokenService,
     private readonly cfg: AppConfig,
     private readonly audit: AuditService,
+    private readonly mail: MailProvider,
   ) {}
+
+  // Always returns ok (no account enumeration). Emails a one-time link when the
+  // address exists. Runs with no org context — password_reset_tokens has no RLS.
+  async forgotPassword(email: string): Promise<{ ok: true }> {
+    const m = this.rc.manager;
+    const users = await m.query(`SELECT id, full_name FROM organization_users WHERE email = $1`, [email]);
+    if (users.length) {
+      const raw = randomBytes(32).toString('base64url');
+      const hash = this.hashToken(raw);
+      const expires = new Date(Date.now() + 3600 * 1000); // 1h
+      await m.query(
+        `INSERT INTO password_reset_tokens(user_id, token_hash, expires_at) VALUES ($1,$2,$3)`,
+        [users[0].id, hash, expires],
+      );
+      const link = `${this.cfg.webBaseUrl}/reset?token=${raw}`;
+      await this.mail.send({
+        to: email,
+        subject: 'Leadprocure — password reset',
+        html: `<p>Hello ${users[0].full_name},</p><p>Reset your password (valid 1 hour):</p><p><a href="${link}">${link}</a></p><p>If you didn't request this, ignore this email.</p>`,
+      });
+    }
+    return { ok: true };
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<{ ok: true }> {
+    if (!newPassword || newPassword.length < 8) throw new BadRequestException('Password too short');
+    const m = this.rc.manager;
+    const hash = this.hashToken(token);
+    const rows = await m.query(
+      `SELECT id, user_id FROM password_reset_tokens
+       WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()`,
+      [hash],
+    );
+    if (!rows.length) throw new BadRequestException('Invalid or expired token');
+    const pwHash = await argon2.hash(newPassword, { type: argon2.argon2id });
+    // Invalidate all existing sessions/access tokens by bumping token_version.
+    await m.query(
+      `UPDATE organization_users SET password_hash = $2, token_version = token_version + 1 WHERE id = $1`,
+      [rows[0].user_id, pwHash],
+    );
+    await m.query(`UPDATE password_reset_tokens SET used_at = now() WHERE id = $1`, [rows[0].id]);
+    await m.query(`UPDATE sessions SET revoked = true WHERE user_id = $1`, [rows[0].user_id]);
+    return { ok: true };
+  }
 
   async register(dto: RegisterOrgDto, kind: OrganizationKind, role: MembershipRole): Promise<AuthResult> {
     const m = this.rc.manager;

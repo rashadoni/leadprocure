@@ -12,6 +12,8 @@ import { SealedCryptoService } from '../../common/crypto/sealed.service';
 import { SignatureProvider } from '../../common/signature/signature.provider';
 import { EntitlementService, QuotaService } from '../../common/license/entitlement.service';
 import { AiScorer } from '../../common/ai/ai-scorer';
+import { MailProvider } from '../../common/mail/mail.module';
+import { AppConfig } from '../../common/config/config.service';
 
 interface SealedBidPayload {
   items: Array<{ event_item_id: string; unit_price_minor: number }>;
@@ -31,6 +33,8 @@ export class SourcingService {
     private readonly quota: QuotaService,
     private readonly emitter: EventEmitter2,
     private readonly aiScorer: AiScorer,
+    private readonly mail: MailProvider,
+    private readonly cfg: AppConfig,
   ) {}
 
   // AI recommendation — only once amounts are open (RLS + status gate both enforce this).
@@ -109,7 +113,29 @@ export class SourcingService {
       [eventId, supplierOrgId],
     );
     await this.audit.record('SUPPLIER_INVITED', 'sourcing_event', eventId, { supplier_org_id: supplierOrgId });
+    void this.emailInvitedSupplier(eventId, supplierOrgId); // best-effort, non-blocking
     return { ok: true };
+  }
+
+  private async emailInvitedSupplier(eventId: string, supplierOrgId: string): Promise<void> {
+    try {
+      const ev = (await this.rc.manager.query(`SELECT title FROM sourcing_events WHERE id=$1`, [eventId]))[0];
+      const users = await this.rc.manager.query(
+        `SELECT u.email FROM memberships m JOIN organization_users u ON u.id = m.user_id
+         WHERE m.org_id = $1 AND m.role = 'SUPPLIER_USER'`,
+        [supplierOrgId],
+      );
+      const link = `${this.cfg.webBaseUrl}/supplier/events/${eventId}`;
+      for (const u of users) {
+        await this.mail.send({
+          to: u.email,
+          subject: `Leadprocure — tender invitation: ${ev?.title ?? ''}`,
+          html: `<p>You are invited to submit a bid for "<b>${ev?.title ?? ''}</b>".</p><p><a href="${link}">Open the tender</a></p>`,
+        });
+      }
+    } catch {
+      /* email is best-effort; never fail the invite */
+    }
   }
 
   // ---------- shared: list & detail (RLS decides visibility) ----------

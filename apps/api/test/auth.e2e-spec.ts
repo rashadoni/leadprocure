@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { AppModule } from '../src/app.module';
+import { MailProvider, Mail } from '../src/common/mail/mail.module';
 
 // Boots the real AppModule (guards, transaction interceptor, RLS DataSource)
 // and exercises the auth flow over HTTP against the live dev database.
@@ -12,9 +13,13 @@ describe('auth flow (API e2e)', () => {
   const email = `e2e-${randomUUID().slice(0, 8)}@acme.test`;
   let accessToken: string;
   let refreshCookie: string;
+  const sentMail: Mail[] = [];
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(MailProvider)
+      .useValue({ kind: 'test', send: async (m: Mail) => { sentMail.push(m); } })
+      .compile();
     app = moduleRef.createNestApplication();
     app.use(cookieParser());
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
@@ -105,5 +110,26 @@ describe('auth flow (API e2e)', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .send({ token: 'not-a-paseto-token' })
       .expect(500);
+  });
+
+  it('forgot-password emails a one-time link; reset lets the user log in with the new password', async () => {
+    sentMail.length = 0;
+    // unknown email still returns ok (no account enumeration) and sends nothing
+    await request(app.getHttpServer()).post('/auth/forgot-password').send({ email: 'nobody@nowhere.test' }).expect(201);
+    expect(sentMail).toHaveLength(0);
+
+    await request(app.getHttpServer()).post('/auth/forgot-password').send({ email }).expect(201);
+    expect(sentMail).toHaveLength(1);
+    const token = /token=([A-Za-z0-9_-]+)/.exec(sentMail[0].html)?.[1];
+    expect(token).toBeTruthy();
+
+    await request(app.getHttpServer()).post('/auth/reset-password').send({ token, password: 'NewPassw0rd!' }).expect(201);
+
+    // old password no longer works; new one does
+    await request(app.getHttpServer()).post('/auth/login').send({ email, password: 'password123' }).expect(401);
+    await request(app.getHttpServer()).post('/auth/login').send({ email, password: 'NewPassw0rd!' }).expect(201);
+
+    // token is single-use
+    await request(app.getHttpServer()).post('/auth/reset-password').send({ token, password: 'Another1!' }).expect(400);
   });
 });

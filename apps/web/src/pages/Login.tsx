@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, Session } from '../auth/auth';
+import { api } from '../api/client';
 import { useI18n } from '../i18n';
 
 export default function Login() {
@@ -10,7 +11,17 @@ export default function Login() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [kind, setKind] = useState<'buyer' | 'supplier'>('buyer');
   const [err, setErr] = useState('');
+  const [info, setInfo] = useState('');
   const [f, setF] = useState({ email: '', password: '', legalName: '', fullName: '', voen: '' });
+
+  const forgot = async () => {
+    setErr(''); setInfo('');
+    if (!f.email) { setErr(t('email')); return; }
+    try {
+      await api.post('/auth/forgot-password', { email: f.email });
+      setInfo(t('reset_sent'));
+    } catch { setInfo(t('reset_sent')); }
+  };
 
   const go = (s: Session) =>
     nav(s.org.kind === 'SUPPLIER' ? '/supplier/market' : '/buyer/requests');
@@ -56,6 +67,12 @@ export default function Login() {
           <button className="btn" style={{ width: '100%' }}>{mode === 'login' ? t('login') : t('register')}</button>
         </div>
         {err && <div className="error">{err}</div>}
+        {info && <div className="hint">{info}</div>}
+        {mode === 'login' && (
+          <div style={{ marginTop: 8 }}>
+            <a href="#" onClick={(e) => { e.preventDefault(); forgot(); }} className="hint">{t('forgot')}</a>
+          </div>
+        )}
         <div className="hint">demo: admin@acme.test / seller@supply-one.test · Passw0rd!</div>
       </form>
     </div>

@@ -50,4 +50,12 @@ export class AppConfig {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  // First allowed origin is where password-reset / invite links point.
+  readonly webBaseUrl = this.webOrigins[0] ?? 'http://localhost:5173';
+
+  readonly smtpHost = opt('SMTP_HOST', '');
+  readonly smtpPort = int('SMTP_PORT', 587);
+  readonly smtpUser = opt('SMTP_USER', '');
+  readonly smtpPass = opt('SMTP_PASS', '');
+  readonly mailFrom = opt('MAIL_FROM', 'Leadprocure <no-reply@leadprocure.local>');
 }
