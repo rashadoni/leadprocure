@@ -32,6 +32,22 @@ export default function EventDetail() {
     catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
+  // The OCDS endpoint is auth-guarded; a plain <a href> opens a tab without the
+  // bearer token (→ 401). Fetch through the authorized client and hand the user
+  // the JSON as a downloadable blob instead.
+  const openOcds = async () => {
+    try {
+      const { data } = await api.get(`/events/${id}/ocds`);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ocds-${id}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  };
+
   const doEvaluate = async () => {
     const list = (ev.bids ?? []).filter((b: any) => b.state === 'OPENED');
     await act('evaluate', {
@@ -63,7 +79,7 @@ export default function EventDetail() {
         <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
           {ev.status === 'DRAFT' && <button className="btn" onClick={() => act('publish')}>{t('publish')}</button>}
           {ev.status === 'CLOSED' && <button className="btn" onClick={() => act('open')}>{t('open_bids')}</button>}
-          <a className="btn ghost" href={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'}/events/${id}/ocds`} target="_blank" rel="noreferrer">{t('ocds')}</a>
+          <button className="btn ghost" onClick={openOcds}>{t('ocds')}</button>
         </div>
         {['DRAFT', 'OPEN'].includes(ev.status) && (
           <div className="row" style={{ marginTop: 12, maxWidth: 480 }}>
