@@ -10,6 +10,9 @@ import {
   Post,
 } from '@nestjs/common';
 import type { AccessTokenPayload, PoStatus } from '@leadprocure/shared';
+import { PO_STATUSES } from '@leadprocure/shared';
+import { IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { CurrentUser, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
@@ -305,6 +308,22 @@ export class ContractsService {
   }
 }
 
+class DirectOrderDto {
+  @IsUUID() supplierOrgId!: string;
+}
+class SetPoStatusDto {
+  @IsIn(PO_STATUSES) status!: PoStatus;
+  @IsOptional() @IsString() note?: string;
+}
+class ReceiptItemDto {
+  @IsUUID() poItemId!: string;
+  @IsInt() @Min(0) qty!: number;
+}
+class CreateReceiptDto {
+  @IsArray() @ValidateNested({ each: true }) @Type(() => ReceiptItemDto) items!: ReceiptItemDto[];
+  @IsOptional() @IsString() note?: string;
+}
+
 @Controller()
 export class ContractsController {
   constructor(private readonly contracts: ContractsService) {}
@@ -319,7 +338,7 @@ export class ContractsController {
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   directOrder(
     @Param('requestId') requestId: string,
-    @Body() body: { supplierOrgId: string },
+    @Body() body: DirectOrderDto,
     @CurrentUser() auth: AccessTokenPayload,
   ) {
     return this.contracts.createDirectOrder(requestId, body.supplierOrgId, auth);
@@ -360,7 +379,7 @@ export class ContractsController {
   @Post('orders/:id/status')
   setStatus(
     @Param('id') id: string,
-    @Body() body: { status: PoStatus; note?: string },
+    @Body() body: SetPoStatusDto,
     @CurrentUser() auth: AccessTokenPayload,
   ) {
     return this.contracts.setOrderStatus(id, body.status, body.note, auth);
@@ -375,7 +394,7 @@ export class ContractsController {
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
   receive(
     @Param('id') id: string,
-    @Body() body: { items: Array<{ poItemId: string; qty: number }>; note?: string },
+    @Body() body: CreateReceiptDto,
     @CurrentUser() auth: AccessTokenPayload,
   ) {
     return this.contracts.createReceipt(id, body, auth);

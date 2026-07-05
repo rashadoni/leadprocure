@@ -47,10 +47,12 @@ integrity, authz, auction integrity, injection, auth, money, crypto, web, DoS.
 - **Set real secrets in prod**: `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `BID_MASTER_KEY_B64`
   are `*_change_me` dev defaults. Set `REFRESH_COOKIE_SECURE=true` behind HTTPS. Move the
   bid master key to a KMS.
-- **Inline-typed request bodies** (`@Body() body: {…}`) aren't class-validated (only DTO
-  classes are). The dangerous numeric paths are manually guarded and the DB has CHECK
-  constraints (scorecard 0–100, etc.), so exploitability is low, but convert the rest to
-  validated DTOs for defense-in-depth.
+- ~~**Inline-typed request bodies** aren't class-validated.~~ **DONE** — every `@Body()`
+  across all modules (sourcing, contracts, invoices, catalogs, verification, suppliers,
+  settings, logistics, documents, license, requests) is now a class-validator DTO: money is
+  a non-negative integer, enums use the shared `*_STATUSES`/`MEMBERSHIP_ROLES` sources,
+  UUIDs/required fields are enforced, nested item arrays validate per-element, and the global
+  `ValidationPipe(whitelist:true)` strips unknown keys. Covered by `validation.e2e-spec.ts`.
 - **List pagination**: `requests`/`events`/`contracts`/`orders` lists are RLS-scoped (bounded
   by tenant data) but unpaginated; add limits/paging before large tenants.
 - **App DB user privileges**: confirm `app_user` has no DDL and cannot create the bid master

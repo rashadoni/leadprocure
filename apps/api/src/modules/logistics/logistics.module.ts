@@ -10,6 +10,8 @@ import {
   Post,
 } from '@nestjs/common';
 import type { AccessTokenPayload, ShipmentStatus } from '@leadprocure/shared';
+import { SHIPMENT_STATUSES } from '@leadprocure/shared';
+import { IsIn, IsOptional, IsString } from 'class-validator';
 import { CurrentUser, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
@@ -118,6 +120,19 @@ export class LogisticsService {
   }
 }
 
+class CreateShipmentDto {
+  @IsOptional() @IsString() carrier?: string;
+  @IsOptional() @IsString() trackingNo?: string;
+  @IsOptional() @IsString() origin?: string;
+  @IsOptional() @IsString() destination?: string;
+  @IsOptional() @IsString() eta?: string;
+}
+class ShipmentEventDto {
+  @IsIn(SHIPMENT_STATUSES) status!: ShipmentStatus;
+  @IsOptional() @IsString() location?: string;
+  @IsOptional() @IsString() note?: string;
+}
+
 @Controller('logistics')
 export class LogisticsController {
   constructor(private readonly logistics: LogisticsService) {}
@@ -134,13 +149,13 @@ export class LogisticsController {
 
   @Post('po/:poId/shipment')
   @Roles('SUPPLIER_USER')
-  create(@Param('poId') poId: string, @Body() body: any, @CurrentUser() auth: AccessTokenPayload) {
+  create(@Param('poId') poId: string, @Body() body: CreateShipmentDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.logistics.createForPo(poId, body, auth);
   }
 
   @Post('po/:poId/events')
   @Roles('SUPPLIER_USER')
-  addEvent(@Param('poId') poId: string, @Body() body: any, @CurrentUser() auth: AccessTokenPayload) {
+  addEvent(@Param('poId') poId: string, @Body() body: ShipmentEventDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.logistics.addEvent(poId, body, auth);
   }
 }

@@ -14,6 +14,7 @@ import {
 import { PutObjectCommand, GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
+import { IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
 import { CurrentUser, Roles } from '../auth/decorators';
 import type { AccessTokenPayload } from '@leadprocure/shared';
 import { RequestContextService } from '../context/request-context.service';
@@ -155,17 +156,39 @@ export class DocumentsService {
   }
 }
 
+class PresignDocDto {
+  @IsString() @MinLength(1) filename!: string;
+  @IsString() @MinLength(1) mime!: string;
+}
+class ConfirmDocDto {
+  @IsString() @MinLength(1) storageKey!: string;
+  @IsString() @MinLength(1) filename!: string;
+  @IsString() @MinLength(1) mime!: string;
+  @IsInt() @Min(0) sizeBytes!: number;
+  @IsString() sha256!: string;
+  // entityType/entityId route where the doc attaches (entityType is required by the service).
+  @IsString() @MinLength(1) entityType!: string;
+  @IsOptional() @IsString() entityId?: string;
+}
+class ConfirmBidDocDto {
+  @IsString() @MinLength(1) storageKey!: string;
+  @IsString() @MinLength(1) filename!: string;
+  @IsString() @MinLength(1) mime!: string;
+  @IsInt() @Min(0) sizeBytes!: number;
+  @IsString() sha256!: string;
+}
+
 @Controller('documents')
 export class DocumentsController {
   constructor(private readonly docs: DocumentsService) {}
 
   @Post('presign')
-  presign(@CurrentUser() auth: AccessTokenPayload, @Body() body: { filename: string; mime: string }) {
+  presign(@CurrentUser() auth: AccessTokenPayload, @Body() body: PresignDocDto) {
     return this.docs.presign(auth.org_id, body.filename, body.mime);
   }
 
   @Post('confirm')
-  confirm(@CurrentUser() auth: AccessTokenPayload, @Body() body: any) {
+  confirm(@CurrentUser() auth: AccessTokenPayload, @Body() body: ConfirmDocDto) {
     return this.docs.confirm(auth, body);
   }
 
@@ -182,13 +205,13 @@ export class DocumentsController {
   // ---- bid attachments ----
   @Post('bid/:bidId/presign')
   @Roles('SUPPLIER_USER')
-  presignBid(@CurrentUser() auth: AccessTokenPayload, @Body() body: { filename: string; mime: string }) {
+  presignBid(@CurrentUser() auth: AccessTokenPayload, @Body() body: PresignDocDto) {
     return this.docs.presign(auth.org_id, body.filename, body.mime);
   }
 
   @Post('bid/:bidId/confirm')
   @Roles('SUPPLIER_USER')
-  confirmBid(@CurrentUser() auth: AccessTokenPayload, @Param('bidId') bidId: string, @Body() body: any) {
+  confirmBid(@CurrentUser() auth: AccessTokenPayload, @Param('bidId') bidId: string, @Body() body: ConfirmBidDocDto) {
     return this.docs.confirmBidDoc(auth, bidId, body);
   }
 

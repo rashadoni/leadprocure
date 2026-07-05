@@ -2,10 +2,76 @@ import { Body, Controller, Get, Injectable, Logger, Module, Param, Post, Put } f
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DataSource } from 'typeorm';
+import { IsArray, IsIn, IsInt, IsISO8601, IsOptional, IsString, IsUUID, Min, MinLength, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
 import type { AccessTokenPayload } from '@leadprocure/shared';
 import { SourcingService } from './sourcing.service';
 import { AuctionService, QnaService } from './auction.service';
+
+// ---- Request DTOs (structural validation only; business rules stay in services) ----
+// Money is integer minor units → @IsInt() @Min(0), matching requests' ItemDto.
+class BidItemDto {
+  @IsUUID() eventItemId!: string;
+  @IsInt() @Min(0) unitPriceMinor!: number;
+}
+class CreateEventDto {
+  @IsOptional() @IsString() title?: string;
+  @IsISO8601() closeAt!: string;
+  @IsOptional() @IsIn(['PUBLIC', 'INVITED']) visibility?: 'PUBLIC' | 'INVITED';
+}
+class InviteDto {
+  @IsUUID() supplierOrgId!: string;
+}
+class AddLotDto {
+  @IsString() @MinLength(1) title!: string;
+}
+class AssignLotDto {
+  @IsUUID() lotId!: string;
+}
+class SubmitBidDto {
+  @IsArray() @ValidateNested({ each: true }) @Type(() => BidItemDto) items!: BidItemDto[];
+  @IsOptional() @IsString() currency?: string;
+  @IsOptional() @IsInt() @Min(0) deliveryDays?: number;
+}
+class CriterionDto {
+  @IsString() @MinLength(1) key!: string;
+  @IsInt() @Min(0) weight!: number;
+}
+class ScoreDto {
+  @IsUUID() bidId!: string;
+  @IsString() @MinLength(1) key!: string;
+  @IsInt() @Min(0) score!: number;
+}
+class EvaluateDto {
+  @IsArray() @ValidateNested({ each: true }) @Type(() => CriterionDto) criteria!: CriterionDto[];
+  @IsArray() @ValidateNested({ each: true }) @Type(() => ScoreDto) scores!: ScoreDto[];
+}
+class AwardDto {
+  @IsUUID() lotId!: string;
+  @IsUUID() bidId!: string;
+}
+class CreateAuctionDto {
+  @IsOptional() @IsString() title?: string;
+  @IsISO8601() closeAt!: string;
+  @IsOptional() @IsIn(['PUBLIC', 'INVITED']) visibility?: 'PUBLIC' | 'INVITED';
+  @IsInt() @Min(0) startPriceMinor!: number;
+  @IsInt() @Min(0) minDecrementMinor!: number;
+  @IsOptional() @IsISO8601() qnaCutoffAt?: string;
+}
+class AuctionBidDto {
+  @IsArray() @ValidateNested({ each: true }) @Type(() => BidItemDto) items!: BidItemDto[];
+  @IsOptional() @IsString() idempotencyKey?: string;
+}
+class AskDto {
+  @IsString() @MinLength(1) question!: string;
+}
+class AnswerDto {
+  @IsString() @MinLength(1) answer!: string;
+}
+class AddendumDto {
+  @IsString() @MinLength(1) text!: string;
+}
 
 // Deadline scheduler. Runs with no request context, so it goes through the
 // SECURITY DEFINER close_due_events() seam instead of RLS-scoped queries.
@@ -50,7 +116,7 @@ export class SourcingController {
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   create(
     @Param('requestId') requestId: string,
-    @Body() body: { title?: string; closeAt: string; visibility?: 'PUBLIC' | 'INVITED' },
+    @Body() body: CreateEventDto,
     @CurrentUser() auth: AccessTokenPayload,
   ) {
     return this.sourcing.createFromRequest(requestId, body, auth);
@@ -64,19 +130,19 @@ export class SourcingController {
 
   @Post(':id/invite')
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
-  invite(@Param('id') id: string, @Body() body: { supplierOrgId: string }) {
+  invite(@Param('id') id: string, @Body() body: InviteDto) {
     return this.sourcing.invite(id, body.supplierOrgId);
   }
 
   @Post(':id/lots')
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
-  addLot(@Param('id') id: string, @Body() body: { title: string }) {
+  addLot(@Param('id') id: string, @Body() body: AddLotDto) {
     return this.sourcing.addLot(id, body.title);
   }
 
   @Put(':id/items/:itemId/lot')
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
-  assignLot(@Param('id') id: string, @Param('itemId') itemId: string, @Body() body: { lotId: string }) {
+  assignLot(@Param('id') id: string, @Param('itemId') itemId: string, @Body() body: AssignLotDto) {
     return this.sourcing.assignItemToLot(id, itemId, body.lotId);
   }
 
@@ -84,7 +150,7 @@ export class SourcingController {
   @Roles('SUPPLIER_USER')
   bid(
     @Param('id') id: string,
-    @Body() body: { items: Array<{ eventItemId: string; unitPriceMinor: number }>; currency?: string; deliveryDays?: number },
+    @Body() body: SubmitBidDto,
     @CurrentUser() auth: AccessTokenPayload,
   ) {
     return this.sourcing.submitBid(id, body, auth);
@@ -106,7 +172,7 @@ export class SourcingController {
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   evaluate(
     @Param('id') id: string,
-    @Body() body: { criteria: Array<{ key: string; weight: number }>; scores: Array<{ bidId: string; key: string; score: number }> },
+    @Body() body: EvaluateDto,
     @CurrentUser() auth: AccessTokenPayload,
   ) {
     return this.sourcing.evaluate(id, body, auth);
@@ -116,7 +182,7 @@ export class SourcingController {
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   award(
     @Param('id') id: string,
-    @Body() body: { lotId: string; bidId: string },
+    @Body() body: AwardDto,
     @CurrentUser() auth: AccessTokenPayload,
   ) {
     return this.sourcing.award(id, body, auth);
@@ -145,8 +211,7 @@ export class AuctionController {
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   create(
     @Param('requestId') requestId: string,
-    @Body() body: { title?: string; closeAt: string; visibility?: 'PUBLIC' | 'INVITED';
-                    startPriceMinor: number; minDecrementMinor: number; qnaCutoffAt?: string },
+    @Body() body: CreateAuctionDto,
     @CurrentUser() auth: AccessTokenPayload,
   ) {
     return this.auction.createFromRequest(requestId, body, auth);
@@ -161,7 +226,7 @@ export class AuctionController {
   @Roles('SUPPLIER_USER')
   bid(
     @Param('id') id: string,
-    @Body() body: { items: Array<{ eventItemId: string; unitPriceMinor: number }>; idempotencyKey?: string },
+    @Body() body: AuctionBidDto,
     @CurrentUser() auth: AccessTokenPayload,
   ) {
     return this.auction.placeBid(id, body, auth);
@@ -185,7 +250,7 @@ export class QnaController {
 
   @Post(':id/qna')
   @Roles('SUPPLIER_USER')
-  ask(@Param('id') id: string, @Body() body: { question: string }, @CurrentUser() auth: AccessTokenPayload) {
+  ask(@Param('id') id: string, @Body() body: AskDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.qna.ask(id, body.question, auth);
   }
 
@@ -194,7 +259,7 @@ export class QnaController {
   answer(
     @Param('id') id: string,
     @Param('qnaId') qnaId: string,
-    @Body() body: { answer: string },
+    @Body() body: AnswerDto,
     @CurrentUser() auth: AccessTokenPayload,
   ) {
     return this.qna.answer(id, qnaId, body.answer, auth);
@@ -202,7 +267,7 @@ export class QnaController {
 
   @Post(':id/addenda')
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
-  addendum(@Param('id') id: string, @Body() body: { text: string }, @CurrentUser() auth: AccessTokenPayload) {
+  addendum(@Param('id') id: string, @Body() body: AddendumDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.qna.addendum(id, body.text, auth);
   }
 }

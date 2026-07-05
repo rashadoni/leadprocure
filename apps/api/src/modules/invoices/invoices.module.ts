@@ -12,6 +12,8 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import type { AccessTokenPayload, InvoiceStatus } from '@leadprocure/shared';
+import { IsArray, IsInt, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
@@ -183,6 +185,16 @@ export class InvoicesService {
   }
 }
 
+class InvoiceLineDto {
+  @IsUUID() poItemId!: string;
+  @IsInt() @Min(1) qty!: number;
+  @IsInt() @Min(0) unitPriceMinor!: number;
+}
+class SubmitInvoiceDto {
+  @IsArray() @ValidateNested({ each: true }) @Type(() => InvoiceLineDto) items!: InvoiceLineDto[];
+  @IsOptional() @IsString() dueDate?: string;
+}
+
 @Controller('invoices')
 @RequiresFeature('p2p.invoicing')
 export class InvoicesController {
@@ -208,7 +220,7 @@ export class InvoicesController {
 
   @Post('from-po/:poId')
   @Roles('SUPPLIER_USER')
-  submit(@Param('poId') poId: string, @Body() body: any, @CurrentUser() auth: AccessTokenPayload) {
+  submit(@Param('poId') poId: string, @Body() body: SubmitInvoiceDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.invoices.submit(poId, body, auth);
   }
 

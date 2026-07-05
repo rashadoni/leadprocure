@@ -33,6 +33,14 @@ class UpsertRequestDto {
   @IsOptional() @IsIn(['INCLUSIVE', 'EXCLUSIVE']) vatMode?: 'INCLUSIVE' | 'EXCLUSIVE';
   @IsArray() @ValidateNested({ each: true }) @Type(() => ItemDto) items!: ItemDto[];
 }
+class RejectRequestDto {
+  @IsOptional() @IsString() reason?: string;
+}
+// Policy entries are buyer-configured maps; guard the envelope shape (array), leave the
+// per-entry fields to the service which persists them as-is.
+class ReplacePoliciesDto {
+  @IsOptional() @IsArray() policies?: unknown[];
+}
 
 @Injectable()
 export class RequestsService {
@@ -291,16 +299,16 @@ export class RequestsController {
   policies() { return this.requests.getPolicies(); }
 
   @Put('method-policies') @Roles('BUYER_ADMIN')
-  replacePolicies(@CurrentUser() auth: AccessTokenPayload, @Body() body: { policies: any[] }) {
-    return this.requests.replacePolicies(auth.org_id, body.policies ?? []);
+  replacePolicies(@CurrentUser() auth: AccessTokenPayload, @Body() body: ReplacePoliciesDto) {
+    return this.requests.replacePolicies(auth.org_id, (body.policies as any[]) ?? []);
   }
 
   @Get('approval-policies') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
   approvalPolicies() { return this.requests.getApprovalPolicies(); }
 
   @Put('approval-policies') @Roles('BUYER_ADMIN')
-  replaceApprovalPolicies(@CurrentUser() auth: AccessTokenPayload, @Body() body: { policies: any[] }) {
-    return this.requests.replaceApprovalPolicies(auth.org_id, body.policies ?? []);
+  replaceApprovalPolicies(@CurrentUser() auth: AccessTokenPayload, @Body() body: ReplacePoliciesDto) {
+    return this.requests.replaceApprovalPolicies(auth.org_id, (body.policies as any[]) ?? []);
   }
 
   @Get(':id') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
@@ -325,7 +333,7 @@ export class RequestsController {
   }
 
   @Post(':id/reject') @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
-  reject(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload, @Body() body: { reason?: string }) {
+  reject(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload, @Body() body: RejectRequestDto) {
     return this.requests.reject(id, auth, body?.reason);
   }
 }

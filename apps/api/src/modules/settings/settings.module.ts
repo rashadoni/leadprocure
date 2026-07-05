@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import type { AccessTokenPayload, MembershipRole } from '@leadprocure/shared';
 import { MEMBERSHIP_ROLES } from '@leadprocure/shared';
+import { IsEmail, IsIn, IsString, MinLength } from 'class-validator';
 import { CurrentUser, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
@@ -74,6 +75,16 @@ export class SettingsService {
   }
 }
 
+class AddUserDto {
+  @IsEmail() email!: string;
+  @IsString() @MinLength(2) fullName!: string;
+  @IsString() @MinLength(8) password!: string;
+  @IsIn(MEMBERSHIP_ROLES) role!: MembershipRole;
+}
+class SetRoleDto {
+  @IsIn(MEMBERSHIP_ROLES) role!: MembershipRole;
+}
+
 @Controller('settings')
 export class SettingsController {
   constructor(private readonly settings: SettingsService) {}
@@ -86,7 +97,7 @@ export class SettingsController {
 
   @Post('users')
   @Roles('BUYER_ADMIN')
-  addUser(@Body() body: any, @CurrentUser() auth: AccessTokenPayload) {
+  addUser(@Body() body: AddUserDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.settings.addUser(body, auth);
   }
 
@@ -94,7 +105,7 @@ export class SettingsController {
   @Roles('BUYER_ADMIN')
   setRole(
     @Param('userId') userId: string,
-    @Body() body: { role: MembershipRole },
+    @Body() body: SetRoleDto,
     @CurrentUser() auth: AccessTokenPayload,
   ) {
     return this.settings.setRole(userId, body.role, auth);

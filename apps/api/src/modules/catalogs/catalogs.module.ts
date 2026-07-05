@@ -10,6 +10,8 @@ import {
   Post,
 } from '@nestjs/common';
 import type { AccessTokenPayload } from '@leadprocure/shared';
+import { IsArray, IsInt, IsOptional, IsString, IsUUID, Min, MinLength, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
@@ -161,6 +163,27 @@ export class CatalogsService {
   }
 }
 
+class CreateCatalogDto {
+  @IsUUID() supplierOrgId!: string;
+  @IsString() @MinLength(1) title!: string;
+  @IsOptional() @IsString() currency?: string;
+}
+class AddCatalogItemDto {
+  @IsString() @MinLength(1) name!: string;
+  @IsOptional() @IsString() sku?: string;
+  @IsOptional() @IsString() uom?: string;
+  @IsInt() @Min(0) unitPriceMinor!: number;
+  @IsOptional() @IsInt() @Min(1) moq?: number;
+  @IsOptional() @IsInt() @Min(0) vatRateBp?: number;
+}
+class CatalogOrderItemDto {
+  @IsUUID() catalogItemId!: string;
+  @IsInt() @Min(1) qty!: number;
+}
+class CatalogOrderDto {
+  @IsArray() @ValidateNested({ each: true }) @Type(() => CatalogOrderItemDto) items!: CatalogOrderItemDto[];
+}
+
 @Controller('catalogs')
 @RequiresFeature('contracts.catalog')
 export class CatalogsController {
@@ -178,7 +201,7 @@ export class CatalogsController {
 
   @Post()
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
-  create(@Body() body: { supplierOrgId: string; title: string; currency?: string }, @CurrentUser() auth: AccessTokenPayload) {
+  create(@Body() body: CreateCatalogDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.catalogs.create(body, auth);
   }
 
@@ -190,7 +213,7 @@ export class CatalogsController {
 
   @Post(':id/items')
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
-  addItem(@Param('id') id: string, @Body() body: any, @CurrentUser() auth: AccessTokenPayload) {
+  addItem(@Param('id') id: string, @Body() body: AddCatalogItemDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.catalogs.addItem(id, body, auth);
   }
 
@@ -202,7 +225,7 @@ export class CatalogsController {
 
   @Post(':id/order')
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
-  order(@Param('id') id: string, @Body() body: { items: Array<{ catalogItemId: string; qty: number }> }, @CurrentUser() auth: AccessTokenPayload) {
+  order(@Param('id') id: string, @Body() body: CatalogOrderDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.catalogs.order(id, body.items, auth);
   }
 }

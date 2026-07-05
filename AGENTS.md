@@ -80,7 +80,7 @@ Key gotchas learned (respect these): FOR UPDATE requires UPDATE policies under R
 
 ## 4d. ROADMAP groups 1–4 — DONE
 
-All functional roadmap blocks are built and green (**86 e2e, 9 suites**):
+All functional roadmap blocks are built and green (**94 e2e, 10 suites**):
 - **Group 1**: bid attachments (mig 0011, cross-org, buyer-after-opening), goods
   receipt/GRN (0012, partial→auto-accept), multi-lot award (per-lot totals),
   multi-step approval (0013, value-banded chains).

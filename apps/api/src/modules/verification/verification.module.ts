@@ -10,6 +10,8 @@ import {
   Post,
 } from '@nestjs/common';
 import type { AccessTokenPayload, VerificationStatus } from '@leadprocure/shared';
+import { VERIFICATION_STATUSES } from '@leadprocure/shared';
+import { IsIn, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
@@ -117,6 +119,24 @@ export class VerificationService {
   }
 }
 
+class OpenCaseDto {
+  @IsUUID() supplierOrgId!: string;
+}
+class DecideDto {
+  @IsIn(VERIFICATION_STATUSES) status!: VerificationStatus;
+  @IsOptional() @IsString() notes?: string;
+}
+class VerifyPresignDto {
+  @IsString() @MinLength(1) filename!: string;
+  @IsString() @MinLength(1) mime!: string;
+}
+class ConfirmDocDto {
+  @IsString() @MinLength(1) docType!: string;
+  @IsString() @MinLength(1) storageKey!: string;
+  @IsString() @MinLength(1) filename!: string;
+  @IsString() sha256!: string;
+}
+
 @Controller('verification')
 @RequiresFeature('suppliers.verification')
 export class VerificationController {
@@ -134,25 +154,25 @@ export class VerificationController {
 
   @Post('cases')
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
-  open(@Body() body: { supplierOrgId: string }, @CurrentUser() auth: AccessTokenPayload) {
+  open(@Body() body: OpenCaseDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.verification.openCase(body.supplierOrgId, auth);
   }
 
   @Post('cases/:id/decide')
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
-  decide(@Param('id') id: string, @Body() body: { status: VerificationStatus; notes?: string }, @CurrentUser() auth: AccessTokenPayload) {
+  decide(@Param('id') id: string, @Body() body: DecideDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.verification.decide(id, body.status, body.notes, auth);
   }
 
   @Post('presign')
   @Roles('SUPPLIER_USER')
-  presign(@CurrentUser() auth: AccessTokenPayload, @Body() body: { filename: string; mime: string }) {
+  presign(@CurrentUser() auth: AccessTokenPayload, @Body() body: VerifyPresignDto) {
     return this.verification.presign(auth, body.filename, body.mime);
   }
 
   @Post('cases/:id/documents')
   @Roles('SUPPLIER_USER')
-  confirmDoc(@Param('id') id: string, @Body() body: any, @CurrentUser() auth: AccessTokenPayload) {
+  confirmDoc(@Param('id') id: string, @Body() body: ConfirmDocDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.verification.confirmDoc(id, body, auth);
   }
 

@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Injectable, Module, NotFoundException, Param, Post } from '@nestjs/common';
 import type { AccessTokenPayload } from '@leadprocure/shared';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
@@ -102,6 +103,16 @@ export class SuppliersService {
   }
 }
 
+class SetRelStatusDto {
+  @IsIn(['APPROVED', 'BLOCKED']) status!: 'APPROVED' | 'BLOCKED';
+}
+class AddScoreDto {
+  @IsIn(['OTIF', 'QUALITY', 'COMMS']) metric!: 'OTIF' | 'QUALITY' | 'COMMS';
+  @IsInt() @Min(0) score!: number;
+  @IsOptional() @IsString() note?: string;
+  @IsOptional() @IsUUID() sourcePoId?: string;
+}
+
 @Controller('suppliers')
 @RequiresFeature('suppliers.registry')
 export class SuppliersController {
@@ -127,7 +138,7 @@ export class SuppliersController {
 
   @Post('relationships/:id/status')
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
-  setStatus(@Param('id') id: string, @Body() body: { status: 'APPROVED' | 'BLOCKED' }) {
+  setStatus(@Param('id') id: string, @Body() body: SetRelStatusDto) {
     return this.suppliers.setStatus(id, body.status === 'BLOCKED' ? 'BLOCKED' : 'APPROVED');
   }
 
@@ -140,7 +151,7 @@ export class SuppliersController {
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
   addScore(
     @Param('supplierOrgId') supplierOrgId: string,
-    @Body() body: { metric: 'OTIF' | 'QUALITY' | 'COMMS'; score: number; note?: string; sourcePoId?: string },
+    @Body() body: AddScoreDto,
     @CurrentUser() auth: AccessTokenPayload,
   ) {
     return this.suppliers.addScore(supplierOrgId, body, auth.org_id, auth.sub);
