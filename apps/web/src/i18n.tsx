@@ -1,0 +1,53 @@
+import { createContext, useContext, useState, ReactNode } from 'react';
+
+type Lang = 'az' | 'ru' | 'en';
+
+const dict: Record<Lang, Record<string, string>> = {
+  az: {
+    login: 'Daxil ol', logout: 'Çıxış', email: 'E-poçt', password: 'Şifrə', register: 'Qeydiyyat',
+    requests: 'Sifarişlər', events: 'Tenderlər', suppliers: 'Təchizatçılar', market: 'Açıq tenderlər',
+    create: 'Yarat', submit: 'Göndər', approve: 'Təsdiqlə', reject: 'Rədd et', publish: 'Dərc et',
+    invite: 'Dəvət et', bid: 'Təklif ver', withdraw: 'Geri götür', open_bids: 'Zərfləri aç',
+    award: 'Qalib seç', title: 'Başlıq', status: 'Status', total: 'Məbləğ', deadline: 'Son tarix',
+    items: 'Mövqelər', my_bid: 'Mənim təklifim', amounts_hidden: 'Məbləğlər açılışa qədər gizlidir',
+    company: 'Şirkət', buyer_org: 'Sifarişçi', supplier_org: 'Təchizatçı', qty: 'Say',
+    unit_price: 'Vahid qiymət', name: 'Ad', actions: 'Əməliyyatlar', directory: 'Kataloq',
+    registry: 'Reyestr', score: 'Qiymətləndir', ocds: 'OCDS ixrac',
+  },
+  ru: {
+    login: 'Войти', logout: 'Выход', email: 'Email', password: 'Пароль', register: 'Регистрация',
+    requests: 'Заявки', events: 'Тендеры', suppliers: 'Поставщики', market: 'Открытые тендеры',
+    create: 'Создать', submit: 'Отправить', approve: 'Утвердить', reject: 'Отклонить', publish: 'Опубликовать',
+    invite: 'Пригласить', bid: 'Подать ставку', withdraw: 'Отозвать', open_bids: 'Вскрыть ставки',
+    award: 'Выбрать победителя', title: 'Название', status: 'Статус', total: 'Сумма', deadline: 'Дедлайн',
+    items: 'Позиции', my_bid: 'Моя ставка', amounts_hidden: 'Суммы скрыты до вскрытия',
+    company: 'Компания', buyer_org: 'Заказчик', supplier_org: 'Поставщик', qty: 'Кол-во',
+    unit_price: 'Цена за ед.', name: 'Наименование', actions: 'Действия', directory: 'Каталог',
+    registry: 'Реестр', score: 'Оценить', ocds: 'OCDS экспорт',
+  },
+  en: {
+    login: 'Log in', logout: 'Log out', email: 'Email', password: 'Password', register: 'Register',
+    requests: 'Requests', events: 'Tenders', suppliers: 'Suppliers', market: 'Open tenders',
+    create: 'Create', submit: 'Submit', approve: 'Approve', reject: 'Reject', publish: 'Publish',
+    invite: 'Invite', bid: 'Place bid', withdraw: 'Withdraw', open_bids: 'Open bids',
+    award: 'Award winner', title: 'Title', status: 'Status', total: 'Total', deadline: 'Deadline',
+    items: 'Items', my_bid: 'My bid', amounts_hidden: 'Amounts sealed until opening',
+    company: 'Company', buyer_org: 'Buyer', supplier_org: 'Supplier', qty: 'Qty',
+    unit_price: 'Unit price', name: 'Name', actions: 'Actions', directory: 'Directory',
+    registry: 'Registry', score: 'Score', ocds: 'OCDS export',
+  },
+};
+
+const I18nCtx = createContext<{ lang: Lang; setLang: (l: Lang) => void; t: (k: string) => string }>({
+  lang: 'ru', setLang: () => {}, t: (k) => k,
+});
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [lang, setLangState] = useState<Lang>((localStorage.getItem('lp_lang') as Lang) || 'ru');
+  const setLang = (l: Lang) => { localStorage.setItem('lp_lang', l); setLangState(l); };
+  const t = (k: string) => dict[lang][k] ?? k;
+  return <I18nCtx.Provider value={{ lang, setLang, t }}>{children}</I18nCtx.Provider>;
+}
+
+export const useI18n = () => useContext(I18nCtx);
+export const LANGS: Lang[] = ['az', 'ru', 'en'];

@@ -14,6 +14,7 @@ import { HealthController } from './health.controller';
 import { SealedCryptoModule } from './common/crypto/sealed.service';
 import { SignatureModule } from './common/signature/signature.provider';
 import { NotifyModule } from './common/notify/notify.module';
+import { DocumentsModule } from './common/storage/documents.module';
 import { RealtimeModule } from './common/realtime/realtime.gateway';
 import { IdentityModule } from './modules/identity/identity.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
@@ -31,6 +32,7 @@ import { SourcingModule } from './modules/sourcing/sourcing.module';
     SealedCryptoModule,
     SignatureModule,
     NotifyModule,
+    DocumentsModule,
     RealtimeModule,
     IdentityModule,
     SuppliersModule,
