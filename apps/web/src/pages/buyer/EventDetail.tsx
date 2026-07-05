@@ -5,6 +5,7 @@ import { api, fmtMoney, getToken } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { AuctionPanel } from '../../components/AuctionPanel';
 import { QnaCard } from '../../components/QnaCard';
+import { BidDocs } from '../../components/BidDocs';
 
 export default function EventDetail() {
   const { id } = useParams();
@@ -139,7 +140,10 @@ export default function EventDetail() {
           <tbody>
             {(ev.bids ?? []).map((b: any) => (
               <tr key={b.id} style={awardedBidId === b.id ? { outline: '1px solid var(--ok)' } : undefined}>
-                <td>{b.supplier_name}{awardedBidId === b.id ? ' 🏆' : ''}</td>
+                <td>
+                  {b.supplier_name}{awardedBidId === b.id ? ' 🏆' : ''}
+                  {ev.amounts_visible && <BidDocs bidId={b.id} canUpload={false} />}
+                </td>
                 <td><span className={`badge ${b.state}`}>{b.state}</span></td>
                 <td>{ev.amounts_visible ? fmtMoney(b.total_minor, b.currency) : '🔒'}</td>
                 <td>{ev.amounts_visible ? (b.delivery_days ?? '—') : '🔒'}</td>

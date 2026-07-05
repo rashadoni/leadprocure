@@ -4,6 +4,7 @@ import { api, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { AuctionPanel } from '../../components/AuctionPanel';
 import { QnaCard } from '../../components/QnaCard';
+import { BidDocs } from '../../components/BidDocs';
 
 export default function SupplierEvent() {
   const { id } = useParams();
@@ -55,6 +56,10 @@ export default function SupplierEvent() {
             {ev.my_bid.state === 'SUBMITTED' && ev.status === 'OPEN' && (
               <> · <button className="btn small ghost" onClick={withdraw}>{t('withdraw')}</button></>
             )}
+            <div style={{ marginTop: 6 }}>
+              <div className="hint">{t('attachments')}</div>
+              <BidDocs bidId={ev.my_bid.id} canUpload={ev.status === 'OPEN'} />
+            </div>
           </div>
         )}
       </div>

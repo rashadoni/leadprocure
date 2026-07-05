@@ -141,6 +141,27 @@ describe('sealed RFQ end-to-end flow', () => {
       .expect(404);
   });
 
+  it('supplier attaches a bid document; buyer cannot see it before opening', async () => {
+    const pre = await http().post(`/documents/bid/${bidId}/presign`).set('Authorization', `Bearer ${supplierToken}`)
+      .send({ filename: 'spec.pdf', mime: 'application/pdf' }).expect(201);
+    expect(pre.body.uploadUrl).toContain('http');
+    await http().post(`/documents/bid/${bidId}/confirm`).set('Authorization', `Bearer ${supplierToken}`)
+      .send({ storageKey: pre.body.storageKey, filename: 'spec.pdf', mime: 'application/pdf', sizeBytes: 1234, sha256: 'a'.repeat(64) })
+      .expect(201);
+    // supplier sees own doc
+    const asSupplier = await http().get(`/documents/bid/${bidId}`).set('Authorization', `Bearer ${supplierToken}`).expect(200);
+    expect(asSupplier.body).toHaveLength(1);
+    // buyer cannot yet (event still OPEN)
+    const asBuyer = await http().get(`/documents/bid/${bidId}`).set('Authorization', `Bearer ${buyerToken}`).expect(200);
+    expect(asBuyer.body).toHaveLength(0);
+    // foreign supplier cannot
+    const asOther = await http().get(`/documents/bid/${bidId}`).set('Authorization', `Bearer ${supplier2Token}`).expect(200);
+    expect(asOther.body).toHaveLength(0);
+    // foreign supplier cannot attach to someone else's bid — RLS hides the bid entirely (404)
+    await http().post(`/documents/bid/${bidId}/confirm`).set('Authorization', `Bearer ${supplier2Token}`)
+      .send({ storageKey: 'x', filename: 'x', mime: 'x', sizeBytes: 1, sha256: 'b'.repeat(64) }).expect(404);
+  });
+
   it('buyer sees participation but NOT amounts before opening', async () => {
     const res = await http().get(`/events/${eventId}`).set('Authorization', `Bearer ${buyerToken}`).expect(200);
     expect(res.body.amounts_visible).toBe(false);
@@ -166,6 +187,12 @@ describe('sealed RFQ end-to-end flow', () => {
     expect(res.body.amounts_visible).toBe(true);
     expect(Number(res.body.bids[0].total_minor)).toBe(5_500_000);
     expect(res.body.bid_items.length).toBe(1);
+  });
+
+  it('after opening, the buyer CAN read the supplier bid document', async () => {
+    const asBuyer = await http().get(`/documents/bid/${bidId}`).set('Authorization', `Bearer ${buyerToken}`).expect(200);
+    expect(asBuyer.body).toHaveLength(1);
+    expect(asBuyer.body[0].filename).toBe('spec.pdf');
   });
 
   it('weighted scoring returns a ranking', async () => {

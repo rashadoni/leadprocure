@@ -1,8 +1,20 @@
-import { Body, Controller, Get, Global, Injectable, Module, Param, Post, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Global,
+  Injectable,
+  Module,
+  NotFoundException,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { PutObjectCommand, GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
-import { CurrentUser } from '../auth/decorators';
+import { CurrentUser, Roles } from '../auth/decorators';
 import type { AccessTokenPayload } from '@leadprocure/shared';
 import { RequestContextService } from '../context/request-context.service';
 import { AuditService } from '../audit/audit.service';
@@ -88,6 +100,54 @@ export class DocumentsService {
     );
     return { url };
   }
+
+  // ---- Bid attachments (cross-org; supplier writes, buyer reads after opening) ----
+
+  async confirmBidDoc(
+    auth: AccessTokenPayload,
+    bidId: string,
+    dto: { storageKey: string; filename: string; mime: string; sizeBytes: number; sha256: string },
+  ) {
+    const m = this.rc.manager;
+    // RLS: a supplier only sees their own bid, so this both fetches parties and authorizes.
+    const bid = (
+      await m.query(
+        `SELECT b.supplier_org_id, e.buyer_org_id FROM bids b
+         JOIN sourcing_events e ON e.id = b.event_id WHERE b.id = $1`,
+        [bidId],
+      )
+    )[0];
+    if (!bid) throw new NotFoundException('Bid not found');
+    if (bid.supplier_org_id !== auth.org_id) throw new BadRequestException('Not your bid');
+    const avStatus = this.cfg.clamavEnabled ? 'PENDING' : 'SKIPPED';
+    const rows = await m.query(
+      `INSERT INTO bid_documents(bid_id, buyer_org_id, supplier_org_id, storage_key, filename, mime, size_bytes, sha256, av_status, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+      [bidId, bid.buyer_org_id, auth.org_id, dto.storageKey, dto.filename, dto.mime, dto.sizeBytes, dto.sha256, avStatus, auth.sub],
+    );
+    await this.audit.record('DOCUMENT_UPLOADED', 'bid_document', rows[0].id, { bid_id: bidId, sha256: dto.sha256 });
+    return { id: rows[0].id, avStatus };
+  }
+
+  async listBidDocs(bidId: string) {
+    // RLS decides visibility (supplier own / buyer after opening).
+    return this.rc.manager.query(
+      `SELECT id, filename, mime, size_bytes, sha256, av_status, created_at
+       FROM bid_documents WHERE bid_id = $1 ORDER BY created_at DESC`,
+      [bidId],
+    );
+  }
+
+  async bidDocDownloadUrl(id: string) {
+    const rows = await this.rc.manager.query(`SELECT storage_key FROM bid_documents WHERE id=$1`, [id]);
+    if (!rows.length) return { url: null };
+    const url = await getSignedUrl(
+      this.s3,
+      new GetObjectCommand({ Bucket: this.bucket, Key: rows[0].storage_key }),
+      { expiresIn: 900 },
+    );
+    return { url };
+  }
 }
 
 @Controller('documents')
@@ -112,6 +172,29 @@ export class DocumentsController {
   @Get(':id/download')
   download(@Param('id') id: string) {
     return this.docs.downloadUrl(id);
+  }
+
+  // ---- bid attachments ----
+  @Post('bid/:bidId/presign')
+  @Roles('SUPPLIER_USER')
+  presignBid(@CurrentUser() auth: AccessTokenPayload, @Body() body: { filename: string; mime: string }) {
+    return this.docs.presign(auth.org_id, body.filename, body.mime);
+  }
+
+  @Post('bid/:bidId/confirm')
+  @Roles('SUPPLIER_USER')
+  confirmBid(@CurrentUser() auth: AccessTokenPayload, @Param('bidId') bidId: string, @Body() body: any) {
+    return this.docs.confirmBidDoc(auth, bidId, body);
+  }
+
+  @Get('bid/:bidId')
+  listBid(@Param('bidId') bidId: string) {
+    return this.docs.listBidDocs(bidId);
+  }
+
+  @Get('bid-doc/:id/download')
+  downloadBid(@Param('id') id: string) {
+    return this.docs.bidDocDownloadUrl(id);
   }
 }
 
