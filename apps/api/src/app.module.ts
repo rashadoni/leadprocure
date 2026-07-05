@@ -11,7 +11,14 @@ import { AuditModule } from './common/audit/audit.service';
 import { LicenseModule } from './common/license/license.module';
 import { FeatureGuard } from './common/license/feature.guard';
 import { HealthController } from './health.controller';
+import { SealedCryptoModule } from './common/crypto/sealed.service';
+import { SignatureModule } from './common/signature/signature.provider';
+import { NotifyModule } from './common/notify/notify.module';
+import { RealtimeModule } from './common/realtime/realtime.gateway';
 import { IdentityModule } from './modules/identity/identity.module';
+import { SuppliersModule } from './modules/suppliers/suppliers.module';
+import { RequestsModule } from './modules/requests/requests.module';
+import { SourcingModule } from './modules/sourcing/sourcing.module';
 
 @Module({
   imports: [
@@ -21,7 +28,14 @@ import { IdentityModule } from './modules/identity/identity.module';
     AuthModule,
     AuditModule,
     LicenseModule,
+    SealedCryptoModule,
+    SignatureModule,
+    NotifyModule,
+    RealtimeModule,
     IdentityModule,
+    SuppliersModule,
+    RequestsModule,
+    SourcingModule,
   ],
   controllers: [HealthController],
   providers: [

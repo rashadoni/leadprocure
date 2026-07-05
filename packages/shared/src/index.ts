@@ -162,6 +162,9 @@ export const AUDIT_ACTIONS = [
   'EVENT_EVALUATED',
   'EVENT_AWARDED',
   'LICENSE_INSTALLED',
+  'SUPPLIER_APPROVED',
+  'SUPPLIER_BLOCKED',
+  'DOCUMENT_UPLOADED',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

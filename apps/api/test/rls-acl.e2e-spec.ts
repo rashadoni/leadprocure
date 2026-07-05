@@ -209,6 +209,14 @@ describe('sealed bids: amounts hidden until opening', () => {
     expect(await count(`SELECT 1 FROM bid_items WHERE bid_id=$1`, [bidS])).toBe(0);
   });
 
+  it('buyer cannot modify a supplier bid while bidding is open', async () => {
+    // event is still OPEN here — the ceremony policy (OPENING/EVALUATION) must not apply yet
+    await as(buyerA, 'BUYER_ADMIN');
+    const r = await db.query(`UPDATE bids SET state='DISQUALIFIED' WHERE id=$1`, [bidS]);
+    expect(r.rowCount).toBe(0);
+    await db.query(`UPDATE bids SET state='SUBMITTED' WHERE id=$1`, [bidS]); // no-op safety
+  });
+
   it('after the event moves to OPENING, buyer can read payload and items', async () => {
     await as(buyerA, 'BUYER_ADMIN');
     await db.query(`UPDATE sourcing_events SET status='OPENING' WHERE id=$1`, [eventPublic]);
@@ -233,10 +241,10 @@ describe('sealed bids: amounts hidden until opening', () => {
     ).rejects.toThrow(/row-level security/i);
   });
 
-  it('buyer cannot modify a supplier bid', async () => {
+  it('during the opening ceremony (OPENING) the buyer CAN write bid state — by design', async () => {
     await as(buyerA, 'BUYER_ADMIN');
-    const r = await db.query(`UPDATE bids SET state='DISQUALIFIED' WHERE id=$1`, [bidS]);
-    expect(r.rowCount).toBe(0);
+    const r = await db.query(`UPDATE bids SET state='OPENED' WHERE id=$1`, [bidS]);
+    expect(r.rowCount).toBe(1);
   });
 });
 
