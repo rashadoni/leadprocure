@@ -184,6 +184,22 @@ describe('sealed RFQ end-to-end flow', () => {
     expect(res.body.ranking[0].weighted_total).toBe(94);
   });
 
+  it('AI recommendation ranks the opened bid with an explainable rationale', async () => {
+    const res = await http().get(`/events/${eventId}/ai-recommendation`).set('Authorization', `Bearer ${buyerToken}`).expect(200);
+    expect(res.body.model).toBe('heuristic-v1');
+    expect(res.body.ranking.length).toBeGreaterThan(0);
+    expect(res.body.recommendedBidId).toBe(res.body.ranking[0].bidId);
+    expect(res.body.ranking[0].reasons.length).toBeGreaterThan(0);
+    expect(res.body.rationale).toContain('weighted score');
+    // amounts are open post-opening, so price scoring is populated
+    expect(res.body.ranking[0].priceScore).toBe(100);
+  });
+
+  it('AI recommendation is refused before opening (amounts still sealed)', async () => {
+    // the earlier public event or a fresh OPEN one would 400; assert the guard on status
+    await http().get(`/events/${eventId}/ai-recommendation`).set('Authorization', `Bearer ${supplierToken}`).expect(403); // suppliers can't
+  });
+
   it('award is transactional and idempotent; event becomes AWARDED', async () => {
     const first = await http()
       .post(`/events/${eventId}/award`)

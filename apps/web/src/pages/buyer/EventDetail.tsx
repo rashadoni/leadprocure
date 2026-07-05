@@ -13,6 +13,7 @@ export default function EventDetail() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [inviteOrg, setInviteOrg] = useState('');
   const [scores, setScores] = useState<Record<string, { price: number; delivery: number }>>({});
+  const [ai, setAi] = useState<any>(null);
 
   const load = useCallback(() => api.get(`/events/${id}`).then((r) => setEv(r.data)), [id]);
   useEffect(() => { load(); api.get('/suppliers/directory').then((r) => setSuppliers(r.data)); }, [load]);
@@ -67,9 +68,15 @@ export default function EventDetail() {
     return m;
   }, [ev]);
 
+  const askAi = async () => {
+    try { setAi((await api.get(`/events/${id}/ai-recommendation`)).data); }
+    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  };
+
   if (!ev) return <div className="center">…</div>;
   const lot = ev.lots?.[0];
   const awardedBidId = ev.awards?.[0]?.winning_bid_id;
+  const canAi = ['EVALUATION', 'AWARDED'].includes(ev.status);
 
   return (
     <>
@@ -160,6 +167,44 @@ export default function EventDetail() {
           </div>
         )}
       </div>
+
+      {canAi && (
+        <div className="card" style={{ borderColor: 'var(--accent2)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ margin: 0 }}>🤖 {t('ai_reco')}</h3>
+            <button className="btn small" onClick={askAi}>{ai ? '↻' : t('ai_run')}</button>
+          </div>
+          {ai && (
+            <>
+              <div style={{ margin: '10px 0', color: 'var(--accent)' }}>{ai.rationale}</div>
+              <table>
+                <thead><tr><th>#</th><th>{t('supplier_org')}</th><th>Price</th><th>Delivery</th><th>Reliability</th><th>Score</th><th></th></tr></thead>
+                <tbody>
+                  {ai.ranking.map((r: any, i: number) => (
+                    <tr key={r.bidId} style={r.bidId === ai.recommendedBidId ? { outline: '1px solid var(--accent2)' } : undefined}>
+                      <td>{i + 1}</td>
+                      <td>{r.supplierName}{r.bidId === ai.recommendedBidId ? ' 🤖' : ''}
+                        <div className="hint">{r.reasons.join(' · ')}</div></td>
+                      <td>{r.priceScore}</td>
+                      <td>{r.deliveryScore}</td>
+                      <td>{r.reliabilityScore}</td>
+                      <td><b>{r.weightedTotal}</b></td>
+                      <td>
+                        {ev.status === 'EVALUATION' && !awardedBidId && lot && (
+                          <button className="btn small" onClick={() => act('award', { lotId: lot.id, bidId: r.bidId })}>{t('award')}</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="hint" style={{ marginTop: 6 }}>
+                {t('ai_model')}: {ai.model} · price {ai.weights.price * 100}% / delivery {ai.weights.delivery * 100}% / reliability {ai.weights.reliability * 100}%
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <QnaCard eventId={id!} isBuyer />
     </>

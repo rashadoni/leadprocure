@@ -115,6 +115,13 @@ export class SourcingController {
   ocds(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
     return this.sourcing.ocdsRelease(id, auth);
   }
+
+  @Get(':id/ai-recommendation')
+  @RequiresFeature('ai.scoring')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  aiRecommendation(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
+    return this.sourcing.aiRecommendation(id, auth);
+  }
 }
 
 @Controller('events')

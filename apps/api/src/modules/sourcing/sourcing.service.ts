@@ -11,6 +11,7 @@ import { AuditService } from '../../common/audit/audit.service';
 import { SealedCryptoService } from '../../common/crypto/sealed.service';
 import { SignatureProvider } from '../../common/signature/signature.provider';
 import { EntitlementService, QuotaService } from '../../common/license/entitlement.service';
+import { AiScorer } from '../../common/ai/ai-scorer';
 
 interface SealedBidPayload {
   items: Array<{ event_item_id: string; unit_price_minor: number }>;
@@ -29,7 +30,15 @@ export class SourcingService {
     private readonly entitlements: EntitlementService,
     private readonly quota: QuotaService,
     private readonly emitter: EventEmitter2,
+    private readonly aiScorer: AiScorer,
   ) {}
+
+  // AI recommendation — only once amounts are open (RLS + status gate both enforce this).
+  async aiRecommendation(eventId: string, auth: AccessTokenPayload) {
+    const ev = await this.requireEvent(eventId, ['EVALUATION', 'AWARDED']);
+    void ev;
+    return this.aiScorer.recommend(eventId);
+  }
 
   // ---------- buyer: create + publish ----------
 

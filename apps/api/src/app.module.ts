@@ -24,6 +24,7 @@ import { SourcingModule } from './modules/sourcing/sourcing.module';
 import { ContractsModule } from './modules/contracts/contracts.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { AiScorerModule } from './common/ai/ai-scorer';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     LicenseModule,
     SealedCryptoModule,
     SignatureModule,
+    AiScorerModule,
     NotifyModule,
     DocumentsModule,
     RealtimeModule,
