@@ -7,6 +7,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
+import { DataSource } from 'typeorm';
 import { TokenService } from '../auth/token.service';
 
 export interface RtEmit {
@@ -24,7 +25,10 @@ export class RealtimeGateway implements OnGatewayConnection {
   private readonly logger = new Logger(RealtimeGateway.name);
   @WebSocketServer() server!: Server;
 
-  constructor(private readonly tokens: TokenService) {}
+  constructor(
+    private readonly tokens: TokenService,
+    private readonly ds: DataSource,
+  ) {}
 
   handleConnection(client: Socket): void {
     try {
@@ -35,13 +39,25 @@ export class RealtimeGateway implements OnGatewayConnection {
     }
   }
 
+  // Only join a room the caller is actually allowed to see (mirrors the se_select
+  // RLS policy) — otherwise a logged-in user could subscribe to any event's feed.
   @SubscribeMessage('join')
-  join(client: Socket, eventId: string): { ok: boolean } {
-    if (typeof eventId === 'string' && /^[0-9a-f-]{36}$/.test(eventId)) {
-      void client.join(`event:${eventId}`);
-      return { ok: true };
-    }
-    return { ok: false };
+  async join(client: Socket, eventId: string): Promise<{ ok: boolean }> {
+    const auth = client.data.auth;
+    if (!auth || typeof eventId !== 'string' || !/^[0-9a-f-]{36}$/.test(eventId)) return { ok: false };
+    const visible = await this.ds.query(
+      `SELECT 1 FROM sourcing_events e WHERE e.id = $1 AND (
+         e.buyer_org_id = $2
+         OR ($3 = 'SUPPLIER_USER' AND (
+              (e.visibility = 'PUBLIC' AND e.status IN ('PUBLISHED','OPEN','CLOSED','OPENING','EVALUATION','AWARDED'))
+              OR EXISTS (SELECT 1 FROM event_invitations ei WHERE ei.event_id = e.id AND ei.supplier_org_id = $2)
+         ))
+       ) LIMIT 1`,
+      [eventId, auth.org_id, auth.role],
+    );
+    if (!visible.length) return { ok: false };
+    void client.join(`event:${eventId}`);
+    return { ok: true };
   }
 
   @OnEvent('rt.emit')

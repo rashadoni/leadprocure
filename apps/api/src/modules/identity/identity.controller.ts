@@ -37,9 +37,17 @@ export class IdentityController {
 
   @Public()
   @Post('refresh')
-  async refresh(@Req() req: Request) {
+  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const token = req.cookies?.[this.cfg.refreshCookieName];
-    return this.identity.refresh(token);
+    const result = await this.identity.refresh(token);
+    res.cookie(this.cfg.refreshCookieName, result.refreshToken, {
+      httpOnly: true,
+      secure: this.cfg.refreshCookieSecure,
+      sameSite: 'lax',
+      maxAge: this.cfg.jwtRefreshTtl * 1000,
+      path: '/',
+    });
+    return { accessToken: result.accessToken };
   }
 
   @Public()

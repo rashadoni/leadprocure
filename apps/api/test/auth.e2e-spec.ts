@@ -86,12 +86,22 @@ describe('auth flow (API e2e)', () => {
       .expect(401);
   });
 
-  it('refreshes the access token via httpOnly cookie', async () => {
+  it('refreshes the access token and ROTATES the refresh cookie', async () => {
     const res = await request(app.getHttpServer())
       .post('/auth/refresh')
       .set('Cookie', refreshCookie)
       .expect(201);
     expect(res.body.accessToken).toBeDefined();
+    const rotated = (res.get('Set-Cookie') ?? []).find((c: string) => c.startsWith('lp_refresh='));
+    expect(rotated).toBeTruthy();
+    expect(rotated).not.toBe(refreshCookie); // a new token was issued
+    // the OLD refresh token is now revoked → reusing it fails and is flagged as reuse
+    await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', refreshCookie).expect(401);
+    // the NEW token works
+    const newCookie = rotated!.split(';')[0];
+    const again = await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', newCookie).expect(201);
+    expect(again.body.accessToken).toBeDefined();
+    refreshCookie = (again.get('Set-Cookie') ?? []).find((c: string) => c.startsWith('lp_refresh='))!.split(';')[0];
   });
 
   it('role guard: buyer admin cannot be tricked into supplier-only data leak via role claim', async () => {

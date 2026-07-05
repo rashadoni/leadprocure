@@ -155,7 +155,9 @@ export class IdentityService {
     return this.issue(user, membership);
   }
 
-  async refresh(refreshToken: string): Promise<{ accessToken: string }> {
+  // Rotating refresh: each use revokes the presented token and issues a fresh one.
+  // Re-presenting an already-used (revoked) token is a theft signal → nuke the family.
+  async refresh(refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
     let payload;
     try {
       payload = this.tokens.verifyRefresh(refreshToken);
@@ -163,14 +165,21 @@ export class IdentityService {
       throw new UnauthorizedException('Invalid refresh token');
     }
     const m = this.rc.manager;
-    const rows = await m.query(
-      `SELECT s.id, u.token_version, u.status FROM sessions s
-       JOIN organization_users u ON u.id = s.user_id
-       WHERE s.user_id = $1 AND s.org_id = $2 AND s.revoked = false
-         AND s.refresh_hash = $3 AND s.expires_at > now()`,
-      [payload.sub, payload.org_id, this.hashToken(refreshToken)],
+    const hash = this.hashToken(refreshToken);
+    const sessions = await m.query(
+      `SELECT s.id, s.revoked, s.expires_at, u.token_version, u.status
+       FROM sessions s JOIN organization_users u ON u.id = s.user_id
+       WHERE s.user_id = $1 AND s.org_id = $2 AND s.refresh_hash = $3`,
+      [payload.sub, payload.org_id, hash],
     );
-    if (!rows.length || rows[0].token_version !== payload.token_version || rows[0].status !== 'ACTIVE') {
+    if (!sessions.length) throw new UnauthorizedException('Invalid refresh token');
+    const s = sessions[0];
+    if (s.revoked) {
+      // reuse of a rotated token — revoke every session for this user
+      await m.query(`UPDATE sessions SET revoked = true WHERE user_id = $1`, [payload.sub]);
+      throw new UnauthorizedException('Refresh token reuse detected');
+    }
+    if (s.token_version !== payload.token_version || s.status !== 'ACTIVE' || new Date(s.expires_at).getTime() <= Date.now()) {
       throw new UnauthorizedException('Session expired');
     }
     const membership: MembershipRow[] = await m.query(
@@ -179,6 +188,8 @@ export class IdentityService {
       [payload.sub, payload.org_id],
     );
     if (!membership.length) throw new UnauthorizedException('Membership revoked');
+
+    await m.query(`UPDATE sessions SET revoked = true WHERE id = $1`, [s.id]); // rotate out
     const access = this.tokens.signAccess({
       sub: payload.sub,
       org_id: membership[0].org_id,
@@ -186,7 +197,17 @@ export class IdentityService {
       role: membership[0].role,
       token_version: payload.token_version,
     });
-    return { accessToken: access };
+    const newRefresh = this.tokens.signRefresh({
+      sub: payload.sub,
+      org_id: membership[0].org_id,
+      token_version: payload.token_version,
+    });
+    const expires = new Date(Date.now() + this.cfg.jwtRefreshTtl * 1000);
+    await m.query(
+      `INSERT INTO sessions(id, user_id, org_id, refresh_hash, expires_at) VALUES ($1,$2,$3,$4,$5)`,
+      [randomUUID(), payload.sub, membership[0].org_id, this.hashToken(newRefresh), expires],
+    );
+    return { accessToken: access, refreshToken: newRefresh };
   }
 
   async me(auth: AccessTokenPayload) {
