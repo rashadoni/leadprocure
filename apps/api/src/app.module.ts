@@ -22,6 +22,7 @@ import { RequestsModule } from './modules/requests/requests.module';
 import { SourcingModule } from './modules/sourcing/sourcing.module';
 import { ContractsModule } from './modules/contracts/contracts.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { SettingsModule } from './modules/settings/settings.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     SourcingModule,
     ContractsModule,
     DashboardModule,
+    SettingsModule,
   ],
   controllers: [HealthController],
   providers: [

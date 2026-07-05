@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Injectable, Module, NotFoundException, Param, Post } from '@nestjs/common';
-import { RequiresFeature, Roles } from '../../common/auth/decorators';
+import type { AccessTokenPayload } from '@leadprocure/shared';
+import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
 
@@ -51,6 +52,40 @@ export class SuppliersService {
     return rows[0];
   }
 
+  async scorecard(supplierOrgId: string) {
+    const m = this.rc.manager;
+    const entries = await m.query(
+      `SELECT id, metric, score, note, source_po_id, created_at
+       FROM supplier_scorecard_entries WHERE supplier_org_id = $1 ORDER BY created_at DESC LIMIT 50`,
+      [supplierOrgId],
+    );
+    const averages = await m.query(
+      `SELECT metric, round(avg(score))::int AS avg_score, count(*)::int AS n
+       FROM supplier_scorecard_entries WHERE supplier_org_id = $1 GROUP BY metric`,
+      [supplierOrgId],
+    );
+    return { entries, averages };
+  }
+
+  async addScore(
+    supplierOrgId: string,
+    dto: { metric: 'OTIF' | 'QUALITY' | 'COMMS'; score: number; note?: string; sourcePoId?: string },
+    buyerOrgId: string,
+    userId: string,
+  ) {
+    const row = (
+      await this.rc.manager.query(
+        `INSERT INTO supplier_scorecard_entries(buyer_org_id, supplier_org_id, source_po_id, metric, score, note, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+        [buyerOrgId, supplierOrgId, dto.sourcePoId ?? null, dto.metric, dto.score, dto.note ?? null, userId],
+      )
+    )[0];
+    await this.audit.record('SCORECARD_ENTRY_ADDED', 'scorecard_entry', row.id, {
+      supplier_org_id: supplierOrgId, metric: dto.metric, score: dto.score,
+    });
+    return this.scorecard(supplierOrgId);
+  }
+
   async setStatus(relationshipId: string, status: 'APPROVED' | 'BLOCKED') {
     const rows = await this.rc.manager.query(
       `UPDATE supplier_relationships SET status = $2, updated_at = now() WHERE id = $1 RETURNING id, status`,
@@ -94,6 +129,21 @@ export class SuppliersController {
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   setStatus(@Param('id') id: string, @Body() body: { status: 'APPROVED' | 'BLOCKED' }) {
     return this.suppliers.setStatus(id, body.status === 'BLOCKED' ? 'BLOCKED' : 'APPROVED');
+  }
+
+  @Get(':supplierOrgId/scorecard')
+  scorecard(@Param('supplierOrgId') supplierOrgId: string) {
+    return this.suppliers.scorecard(supplierOrgId);
+  }
+
+  @Post(':supplierOrgId/scorecard')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  addScore(
+    @Param('supplierOrgId') supplierOrgId: string,
+    @Body() body: { metric: 'OTIF' | 'QUALITY' | 'COMMS'; score: number; note?: string; sourcePoId?: string },
+    @CurrentUser() auth: AccessTokenPayload,
+  ) {
+    return this.suppliers.addScore(supplierOrgId, body, auth.org_id, auth.sub);
   }
 }
 

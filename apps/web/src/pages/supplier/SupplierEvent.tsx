@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
+import { AuctionPanel } from '../../components/AuctionPanel';
+import { QnaCard } from '../../components/QnaCard';
 
 export default function SupplierEvent() {
   const { id } = useParams();
@@ -20,8 +22,13 @@ export default function SupplierEvent() {
       const items = ev.items
         .filter((i: any) => prices[i.id])
         .map((i: any) => ({ eventItemId: i.id, unitPriceMinor: Math.round(Number(prices[i.id]) * 100) }));
-      const res = await api.post(`/events/${id}/bid`, { items, deliveryDays: Number(deliveryDays) });
-      setMsg(`OK · sha256 ${res.data.payload_sha256.slice(0, 16)}…`);
+      if (ev.format === 'REVERSE') {
+        const res = await api.post(`/events/${id}/auction/bids`, { items });
+        setMsg(`OK · ${fmtMoney(res.data.total_minor, ev.evaluation_currency)}${res.data.extended ? ' · ⏱ +ext' : ''}`);
+      } else {
+        const res = await api.post(`/events/${id}/bid`, { items, deliveryDays: Number(deliveryDays) });
+        setMsg(`OK · sha256 ${res.data.payload_sha256.slice(0, 16)}…`);
+      }
       load();
     } catch (e: any) { setMsg(e.response?.data?.message?.toString() ?? 'Error'); }
   };
@@ -52,8 +59,10 @@ export default function SupplierEvent() {
         )}
       </div>
 
+      {ev.format === 'REVERSE' && <AuctionPanel eventId={id!} onChanged={load} />}
+
       <div className="card">
-        <h3>{t('items')} — {t('bid')}</h3>
+        <h3>{t('items')} — {ev.format === 'REVERSE' ? `⚡ ${t('place_bid')}` : t('bid')}</h3>
         <table>
           <thead><tr><th>{t('name')}</th><th>{t('qty')}</th><th>Est.</th><th>{t('unit_price')} (AZN)</th></tr></thead>
           <tbody>
@@ -82,12 +91,14 @@ export default function SupplierEvent() {
             <div style={{ padding: '8px 0', fontWeight: 700 }}>{fmtMoney(Math.round(total * 100), ev.evaluation_currency)}</div>
           </div>
           <button className="btn" disabled={ev.status !== 'OPEN'} onClick={submit}>
-            🔒 {t('bid')}
+            {ev.format === 'REVERSE' ? `⚡ ${t('place_bid')}` : `🔒 ${t('bid')}`}
           </button>
         </div>
         {msg && <div className="hint">{msg}</div>}
-        <div className="hint">🔒 {t('amounts_hidden')}</div>
+        {ev.format !== 'REVERSE' && <div className="hint">🔒 {t('amounts_hidden')}</div>}
       </div>
+
+      <QnaCard eventId={id!} isBuyer={false} />
     </>
   );
 }

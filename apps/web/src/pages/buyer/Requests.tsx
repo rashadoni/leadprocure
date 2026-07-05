@@ -36,18 +36,29 @@ export default function Requests() {
   };
 
   const act = async (id: string, action: string) => {
+    try { await api.post(`/requests/${id}/${action}`); load(); }
+    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  };
+
+  const makeRfq = async (id: string) => {
     try {
-      const res = await api.post(`/requests/${id}/${action}`);
-      // approved + method requires sourcing → offer to create the RFQ
-      if (action === 'approve' && res.data.method_resolved && res.data.method_resolved !== 'DIRECT') {
-        if (confirm(`${t('create')} RFQ? (method: ${res.data.method_resolved})`)) {
-          const closeAt = new Date(Date.now() + 24 * 3600_000).toISOString();
-          const ev = await api.post(`/events/from-request/${id}`, { closeAt, visibility: 'INVITED' });
-          nav(`/buyer/events/${ev.data.id}`);
-          return;
-        }
-      }
-      load();
+      const closeAt = new Date(Date.now() + 24 * 3600_000).toISOString();
+      const ev = await api.post(`/events/from-request/${id}`, { closeAt, visibility: 'INVITED' });
+      nav(`/buyer/events/${ev.data.id}`);
+    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  };
+
+  // Reverse auction: start at the estimate, min decrement = 1% (floor 1 AZN).
+  const makeAuction = async (r: any) => {
+    try {
+      const start = Number(r.estimated_total_minor);
+      const ev = await api.post(`/events/reverse/from-request/${r.id}`, {
+        closeAt: new Date(Date.now() + 24 * 3600_000).toISOString(),
+        visibility: 'INVITED',
+        startPriceMinor: start,
+        minDecrementMinor: Math.max(Math.round(start / 100), 100),
+      });
+      nav(`/buyer/events/${ev.data.id}`);
     } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
@@ -93,6 +104,12 @@ export default function Requests() {
                     <>
                       <button className="btn small" onClick={() => act(r.id, 'approve')}>{t('approve')}</button>{' '}
                       <button className="btn small ghost" onClick={() => act(r.id, 'reject')}>{t('reject')}</button>
+                    </>
+                  )}
+                  {r.status === 'APPROVED' && r.method_resolved !== 'DIRECT' && canApprove && (
+                    <>
+                      <button className="btn small" onClick={() => makeRfq(r.id)}>RFQ 🔒</button>{' '}
+                      <button className="btn small ghost" onClick={() => makeAuction(r)}>{t('auction')} ⚡</button>
                     </>
                   )}
                 </td>

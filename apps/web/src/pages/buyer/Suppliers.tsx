@@ -18,6 +18,18 @@ export default function Suppliers() {
     await api.post(`/suppliers/relationships/${relId}/status`, { status }); load();
   };
 
+  const [scores, setScores] = useState<Record<string, any>>({});
+  const loadScore = async (orgId: string) => {
+    const r = await api.get(`/suppliers/${orgId}/scorecard`);
+    setScores((s) => ({ ...s, [orgId]: r.data.averages }));
+  };
+  const rate = async (orgId: string) => {
+    const raw = prompt('OTIF score 0-100:', '90');
+    if (raw == null) return;
+    await api.post(`/suppliers/${orgId}/scorecard`, { metric: 'OTIF', score: Number(raw) });
+    loadScore(orgId);
+  };
+
   const inRegistry = new Set(registry.map((r) => r.supplier_org_id));
 
   return (
@@ -35,7 +47,13 @@ export default function Suppliers() {
                 <td><span className={`badge ${r.status}`}>{r.status}</span></td>
                 <td>
                   {r.status !== 'APPROVED' && <button className="btn small" onClick={() => setStatus(r.id, 'APPROVED')}>{t('approve')}</button>}{' '}
-                  {r.status !== 'BLOCKED' && <button className="btn small ghost" onClick={() => setStatus(r.id, 'BLOCKED')}>Block</button>}
+                  {r.status !== 'BLOCKED' && <button className="btn small ghost" onClick={() => setStatus(r.id, 'BLOCKED')}>Block</button>}{' '}
+                  <button className="btn small ghost" onClick={() => rate(r.supplier_org_id)}>★ {t('scorecard')}</button>
+                  {scores[r.supplier_org_id] && (
+                    <span className="hint" style={{ marginLeft: 6 }}>
+                      {scores[r.supplier_org_id].map((a: any) => `${a.metric}:${a.avg_score}`).join(' ')}
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}

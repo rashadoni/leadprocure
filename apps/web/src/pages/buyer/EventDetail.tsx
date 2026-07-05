@@ -3,6 +3,8 @@ import { useParams } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
 import { api, fmtMoney, getToken } from '../../api/client';
 import { useI18n } from '../../i18n';
+import { AuctionPanel } from '../../components/AuctionPanel';
+import { QnaCard } from '../../components/QnaCard';
 
 export default function EventDetail() {
   const { id } = useParams();
@@ -78,7 +80,12 @@ export default function EventDetail() {
         <b>{t('deadline')}:</b> {new Date(ev.close_at).toLocaleString()} · <b>{ev.visibility}</b> · {ev.evaluation_currency}
         <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
           {ev.status === 'DRAFT' && <button className="btn" onClick={() => act('publish')}>{t('publish')}</button>}
-          {ev.status === 'CLOSED' && <button className="btn" onClick={() => act('open')}>{t('open_bids')}</button>}
+          {ev.status === 'CLOSED' && ev.format === 'SEALED' && (
+            <button className="btn" onClick={() => act('open')}>{t('open_bids')}</button>
+          )}
+          {ev.status === 'CLOSED' && ev.format === 'REVERSE' && (
+            <button className="btn" onClick={() => act('auction/finalize')}>{t('finalize')}</button>
+          )}
           <button className="btn ghost" onClick={openOcds}>{t('ocds')}</button>
           {ev.status === 'AWARDED' && ev.awards?.[0] && (
             <button className="btn" onClick={async () => {
@@ -103,6 +110,8 @@ export default function EventDetail() {
           </div>
         )}
       </div>
+
+      {ev.format === 'REVERSE' && <AuctionPanel eventId={id!} />}
 
       <div className="card">
         <h3>{t('items')}</h3>
@@ -151,6 +160,8 @@ export default function EventDetail() {
           </div>
         )}
       </div>
+
+      <QnaCard eventId={id!} isBuyer />
     </>
   );
 }

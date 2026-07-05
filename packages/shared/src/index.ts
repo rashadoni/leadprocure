@@ -192,6 +192,8 @@ export const AUDIT_ACTIONS = [
   'QNA_POSTED',
   'QNA_ANSWERED',
   'ADDENDUM_PUBLISHED',
+  'ROLE_CHANGED',
+  'SCORECARD_ENTRY_ADDED',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

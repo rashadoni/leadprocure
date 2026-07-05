@@ -18,6 +18,10 @@ const dict: Record<Lang, Record<string, string>> = {
     active_events: 'Aktiv tenderlər', pending: 'Təsdiq gözləyir', tasks: 'Tapşırıqlar',
     notifications: 'Bildirişlər', activate: 'Aktivləşdir', create_po: 'PO yarat',
     make_contract: 'Müqavilə yarat', history: 'Tarixçə',
+    auction: 'Auksion', best_price: 'Ən yaxşı qiymət', next_max: 'Növbəti maks.',
+    bidders: 'İştirakçılar', extensions: 'Uzadılmalar', finalize: 'Yekunlaşdır',
+    place_bid: 'Təklif ver', qna: 'Sual-cavab', ask: 'Soruş', answer: 'Cavabla',
+    addendum: 'Əlavə', settings: 'Parametrlər', users: 'İstifadəçilər', scorecard: 'Reytinq',
   },
   ru: {
     login: 'Войти', logout: 'Выход', email: 'Email', password: 'Пароль', register: 'Регистрация',
@@ -34,6 +38,10 @@ const dict: Record<Lang, Record<string, string>> = {
     active_events: 'Активные тендеры', pending: 'Ждут утверждения', tasks: 'Задачи',
     notifications: 'Уведомления', activate: 'Активировать', create_po: 'Создать PO',
     make_contract: 'Создать контракт', history: 'История',
+    auction: 'Аукцион', best_price: 'Лучшая цена', next_max: 'След. максимум',
+    bidders: 'Участники', extensions: 'Продления', finalize: 'Завершить торги',
+    place_bid: 'Сделать ставку', qna: 'Вопросы и ответы', ask: 'Спросить', answer: 'Ответить',
+    addendum: 'Аддендум', settings: 'Настройки', users: 'Пользователи', scorecard: 'Рейтинг',
   },
   en: {
     login: 'Log in', logout: 'Log out', email: 'Email', password: 'Password', register: 'Register',
@@ -50,6 +58,10 @@ const dict: Record<Lang, Record<string, string>> = {
     active_events: 'Active tenders', pending: 'Pending approval', tasks: 'Tasks',
     notifications: 'Notifications', activate: 'Activate', create_po: 'Create PO',
     make_contract: 'Create contract', history: 'History',
+    auction: 'Auction', best_price: 'Best price', next_max: 'Next max',
+    bidders: 'Bidders', extensions: 'Extensions', finalize: 'Finalize',
+    place_bid: 'Place bid', qna: 'Q&A', ask: 'Ask', answer: 'Answer',
+    addendum: 'Addendum', settings: 'Settings', users: 'Users', scorecard: 'Scorecard',
   },
 };
 
