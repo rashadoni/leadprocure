@@ -1,0 +1,2 @@
+apps/web/public/guides/*.webm filter=lfs diff=lfs merge=lfs -text
+apps/web/public/guides/*.png filter=lfs diff=lfs merge=lfs -text

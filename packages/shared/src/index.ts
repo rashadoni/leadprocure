@@ -1,0 +1,175 @@
+// Shared domain vocabulary for Leadprocure — imported by both the API and the web app.
+// Keep this framework-agnostic: enums, string-literal unions, plain types only.
+
+// ---------------- Deployment & licensing ----------------
+export const DEPLOYMENT_MODES = ['cloud_multi_tenant', 'on_prem_isolated', 'federated'] as const;
+export type DeploymentMode = (typeof DEPLOYMENT_MODES)[number];
+
+export const IDENTITY_ORIGINS = ['SAAS', 'ON_PREM_LOCAL', 'FEDERATED'] as const;
+export type IdentityOrigin = (typeof IDENTITY_ORIGINS)[number];
+
+export const LICENSE_TYPES = ['client', 'server'] as const;
+export type LicenseType = (typeof LICENSE_TYPES)[number];
+
+export const EDITIONS = ['community', 'standard', 'enterprise'] as const;
+export type Edition = (typeof EDITIONS)[number];
+
+export const LICENSE_STATUSES = [
+  'valid',
+  'renewal_due',
+  'grace',
+  'expired_restricted',
+  'revoked',
+] as const;
+export type LicenseStatus = (typeof LICENSE_STATUSES)[number];
+
+// Feature keys are checked in code; editions are just bundles of these on the license server.
+export const FEATURE_KEYS = [
+  'sourcing.rfq',
+  'sourcing.reverse_auction',
+  'sourcing.multi_currency',
+  'compliance.ocds_export',
+  'signature.asan_imza',
+  'ai.scoring',
+  'suppliers.registry',
+  'realtime.updates',
+] as const;
+export type FeatureKey = (typeof FEATURE_KEYS)[number];
+
+export interface LicenseLimits {
+  max_buyer_orgs: number | null;
+  seats: number | null;
+  events_month: number | null;
+}
+
+export interface LicenseClaims {
+  license_id: string;
+  customer_id: string;
+  deployment_type: DeploymentMode;
+  license_type: LicenseType;
+  edition: Edition;
+  features: FeatureKey[];
+  limits: LicenseLimits;
+  valid_from: string; // ISO
+  expires_at: string; // ISO
+  grace_until: string; // ISO
+  key_id: string;
+  schema_version: number;
+}
+
+export interface EntitlementSnapshot {
+  status: LicenseStatus;
+  edition: Edition;
+  deploymentMode: DeploymentMode;
+  features: FeatureKey[];
+  limits: LicenseLimits;
+  expiresAt: string;
+  graceUntil: string;
+}
+
+// ---------------- Identity & roles ----------------
+export const ORGANIZATION_KINDS = ['BUYER', 'SUPPLIER', 'BOTH'] as const;
+export type OrganizationKind = (typeof ORGANIZATION_KINDS)[number];
+
+export const ORGANIZATION_STATUSES = ['ACTIVE', 'SUSPENDED', 'CLOSED'] as const;
+export type OrganizationStatus = (typeof ORGANIZATION_STATUSES)[number];
+
+export const MEMBERSHIP_ROLES = [
+  'BUYER_ADMIN',
+  'BUYER_APPROVER',
+  'BUYER_USER',
+  'SUPPLIER_USER',
+] as const;
+export type MembershipRole = (typeof MEMBERSHIP_ROLES)[number];
+
+export const BUYER_ROLES: MembershipRole[] = ['BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER'];
+
+// ---------------- Suppliers ----------------
+export const SUPPLIER_RELATIONSHIP_STATUSES = ['INVITED', 'APPROVED', 'BLOCKED'] as const;
+export type SupplierRelationshipStatus = (typeof SUPPLIER_RELATIONSHIP_STATUSES)[number];
+
+// ---------------- Procurement requests ----------------
+export const REQUEST_STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'] as const;
+export type RequestStatus = (typeof REQUEST_STATUSES)[number];
+
+export const PROCUREMENT_METHODS = ['DIRECT', 'RFQ', 'OPEN_TENDER'] as const;
+export type ProcurementMethod = (typeof PROCUREMENT_METHODS)[number];
+
+export const VAT_MODES = ['INCLUSIVE', 'EXCLUSIVE'] as const;
+export type VatMode = (typeof VAT_MODES)[number];
+
+// ---------------- Sourcing events ----------------
+export const SOURCING_EVENT_TYPES = ['RFI', 'RFP', 'RFQ', 'AUCTION'] as const;
+export type SourcingEventType = (typeof SOURCING_EVENT_TYPES)[number];
+
+export const SOURCING_EVENT_FORMATS = ['SEALED', 'OPEN', 'REVERSE', 'DUTCH'] as const;
+export type SourcingEventFormat = (typeof SOURCING_EVENT_FORMATS)[number];
+
+export const SOURCING_EVENT_STATUSES = [
+  'DRAFT',
+  'PUBLISHED',
+  'OPEN',
+  'CLOSED',
+  'OPENING',
+  'EVALUATION',
+  'AWARDED',
+  'CANCELLED',
+] as const;
+export type SourcingEventStatus = (typeof SOURCING_EVENT_STATUSES)[number];
+
+export const EVENT_VISIBILITIES = ['PUBLIC', 'INVITED'] as const;
+export type EventVisibility = (typeof EVENT_VISIBILITIES)[number];
+
+// Buyer may only read bid amounts once the event has reached (or passed) opening.
+export const AMOUNTS_VISIBLE_FROM: SourcingEventStatus[] = ['OPENING', 'EVALUATION', 'AWARDED'];
+
+// ---------------- Bids ----------------
+export const BID_STATES = [
+  'DRAFT',
+  'SUBMITTED',
+  'WITHDRAWN',
+  'SUPERSEDED',
+  'LATE',
+  'OPENED',
+  'DISQUALIFIED',
+] as const;
+export type BidState = (typeof BID_STATES)[number];
+
+// ---------------- Money ----------------
+// Money is always integer minor units (e.g. qəpik for AZN) + ISO 4217 code. Never float.
+export interface Money {
+  amountMinor: number;
+  currency: string;
+}
+
+export const DEFAULT_CURRENCY = 'AZN';
+export const DEFAULT_VAT_RATE_BP = 1800; // 18% in basis points
+
+// ---------------- Audit ----------------
+export const AUDIT_ACTIONS = [
+  'ORG_REGISTERED',
+  'USER_LOGGED_IN',
+  'REQUEST_SUBMITTED',
+  'REQUEST_APPROVED',
+  'REQUEST_REJECTED',
+  'EVENT_PUBLISHED',
+  'SUPPLIER_INVITED',
+  'BID_SUBMITTED',
+  'BID_WITHDRAWN',
+  'EVENT_CLOSED',
+  'EVENT_OPENED',
+  'BID_DISQUALIFIED',
+  'EVENT_EVALUATED',
+  'EVENT_AWARDED',
+  'LICENSE_INSTALLED',
+] as const;
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+// ---------------- Auth payloads ----------------
+export interface AccessTokenPayload {
+  sub: string; // user id
+  org_id: string;
+  org_kind: OrganizationKind;
+  role: MembershipRole;
+  token_version: number;
+}

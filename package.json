@@ -1,0 +1,25 @@
+{
+  "name": "leadprocure",
+  "version": "0.0.1",
+  "private": true,
+  "packageManager": "pnpm@10.33.4",
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["argon2", "esbuild", "@nestjs/core"]
+  },
+  "scripts": {
+    "build:shared": "pnpm --filter @leadprocure/shared build",
+    "build": "pnpm build:shared && pnpm --filter api build && pnpm --filter web build",
+    "dev:api": "pnpm build:shared && pnpm --filter api start:dev",
+    "dev:web": "pnpm --filter web dev",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "migration:run": "pnpm build:shared && pnpm --filter api migration:run",
+    "migration:revert": "pnpm --filter api migration:revert",
+    "seed": "pnpm build:shared && pnpm --filter api seed",
+    "license:gen": "pnpm --filter api license:gen",
+    "test:e2e": "pnpm build:shared && pnpm --filter api test:e2e"
+  }
+}
