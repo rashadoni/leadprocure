@@ -138,6 +138,11 @@ export class DocumentsService {
     );
   }
 
+  // Generic signed GET for any storage key (used by verification docs etc.).
+  async signedGetUrl(storageKey: string) {
+    return getSignedUrl(this.s3, new GetObjectCommand({ Bucket: this.bucket, Key: storageKey }), { expiresIn: 900 });
+  }
+
   async bidDocDownloadUrl(id: string) {
     const rows = await this.rc.manager.query(`SELECT storage_key FROM bid_documents WHERE id=$1`, [id]);
     if (!rows.length) return { url: null };

@@ -27,6 +27,7 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { AiScorerModule } from './common/ai/ai-scorer';
 import { LogisticsModule } from './modules/logistics/logistics.module';
 import { CatalogsModule } from './modules/catalogs/catalogs.module';
+import { VerificationModule } from './modules/verification/verification.module';
 import { MailModule } from './common/mail/mail.module';
 
 @Module({
@@ -54,6 +55,7 @@ import { MailModule } from './common/mail/mail.module';
     SettingsModule,
     LogisticsModule,
     CatalogsModule,
+    VerificationModule,
   ],
   controllers: [HealthController],
   providers: [

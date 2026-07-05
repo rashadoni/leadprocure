@@ -48,7 +48,8 @@ export default function Suppliers() {
                 <td>
                   {r.status !== 'APPROVED' && <button className="btn small" onClick={() => setStatus(r.id, 'APPROVED')}>{t('approve')}</button>}{' '}
                   {r.status !== 'BLOCKED' && <button className="btn small ghost" onClick={() => setStatus(r.id, 'BLOCKED')}>Block</button>}{' '}
-                  <button className="btn small ghost" onClick={() => rate(r.supplier_org_id)}>★ {t('scorecard')}</button>
+                  <button className="btn small ghost" onClick={() => rate(r.supplier_org_id)}>★ {t('scorecard')}</button>{' '}
+                  <button className="btn small ghost" onClick={async () => { await api.post('/verification/cases', { supplierOrgId: r.supplier_org_id }); alert(t('verification') + ' →'); }}>🛡</button>
                   {scores[r.supplier_org_id] && (
                     <span className="hint" style={{ marginLeft: 6 }}>
                       {scores[r.supplier_org_id].map((a: any) => `${a.metric}:${a.avg_score}`).join(' ')}

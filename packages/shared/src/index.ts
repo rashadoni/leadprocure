@@ -34,6 +34,7 @@ export const FEATURE_KEYS = [
   'suppliers.registry',
   'realtime.updates',
   'contracts.catalog',
+  'suppliers.verification',
 ] as const;
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
 
@@ -202,7 +203,16 @@ export const AUDIT_ACTIONS = [
   'CATALOG_CREATED',
   'CATALOG_ACTIVATED',
   'CATALOG_ORDER_CREATED',
+  'VERIFICATION_OPENED',
+  'VERIFICATION_DOC_UPLOADED',
+  'VERIFICATION_DECIDED',
 ] as const;
+
+// ---------------- Supplier verification (KYC) ----------------
+export const VERIFICATION_STATUSES = ['NEW', 'IN_REVIEW', 'APPROVED', 'REJECTED'] as const;
+export type VerificationStatus = (typeof VERIFICATION_STATUSES)[number];
+export const VERIFICATION_DOC_TYPES = ['VOEN', 'LICENSE', 'BANK', 'INSURANCE', 'OTHER'] as const;
+export type VerificationDocType = (typeof VERIFICATION_DOC_TYPES)[number];
 
 // ---------------- Catalogs ----------------
 export const CATALOG_STATUSES = ['DRAFT', 'ACTIVE', 'ARCHIVED'] as const;
