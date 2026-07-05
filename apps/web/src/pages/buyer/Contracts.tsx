@@ -51,7 +51,10 @@ export default function Contracts() {
                     <button className="btn small" onClick={() => act(() => api.post(`/contracts/${c.id}/activate`))}>{t('activate')}</button>
                   )}{' '}
                   {isBuyerSide && c.status === 'ACTIVE' && (
-                    <button className="btn small" onClick={() => act(() => api.post(`/contracts/${c.id}/orders`))}>{t('create_po')}</button>
+                    <>
+                      <button className="btn small" onClick={() => act(() => api.post(`/contracts/${c.id}/orders`))}>{t('create_po')}</button>{' '}
+                      <button className="btn small ghost" onClick={() => act(() => api.post(`/catalogs/from-contract/${c.id}`))}>📖 {t('catalogs')}</button>
+                    </>
                   )}
                 </td>
               </tr>

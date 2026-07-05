@@ -33,6 +33,7 @@ export const FEATURE_KEYS = [
   'ai.scoring',
   'suppliers.registry',
   'realtime.updates',
+  'contracts.catalog',
 ] as const;
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
 
@@ -198,7 +199,14 @@ export const AUDIT_ACTIONS = [
   'SHIPMENT_EVENT_ADDED',
   'GRN_RECORDED',
   'APPROVAL_STEP_ACTED',
+  'CATALOG_CREATED',
+  'CATALOG_ACTIVATED',
+  'CATALOG_ORDER_CREATED',
 ] as const;
+
+// ---------------- Catalogs ----------------
+export const CATALOG_STATUSES = ['DRAFT', 'ACTIVE', 'ARCHIVED'] as const;
+export type CatalogStatus = (typeof CATALOG_STATUSES)[number];
 
 // ---------------- Logistics ----------------
 export const SHIPMENT_STATUSES = [
