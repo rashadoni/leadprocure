@@ -55,7 +55,17 @@ pnpm --filter api start:dev                                # http://localhost:30
 
 Read `1720000000000-init.ts` for exact columns. Key tables: `organizations`(+`identity_origin`), `organization_users`, `memberships`, `sessions`, `supplier_profiles`, `buyer_profiles`, `supplier_relationships`, `procurement_method_policies`, `procurement_requests`, `request_items`, `sourcing_events`, `event_lots`, `event_items`, `event_invitations`, `event_qna`, `bids`, `bid_sealed_payloads`, `bid_items`, `evaluations`, `evaluation_scores`, `awards`, `documents`, `notifications`, `audit_events`, `fx_rates`, `idempotency_keys`, `licenses`, `entitlement_usage`, `release_versions`.
 
-## 5. Remaining work (build in this order; each phase must compile + a quick smoke)
+## 4b. PHASE 2 — DONE (do not rebuild)
+
+All four blocks are built, tested (58/58 e2e across 4 suites) and committed:
+- **A. Contracts+POs** (migration 0003): cross-org RLS via denormalized party columns; `po_apply_status()` SECURITY DEFINER is the ONLY status-transition path. UI: Contracts page, supplier "Заказы в работе".
+- **B. Dashboard+notifications**: `GET /dashboard/buyer` (RLS-scoped KPIs + task feed), Dashboard page.
+- **C. Reverse auction + Q&A** (migrations 0004–0006): append-only `auction_bids` ledger; anonymous best via `auction_state()`; bid path uses `pg_advisory_xact_lock` (suppliers cannot FOR UPDATE events under RLS!) and `auction_try_extend()` for anti-sniping; Q&A equal-disclosure policies. UI: AuctionPanel, QnaCard.
+- **D. Settings + scorecards** (migration 0007): org users/roles (anti-escalation: not self, admin-only, token_version bump), `supplier_scorecard_entries`. UI: Settings page, ★ on suppliers registry.
+
+Key gotchas learned (respect these): FOR UPDATE requires UPDATE policies under RLS → suppliers must serialize via advisory locks; owner-run SECURITY DEFINER functions are the sanctioned RLS bypass seam; org FKs must be ON DELETE CASCADE; two jest runs against one DB interfere — run the suite once.
+
+## 5. Remaining work — PHASE 3 candidates (not started)
 
 1. **Suppliers** (`modules/suppliers`): buyer registry of suppliers — list global `supplier_profiles`, invite/approve/block via `supplier_relationships` (RLS by `buyer_org_id`). `@Roles('BUYER_ADMIN','BUYER_APPROVER')` for mutations.
 2. **Requests** (`modules/requests`): request CRUD + `request_items`; `submit`/`approve`/`reject`; **server-side total recompute** from items; resolve `procurement_method_policies` (value bands → DIRECT/RFQ/OPEN_TENDER) into `method_resolved`. Audit each transition.
