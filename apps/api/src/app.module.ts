@@ -20,6 +20,8 @@ import { IdentityModule } from './modules/identity/identity.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { RequestsModule } from './modules/requests/requests.module';
 import { SourcingModule } from './modules/sourcing/sourcing.module';
+import { ContractsModule } from './modules/contracts/contracts.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -38,6 +40,8 @@ import { SourcingModule } from './modules/sourcing/sourcing.module';
     SuppliersModule,
     RequestsModule,
     SourcingModule,
+    ContractsModule,
+    DashboardModule,
   ],
   controllers: [HealthController],
   providers: [

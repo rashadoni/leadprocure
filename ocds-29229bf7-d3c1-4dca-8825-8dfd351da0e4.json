@@ -1,0 +1,56 @@
+{
+  "uri": "urn:leadprocure:ocds:29229bf7-d3c1-4dca-8825-8dfd351da0e4",
+  "version": "1.1",
+  "publishedDate": "2026-07-05T13:10:06.249Z",
+  "publisher": {
+    "name": "Leadprocure"
+  },
+  "releases": [
+    {
+      "ocid": "ocds-lp-29229bf7-d3c1-4dca-8825-8dfd351da0e4",
+      "id": "29229bf7-d3c1-4dca-8825-8dfd351da0e4-1",
+      "date": "2026-07-05T13:10:06.249Z",
+      "language": "az",
+      "tag": [
+        "tender",
+        "award"
+      ],
+      "initiationType": "tender",
+      "buyer": {
+        "id": "8a8439cd-5c15-45f2-807d-5a64b6fbfdc5",
+        "name": "Acme MMC"
+      },
+      "tender": {
+        "id": "29229bf7-d3c1-4dca-8825-8dfd351da0e4",
+        "title": "Спецодежда 2026",
+        "status": "complete",
+        "procurementMethod": "selective",
+        "procurementMethodDetails": "SEALED RFQ",
+        "tenderPeriod": {
+          "startDate": "2026-07-05T10:32:21.105Z",
+          "endDate": "2026-07-05T10:33:58.371Z"
+        },
+        "items": [
+          {
+            "id": "61c3c3db-e69e-4a0b-b56e-c28741e94ca2",
+            "description": "Комплект спецодежды",
+            "quantity": 100,
+            "unit": {
+              "name": "pcs"
+            }
+          }
+        ]
+      },
+      "awards": [
+        {
+          "id": "baa8ddaf-4954-445d-80fa-f36b889f7e6b",
+          "status": "active",
+          "date": "2026-07-05T10:34:42.027Z",
+          "relatedLots": [
+            "3eafdedb-f822-4da4-95f7-31142f7914bb"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -211,6 +211,98 @@ describe('sealed RFQ end-to-end flow', () => {
     expect(release.tender.items).toHaveLength(1);
   });
 
+  // ---------- phase 2 block A: award → contract → PO → delivery ----------
+
+  let contractId: string;
+  let poId: string;
+
+  it('award becomes a contract (idempotent) and activates', async () => {
+    const awards = await http().get(`/events/${eventId}`).set('Authorization', `Bearer ${buyerToken}`);
+    const awardId = awards.body.awards[0].id;
+
+    const c1 = await http()
+      .post(`/contracts/from-award/${awardId}`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .expect(201);
+    contractId = c1.body.id;
+    expect(c1.body.status).toBe('DRAFT');
+    expect(Number(c1.body.total_minor)).toBe(5_500_000);
+
+    const c2 = await http()
+      .post(`/contracts/from-award/${awardId}`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .expect(201);
+    expect(c2.body.id).toBe(contractId); // idempotent
+
+    const act = await http()
+      .post(`/contracts/${contractId}/activate`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .expect(201);
+    expect(act.body.status).toBe('ACTIVE');
+  });
+
+  it('supplier sees the contract too (cross-org read)', async () => {
+    const res = await http().get('/contracts').set('Authorization', `Bearer ${supplierToken}`).expect(200);
+    expect(res.body.map((c: any) => c.id)).toContain(contractId);
+    const res2 = await http().get('/contracts').set('Authorization', `Bearer ${supplier2Token}`).expect(200);
+    expect(res2.body.map((c: any) => c.id)).not.toContain(contractId);
+  });
+
+  it('buyer creates and issues a PO with items from the awarded bid', async () => {
+    const po = await http()
+      .post(`/contracts/${contractId}/orders`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .expect(201);
+    poId = po.body.id;
+    expect(po.body.status).toBe('DRAFT');
+    expect(po.body.items).toHaveLength(1);
+    expect(Number(po.body.total_minor)).toBe(5_500_000);
+
+    const issued = await http()
+      .post(`/orders/${poId}/status`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({ status: 'ISSUED' })
+      .expect(201);
+    expect(issued.body.status).toBe('ISSUED');
+  });
+
+  it('supplier walks the delivery chain; buyer accepts', async () => {
+    for (const s of ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED']) {
+      const res = await http()
+        .post(`/orders/${poId}/status`)
+        .set('Authorization', `Bearer ${supplierToken}`)
+        .send({ status: s })
+        .expect(201);
+      expect(res.body.status).toBe(s);
+    }
+    const accepted = await http()
+      .post(`/orders/${poId}/status`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({ status: 'ACCEPTED' })
+      .expect(201);
+    expect(accepted.body.status).toBe('ACCEPTED');
+
+    const hist = await http().get(`/orders/${poId}`).set('Authorization', `Bearer ${buyerToken}`).expect(200);
+    expect(hist.body.history.map((h: any) => h.to_status)).toEqual([
+      'ISSUED', 'CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED', 'ACCEPTED',
+    ]);
+  });
+
+  it('illegal transitions are rejected by the DB seam', async () => {
+    // supplier cannot ACCEPT own delivery; buyer cannot CONFIRM
+    await http()
+      .post(`/orders/${poId}/status`)
+      .set('Authorization', `Bearer ${supplierToken}`)
+      .send({ status: 'ACCEPTED' })
+      .expect(400);
+  });
+
+  it('foreign supplier cannot see the PO', async () => {
+    const res = await http().get('/orders').set('Authorization', `Bearer ${supplier2Token}`).expect(200);
+    expect(res.body.map((p: any) => p.id)).not.toContain(poId);
+    await http().get(`/orders/${poId}`).set('Authorization', `Bearer ${supplier2Token}`).expect(404);
+  });
+
   it('audit hash-chain for the buyer org is intact and linked', async () => {
     await db.query(`SELECT set_config('app.org_id', $1, false), set_config('app.role','BUYER_ADMIN', false)`, [buyerOrgId]);
     const rows = (

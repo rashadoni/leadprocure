@@ -5,6 +5,9 @@ import { AuthProvider, Protected, useAuth } from './auth/auth';
 import { I18nProvider } from './i18n';
 import Shell from './layouts/Shell';
 import Login from './pages/Login';
+import Dashboard from './pages/buyer/Dashboard';
+import Contracts from './pages/buyer/Contracts';
+import Orders from './pages/supplier/Orders';
 import Requests from './pages/buyer/Requests';
 import Events from './pages/buyer/Events';
 import EventDetail from './pages/buyer/EventDetail';
@@ -29,6 +32,10 @@ const router = createBrowserRouter([
   {
     element: <Protected><Shell /></Protected>,
     children: [
+      { path: '/buyer/dashboard', element: <Protected roles={BUYER}><Dashboard /></Protected> },
+      { path: '/buyer/contracts', element: <Protected roles={BUYER}><Contracts /></Protected> },
+      { path: '/supplier/orders', element: <Protected roles={SUPPLIER}><Orders /></Protected> },
+      { path: '/supplier/contracts', element: <Protected roles={SUPPLIER}><Contracts /></Protected> },
       { path: '/buyer/requests', element: <Protected roles={BUYER}><Requests /></Protected> },
       { path: '/buyer/events', element: <Protected roles={BUYER}><Events /></Protected> },
       { path: '/buyer/events/:id', element: <Protected roles={BUYER}><EventDetail /></Protected> },

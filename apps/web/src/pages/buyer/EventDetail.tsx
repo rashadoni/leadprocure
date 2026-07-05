@@ -80,6 +80,15 @@ export default function EventDetail() {
           {ev.status === 'DRAFT' && <button className="btn" onClick={() => act('publish')}>{t('publish')}</button>}
           {ev.status === 'CLOSED' && <button className="btn" onClick={() => act('open')}>{t('open_bids')}</button>}
           <button className="btn ghost" onClick={openOcds}>{t('ocds')}</button>
+          {ev.status === 'AWARDED' && ev.awards?.[0] && (
+            <button className="btn" onClick={async () => {
+              try {
+                const c = await api.post(`/contracts/from-award/${ev.awards[0].id}`);
+                await api.post(`/contracts/${c.data.id}/activate`).catch(() => {});
+                window.location.href = '/buyer/contracts';
+              } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+            }}>{t('make_contract')}</button>
+          )}
         </div>
         {['DRAFT', 'OPEN'].includes(ev.status) && (
           <div className="row" style={{ marginTop: 12, maxWidth: 480 }}>

@@ -15,12 +15,18 @@ export default function Shell() {
         <div className="brand">Leadprocure</div>
         {isBuyer ? (
           <>
+            <NavLink to="/buyer/dashboard">{t('dashboard')}</NavLink>
             <NavLink to="/buyer/requests">{t('requests')}</NavLink>
             <NavLink to="/buyer/events">{t('events')}</NavLink>
+            <NavLink to="/buyer/contracts">{t('contracts')}</NavLink>
             <NavLink to="/buyer/suppliers">{t('suppliers')}</NavLink>
           </>
         ) : (
-          <NavLink to="/supplier/market">{t('market')}</NavLink>
+          <>
+            <NavLink to="/supplier/market">{t('market')}</NavLink>
+            <NavLink to="/supplier/orders">{t('my_orders')}</NavLink>
+            <NavLink to="/supplier/contracts">{t('contracts')}</NavLink>
+          </>
         )}
         <div className="spacer" />
         <div className="lang">

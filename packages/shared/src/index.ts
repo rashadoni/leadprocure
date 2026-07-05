@@ -135,6 +135,23 @@ export const BID_STATES = [
 ] as const;
 export type BidState = (typeof BID_STATES)[number];
 
+// ---------------- Contracts & purchase orders ----------------
+export const CONTRACT_STATUSES = ['DRAFT', 'ACTIVE', 'CLOSED', 'CANCELLED'] as const;
+export type ContractStatus = (typeof CONTRACT_STATUSES)[number];
+
+export const PO_STATUSES = [
+  'DRAFT', 'ISSUED', 'CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED', 'ACCEPTED', 'REJECTED', 'CANCELLED',
+] as const;
+export type PoStatus = (typeof PO_STATUSES)[number];
+
+// Which side may move a PO to which status (mirrors po_apply_status in the DB).
+export const PO_SUPPLIER_TRANSITIONS: Record<string, PoStatus> = {
+  ISSUED: 'CONFIRMED', CONFIRMED: 'PACKED', PACKED: 'SHIPPED', SHIPPED: 'DELIVERED',
+};
+export const PO_BUYER_NEXT: Record<string, PoStatus[]> = {
+  DRAFT: ['ISSUED', 'CANCELLED'], ISSUED: ['CANCELLED'], DELIVERED: ['ACCEPTED', 'REJECTED'],
+};
+
 // ---------------- Money ----------------
 // Money is always integer minor units (e.g. qəpik for AZN) + ISO 4217 code. Never float.
 export interface Money {
@@ -165,6 +182,10 @@ export const AUDIT_ACTIONS = [
   'SUPPLIER_APPROVED',
   'SUPPLIER_BLOCKED',
   'DOCUMENT_UPLOADED',
+  'CONTRACT_CREATED',
+  'CONTRACT_ACTIVATED',
+  'PO_CREATED',
+  'PO_STATUS_CHANGED',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

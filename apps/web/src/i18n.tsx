@@ -13,6 +13,11 @@ const dict: Record<Lang, Record<string, string>> = {
     company: 'Şirkət', buyer_org: 'Sifarişçi', supplier_org: 'Təchizatçı', qty: 'Say',
     unit_price: 'Vahid qiymət', name: 'Ad', actions: 'Əməliyyatlar', directory: 'Kataloq',
     registry: 'Reyestr', score: 'Qiymətləndir', ocds: 'OCDS ixrac',
+    dashboard: 'İdarə paneli', contracts: 'Müqavilələr', orders: 'Sifarişlər (PO)',
+    my_orders: 'İşdə olan sifarişlər', spend: 'Ümumi xərc', savings: 'Qənaət',
+    active_events: 'Aktiv tenderlər', pending: 'Təsdiq gözləyir', tasks: 'Tapşırıqlar',
+    notifications: 'Bildirişlər', activate: 'Aktivləşdir', create_po: 'PO yarat',
+    make_contract: 'Müqavilə yarat', history: 'Tarixçə',
   },
   ru: {
     login: 'Войти', logout: 'Выход', email: 'Email', password: 'Пароль', register: 'Регистрация',
@@ -24,6 +29,11 @@ const dict: Record<Lang, Record<string, string>> = {
     company: 'Компания', buyer_org: 'Заказчик', supplier_org: 'Поставщик', qty: 'Кол-во',
     unit_price: 'Цена за ед.', name: 'Наименование', actions: 'Действия', directory: 'Каталог',
     registry: 'Реестр', score: 'Оценить', ocds: 'OCDS экспорт',
+    dashboard: 'Рабочий стол', contracts: 'Контракты', orders: 'Заказы (PO)',
+    my_orders: 'Заказы в работе', spend: 'Объём закупок', savings: 'Экономия',
+    active_events: 'Активные тендеры', pending: 'Ждут утверждения', tasks: 'Задачи',
+    notifications: 'Уведомления', activate: 'Активировать', create_po: 'Создать PO',
+    make_contract: 'Создать контракт', history: 'История',
   },
   en: {
     login: 'Log in', logout: 'Log out', email: 'Email', password: 'Password', register: 'Register',
@@ -35,6 +45,11 @@ const dict: Record<Lang, Record<string, string>> = {
     company: 'Company', buyer_org: 'Buyer', supplier_org: 'Supplier', qty: 'Qty',
     unit_price: 'Unit price', name: 'Name', actions: 'Actions', directory: 'Directory',
     registry: 'Registry', score: 'Score', ocds: 'OCDS export',
+    dashboard: 'Dashboard', contracts: 'Contracts', orders: 'Orders (PO)',
+    my_orders: 'Orders in progress', spend: 'Total spend', savings: 'Savings',
+    active_events: 'Active tenders', pending: 'Pending approval', tasks: 'Tasks',
+    notifications: 'Notifications', activate: 'Activate', create_po: 'Create PO',
+    make_contract: 'Create contract', history: 'History',
   },
 };
 
