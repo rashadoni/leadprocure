@@ -17,3 +17,6 @@ infra/secrets/
 infra/.env.prod
 license-private.pem
 .venv/
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/.playwright/

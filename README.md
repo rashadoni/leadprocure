@@ -51,7 +51,8 @@ Demo logins (password `Passw0rd!`): buyer `admin@acme.test` / `approver@acme.tes
 ## Tests
 
 ```bash
-pnpm --filter api test:e2e   # 86 e2e tests, 9 suites — happy paths + hostile isolation
+pnpm --filter api test:e2e   # 86 API e2e tests (9 suites) + Playwright UI smoke
+pnpm --filter web test:ui   # browser smoke: every section of both panels + key flows
 ```
 
 The suite is the security net: cross-tenant isolation, sealed-bid secrecy before opening,
