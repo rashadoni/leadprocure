@@ -17,7 +17,7 @@ async function login(page: Page, email: string): Promise<void> {
 
 async function assertRenders(page: Page, path: string, headingHint: RegExp): Promise<void> {
   await page.goto(path);
-  await expect(page.locator('h1').first()).toContainText(headingHint, { timeout: 10_000 });
+  await expect(page.locator('h1').first()).toContainText(headingHint, { timeout: 20_000 });
   await expect(page.locator('text=Unexpected Application Error')).toHaveCount(0);
 }
 
@@ -59,6 +59,7 @@ test.describe('supplier panel', () => {
   test.beforeEach(async ({ page }) => login(page, 'seller@supply-one.test'));
 
   test('all supplier sections render', async ({ page }) => {
+    await assertRenders(page, '/supplier/dashboard', /Рабочий стол|Dashboard|İdarə paneli/);
     await assertRenders(page, '/supplier/market', /Открытые тендеры|Open tenders|Açıq tender/);
     await assertRenders(page, '/supplier/orders', /Заказы в работе|Orders in progress|İşdə olan/);
     await assertRenders(page, '/supplier/contracts', /Контракты|Contracts|Müqavil/);

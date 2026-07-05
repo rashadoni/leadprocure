@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { randomUUID } from 'crypto';
+import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
 import { MailProvider, Mail } from '../src/common/mail/mail.module';
 
@@ -86,7 +87,7 @@ describe('auth flow (API e2e)', () => {
       .expect(401);
   });
 
-  it('refreshes the access token and ROTATES the refresh cookie', async () => {
+  it('rotates the cookie, tolerates a benign replay within leeway, but nukes the family on stale reuse', async () => {
     const res = await request(app.getHttpServer())
       .post('/auth/refresh')
       .set('Cookie', refreshCookie)
@@ -95,13 +96,31 @@ describe('auth flow (API e2e)', () => {
     const rotated = (res.get('Set-Cookie') ?? []).find((c: string) => c.startsWith('lp_refresh='));
     expect(rotated).toBeTruthy();
     expect(rotated).not.toBe(refreshCookie); // a new token was issued
-    // the OLD refresh token is now revoked → reusing it fails and is flagged as reuse
-    await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', refreshCookie).expect(401);
-    // the NEW token works
+    const oldCookie = refreshCookie.split(';')[0];
     const newCookie = rotated!.split(';')[0];
-    const again = await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', newCookie).expect(201);
-    expect(again.body.accessToken).toBeDefined();
-    refreshCookie = (again.get('Set-Cookie') ?? []).find((c: string) => c.startsWith('lp_refresh='))!.split(';')[0];
+
+    // Benign race: the just-rotated token replayed within the leeway window is a normal
+    // SPA double-refresh (browser hasn't stored the new cookie yet) — it still yields
+    // fresh creds and does NOT revoke the family.
+    const replay = await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', oldCookie).expect(201);
+    expect(replay.body.accessToken).toBeDefined();
+
+    // Theft: age the revoked tokens past the leeway, then reuse one → breach response
+    // that hard-revokes EVERY session for the user (including the still-live newCookie).
+    const ds = app.get(DataSource);
+    await ds.query(
+      `UPDATE sessions SET revoked_at = now() - interval '1 hour'
+       WHERE revoked = true AND revoked_at IS NOT NULL
+         AND user_id = (SELECT id FROM organization_users WHERE email = $1)`,
+      [email],
+    );
+    await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', oldCookie).expect(401);
+    await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', newCookie).expect(401);
+
+    // Re-establish a clean session for the remaining tests.
+    const relogin = await request(app.getHttpServer()).post('/auth/login').send({ email, password: 'password123' }).expect(201);
+    accessToken = relogin.body.accessToken;
+    refreshCookie = (relogin.get('Set-Cookie') ?? []).find((c: string) => c.startsWith('lp_refresh='))!.split(';')[0];
   });
 
   it('role guard: buyer admin cannot be tricked into supplier-only data leak via role claim', async () => {

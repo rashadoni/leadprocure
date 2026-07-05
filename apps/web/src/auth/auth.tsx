@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
-import { api, setToken } from '../api/client';
+import { api, setToken, refreshAccessToken } from '../api/client';
 
 export interface Session {
   user: { id: string; email: string; fullName: string };
@@ -26,8 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Try silent resume via the httpOnly refresh cookie.
     (async () => {
       try {
-        const { data } = await api.post('/auth/refresh');
-        setToken(data.accessToken);
+        await refreshAccessToken();
         const me = await api.get('/auth/me');
         setSession({
           user: me.data.user,

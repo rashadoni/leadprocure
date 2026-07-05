@@ -5,8 +5,10 @@ import { defineConfig } from '@playwright/test';
 //   pnpm --filter api start:dev   &   pnpm --filter web dev
 export default defineConfig({
   testDir: './tests',
-  timeout: 30_000,
-  retries: 0,
+  // Generous: the Vite dev server compiles each route on first visit, so a run that
+  // walks every page cold can be slow (this is a dev-server trait, not the app).
+  timeout: 90_000,
+  retries: 1,
   use: {
     baseURL: 'http://localhost:5173',
     headless: true,

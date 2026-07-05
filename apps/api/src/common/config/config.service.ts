@@ -33,6 +33,10 @@ export class AppConfig {
   readonly jwtRefreshTtl = int('JWT_REFRESH_TTL', 1209600);
   readonly refreshCookieName = opt('REFRESH_COOKIE_NAME', 'lp_refresh');
   readonly refreshCookieSecure = bool('REFRESH_COOKIE_SECURE', false);
+  // Rotating-refresh reuse leeway: a just-rotated token replayed within this window is
+  // treated as a benign race (SPA reload / StrictMode double-mount / concurrent 401s),
+  // not theft. Only reuse older than this trips the "revoke the family" breach response.
+  readonly refreshReuseLeewayMs = int('JWT_REFRESH_REUSE_LEEWAY_MS', 15000);
 
   readonly bidMasterKeyB64 = opt('BID_MASTER_KEY_B64', '');
 

@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import * as argon2 from 'argon2';
+import { DataSource } from 'typeorm';
 import type { AccessTokenPayload, MembershipRole, OrganizationKind } from '@leadprocure/shared';
 import { randomBytes } from 'crypto';
 import { RequestContextService } from '../../common/context/request-context.service';
@@ -45,6 +46,7 @@ export class IdentityService {
     private readonly cfg: AppConfig,
     private readonly audit: AuditService,
     private readonly mail: MailProvider,
+    private readonly ds: DataSource,
   ) {}
 
   // Always returns ok (no account enumeration). Emails a one-time link when the
@@ -87,7 +89,9 @@ export class IdentityService {
       [rows[0].user_id, pwHash],
     );
     await m.query(`UPDATE password_reset_tokens SET used_at = now() WHERE id = $1`, [rows[0].id]);
-    await m.query(`UPDATE sessions SET revoked = true WHERE user_id = $1`, [rows[0].user_id]);
+    // Hard revoke (revoked_at NULL): a password reset kills every session outright — these
+    // must never qualify for the rotation reuse-leeway.
+    await m.query(`UPDATE sessions SET revoked = true, revoked_at = NULL WHERE user_id = $1`, [rows[0].user_id]);
     return { ok: true };
   }
 
@@ -156,7 +160,12 @@ export class IdentityService {
   }
 
   // Rotating refresh: each use revokes the presented token and issues a fresh one.
-  // Re-presenting an already-used (revoked) token is a theft signal → nuke the family.
+  // Re-presenting an already-rotated token is normally a theft signal → nuke the family.
+  // But a legitimate client can race the same token twice (SPA reload, StrictMode
+  // double-mount, several in-flight 401s all refreshing at once): the browser hasn't
+  // received the new cookie yet, so both calls carry the old one. We tolerate that with
+  // a short leeway window — a replay within `refreshReuseLeewayMs` of rotation gets fresh
+  // creds without nuking; only stale reuse trips the breach response.
   async refresh(refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
     let payload;
     try {
@@ -167,16 +176,24 @@ export class IdentityService {
     const m = this.rc.manager;
     const hash = this.hashToken(refreshToken);
     const sessions = await m.query(
-      `SELECT s.id, s.revoked, s.expires_at, u.token_version, u.status
+      `SELECT s.id, s.revoked, s.revoked_at, s.expires_at, u.token_version, u.status
        FROM sessions s JOIN organization_users u ON u.id = s.user_id
        WHERE s.user_id = $1 AND s.org_id = $2 AND s.refresh_hash = $3`,
       [payload.sub, payload.org_id, hash],
     );
     if (!sessions.length) throw new UnauthorizedException('Invalid refresh token');
     const s = sessions[0];
-    if (s.revoked) {
-      // reuse of a rotated token — revoke every session for this user
-      await m.query(`UPDATE sessions SET revoked = true WHERE user_id = $1`, [payload.sub]);
+    const benignReplay =
+      s.revoked &&
+      s.revoked_at != null &&
+      Date.now() - new Date(s.revoked_at).getTime() <= this.cfg.refreshReuseLeewayMs;
+    if (s.revoked && !benignReplay) {
+      // Stale reuse of a rotated token = theft signal. Hard revoke the WHOLE family
+      // (revoked_at NULL) so nothing — not even recently-rotated tokens — stays
+      // benign-replayable after a breach. This MUST run on a separate autocommit
+      // connection: the request transaction rolls back when we throw below, which would
+      // otherwise undo the revoke and make the breach response a no-op.
+      await this.ds.query(`UPDATE sessions SET revoked = true, revoked_at = NULL WHERE user_id = $1`, [payload.sub]);
       throw new UnauthorizedException('Refresh token reuse detected');
     }
     if (s.token_version !== payload.token_version || s.status !== 'ACTIVE' || new Date(s.expires_at).getTime() <= Date.now()) {
@@ -189,7 +206,10 @@ export class IdentityService {
     );
     if (!membership.length) throw new UnauthorizedException('Membership revoked');
 
-    await m.query(`UPDATE sessions SET revoked = true WHERE id = $1`, [s.id]); // rotate out
+    // Rotate out the presented token (skip if a benign replay already revoked it).
+    if (!benignReplay) {
+      await m.query(`UPDATE sessions SET revoked = true, revoked_at = now() WHERE id = $1`, [s.id]);
+    }
     const access = this.tokens.signAccess({
       sub: payload.sub,
       org_id: membership[0].org_id,
@@ -208,6 +228,24 @@ export class IdentityService {
       [randomUUID(), payload.sub, membership[0].org_id, this.hashToken(newRefresh), expires],
     );
     return { accessToken: access, refreshToken: newRefresh };
+  }
+
+  // Server-side logout: hard-revoke the presented refresh session so the token can't be
+  // refreshed after sign-out (clearing the cookie alone leaves a stolen copy usable).
+  // Tolerant of a missing/garbage token — logout must never error the client.
+  async logout(refreshToken: string | undefined): Promise<{ ok: true }> {
+    if (!refreshToken) return { ok: true };
+    let payload;
+    try {
+      payload = this.tokens.verifyRefresh(refreshToken);
+    } catch {
+      return { ok: true };
+    }
+    await this.rc.manager.query(
+      `UPDATE sessions SET revoked = true, revoked_at = NULL WHERE user_id = $1 AND refresh_hash = $2`,
+      [payload.sub, this.hashToken(refreshToken)],
+    );
+    return { ok: true };
   }
 
   async me(auth: AccessTokenPayload) {

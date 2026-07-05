@@ -16,6 +16,26 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Coalesce concurrent refreshes into one in-flight request. Without this, a page reload
+// (StrictMode double-mount) or several 401s at once each POST /auth/refresh with the same
+// cookie; rotating-refresh then sees the second as a replay. One shared promise = one
+// rotation per burst.
+let refreshInFlight: Promise<string> | null = null;
+export function refreshAccessToken(): Promise<string> {
+  if (!refreshInFlight) {
+    refreshInFlight = api
+      .post('/auth/refresh')
+      .then(({ data }) => {
+        setToken(data.accessToken);
+        return data.accessToken as string;
+      })
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+  return refreshInFlight;
+}
+
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
@@ -23,9 +43,8 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !original._retry && !original.url?.includes('/auth/')) {
       original._retry = true;
       try {
-        const { data } = await api.post('/auth/refresh');
-        setToken(data.accessToken);
-        original.headers.Authorization = `Bearer ${data.accessToken}`;
+        const token = await refreshAccessToken();
+        original.headers.Authorization = `Bearer ${token}`;
         return api(original);
       } catch {
         setToken(null);

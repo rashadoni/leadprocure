@@ -65,7 +65,8 @@ export class IdentityController {
   }
 
   @Post('logout')
-  logout(@Res({ passthrough: true }) res: Response) {
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    await this.identity.logout(req.cookies?.[this.cfg.refreshCookieName]);
     res.clearCookie(this.cfg.refreshCookieName);
     return { ok: true };
   }
