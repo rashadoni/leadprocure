@@ -113,7 +113,12 @@ export default function Requests() {
                 <td>{r.request_no}</td>
                 <td>{r.title}</td>
                 <td>{fmtMoney(r.estimated_total_minor, r.currency)}</td>
-                <td><span className={`badge ${r.status}`}>{r.status}</span></td>
+                <td>
+                  <span className={`badge ${r.status}`}>{r.status}</span>
+                  {r.status === 'SUBMITTED' && r.steps_total > 0 && (
+                    <div className="hint">✔ {r.steps_done}/{r.steps_total} · {r.current_role}</div>
+                  )}
+                </td>
                 <td>{r.method_resolved ?? '—'}</td>
                 <td>
                   {r.status === 'DRAFT' && <button className="btn small" onClick={() => act(r.id, 'submit')}>{t('submit')}</button>}{' '}

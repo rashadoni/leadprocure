@@ -43,11 +43,15 @@ export class RequestsService {
 
   async list(q?: string) {
     return this.rc.manager.query(
-      `SELECT id, request_no, title, status, estimated_total_minor, currency, category,
-              method_resolved, created_at
-       FROM procurement_requests
-       WHERE ($1::text IS NULL OR title ILIKE '%' || $1 || '%' OR request_no ILIKE '%' || $1 || '%')
-       ORDER BY created_at DESC`,
+      `SELECT pr.id, pr.request_no, pr.title, pr.status, pr.estimated_total_minor, pr.currency, pr.category,
+              pr.method_resolved, pr.created_at,
+              (SELECT count(*)::int FROM approval_steps s WHERE s.request_id = pr.id) AS steps_total,
+              (SELECT count(*)::int FROM approval_steps s WHERE s.request_id = pr.id AND s.status = 'APPROVED') AS steps_done,
+              (SELECT s.approver_role FROM approval_steps s WHERE s.request_id = pr.id AND s.status = 'SUBMITTED'
+               ORDER BY s.step_no LIMIT 1) AS current_role
+       FROM procurement_requests pr
+       WHERE ($1::text IS NULL OR pr.title ILIKE '%' || $1 || '%' OR pr.request_no ILIKE '%' || $1 || '%')
+       ORDER BY pr.created_at DESC`,
       [q ?? null],
     );
   }
@@ -60,7 +64,32 @@ export class RequestsService {
       `SELECT * FROM request_items WHERE request_id = $1 ORDER BY line_no`,
       [id],
     );
-    return { ...rows[0], items };
+    const approvals = await m.query(
+      `SELECT step_no, approver_role, status, acted_at FROM approval_steps WHERE request_id = $1 ORDER BY step_no`,
+      [id],
+    );
+    return { ...rows[0], items, approvals };
+  }
+
+  async getApprovalPolicies() {
+    return this.rc.manager.query(
+      `SELECT id, min_amount_minor, max_amount_minor, steps FROM approval_policies ORDER BY min_amount_minor`,
+    );
+  }
+
+  async replaceApprovalPolicies(
+    orgId: string,
+    policies: Array<{ minAmountMinor: number; maxAmountMinor: number | null; steps: Array<{ order: number; role: string }> }>,
+  ) {
+    const m = this.rc.manager;
+    await m.query(`DELETE FROM approval_policies`);
+    for (const p of policies) {
+      await m.query(
+        `INSERT INTO approval_policies(buyer_org_id, min_amount_minor, max_amount_minor, steps) VALUES ($1,$2,$3,$4)`,
+        [orgId, p.minAmountMinor, p.maxAmountMinor, JSON.stringify(p.steps)],
+      );
+    }
+    return this.getApprovalPolicies();
   }
 
   async create(dto: UpsertRequestDto, auth: AccessTokenPayload) {
@@ -96,12 +125,29 @@ export class RequestsService {
   }
 
   async submit(id: string) {
-    await this.requireStatus(id, ['DRAFT']);
-    await this.rc.manager.query(
-      `UPDATE procurement_requests SET status='SUBMITTED', updated_at=now() WHERE id=$1`,
-      [id],
-    );
-    await this.audit.record('REQUEST_SUBMITTED', 'procurement_request', id, {});
+    const m = this.rc.manager;
+    const req = await this.requireStatus(id, ['DRAFT']);
+    await m.query(`UPDATE procurement_requests SET status='SUBMITTED', updated_at=now() WHERE id=$1`, [id]);
+
+    // Materialize the approval chain from the matching value-banded policy (if any).
+    const total = Number(req.estimated_total_minor);
+    const policy = (
+      await m.query(
+        `SELECT steps FROM approval_policies
+         WHERE min_amount_minor <= $1 AND (max_amount_minor IS NULL OR $1 < max_amount_minor)
+         ORDER BY min_amount_minor DESC LIMIT 1`,
+        [total],
+      )
+    )[0];
+    const steps: Array<{ order: number; role: string }> = policy ? policy.steps : [];
+    let stepNo = 1;
+    for (const s of [...steps].sort((a, b) => a.order - b.order)) {
+      await m.query(
+        `INSERT INTO approval_steps(request_id, owner_org_id, step_no, approver_role) VALUES ($1,$2,$3,$4)`,
+        [id, req.owner_org_id, stepNo++, s.role],
+      );
+    }
+    await this.audit.record('REQUEST_SUBMITTED', 'procurement_request', id, { steps: steps.length });
     return this.get(id);
   }
 
@@ -111,6 +157,26 @@ export class RequestsService {
     const m = this.rc.manager;
     await m.query(`SELECT id FROM procurement_requests WHERE id=$1 FOR UPDATE`, [id]);
     const req = await this.requireStatus(id, ['SUBMITTED']);
+
+    // Multi-step chain: advance the current step; only the FINAL step triggers the
+    // full approval (total recompute + method resolution) below.
+    const pending = await m.query(
+      `SELECT * FROM approval_steps WHERE request_id=$1 AND status='SUBMITTED' ORDER BY step_no`,
+      [id],
+    );
+    if (pending.length) {
+      const current = pending[0];
+      if (auth.role !== current.approver_role && auth.role !== 'BUYER_ADMIN') {
+        throw new BadRequestException(`This step requires role ${current.approver_role}`);
+      }
+      await m.query(
+        `UPDATE approval_steps SET status='APPROVED', acted_by=$2, acted_at=now() WHERE id=$1`,
+        [current.id, auth.sub],
+      );
+      await this.audit.record('APPROVAL_STEP_ACTED', 'approval_step', current.id, { step_no: current.step_no, decision: 'APPROVED' });
+      if (pending.length > 1) return this.get(id); // more steps remain — stays SUBMITTED
+    }
+
     const totalRows = await m.query(
       `SELECT COALESCE(SUM(est_total_minor),0)::bigint AS total FROM request_items WHERE request_id=$1`,
       [id],
@@ -128,8 +194,21 @@ export class RequestsService {
   }
 
   async reject(id: string, auth: AccessTokenPayload, reason?: string) {
+    const m = this.rc.manager;
     await this.requireStatus(id, ['SUBMITTED']);
-    await this.rc.manager.query(
+    // Any approver in the chain can reject; mark their current step and the request.
+    const pending = await m.query(
+      `SELECT * FROM approval_steps WHERE request_id=$1 AND status='SUBMITTED' ORDER BY step_no`,
+      [id],
+    );
+    if (pending.length) {
+      const current = pending[0];
+      if (auth.role !== current.approver_role && auth.role !== 'BUYER_ADMIN') {
+        throw new BadRequestException(`This step requires role ${current.approver_role}`);
+      }
+      await m.query(`UPDATE approval_steps SET status='REJECTED', acted_by=$2, acted_at=now() WHERE id=$1`, [current.id, auth.sub]);
+    }
+    await m.query(
       `UPDATE procurement_requests SET status='REJECTED', rejected_by=$2, updated_at=now() WHERE id=$1`,
       [id, auth.sub],
     );
@@ -214,6 +293,14 @@ export class RequestsController {
   @Put('method-policies') @Roles('BUYER_ADMIN')
   replacePolicies(@CurrentUser() auth: AccessTokenPayload, @Body() body: { policies: any[] }) {
     return this.requests.replacePolicies(auth.org_id, body.policies ?? []);
+  }
+
+  @Get('approval-policies') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  approvalPolicies() { return this.requests.getApprovalPolicies(); }
+
+  @Put('approval-policies') @Roles('BUYER_ADMIN')
+  replaceApprovalPolicies(@CurrentUser() auth: AccessTokenPayload, @Body() body: { policies: any[] }) {
+    return this.requests.replaceApprovalPolicies(auth.org_id, body.policies ?? []);
   }
 
   @Get(':id') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')

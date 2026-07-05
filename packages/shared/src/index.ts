@@ -197,6 +197,7 @@ export const AUDIT_ACTIONS = [
   'SHIPMENT_CREATED',
   'SHIPMENT_EVENT_ADDED',
   'GRN_RECORDED',
+  'APPROVAL_STEP_ACTED',
 ] as const;
 
 // ---------------- Logistics ----------------

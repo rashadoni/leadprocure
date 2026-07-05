@@ -9,12 +9,14 @@ export default function Settings() {
   const { session } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [policies, setPolicies] = useState<any[]>([]);
+  const [approvals, setApprovals] = useState<any[]>([]);
   const [nu, setNu] = useState({ email: '', fullName: '', password: '', role: 'BUYER_USER' });
   const isAdmin = session?.org.role === 'BUYER_ADMIN';
 
   const load = () => {
     api.get('/settings/users').then((r) => setUsers(r.data));
     api.get('/requests/method-policies').then((r) => setPolicies(r.data));
+    api.get('/requests/approval-policies').then((r) => setApprovals(r.data));
   };
   useEffect(load, []);
 
@@ -92,6 +94,30 @@ export default function Settings() {
               ],
             }))}>
             Set default (50k AZN threshold)
+          </button>
+        )}
+      </div>
+
+      <div className="card">
+        <h3>{t('approval_chain')}</h3>
+        {approvals.length === 0 && <div className="hint">Single-step approval (no chain configured)</div>}
+        {approvals.map((p) => (
+          <div key={p.id} style={{ padding: '6px 0' }}>
+            {fmtMoney(p.min_amount_minor)} – {p.max_amount_minor ? fmtMoney(p.max_amount_minor) : '∞'}:{' '}
+            {(p.steps ?? []).sort((a: any, b: any) => a.order - b.order).map((s: any, i: number) => (
+              <span key={i} className="badge INVITED" style={{ marginRight: 4 }}>{i + 1}. {s.role}</span>
+            ))}
+          </div>
+        ))}
+        {isAdmin && (
+          <button className="btn small" style={{ marginTop: 10 }}
+            onClick={() => run(() => api.put('/requests/approval-policies', {
+              policies: [
+                { minAmountMinor: 0, maxAmountMinor: 5_000_000, steps: [{ order: 1, role: 'BUYER_APPROVER' }] },
+                { minAmountMinor: 5_000_000, maxAmountMinor: null, steps: [{ order: 1, role: 'BUYER_APPROVER' }, { order: 2, role: 'BUYER_ADMIN' }] },
+              ],
+            }))}>
+            Set default 2-step chain (large = approver → admin)
           </button>
         )}
       </div>
