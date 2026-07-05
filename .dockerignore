@@ -1,0 +1,11 @@
+**/node_modules
+**/dist
+**/build
+**/coverage
+**/.git
+**/.env
+**/.env.local
+**/*.log
+playwright-report
+test-results
+*.docx

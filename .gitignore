@@ -13,3 +13,5 @@ apps/api/dist/
 packages/shared/dist/
 infra/secrets/
 *.license
+.env.prod
+infra/.env.prod

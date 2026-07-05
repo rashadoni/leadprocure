@@ -1,0 +1,86 @@
+# Production/demo stack. Build context is the repo root so the pnpm workspace is visible.
+#   cd infra && cp .env.prod.example .env.prod && edit secrets
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_OWNER_USER:-leadprocure_owner}
+      POSTGRES_PASSWORD: ${POSTGRES_OWNER_PASSWORD:?set in .env.prod}
+      POSTGRES_DB: ${POSTGRES_DB:-leadprocure}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_OWNER_USER:-leadprocure_owner} -d ${POSTGRES_DB:-leadprocure}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?set in .env.prod}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?set in .env.prod}
+    volumes:
+      - minio:/data
+
+  clamav:
+    image: clamav/clamav:latest
+    restart: unless-stopped
+    volumes:
+      - clamav:/var/lib/clamav
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      API_PORT: 3000
+      DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-cloud_multi_tenant}
+      DATABASE_OWNER_URL: postgres://${POSTGRES_OWNER_USER:-leadprocure_owner}:${POSTGRES_OWNER_PASSWORD}@postgres:5432/${POSTGRES_DB:-leadprocure}
+      DATABASE_URL: postgres://app_user:${APP_DB_PASSWORD:?set in .env.prod}@postgres:5432/${POSTGRES_DB:-leadprocure}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set in .env.prod}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set in .env.prod}
+      REFRESH_COOKIE_SECURE: "true"
+      BID_MASTER_KEY_B64: ${BID_MASTER_KEY_B64:?set in .env.prod}
+      WEB_ORIGIN: ${WEB_ORIGIN:?set in .env.prod}
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: ${S3_BUCKET:-leadprocure}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_FORCE_PATH_STYLE: "true"
+      CLAMAV_ENABLED: ${CLAMAV_ENABLED:-false}
+      CLAMAV_HOST: clamav
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-Leadprocure <no-reply@leadprocure.local>}
+    ports:
+      - "3000:3000"
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${PUBLIC_API_URL:?set in .env.prod (e.g. https://api.example.com)}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  pgdata:
+  minio:
+  clamav:
