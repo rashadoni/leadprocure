@@ -219,6 +219,71 @@ export class ContractsService {
     return { ...rows[0], items, history };
   }
 
+  // ---- Goods receipt (GRN) — buyer records what arrived; partial receipts allowed ----
+
+  async createReceipt(
+    poId: string,
+    dto: { items: Array<{ poItemId: string; qty: number }>; note?: string },
+    auth: AccessTokenPayload,
+  ) {
+    const m = this.rc.manager;
+    const po = (await m.query(`SELECT id, buyer_org_id, supplier_org_id FROM purchase_orders WHERE id = $1`, [poId]))[0];
+    if (!po) throw new NotFoundException('Order not found');
+    if (po.buyer_org_id !== auth.org_id) throw new BadRequestException('Only the buyer records receipts');
+    if (!dto.items?.length) throw new BadRequestException('At least one line is required');
+
+    const gr = (
+      await m.query(
+        `INSERT INTO goods_receipts(po_id, buyer_org_id, supplier_org_id, received_by, note)
+         VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+        [poId, po.buyer_org_id, po.supplier_org_id, auth.sub, dto.note ?? null],
+      )
+    )[0];
+    for (const it of dto.items) {
+      if (!(Number(it.qty) > 0)) throw new BadRequestException('qty must be positive');
+      await m.query(
+        `INSERT INTO goods_receipt_items(gr_id, po_item_id, buyer_org_id, supplier_org_id, qty_received)
+         VALUES ($1,$2,$3,$4,$5)`,
+        [gr.id, it.poItemId, po.buyer_org_id, po.supplier_org_id, it.qty],
+      );
+    }
+    await this.audit.record('GRN_RECORDED', 'goods_receipt', gr.id, { po_id: poId, lines: dto.items.length });
+
+    // If every PO line is now fully received, best-effort advance the PO to ACCEPTED
+    // (legal only from DELIVERED; a SAVEPOINT keeps an inapplicable step a no-op).
+    const summary = await this.receiptSummary(poId);
+    if (summary.every((s: any) => Number(s.received) >= Number(s.ordered))) {
+      await m.query(`SAVEPOINT accept`);
+      try {
+        await m.query(`SELECT po_apply_status($1, 'ACCEPTED'::po_status, 'fully received')`, [poId]);
+        await m.query(`RELEASE SAVEPOINT accept`);
+      } catch {
+        await m.query(`ROLLBACK TO SAVEPOINT accept`);
+      }
+    }
+    await this.notify.notifyOrg(po.supplier_org_id, 'GRN_RECORDED', { po_id: poId });
+    return this.getReceipts(poId);
+  }
+
+  private async receiptSummary(poId: string) {
+    return this.rc.manager.query(
+      `SELECT poi.id AS po_item_id, poi.name, poi.qty AS ordered,
+              COALESCE(SUM(gri.qty_received),0) AS received
+       FROM purchase_order_items poi
+       LEFT JOIN goods_receipt_items gri ON gri.po_item_id = poi.id
+       WHERE poi.po_id = $1 GROUP BY poi.id, poi.name, poi.qty ORDER BY poi.line_no`,
+      [poId],
+    );
+  }
+
+  async getReceipts(poId: string) {
+    const receipts = await this.rc.manager.query(
+      `SELECT id, note, created_at FROM goods_receipts WHERE po_id = $1 ORDER BY created_at`,
+      [poId],
+    );
+    return { summary: await this.receiptSummary(poId), receipts };
+  }
+
   // All transitions run through the SECURITY DEFINER seam — it enforces which side
   // may perform which transition; we just relay and audit.
   async setOrderStatus(id: string, status: PoStatus, note: string | undefined, auth: AccessTokenPayload) {
@@ -299,6 +364,21 @@ export class ContractsController {
     @CurrentUser() auth: AccessTokenPayload,
   ) {
     return this.contracts.setOrderStatus(id, body.status, body.note, auth);
+  }
+
+  @Get('orders/:id/receipts')
+  receipts(@Param('id') id: string) {
+    return this.contracts.getReceipts(id);
+  }
+
+  @Post('orders/:id/receipts')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  receive(
+    @Param('id') id: string,
+    @Body() body: { items: Array<{ poItemId: string; qty: number }>; note?: string },
+    @CurrentUser() auth: AccessTokenPayload,
+  ) {
+    return this.contracts.createReceipt(id, body, auth);
   }
 }
 

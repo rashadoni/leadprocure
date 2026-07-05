@@ -21,6 +21,16 @@ export default function Contracts() {
     try { await fn(); load(); } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
+  // Receive all outstanding quantities (partial receipts are supported by the API).
+  const receiveAll = async (poId: string) => {
+    const { data } = await api.get(`/orders/${poId}/receipts`);
+    const remaining = data.summary
+      .filter((s: any) => Number(s.received) < Number(s.ordered))
+      .map((s: any) => ({ poItemId: s.po_item_id, qty: Number(s.ordered) - Number(s.received) }));
+    if (!remaining.length) { alert('Nothing left to receive'); return; }
+    await act(() => api.post(`/orders/${poId}/receipts`, { items: remaining }));
+  };
+
   return (
     <>
       <h1>{t('contracts')}</h1>
@@ -67,7 +77,10 @@ export default function Contracts() {
                       onClick={() => act(() => api.post(`/orders/${p.id}/status`, { status: next }))}>
                       {next}
                     </button>
-                  ))}
+                  ))}{' '}
+                  {isBuyerSide && ['SHIPPED', 'DELIVERED'].includes(p.status) && (
+                    <button className="btn small" onClick={() => receiveAll(p.id)}>{t('receive')} 📥</button>
+                  )}
                 </td>
               </tr>
             ))}

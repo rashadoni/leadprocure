@@ -21,7 +21,7 @@ const dict: Record<Lang, Record<string, string>> = {
     auction: 'Auksion', best_price: 'Ən yaxşı qiymət', next_max: 'Növbəti maks.',
     bidders: 'İştirakçılar', extensions: 'Uzadılmalar', finalize: 'Yekunlaşdır',
     place_bid: 'Təklif ver', qna: 'Sual-cavab', ask: 'Soruş', answer: 'Cavabla',
-    addendum: 'Əlavə', settings: 'Parametrlər', users: 'İstifadəçilər', scorecard: 'Reytinq', ai_reco: 'Süni intellekt tövsiyəsi', ai_run: 'Təhlil et', ai_model: 'Model', logistics: 'Logistika', create_shipment: 'Göndəriş yarat', direct_order: 'Birbaşa sifariş', attachments: 'Əlavələr', forgot: 'Şifrəni unutdunuz?', reset_password: 'Şifrəni yenilə', reset_sent: 'Linki e-poçtunuza göndərdik.',
+    addendum: 'Əlavə', settings: 'Parametrlər', users: 'İstifadəçilər', scorecard: 'Reytinq', ai_reco: 'Süni intellekt tövsiyəsi', ai_run: 'Təhlil et', ai_model: 'Model', logistics: 'Logistika', create_shipment: 'Göndəriş yarat', direct_order: 'Birbaşa sifariş', attachments: 'Əlavələr', receive: 'Qəbul et', forgot: 'Şifrəni unutdunuz?', reset_password: 'Şifrəni yenilə', reset_sent: 'Linki e-poçtunuza göndərdik.',
   },
   ru: {
     login: 'Войти', logout: 'Выход', email: 'Email', password: 'Пароль', register: 'Регистрация',
@@ -41,7 +41,7 @@ const dict: Record<Lang, Record<string, string>> = {
     auction: 'Аукцион', best_price: 'Лучшая цена', next_max: 'След. максимум',
     bidders: 'Участники', extensions: 'Продления', finalize: 'Завершить торги',
     place_bid: 'Сделать ставку', qna: 'Вопросы и ответы', ask: 'Спросить', answer: 'Ответить',
-    addendum: 'Аддендум', settings: 'Настройки', users: 'Пользователи', scorecard: 'Рейтинг', ai_reco: 'ИИ-рекомендация', ai_run: 'Проанализировать', ai_model: 'Модель', logistics: 'Логистика', create_shipment: 'Оформить отгрузку', direct_order: 'Прямой заказ', attachments: 'Вложения', forgot: 'Забыли пароль?', reset_password: 'Сбросить пароль', reset_sent: 'Ссылка отправлена на почту.',
+    addendum: 'Аддендум', settings: 'Настройки', users: 'Пользователи', scorecard: 'Рейтинг', ai_reco: 'ИИ-рекомендация', ai_run: 'Проанализировать', ai_model: 'Модель', logistics: 'Логистика', create_shipment: 'Оформить отгрузку', direct_order: 'Прямой заказ', attachments: 'Вложения', receive: 'Приёмка', forgot: 'Забыли пароль?', reset_password: 'Сбросить пароль', reset_sent: 'Ссылка отправлена на почту.',
   },
   en: {
     login: 'Log in', logout: 'Log out', email: 'Email', password: 'Password', register: 'Register',
@@ -61,7 +61,7 @@ const dict: Record<Lang, Record<string, string>> = {
     auction: 'Auction', best_price: 'Best price', next_max: 'Next max',
     bidders: 'Bidders', extensions: 'Extensions', finalize: 'Finalize',
     place_bid: 'Place bid', qna: 'Q&A', ask: 'Ask', answer: 'Answer',
-    addendum: 'Addendum', settings: 'Settings', users: 'Users', scorecard: 'Scorecard', ai_reco: 'AI recommendation', ai_run: 'Analyze', ai_model: 'Model', logistics: 'Logistics', create_shipment: 'Create shipment', direct_order: 'Direct order', attachments: 'Attachments', forgot: 'Forgot password?', reset_password: 'Reset password', reset_sent: 'Reset link sent to your email.',
+    addendum: 'Addendum', settings: 'Settings', users: 'Users', scorecard: 'Scorecard', ai_reco: 'AI recommendation', ai_run: 'Analyze', ai_model: 'Model', logistics: 'Logistics', create_shipment: 'Create shipment', direct_order: 'Direct order', attachments: 'Attachments', receive: 'Receive', forgot: 'Forgot password?', reset_password: 'Reset password', reset_sent: 'Reset link sent to your email.',
   },
 };
 

@@ -377,6 +377,35 @@ describe('sealed RFQ end-to-end flow', () => {
       .then((r) => expect(r.body.shipment).toBeNull());
   });
 
+  it('GRN: partial then full receipt auto-accepts the PO; foreign supplier is blocked', async () => {
+    const bearer = (tok: string) => ['Authorization', `Bearer ${tok}`] as [string, string];
+    const po = await http().post(`/contracts/${contractId}/orders`).set(...bearer(buyerToken)).expect(201);
+    const poId = po.body.id;
+    const poItemId = po.body.items[0].id;
+    const ordered = Number(po.body.items[0].qty); // 100
+    // walk to DELIVERED
+    await http().post(`/orders/${poId}/status`).set(...bearer(buyerToken)).send({ status: 'ISSUED' }).expect(201);
+    for (const s of ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED']) {
+      await http().post(`/orders/${poId}/status`).set(...bearer(supplierToken)).send({ status: s }).expect(201);
+    }
+    // partial receipt (40 of 100) — PO stays DELIVERED
+    const partial = await http().post(`/orders/${poId}/receipts`).set(...bearer(buyerToken))
+      .send({ items: [{ poItemId, qty: 40 }] }).expect(201);
+    expect(Number(partial.body.summary[0].received)).toBe(40);
+    let poNow = await http().get(`/orders/${poId}`).set(...bearer(buyerToken)).expect(200);
+    expect(poNow.body.status).toBe('DELIVERED');
+    // supplier is not allowed to record receipts (buyer-only endpoint → 403)
+    await http().post(`/orders/${poId}/receipts`).set(...bearer(supplierToken)).send({ items: [{ poItemId, qty: 1 }] }).expect(403);
+    // remaining 60 → fully received → PO auto-ACCEPTED
+    await http().post(`/orders/${poId}/receipts`).set(...bearer(buyerToken))
+      .send({ items: [{ poItemId, qty: ordered - 40 }] }).expect(201);
+    poNow = await http().get(`/orders/${poId}`).set(...bearer(buyerToken)).expect(200);
+    expect(poNow.body.status).toBe('ACCEPTED');
+    // supplier can read the receipt summary (cross-org); foreign supplier cannot see the PO
+    await http().get(`/orders/${poId}/receipts`).set(...bearer(supplierToken)).expect(200);
+    await http().get(`/orders/${poId}`).set(...bearer(supplier2Token)).expect(404);
+  });
+
   it('DIRECT purchase: below-threshold request → straight to PO; supplier is notified', async () => {
     const bearer = (tok: string) => ['Authorization', `Bearer ${tok}`] as [string, string];
     // approve the supplier in the buyer's registry (required for a direct order)

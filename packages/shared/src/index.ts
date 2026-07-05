@@ -196,6 +196,7 @@ export const AUDIT_ACTIONS = [
   'SCORECARD_ENTRY_ADDED',
   'SHIPMENT_CREATED',
   'SHIPMENT_EVENT_ADDED',
+  'GRN_RECORDED',
 ] as const;
 
 // ---------------- Logistics ----------------
