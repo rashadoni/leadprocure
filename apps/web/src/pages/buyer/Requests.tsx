@@ -14,10 +14,26 @@ export default function Requests() {
   const [title, setTitle] = useState('');
   const [items, setItems] = useState<Item[]>([{ name: '', qty: 1, price: '' }]);
   const [err, setErr] = useState('');
+  const [q, setQ] = useState('');
+  const [directFor, setDirectFor] = useState<string | null>(null);
+  const [approvedSuppliers, setApprovedSuppliers] = useState<any[]>([]);
   const canApprove = ['BUYER_ADMIN', 'BUYER_APPROVER'].includes(session?.org.role ?? '');
 
-  const load = () => api.get('/requests').then((r) => setRows(r.data));
-  useEffect(() => { load(); }, []);
+  const load = () => api.get('/requests', { params: q ? { q } : {} }).then((r) => setRows(r.data));
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q]);
+
+  const openDirect = async (id: string) => {
+    const r = await api.get('/suppliers');
+    setApprovedSuppliers(r.data.filter((x: any) => x.status === 'APPROVED'));
+    setDirectFor(id);
+  };
+  const placeDirect = async (requestId: string, supplierOrgId: string) => {
+    try {
+      await api.post(`/orders/direct/from-request/${requestId}`, { supplierOrgId });
+      setDirectFor(null);
+      nav('/buyer/contracts');
+    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  };
 
   const create = async (e: FormEvent) => {
     e.preventDefault();
@@ -88,6 +104,7 @@ export default function Requests() {
         </form>
       </div>
       <div className="card">
+        <input placeholder={`🔎 ${t('title')}…`} value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 320, marginBottom: 12 }} />
         <table>
           <thead><tr><th>#</th><th>{t('title')}</th><th>{t('total')}</th><th>{t('status')}</th><th>Method</th><th>{t('actions')}</th></tr></thead>
           <tbody>
@@ -111,6 +128,22 @@ export default function Requests() {
                       <button className="btn small" onClick={() => makeRfq(r.id)}>RFQ 🔒</button>{' '}
                       <button className="btn small ghost" onClick={() => makeAuction(r)}>{t('auction')} ⚡</button>
                     </>
+                  )}
+                  {r.status === 'APPROVED' && r.method_resolved === 'DIRECT' && canApprove && (
+                    directFor === r.id ? (
+                      <span style={{ display: 'inline-flex', gap: 6 }}>
+                        <select id={`sup-${r.id}`} defaultValue="">
+                          <option value="" disabled>{t('supplier_org')}…</option>
+                          {approvedSuppliers.map((s) => <option key={s.supplier_org_id} value={s.supplier_org_id}>{s.legal_name}</option>)}
+                        </select>
+                        <button className="btn small" onClick={() => {
+                          const v = (document.getElementById(`sup-${r.id}`) as HTMLSelectElement).value;
+                          if (v) placeDirect(r.id, v);
+                        }}>OK</button>
+                      </span>
+                    ) : (
+                      <button className="btn small" onClick={() => openDirect(r.id)}>{t('direct_order')} 📦</button>
+                    )
                   )}
                 </td>
               </tr>

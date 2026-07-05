@@ -13,13 +13,62 @@ import type { AccessTokenPayload, PoStatus } from '@leadprocure/shared';
 import { CurrentUser, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
+import { NotifyService } from '../../common/notify/notify.module';
 
 @Injectable()
 export class ContractsService {
   constructor(
     private readonly rc: RequestContextService,
     private readonly audit: AuditService,
+    private readonly notify: NotifyService,
   ) {}
+
+  // DIRECT purchase: a below-threshold approved request goes straight to a PO — no
+  // tender, no contract. Items are snapshotted at their estimated prices.
+  async createDirectOrder(requestId: string, supplierOrgId: string, auth: AccessTokenPayload) {
+    const m = this.rc.manager;
+    const reqRows = await m.query(`SELECT * FROM procurement_requests WHERE id = $1`, [requestId]);
+    if (!reqRows.length) throw new NotFoundException('Request not found');
+    const req = reqRows[0];
+    if (req.status !== 'APPROVED') throw new BadRequestException('Request must be APPROVED');
+    if (req.method_resolved && req.method_resolved !== 'DIRECT') {
+      throw new BadRequestException(`Method is ${req.method_resolved}; use a sourcing event, not a direct order`);
+    }
+    const sup = await m.query(
+      `SELECT status FROM supplier_relationships WHERE buyer_org_id = $1 AND supplier_org_id = $2`,
+      [auth.org_id, supplierOrgId],
+    );
+    if (!sup.length || sup[0].status !== 'APPROVED') {
+      throw new BadRequestException('Supplier must be APPROVED in your registry for a direct order');
+    }
+
+    const items = await m.query(
+      `SELECT id, line_no, name, qty, uom, est_unit_price_minor, vat_rate_bp FROM request_items
+       WHERE request_id = $1 ORDER BY line_no`,
+      [requestId],
+    );
+    const total = items.reduce((s: number, it: any) => s + Number(it.qty) * Number(it.est_unit_price_minor), 0);
+    const n = await m.query(`SELECT count(*)::int AS n FROM purchase_orders`);
+    const poNo = `PO-${new Date().getFullYear()}-${String(n[0].n + 1).padStart(4, '0')}`;
+    const po = (
+      await m.query(
+        `INSERT INTO purchase_orders(contract_id, buyer_org_id, supplier_org_id, po_no, status, total_minor, currency, created_by)
+         VALUES (NULL,$1,$2,$3,'DRAFT',$4,$5,$6) RETURNING id`,
+        [auth.org_id, supplierOrgId, poNo, total, req.currency, auth.sub],
+      )
+    )[0];
+    for (const it of items) {
+      await m.query(
+        `INSERT INTO purchase_order_items(po_id, buyer_org_id, supplier_org_id, event_item_id, line_no, name, qty, uom, unit_price_minor, line_total_minor, vat_rate_bp)
+         VALUES ($1,$2,$3,NULL,$4,$5,$6,$7,$8,$9,$10)`,
+        [po.id, auth.org_id, supplierOrgId, it.line_no, it.name, it.qty, it.uom,
+         it.est_unit_price_minor, Number(it.qty) * Number(it.est_unit_price_minor), it.vat_rate_bp],
+      );
+    }
+    await this.audit.record('PO_CREATED', 'purchase_order', po.id, { request_id: requestId, direct: true, total_minor: total });
+    await this.notify.notifyOrg(supplierOrgId, 'DIRECT_ORDER_CREATED', { po_no: poNo, po_id: po.id });
+    return this.getOrder(po.id);
+  }
 
   // Award → contract. Snapshot of the winning bid becomes the contract header;
   // items are copied per-PO later (a contract can cover many partial orders).
@@ -180,7 +229,11 @@ export class ContractsService {
       await this.audit.record('PO_STATUS_CHANGED', 'purchase_order', id, {
         to: status, by_org: auth.org_id, note: note ?? null,
       });
-      return rows[0];
+      // Notify the OTHER party of the transition.
+      const po = rows[0];
+      const counterparty = auth.org_id === po.buyer_org_id ? po.supplier_org_id : po.buyer_org_id;
+      await this.notify.notifyOrg(counterparty, 'PO_STATUS_CHANGED', { po_no: po.po_no, po_id: id, status });
+      return po;
     } catch (e: any) {
       throw new BadRequestException(e.message?.replace(/^.*ERROR:\s*/, '') ?? 'Transition failed');
     }
@@ -195,6 +248,16 @@ export class ContractsController {
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   fromAward(@Param('awardId') awardId: string, @CurrentUser() auth: AccessTokenPayload) {
     return this.contracts.createFromAward(awardId, auth);
+  }
+
+  @Post('orders/direct/from-request/:requestId')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  directOrder(
+    @Param('requestId') requestId: string,
+    @Body() body: { supplierOrgId: string },
+    @CurrentUser() auth: AccessTokenPayload,
+  ) {
+    return this.contracts.createDirectOrder(requestId, body.supplierOrgId, auth);
   }
 
   @Post('contracts/:id/activate')

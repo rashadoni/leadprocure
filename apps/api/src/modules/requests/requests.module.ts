@@ -9,6 +9,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
 } from '@nestjs/common';
 import { IsArray, IsIn, IsInt, IsOptional, IsString, Min, MinLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -40,11 +41,14 @@ export class RequestsService {
     private readonly audit: AuditService,
   ) {}
 
-  async list() {
+  async list(q?: string) {
     return this.rc.manager.query(
       `SELECT id, request_no, title, status, estimated_total_minor, currency, category,
               method_resolved, created_at
-       FROM procurement_requests ORDER BY created_at DESC`,
+       FROM procurement_requests
+       WHERE ($1::text IS NULL OR title ILIKE '%' || $1 || '%' OR request_no ILIKE '%' || $1 || '%')
+       ORDER BY created_at DESC`,
+      [q ?? null],
     );
   }
 
@@ -202,7 +206,7 @@ export class RequestsController {
   constructor(private readonly requests: RequestsService) {}
 
   @Get() @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
-  list() { return this.requests.list(); }
+  list(@Query('q') q?: string) { return this.requests.list(q); }
 
   @Get('method-policies') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
   policies() { return this.requests.getPolicies(); }

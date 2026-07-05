@@ -350,6 +350,34 @@ describe('sealed RFQ end-to-end flow', () => {
       .then((r) => expect(r.body.shipment).toBeNull());
   });
 
+  it('DIRECT purchase: below-threshold request → straight to PO; supplier is notified', async () => {
+    const bearer = (tok: string) => ['Authorization', `Bearer ${tok}`] as [string, string];
+    // approve the supplier in the buyer's registry (required for a direct order)
+    await http().post(`/suppliers/${supplierOrgId}/invite`).set(...bearer(buyerToken)).expect(201);
+    const reg = await http().get('/suppliers').set(...bearer(buyerToken)).expect(200);
+    const relId = reg.body.find((r: any) => r.supplier_org_id === supplierOrgId).id;
+    await http().post(`/suppliers/relationships/${relId}/status`).set(...bearer(buyerToken)).send({ status: 'APPROVED' }).expect(201);
+
+    // small request (1000 AZN) → resolves DIRECT under the acme policy
+    const req = await http().post('/requests').set(...bearer(buyerToken))
+      .send({ title: `Pens ${tag}`, items: [{ name: 'Pen box', qty: 10, estUnitPriceMinor: 10_000 }] }).expect(201);
+    await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyerToken)).expect(201);
+    const approved = await http().post(`/requests/${req.body.id}/approve`).set(...bearer(buyerToken)).expect(201);
+    expect(approved.body.method_resolved).toBe('DIRECT');
+
+    const po = await http().post(`/orders/direct/from-request/${req.body.id}`).set(...bearer(buyerToken))
+      .send({ supplierOrgId }).expect(201);
+    expect(po.body.status).toBe('DRAFT');
+    expect(po.body.items).toHaveLength(1);
+    expect(Number(po.body.total_minor)).toBe(100_000);
+
+    // the supplier can see the PO (cross-org) and received a notification
+    const supOrders = await http().get('/orders').set(...bearer(supplierToken)).expect(200);
+    expect(supOrders.body.map((p: any) => p.id)).toContain(po.body.id);
+    const notes = await http().get('/notifications').set(...bearer(supplierToken)).expect(200);
+    expect(notes.body.some((n: any) => n.type === 'DIRECT_ORDER_CREATED')).toBe(true);
+  });
+
   it('audit hash-chain for the buyer org is intact and linked', async () => {
     await db.query(`SELECT set_config('app.org_id', $1, false), set_config('app.role','BUYER_ADMIN', false)`, [buyerOrgId]);
     const rows = (

@@ -14,6 +14,7 @@ import { EntitlementService, QuotaService } from '../../common/license/entitleme
 import { AiScorer } from '../../common/ai/ai-scorer';
 import { MailProvider } from '../../common/mail/mail.module';
 import { AppConfig } from '../../common/config/config.service';
+import { NotifyService } from '../../common/notify/notify.module';
 
 interface SealedBidPayload {
   items: Array<{ event_item_id: string; unit_price_minor: number }>;
@@ -35,6 +36,7 @@ export class SourcingService {
     private readonly aiScorer: AiScorer,
     private readonly mail: MailProvider,
     private readonly cfg: AppConfig,
+    private readonly notify: NotifyService,
   ) {}
 
   // AI recommendation — only once amounts are open (RLS + status gate both enforce this).
@@ -418,6 +420,11 @@ export class SourcingService {
       lot_id: dto.lotId, winning_bid_id: dto.bidId, total_minor: bidRows[0].total_minor,
       signature: sig, signer: this.signature.kind,
     });
+    // Notify the winning supplier.
+    const winner = await m.query(`SELECT supplier_org_id FROM bids WHERE id = $1`, [dto.bidId]);
+    if (winner.length) {
+      await this.notify.notifyOrg(winner[0].supplier_org_id, 'BID_AWARDED', { event_id: eventId, lot_id: dto.lotId });
+    }
     this.rt(eventId, 'event.awarded', { lot_id: dto.lotId });
     return { award: inserted[0], idempotent: false };
   }
