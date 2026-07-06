@@ -34,6 +34,10 @@ otherwise; the app falls back to a local scorer if the service is down).
 Key design docs: [AGENTS.md](AGENTS.md) (conventions + state), [ROADMAP.md](ROADMAP.md)
 (feature design record), [SECURITY.md](SECURITY.md) (audit), [infra/DEPLOY.md](infra/DEPLOY.md).
 
+**Новичку: [docs/DEMO.md](docs/DEMO.md)** — тур по продукту за 10 минут (логины,
+жизненный цикл закупки, кто что может). Наполнить стенд демо-историей:
+`node scripts/demo-fill.mjs http://localhost:3000`.
+
 ## Quickstart (dev)
 
 ```bash
