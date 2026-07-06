@@ -1,11 +1,74 @@
-import { Controller, Get, Global, Injectable, Module, Param, Post } from '@nestjs/common';
+import { Controller, Get, Global, Injectable, Logger, Module, Param, Post } from '@nestjs/common';
+import { DataSource } from 'typeorm';
+import { AppConfig } from '../config/config.service';
+import { MailProvider } from '../mail/mail.module';
 import { RequestContextService } from '../context/request-context.service';
+
+// Human subject lines (ru · az) for outbound email; unknown types fall back to the key.
+const MAIL_SUBJECTS: Record<string, string> = {
+  DIRECT_ORDER_CREATED: 'Новый заказ · Yeni sifariş',
+  PO_STATUS_CHANGED: 'Статус заказа изменён · Sifariş statusu dəyişdi',
+  PO_AMENDMENT_PROPOSED: 'Предложено изменение заказа · Sifariş dəyişikliyi təklif olunub',
+  PO_AMENDMENT_ACCEPTED: 'Изменение заказа принято · Sifariş dəyişikliyi qəbul edildi',
+  PO_AMENDMENT_REJECTED: 'Изменение заказа отклонено · Sifariş dəyişikliyi rədd edildi',
+  GRN_RECORDED: 'Приёмка оформлена · Qəbul rəsmiləşdirildi',
+  INVOICE_SUBMITTED: 'Поступил счёт · Yeni qaimə',
+  INVOICE_STATUS_CHANGED: 'Статус счёта изменён · Qaimə statusu dəyişdi',
+  SUPPLIER_INVITED: 'Приглашение в тендер · Tenderə dəvət',
+  EVENT_PUBLISHED: 'Опубликован тендер · Tender dərc olunub',
+  VERIFICATION_OPENED: 'Открыта верификация · Yoxlama açılıb',
+  VERIFICATION_DECIDED: 'Решение по верификации · Yoxlama qərarı',
+};
+// Only these payload fields may appear in an email body — a whitelist, so sealed or
+// internal values can never leak into outbound mail by accident.
+const MAIL_SAFE_KEYS = ['po_no', 'invoice_no', 'status', 'title', 'no'] as const;
+
+// Async email fan-out to the ACTIVE users of the recipient org. Runs post-commit on its
+// own connection (DataSource, no request tx). Every failure is swallowed + logged: email
+// is advisory and must never affect business state.
+@Injectable()
+export class NotifyEmailer {
+  private readonly logger = new Logger(NotifyEmailer.name);
+  constructor(
+    private readonly ds: DataSource,
+    private readonly mail: MailProvider,
+    private readonly cfg: AppConfig,
+  ) {}
+
+  async fanOut(orgId: string, type: string, payload: Record<string, unknown>): Promise<void> {
+    try {
+      const users: Array<{ email: string; full_name: string }> = await this.ds.query(
+        `SELECT u.email, u.full_name FROM organization_users u
+         JOIN memberships m ON m.user_id = u.id
+         WHERE m.org_id = $1 AND u.status = 'ACTIVE' ORDER BY u.created_at LIMIT 50`,
+        [orgId],
+      );
+      if (!users.length) return;
+      const subject = `Leadprocure — ${MAIL_SUBJECTS[type] ?? type}`;
+      const details = MAIL_SAFE_KEYS
+        .filter((k) => payload[k] != null && payload[k] !== '')
+        .map((k) => `${k}: ${payload[k]}`)
+        .join('\n');
+      for (const u of users) {
+        const text = `Salam / Здравствуйте, ${u.full_name}!\n\n${MAIL_SUBJECTS[type] ?? type}\n${details ? `\n${details}\n` : ''}\n→ ${this.cfg.webBaseUrl}\n\n— Leadprocure`;
+        await this.mail
+          .send({ to: u.email, subject, html: `<pre>${text}</pre>`, text })
+          .catch((e) => this.logger.warn(`mail to ${u.email} failed: ${e?.message}`));
+      }
+    } catch (e: any) {
+      this.logger.warn(`fan-out ${type} → org ${orgId} failed: ${e?.message}`);
+    }
+  }
+}
 
 // Minimal notification center: rows are delivery-proofed (delivered_at set on insert
 // for in-app delivery). RLS restricts reads to the recipient org.
 @Injectable()
 export class NotifyService {
-  constructor(private readonly rc: RequestContextService) {}
+  constructor(
+    private readonly rc: RequestContextService,
+    private readonly emailer: NotifyEmailer,
+  ) {}
 
   async notifyOwnOrg(type: string, payload: Record<string, unknown>): Promise<void> {
     await this.notifyOrg(this.rc.orgId!, type, payload);
@@ -13,6 +76,8 @@ export class NotifyService {
 
   // Notify ANY org (self or counterparty) via the SECURITY DEFINER seam. Best-effort:
   // a notification failure must never break the business action that triggered it.
+  // Email fan-out is queued for AFTER the transaction commits, so rolled-back actions
+  // never send mail.
   async notifyOrg(orgId: string, type: string, payload: Record<string, unknown>): Promise<void> {
     try {
       await this.rc.manager.query(`SELECT app_notify($1, NULL, $2, $3::jsonb)`, [
@@ -20,6 +85,7 @@ export class NotifyService {
         type,
         JSON.stringify(payload),
       ]);
+      this.rc.onCommit(() => this.emailer.fanOut(orgId, type, payload));
     } catch {
       /* best-effort */
     }
@@ -46,5 +112,9 @@ export class NotifyController {
 }
 
 @Global()
-@Module({ controllers: [NotifyController], providers: [NotifyService], exports: [NotifyService] })
+@Module({
+  controllers: [NotifyController],
+  providers: [NotifyService, NotifyEmailer],
+  exports: [NotifyService],
+})
 export class NotifyModule {}

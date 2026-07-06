@@ -146,3 +146,6 @@ e2e (happy + hostile isolation) → keep the full suite green → commit → pus
   opening ceremony, then normal weighted evaluation + award); RFI = information gathering —
   text response only, sealed until opening for equal treatment, no evaluation/award. Buyer
   picks RFQ/RFP/RFI when creating the event; supplier bid form adapts per type.
+- **Email notification loop**: every in-app notification also emails the recipient org's
+  active users — post-commit only (never for rolled-back actions), whitelisted body
+  fields (no amounts), ru·az subjects, console provider in dev / SMTP in prod.

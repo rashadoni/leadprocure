@@ -10,6 +10,9 @@ export interface RequestContext {
   orgId?: string;
   role?: string;
   manager: EntityManager;
+  // Jobs to run AFTER the request transaction commits (e.g. outbound email fan-out).
+  // Never run on rollback — side effects must not fire for actions that didn't happen.
+  postCommit?: Array<() => void | Promise<void>>;
 }
 
 @Injectable()
@@ -40,6 +43,17 @@ export class RequestContextService {
 
   get actorId(): string | undefined {
     return this.optional()?.actorId;
+  }
+
+  // Queue a side effect for after the transaction commits. Outside a request context
+  // (background jobs run without one) the job fires immediately, fire-and-forget.
+  onCommit(fn: () => void | Promise<void>): void {
+    const ctx = this.optional();
+    if (!ctx) {
+      Promise.resolve().then(fn).catch(() => {});
+      return;
+    }
+    (ctx.postCommit ??= []).push(fn);
   }
 
   // Used during registration: once the owning org exists we elevate the request's

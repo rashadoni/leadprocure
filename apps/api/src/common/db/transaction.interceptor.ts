@@ -36,6 +36,12 @@ export class TransactionInterceptor implements NestInterceptor {
       };
       const result = await this.rc.run(ctx, () => firstValueFrom(next.handle()));
       await qr.commitTransaction();
+      // Post-commit side effects (email fan-out etc.): fire-and-forget so they neither
+      // delay the response nor ever run for rolled-back requests (the error path above
+      // never reaches this flush).
+      for (const job of ctx.postCommit ?? []) {
+        Promise.resolve().then(job).catch(() => {});
+      }
       return of(result);
     } catch (err) {
       if (qr.isTransactionActive) await qr.rollbackTransaction();

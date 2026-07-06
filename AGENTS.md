@@ -80,7 +80,7 @@ Key gotchas learned (respect these): FOR UPDATE requires UPDATE policies under R
 
 ## 4d. ROADMAP groups 1–4 — DONE
 
-All functional roadmap blocks are built and green (**130 e2e, 15 suites**):
+All functional roadmap blocks are built and green (**134 e2e, 16 suites**):
 - **Group 1**: bid attachments (mig 0011, cross-org, buyer-after-opening), goods
   receipt/GRN (0012, partial→auto-accept), multi-lot award (per-lot totals),
   multi-step approval (0013, value-banded chains).
@@ -112,6 +112,12 @@ All functional roadmap blocks are built and green (**130 e2e, 15 suites**):
 - **Auth gotcha — JWT needs jti.** With 1-second iat resolution, a refresh rotation in the
   same second as issuance produced an IDENTICAL token (rotation = silent no-op, flaky
   auth e2e). TokenService.signRefresh now adds a random jti to every refresh token.
+- **Email loop**: notifyOrg queues an email fan-out via `rc.onCommit()` — a post-commit
+  queue on the request context flushed by TransactionInterceptor ONLY after commit
+  (rolled-back actions never send mail). NotifyEmailer mails the recipient org's ACTIVE
+  users (cap 50) on its own DataSource connection; body fields come from a WHITELIST
+  (po_no/invoice_no/status/title/no) so sealed amounts can't leak into outbound mail.
+  Console provider when SMTP_HOST is empty; real SMTP via env in prod.
 
 **Gotcha learned:** TypeORM `UPDATE … RETURNING` yields `[rows, count]` — never read a
 column off it; SELECT the value first (bit us in verification `decide`). Also: stop the
