@@ -16,6 +16,7 @@ import { Type } from 'class-transformer';
 import type { ProcurementMethod } from '@leadprocure/shared';
 import { CurrentUser, Roles } from '../../common/auth/decorators';
 import type { AccessTokenPayload } from '@leadprocure/shared';
+import { pageFrom, parsePaging, Paging } from '../../common/http/paging';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
 
@@ -49,19 +50,21 @@ export class RequestsService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(q?: string) {
-    return this.rc.manager.query(
+  async list(q?: string, paging: Paging = parsePaging()) {
+    const rows = await this.rc.manager.query(
       `SELECT pr.id, pr.request_no, pr.title, pr.status, pr.estimated_total_minor, pr.currency, pr.category,
               pr.method_resolved, pr.created_at,
+              count(*) OVER()::int AS total_count,
               (SELECT count(*)::int FROM approval_steps s WHERE s.request_id = pr.id) AS steps_total,
               (SELECT count(*)::int FROM approval_steps s WHERE s.request_id = pr.id AND s.status = 'APPROVED') AS steps_done,
               (SELECT s.approver_role FROM approval_steps s WHERE s.request_id = pr.id AND s.status = 'SUBMITTED'
                ORDER BY s.step_no LIMIT 1) AS current_role
        FROM procurement_requests pr
        WHERE ($1::text IS NULL OR pr.title ILIKE '%' || $1 || '%' OR pr.request_no ILIKE '%' || $1 || '%')
-       ORDER BY pr.created_at DESC LIMIT 200`,
-      [q ?? null],
+       ORDER BY pr.created_at DESC LIMIT $2 OFFSET $3`,
+      [q ?? null, paging.limit, paging.offset],
     );
+    return pageFrom(rows, paging);
   }
 
   async get(id: string) {
@@ -293,7 +296,9 @@ export class RequestsController {
   constructor(private readonly requests: RequestsService) {}
 
   @Get() @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
-  list(@Query('q') q?: string) { return this.requests.list(q); }
+  list(@Query('q') q?: string, @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
+    return this.requests.list(q, parsePaging(page, pageSize));
+  }
 
   @Get('method-policies') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
   policies() { return this.requests.getPolicies(); }

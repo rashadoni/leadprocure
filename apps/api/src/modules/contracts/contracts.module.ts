@@ -8,9 +8,11 @@ import {
   NotFoundException,
   Param,
   Post,
+  Query,
 } from '@nestjs/common';
 import type { AccessTokenPayload, PoStatus } from '@leadprocure/shared';
 import { PO_STATUSES } from '@leadprocure/shared';
+import { pageFrom, parsePaging, Paging } from '../../common/http/paging';
 import { IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { CurrentUser, Roles } from '../../common/auth/decorators';
@@ -121,15 +123,18 @@ export class ContractsService {
     return this.get(id);
   }
 
-  async list() {
-    return this.rc.manager.query(
+  async list(paging: Paging = parsePaging()) {
+    const rows = await this.rc.manager.query(
       `SELECT c.*, ob.legal_name AS buyer_name, os.legal_name AS supplier_name,
+              count(*) OVER()::int AS total_count,
               (SELECT count(*)::int FROM purchase_orders p WHERE p.contract_id = c.id) AS po_count
        FROM contracts c
        JOIN organizations ob ON ob.id = c.buyer_org_id
        JOIN organizations os ON os.id = c.supplier_org_id
-       ORDER BY c.created_at DESC LIMIT 200`,
+       ORDER BY c.created_at DESC LIMIT $1 OFFSET $2`,
+      [paging.limit, paging.offset],
     );
+    return pageFrom(rows, paging);
   }
 
   async get(id: string) {
@@ -196,14 +201,17 @@ export class ContractsService {
     return this.getOrder(po.id);
   }
 
-  async listOrders() {
-    return this.rc.manager.query(
-      `SELECT p.*, ob.legal_name AS buyer_name, os.legal_name AS supplier_name
+  async listOrders(paging: Paging = parsePaging()) {
+    const rows = await this.rc.manager.query(
+      `SELECT p.*, ob.legal_name AS buyer_name, os.legal_name AS supplier_name,
+              count(*) OVER()::int AS total_count
        FROM purchase_orders p
        JOIN organizations ob ON ob.id = p.buyer_org_id
        JOIN organizations os ON os.id = p.supplier_org_id
-       ORDER BY p.created_at DESC LIMIT 200`,
+       ORDER BY p.created_at DESC LIMIT $1 OFFSET $2`,
+      [paging.limit, paging.offset],
     );
+    return pageFrom(rows, paging);
   }
 
   async getOrder(id: string) {
@@ -351,8 +359,8 @@ export class ContractsController {
   }
 
   @Get('contracts')
-  list() {
-    return this.contracts.list();
+  list(@Query('page') page?: string, @Query('pageSize') pageSize?: string) {
+    return this.contracts.list(parsePaging(page, pageSize));
   }
 
   @Get('contracts/:id')
@@ -367,8 +375,8 @@ export class ContractsController {
   }
 
   @Get('orders')
-  listOrders() {
-    return this.contracts.listOrders();
+  listOrders(@Query('page') page?: string, @Query('pageSize') pageSize?: string) {
+    return this.contracts.listOrders(parsePaging(page, pageSize));
   }
 
   @Get('orders/:id')

@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AMOUNTS_VISIBLE_FROM, type AccessTokenPayload } from '@leadprocure/shared';
+import { pageFrom, parsePaging, Paging } from '../../common/http/paging';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
 import { SealedCryptoService } from '../../common/crypto/sealed.service';
@@ -168,22 +169,25 @@ export class SourcingService {
 
   // ---------- shared: list & detail (RLS decides visibility) ----------
 
-  async list(auth: AccessTokenPayload) {
+  async list(auth: AccessTokenPayload, paging: Paging = parsePaging()) {
     const m = this.rc.manager;
-    const events = await m.query(
+    const rows = await m.query(
       `SELECT e.id, e.title, e.type, e.format, e.status, e.visibility, e.evaluation_currency,
               e.open_at, e.close_at, e.awarded_at, e.created_at, o.legal_name AS buyer_name,
+              count(*) OVER()::int AS total_count,
               (SELECT count(*)::int FROM bids b WHERE b.event_id = e.id AND b.state <> 'DRAFT') AS bid_count
        FROM sourcing_events e JOIN organizations o ON o.id = e.buyer_org_id
-       ORDER BY e.created_at DESC LIMIT 200`,
+       ORDER BY e.created_at DESC LIMIT $1 OFFSET $2`,
+      [paging.limit, paging.offset],
     );
+    const page = pageFrom(rows, paging);
     if (auth.role === 'SUPPLIER_USER') {
       // annotate with "did I bid" (bids RLS shows only own rows to suppliers)
       const mine = await m.query(`SELECT event_id, state FROM bids`);
       const byEvent = new Map(mine.map((b: any) => [b.event_id, b.state]));
-      return events.map((e: any) => ({ ...e, my_bid_state: byEvent.get(e.id) ?? null }));
+      page.items = page.items.map((e: any) => ({ ...e, my_bid_state: byEvent.get(e.id) ?? null }));
     }
-    return events;
+    return page;
   }
 
   async detail(eventId: string, auth: AccessTokenPayload) {

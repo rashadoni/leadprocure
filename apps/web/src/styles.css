@@ -52,3 +52,6 @@ label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px
 .lang button { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 2px 8px; cursor: pointer; font-size: 11px; }
 .lang button.on { color: var(--text); border-color: var(--accent); }
 .sealed { color: var(--warn); font-size: 13px; }
+.pager { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 12px; }
+.pager-info { color: var(--muted); font-size: 12px; }
+.pager .btn.small[disabled] { opacity: 0.4; cursor: default; }

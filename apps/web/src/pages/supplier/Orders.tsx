@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { api, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { PO_SUPPLIER_TRANSITIONS, SHIPMENT_STATUSES } from '@leadprocure/shared';
+import Pager from '../../components/Pager';
+
+const PAGE_SIZE = 20;
 
 // "Заказы в работе" — the supplier's delivery pipeline. Each PO advances through
 // CONFIRMED → PACKED → SHIPPED → DELIVERED; transitions are validated by the DB seam.
@@ -10,9 +13,12 @@ export default function Orders() {
   const { t } = useI18n();
   const nav = useNavigate();
   const [orders, setOrders] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
 
-  const load = () => api.get('/orders').then((r) => setOrders(r.data));
-  useEffect(() => { load(); }, []);
+  const load = () => api.get('/orders', { params: { page, pageSize: PAGE_SIZE } })
+    .then((r) => { setOrders(r.data.items); setTotal(r.data.total); });
+  useEffect(() => { load(); }, [page]);
 
   const [ship, setShip] = useState<Record<string, any>>({});
 
@@ -98,6 +104,7 @@ export default function Orders() {
             })}
           </tbody>
         </table>
+        <Pager total={total} page={page} pageSize={PAGE_SIZE} onPage={setPage} />
       </div>
     </>
   );

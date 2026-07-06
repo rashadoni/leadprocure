@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Injectable, Logger, Module, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, Injectable, Logger, Module, Param, Post, Put, Query } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DataSource } from 'typeorm';
@@ -6,6 +6,7 @@ import { IsArray, IsIn, IsInt, IsISO8601, IsOptional, IsString, IsUUID, Min, Min
 import { Type } from 'class-transformer';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
 import type { AccessTokenPayload } from '@leadprocure/shared';
+import { parsePaging } from '../../common/http/paging';
 import { SourcingService } from './sourcing.service';
 import { AuctionService, QnaService } from './auction.service';
 
@@ -103,8 +104,8 @@ export class SourcingController {
   constructor(private readonly sourcing: SourcingService) {}
 
   @Get()
-  list(@CurrentUser() auth: AccessTokenPayload) {
-    return this.sourcing.list(auth);
+  list(@CurrentUser() auth: AccessTokenPayload, @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
+    return this.sourcing.list(auth, parsePaging(page, pageSize));
   }
 
   @Get(':id')

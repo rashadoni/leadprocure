@@ -2,11 +2,19 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useI18n } from '../../i18n';
+import Pager from '../../components/Pager';
+
+const PAGE_SIZE = 20;
 
 export default function Market() {
   const { t } = useI18n();
   const [rows, setRows] = useState<any[]>([]);
-  useEffect(() => { api.get('/events').then((r) => setRows(r.data)); }, []);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    api.get('/events', { params: { page, pageSize: PAGE_SIZE } })
+      .then((r) => { setRows(r.data.items); setTotal(r.data.total); });
+  }, [page]);
   return (
     <>
       <h1>{t('market')}</h1>
@@ -25,6 +33,7 @@ export default function Market() {
             ))}
           </tbody>
         </table>
+        <Pager total={total} page={page} pageSize={PAGE_SIZE} onPage={setPage} />
       </div>
     </>
   );

@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { api, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
+import Pager from '../../components/Pager';
+
+const PAGE_SIZE = 20;
 
 interface Item { name: string; qty: number; price: string }
 
@@ -15,12 +18,15 @@ export default function Requests() {
   const [items, setItems] = useState<Item[]>([{ name: '', qty: 1, price: '' }]);
   const [err, setErr] = useState('');
   const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [directFor, setDirectFor] = useState<string | null>(null);
   const [approvedSuppliers, setApprovedSuppliers] = useState<any[]>([]);
   const canApprove = ['BUYER_ADMIN', 'BUYER_APPROVER'].includes(session?.org.role ?? '');
 
-  const load = () => api.get('/requests', { params: q ? { q } : {} }).then((r) => setRows(r.data));
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q]);
+  const load = () => api.get('/requests', { params: { ...(q ? { q } : {}), page, pageSize: PAGE_SIZE } })
+    .then((r) => { setRows(r.data.items); setTotal(r.data.total); });
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, page]);
 
   const openDirect = async (id: string) => {
     const r = await api.get('/suppliers');
@@ -104,7 +110,7 @@ export default function Requests() {
         </form>
       </div>
       <div className="card">
-        <input placeholder={`🔎 ${t('title')}…`} value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 320, marginBottom: 12 }} />
+        <input placeholder={`🔎 ${t('title')}…`} value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} style={{ maxWidth: 320, marginBottom: 12 }} />
         <table>
           <thead><tr><th>#</th><th>{t('title')}</th><th>{t('total')}</th><th>{t('status')}</th><th>Method</th><th>{t('actions')}</th></tr></thead>
           <tbody>
@@ -155,6 +161,7 @@ export default function Requests() {
             ))}
           </tbody>
         </table>
+        <Pager total={total} page={page} pageSize={PAGE_SIZE} onPage={setPage} />
       </div>
     </>
   );

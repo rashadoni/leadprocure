@@ -60,7 +60,7 @@ describe('catalogs + instant re-order', () => {
     expect(Number(po.body.total_minor)).toBe(500_000); // 10 × 50k
     // the PO reached the supplier
     const supOrders = await http().get('/orders').set(...bearer(supplier)).expect(200);
-    expect(supOrders.body.map((p: any) => p.id)).toContain(po.body.id);
+    expect(supOrders.body.items.map((p: any) => p.id)).toContain(po.body.id);
   });
 
   it('supplier can read the catalog; a different buyer cannot', async () => {

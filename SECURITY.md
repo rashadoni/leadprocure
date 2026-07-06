@@ -53,7 +53,10 @@ integrity, authz, auction integrity, injection, auth, money, crypto, web, DoS.
   a non-negative integer, enums use the shared `*_STATUSES`/`MEMBERSHIP_ROLES` sources,
   UUIDs/required fields are enforced, nested item arrays validate per-element, and the global
   `ValidationPipe(whitelist:true)` strips unknown keys. Covered by `validation.e2e-spec.ts`.
-- **List pagination**: `requests`/`events`/`contracts`/`orders` lists are RLS-scoped (bounded
-  by tenant data) but unpaginated; add limits/paging before large tenants.
+- ~~**List pagination**: `requests`/`events`/`contracts`/`orders` lists are unpaginated.~~
+  **DONE** — those four now do server-side offset pagination (`?page`/`?pageSize`, clamped
+  ≤200) returning a `{ items, total, page, pageSize }` envelope, with a shared `<Pager>` in
+  the UI. Covered by `pagination.e2e-spec.ts`. The lower-cardinality lists (suppliers,
+  invoices, catalogs, verification, logistics) remain capped at 200 — fine until those grow.
 - **App DB user privileges**: confirm `app_user` has no DDL and cannot create the bid master
   key material; rotate the demo DB password off `app_pass`.

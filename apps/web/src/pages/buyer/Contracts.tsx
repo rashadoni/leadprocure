@@ -3,19 +3,28 @@ import { api, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import { PO_BUYER_NEXT } from '@leadprocure/shared';
+import Pager from '../../components/Pager';
+
+const PAGE_SIZE = 20;
 
 export default function Contracts() {
   const { t } = useI18n();
   const { session } = useAuth();
   const [contracts, setContracts] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
+  const [cPage, setCPage] = useState(1);
+  const [cTotal, setCTotal] = useState(0);
+  const [oPage, setOPage] = useState(1);
+  const [oTotal, setOTotal] = useState(0);
   const isBuyerSide = session?.org.kind !== 'SUPPLIER';
 
   const load = () => {
-    api.get('/contracts').then((r) => setContracts(r.data));
-    api.get('/orders').then((r) => setOrders(r.data));
+    api.get('/contracts', { params: { page: cPage, pageSize: PAGE_SIZE } })
+      .then((r) => { setContracts(r.data.items); setCTotal(r.data.total); });
+    api.get('/orders', { params: { page: oPage, pageSize: PAGE_SIZE } })
+      .then((r) => { setOrders(r.data.items); setOTotal(r.data.total); });
   };
-  useEffect(load, []);
+  useEffect(load, [cPage, oPage]);
 
   const act = async (fn: () => Promise<unknown>) => {
     try { await fn(); load(); } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
@@ -61,6 +70,7 @@ export default function Contracts() {
             ))}
           </tbody>
         </table>
+        <Pager total={cTotal} page={cPage} pageSize={PAGE_SIZE} onPage={setCPage} />
       </div>
 
       <h1>{t('orders')}</h1>
@@ -89,6 +99,7 @@ export default function Contracts() {
             ))}
           </tbody>
         </table>
+        <Pager total={oTotal} page={oPage} pageSize={PAGE_SIZE} onPage={setOPage} />
       </div>
     </>
   );

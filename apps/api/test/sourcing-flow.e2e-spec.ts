@@ -286,9 +286,9 @@ describe('sealed RFQ end-to-end flow', () => {
 
   it('supplier sees the contract too (cross-org read)', async () => {
     const res = await http().get('/contracts').set('Authorization', `Bearer ${supplierToken}`).expect(200);
-    expect(res.body.map((c: any) => c.id)).toContain(contractId);
+    expect(res.body.items.map((c: any) => c.id)).toContain(contractId);
     const res2 = await http().get('/contracts').set('Authorization', `Bearer ${supplier2Token}`).expect(200);
-    expect(res2.body.map((c: any) => c.id)).not.toContain(contractId);
+    expect(res2.body.items.map((c: any) => c.id)).not.toContain(contractId);
   });
 
   it('buyer creates and issues a PO with items from the awarded bid', async () => {
@@ -342,7 +342,7 @@ describe('sealed RFQ end-to-end flow', () => {
 
   it('foreign supplier cannot see the PO', async () => {
     const res = await http().get('/orders').set('Authorization', `Bearer ${supplier2Token}`).expect(200);
-    expect(res.body.map((p: any) => p.id)).not.toContain(poId);
+    expect(res.body.items.map((p: any) => p.id)).not.toContain(poId);
     await http().get(`/orders/${poId}`).set('Authorization', `Bearer ${supplier2Token}`).expect(404);
   });
 
@@ -429,7 +429,7 @@ describe('sealed RFQ end-to-end flow', () => {
 
     // the supplier can see the PO (cross-org) and received a notification
     const supOrders = await http().get('/orders').set(...bearer(supplierToken)).expect(200);
-    expect(supOrders.body.map((p: any) => p.id)).toContain(po.body.id);
+    expect(supOrders.body.items.map((p: any) => p.id)).toContain(po.body.id);
     const notes = await http().get('/notifications').set(...bearer(supplierToken)).expect(200);
     expect(notes.body.some((n: any) => n.type === 'DIRECT_ORDER_CREATED')).toBe(true);
   });
