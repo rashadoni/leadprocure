@@ -1,6 +1,9 @@
 # Production/demo stack. Build context is the repo root so the pnpm workspace is visible.
 #   cd infra && cp .env.prod.example .env.prod && edit secrets
 #   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+# Own project name: both compose files live in infra/, and without this they would share
+# the default "infra" project and `up` on one stack would replace the other's containers.
+name: leadprocure-prod
 services:
   postgres:
     image: postgres:16

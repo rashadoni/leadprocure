@@ -30,7 +30,26 @@ docker compose -f docker-compose.prod.yml exec api pnpm --filter api seed
 ```
 Creates Acme MMC (admin/approver/user) + two suppliers. Passwords printed in the log.
 
-## 4. Notes
+## 4. Local demo stand (no VPS)
+The same stack runs on a laptop for demos — verified end-to-end on macOS/Apple Silicon:
+```bash
+cd infra && cp .env.prod.example .env.prod
+# set secrets; use the local URLs: WEB_ORIGIN=http://localhost:8080, PUBLIC_API_URL=http://localhost:3000
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build \
+  postgres minio createbuckets ai-orchestrator api web   # skip clamav (see below)
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec api pnpm --filter api seed
+open http://localhost:8080   # demo: admin@acme.test / Passw0rd!
+```
+- Browsers treat `localhost` as a secure context, so the `Secure` refresh cookie works
+  without TLS for the local stand (silent session resume verified in Chromium).
+- **Apple Silicon**: `clamav/clamav` has no arm64 image — start the listed services only
+  and keep `CLAMAV_ENABLED=false`. On an amd64 VPS run the full stack with clamav on.
+- The prod stack has its own compose project (`name: leadprocure-prod`), so it coexists
+  with the dev stack from `docker-compose.yml` (project `infra`) without replacing its
+  containers/volumes. One clash remains: prod `api` and the dev `nest --watch` both bind
+  host :3000 — run one at a time.
+
+## 5. Notes
 - **TLS is required**: `REFRESH_COOKIE_SECURE=true` means the refresh cookie is only sent
   over HTTPS. Behind the proxy, keep `WEB_ORIGIN`/`PUBLIC_API_URL` as the https URLs.
 - **Backups**: `docker compose exec postgres pg_dump -U leadprocure_owner leadprocure > backup.sql`.
