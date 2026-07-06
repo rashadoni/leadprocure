@@ -110,7 +110,8 @@ export default function Requests() {
         </form>
       </div>
       <div className="card">
-        <input placeholder={`🔎 ${t('title')}…`} value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} style={{ maxWidth: 320, marginBottom: 12 }} />
+        <input placeholder={`🔎 ${t('title')}…`} value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} style={{ maxWidth: 320, marginBottom: 6 }} />
+        <div className="hint" style={{ marginBottom: 10 }}>{t('legend_procedures')}</div>
         <table>
           <thead><tr><th>#</th><th>{t('title')}</th><th>{t('total')}</th><th>{t('status')}</th><th>Method</th><th>{t('actions')}</th></tr></thead>
           <tbody>
@@ -127,19 +128,19 @@ export default function Requests() {
                 </td>
                 <td>{r.method_resolved ?? '—'}</td>
                 <td>
-                  {r.status === 'DRAFT' && <button className="btn small" onClick={() => act(r.id, 'submit')}>{t('submit')}</button>}{' '}
+                  {r.status === 'DRAFT' && <button className="btn small" title={t('tip_submit')} onClick={() => act(r.id, 'submit')}>{t('submit')}</button>}{' '}
                   {r.status === 'SUBMITTED' && canApprove && (
                     <>
-                      <button className="btn small" onClick={() => act(r.id, 'approve')}>{t('approve')}</button>{' '}
-                      <button className="btn small ghost" onClick={() => act(r.id, 'reject')}>{t('reject')}</button>
+                      <button className="btn small" title={t('tip_approve')} onClick={() => act(r.id, 'approve')}>{t('approve')}</button>{' '}
+                      <button className="btn small ghost" title={t('tip_reject')} onClick={() => act(r.id, 'reject')}>{t('reject')}</button>
                     </>
                   )}
                   {r.status === 'APPROVED' && r.method_resolved !== 'DIRECT' && canApprove && (
                     <>
-                      <button className="btn small" onClick={() => makeRfq(r.id)}>RFQ 🔒</button>{' '}
-                      <button className="btn small ghost" onClick={() => makeRfq(r.id, 'RFP')}>RFP 📄</button>{' '}
-                      <button className="btn small ghost" onClick={() => makeRfq(r.id, 'RFI')}>RFI ❓</button>{' '}
-                      <button className="btn small ghost" onClick={() => makeAuction(r)}>{t('auction')} ⚡</button>
+                      <button className="btn small" title={t('tip_rfq')} onClick={() => makeRfq(r.id)}>RFQ 🔒</button>{' '}
+                      <button className="btn small ghost" title={t('tip_rfp')} onClick={() => makeRfq(r.id, 'RFP')}>RFP 📄</button>{' '}
+                      <button className="btn small ghost" title={t('tip_rfi')} onClick={() => makeRfq(r.id, 'RFI')}>RFI ❓</button>{' '}
+                      <button className="btn small ghost" title={t('tip_auction')} onClick={() => makeAuction(r)}>{t('auction')} ⚡</button>
                     </>
                   )}
                   {r.status === 'APPROVED' && r.method_resolved === 'DIRECT' && canApprove && (
@@ -155,7 +156,7 @@ export default function Requests() {
                         }}>OK</button>
                       </span>
                     ) : (
-                      <button className="btn small" onClick={() => openDirect(r.id)}>{t('direct_order')} 📦</button>
+                      <button className="btn small" title={t('tip_direct')} onClick={() => openDirect(r.id)}>{t('direct_order')} 📦</button>
                     )
                   )}
                 </td>
