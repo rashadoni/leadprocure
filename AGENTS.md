@@ -80,7 +80,7 @@ Key gotchas learned (respect these): FOR UPDATE requires UPDATE policies under R
 
 ## 4d. ROADMAP groups 1–4 — DONE
 
-All functional roadmap blocks are built and green (**121 e2e, 14 suites**):
+All functional roadmap blocks are built and green (**130 e2e, 15 suites**):
 - **Group 1**: bid attachments (mig 0011, cross-org, buyer-after-opening), goods
   receipt/GRN (0012, partial→auto-accept), multi-lot award (per-lot totals),
   multi-step approval (0013, value-banded chains).
@@ -103,6 +103,15 @@ All functional roadmap blocks are built and green (**121 e2e, 14 suites**):
   decides via SECURITY DEFINER `po_amendment_decide()` which applies lines + recomputes the
   PO total atomically. `changes` jsonb snapshots old→new so history survives PO mutation.
   UI: propose form on buyer Contracts, diff+accept/reject panel on supplier Orders.
+- **RFI/RFP event types** (no migration — enum existed): `createFromRequest` takes
+  `type` (default RFQ). RFP = prices + required `proposalText` sealed TOGETHER in the
+  bid payload, revealed only at opening, then normal evaluate/award. RFI = response text
+  only (no priced items, bids.total_minor stays NULL); terminal state reuses EVALUATION
+  ("responses opened"); evaluate/award/aiRecommendation all reject RFI. detail() decrypts
+  payloads to attach `proposal_text` to buyer bids ONLY once amounts_visible.
+- **Auth gotcha — JWT needs jti.** With 1-second iat resolution, a refresh rotation in the
+  same second as issuance produced an IDENTICAL token (rotation = silent no-op, flaky
+  auth e2e). TokenService.signRefresh now adds a random jti to every refresh token.
 
 **Gotcha learned:** TypeORM `UPDATE … RETURNING` yields `[rows, count]` — never read a
 column off it; SELECT the value first (bit us in verification `decide`). Also: stop the

@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { AccessTokenPayload } from '@leadprocure/shared';
@@ -7,6 +8,7 @@ export interface RefreshPayload {
   sub: string;
   org_id: string;
   token_version: number;
+  jti?: string;
 }
 
 @Injectable()
@@ -32,7 +34,10 @@ export class TokenService {
     return this.access.verify<AccessTokenPayload>(token);
   }
   signRefresh(payload: RefreshPayload): string {
-    return this.refresh.sign(payload);
+    // jti makes every refresh token unique. Without it, JWT's 1-second iat resolution
+    // means a rotation within the same second as issuance can produce the IDENTICAL
+    // token string — "rotation" silently becomes a no-op (same session hash).
+    return this.refresh.sign({ ...payload, jti: randomUUID() });
   }
   verifyRefresh(token: string): RefreshPayload {
     return this.refresh.verify<RefreshPayload>(token);

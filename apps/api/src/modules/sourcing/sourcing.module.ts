@@ -20,6 +20,7 @@ class CreateEventDto {
   @IsOptional() @IsString() title?: string;
   @IsISO8601() closeAt!: string;
   @IsOptional() @IsIn(['PUBLIC', 'INVITED']) visibility?: 'PUBLIC' | 'INVITED';
+  @IsOptional() @IsIn(['RFQ', 'RFP', 'RFI']) type?: 'RFQ' | 'RFP' | 'RFI';
 }
 class InviteDto {
   @IsUUID() supplierOrgId!: string;
@@ -31,9 +32,11 @@ class AssignLotDto {
   @IsUUID() lotId!: string;
 }
 class SubmitBidDto {
-  @IsArray() @ValidateNested({ each: true }) @Type(() => BidItemDto) items!: BidItemDto[];
+  // optional at the DTO level: RFI bids carry no priced items (the service enforces per-type shape)
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => BidItemDto) items?: BidItemDto[];
   @IsOptional() @IsString() currency?: string;
   @IsOptional() @IsInt() @Min(0) deliveryDays?: number;
+  @IsOptional() @IsString() proposalText?: string;
 }
 class CriterionDto {
   @IsString() @MinLength(1) key!: string;

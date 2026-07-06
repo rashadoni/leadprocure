@@ -77,12 +77,14 @@ export default function EventDetail() {
   if (!ev) return <div className="center">…</div>;
   const lot = ev.lots?.[0];
   const awardedBidId = ev.awards?.[0]?.winning_bid_id;
-  const canAi = ['EVALUATION', 'AWARDED'].includes(ev.status);
+  const isRfi = ev.type === 'RFI';
+  const canAi = ['EVALUATION', 'AWARDED'].includes(ev.status) && !isRfi;
 
   return (
     <>
       <h1>
-        {ev.title} <span className={`badge ${ev.status}`}>{ev.status}</span>
+        {ev.title} <span className="badge INVITED">{ev.type}</span>{' '}
+        <span className={`badge ${ev.status}`}>{ev.status}</span>
       </h1>
       <div className="card">
         <b>{t('deadline')}:</b> {new Date(ev.close_at).toLocaleString()} · <b>{ev.visibility}</b> · {ev.evaluation_currency}
@@ -150,7 +152,7 @@ export default function EventDetail() {
         </table>
       </div>
 
-      {ev.status === 'EVALUATION' && ev.lots.length > 0 && (
+      {ev.status === 'EVALUATION' && !isRfi && ev.lots.length > 0 && (
         <div className="card" style={{ borderColor: 'var(--ok)' }}>
           <h3>{t('award')} · {t('lots')}</h3>
           {ev.lots.map((l: any) => {
@@ -189,6 +191,11 @@ export default function EventDetail() {
               <tr key={b.id} style={awardedBidId === b.id ? { outline: '1px solid var(--ok)' } : undefined}>
                 <td>
                   {b.supplier_name}{awardedBidId === b.id ? ' 🏆' : ''}
+                  {b.proposal_text && (
+                    <div className="hint" style={{ whiteSpace: 'pre-wrap', maxWidth: 420, marginTop: 4 }}>
+                      📝 {b.proposal_text}
+                    </div>
+                  )}
                   {ev.amounts_visible && <BidDocs bidId={b.id} canUpload={false} />}
                 </td>
                 <td><span className={`badge ${b.state}`}>{b.state}</span></td>
@@ -196,7 +203,7 @@ export default function EventDetail() {
                 <td>{ev.amounts_visible ? (b.delivery_days ?? '—') : '🔒'}</td>
                 <td>{weightedByBid.has(b.id) ? weightedByBid.get(b.id)!.toFixed(1) : '—'}</td>
                 <td>
-                  {ev.status === 'EVALUATION' && b.state === 'OPENED' && (
+                  {ev.status === 'EVALUATION' && !isRfi && b.state === 'OPENED' && (
                     <span style={{ display: 'inline-flex', gap: 6 }}>
                       <input style={{ width: 64 }} type="number" placeholder="price" min={0} max={100}
                         onChange={(e) => setScores({ ...scores, [b.id]: { ...(scores[b.id] ?? { delivery: 50 }), price: Number(e.target.value) } })} />
@@ -209,7 +216,7 @@ export default function EventDetail() {
             ))}
           </tbody>
         </table>
-        {ev.status === 'EVALUATION' && (ev.bids ?? []).some((b: any) => b.state === 'OPENED') && (
+        {ev.status === 'EVALUATION' && !isRfi && (ev.bids ?? []).some((b: any) => b.state === 'OPENED') && (
           <div style={{ marginTop: 12 }}>
             <button className="btn ghost" onClick={doEvaluate}>{t('score')} (70% price / 30% delivery)</button>
           </div>

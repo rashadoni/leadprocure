@@ -62,10 +62,10 @@ export default function Requests() {
     catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
-  const makeRfq = async (id: string) => {
+  const makeRfq = async (id: string, type: 'RFQ' | 'RFP' | 'RFI' = 'RFQ') => {
     try {
       const closeAt = new Date(Date.now() + 24 * 3600_000).toISOString();
-      const ev = await api.post(`/events/from-request/${id}`, { closeAt, visibility: 'INVITED' });
+      const ev = await api.post(`/events/from-request/${id}`, { closeAt, visibility: 'INVITED', type });
       nav(`/buyer/events/${ev.data.id}`);
     } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
@@ -137,6 +137,8 @@ export default function Requests() {
                   {r.status === 'APPROVED' && r.method_resolved !== 'DIRECT' && canApprove && (
                     <>
                       <button className="btn small" onClick={() => makeRfq(r.id)}>RFQ 🔒</button>{' '}
+                      <button className="btn small ghost" onClick={() => makeRfq(r.id, 'RFP')}>RFP 📄</button>{' '}
+                      <button className="btn small ghost" onClick={() => makeRfq(r.id, 'RFI')}>RFI ❓</button>{' '}
                       <button className="btn small ghost" onClick={() => makeAuction(r)}>{t('auction')} ⚡</button>
                     </>
                   )}

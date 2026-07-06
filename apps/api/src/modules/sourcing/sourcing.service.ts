@@ -19,9 +19,12 @@ import { NotifyService } from '../../common/notify/notify.module';
 
 interface SealedBidPayload {
   items: Array<{ event_item_id: string; unit_price_minor: number }>;
-  total_minor: number;
+  total_minor: number | null; // null for RFI (no prices)
   currency: string;
   delivery_days: number | null;
+  // RFP: technical proposal sealed WITH the prices; RFI: the response itself.
+  // Never exposed to the buyer before the opening ceremony.
+  proposal_text?: string | null;
 }
 
 @Injectable()
@@ -43,13 +46,17 @@ export class SourcingService {
   // AI recommendation — only once amounts are open (RLS + status gate both enforce this).
   async aiRecommendation(eventId: string, auth: AccessTokenPayload) {
     const ev = await this.requireEvent(eventId, ['EVALUATION', 'AWARDED']);
-    void ev;
+    if (ev.type === 'RFI') throw new BadRequestException('RFI does not support scoring');
     return this.aiScorer.recommend(eventId);
   }
 
   // ---------- buyer: create + publish ----------
 
-  async createFromRequest(requestId: string, dto: { title?: string; closeAt: string; visibility?: 'PUBLIC' | 'INVITED' }, auth: AccessTokenPayload) {
+  async createFromRequest(
+    requestId: string,
+    dto: { title?: string; closeAt: string; visibility?: 'PUBLIC' | 'INVITED'; type?: 'RFQ' | 'RFP' | 'RFI' },
+    auth: AccessTokenPayload,
+  ) {
     // License gate: new work blocked when expired_restricted/revoked; live events keep running.
     this.entitlements.assertCanCreateNew();
     await this.quota.consumeMonthlyEvent(auth.org_id);
@@ -69,10 +76,11 @@ export class SourcingService {
       await m.query(
         `INSERT INTO sourcing_events(buyer_org_id, request_id, type, format, status, visibility, title,
            evaluation_currency, vat_mode, close_at, created_by)
-         VALUES ($1,$2,'RFQ','SEALED','DRAFT',$3,$4,$5,$6,$7,$8) RETURNING id`,
+         VALUES ($1,$2,$9,'SEALED','DRAFT',$3,$4,$5,$6,$7,$8) RETURNING id`,
         [
           auth.org_id, requestId, dto.visibility ?? 'INVITED', dto.title ?? req.title,
           req.currency, req.vat_mode, closeAt.toISOString(), auth.sub,
+          dto.type ?? 'RFQ',
         ],
       )
     )[0];
@@ -223,6 +231,25 @@ export class SourcingService {
       total_minor: amountsVisible ? b.total_minor : null,
       delivery_days: amountsVisible ? b.delivery_days : null,
     }));
+    // RFP/RFI: the technical proposal / response text is sealed with the prices and only
+    // decrypted for the buyer once the ceremony opened the bids (RLS also gates payloads).
+    if (amountsVisible && (ev.type === 'RFP' || ev.type === 'RFI')) {
+      const payloads = await m.query(
+        `SELECT p.bid_id, p.ciphertext, p.iv, p.wrapped_key FROM bid_sealed_payloads p
+         JOIN bids b ON b.id = p.bid_id WHERE b.event_id = $1`,
+        [eventId],
+      );
+      const textByBid = new Map<string, string | null>();
+      for (const row of payloads) {
+        try {
+          const payload = this.sealed.open<SealedBidPayload>({
+            ciphertext: row.ciphertext, iv: row.iv, wrappedKey: row.wrapped_key,
+          });
+          textByBid.set(row.bid_id, payload.proposal_text ?? null);
+        } catch { /* unreadable payload → no text */ }
+      }
+      for (const b of safeBids) b.proposal_text = textByBid.get(b.id) ?? null;
+    }
     let bidItems: any[] = [];
     let lotBidTotals: any[] = [];
     if (amountsVisible) {
@@ -253,7 +280,12 @@ export class SourcingService {
 
   async submitBid(
     eventId: string,
-    dto: { items: Array<{ eventItemId: string; unitPriceMinor: number }>; currency?: string; deliveryDays?: number },
+    dto: {
+      items?: Array<{ eventItemId: string; unitPriceMinor: number }>;
+      currency?: string;
+      deliveryDays?: number;
+      proposalText?: string;
+    },
     auth: AccessTokenPayload,
   ) {
     const m = this.rc.manager;
@@ -261,29 +293,43 @@ export class SourcingService {
     const evRows = await m.query(`SELECT * FROM sourcing_events WHERE id = $1`, [eventId]);
     if (!evRows.length) throw new NotFoundException('Event not found');
     const ev = evRows[0];
+    if (ev.type === 'AUCTION') throw new BadRequestException('Use the auction endpoint for this event');
     if (ev.status !== 'OPEN') throw new BadRequestException('Event is not open for bidding');
     if (new Date(ev.close_at).getTime() <= Date.now()) {
       throw new BadRequestException('Bidding deadline has passed'); // server-authoritative clock
     }
 
+    // Per-type shape: RFQ = prices; RFP = prices + technical proposal; RFI = response only.
+    const proposalText = dto.proposalText?.trim() || null;
+    if (ev.type === 'RFI') {
+      if (dto.items?.length) throw new BadRequestException('RFI does not accept priced items');
+      if (!proposalText) throw new BadRequestException('RFI requires a response text');
+    } else {
+      if (!dto.items?.length) throw new BadRequestException('Bid items required');
+      if (ev.type === 'RFP' && !proposalText) throw new BadRequestException('RFP requires a technical proposal');
+    }
+
     const eventItems = await m.query(`SELECT id, qty FROM event_items WHERE event_id = $1`, [eventId]);
     const qtyById = new Map<string, number>(eventItems.map((i: any) => [i.id, Number(i.qty)]));
-    if (!dto.items?.length) throw new BadRequestException('Bid items required');
-    let total = 0;
-    for (const it of dto.items) {
-      const qty = qtyById.get(it.eventItemId);
-      if (qty == null) throw new BadRequestException(`Unknown event item ${it.eventItemId}`);
-      if (!Number.isInteger(it.unitPriceMinor) || it.unitPriceMinor < 0) {
-        throw new BadRequestException('unitPriceMinor must be a non-negative integer');
+    let total: number | null = null;
+    if (ev.type !== 'RFI') {
+      total = 0;
+      for (const it of dto.items!) {
+        const qty = qtyById.get(it.eventItemId);
+        if (qty == null) throw new BadRequestException(`Unknown event item ${it.eventItemId}`);
+        if (!Number.isInteger(it.unitPriceMinor) || it.unitPriceMinor < 0) {
+          throw new BadRequestException('unitPriceMinor must be a non-negative integer');
+        }
+        total += qty * it.unitPriceMinor; // server-side total — client totals are ignored
       }
-      total += qty * it.unitPriceMinor; // server-side total — client totals are ignored
     }
 
     const payload: SealedBidPayload = {
-      items: dto.items.map((i) => ({ event_item_id: i.eventItemId, unit_price_minor: i.unitPriceMinor })),
+      items: (dto.items ?? []).map((i) => ({ event_item_id: i.eventItemId, unit_price_minor: i.unitPriceMinor })),
       total_minor: total,
       currency: dto.currency ?? ev.evaluation_currency,
       delivery_days: dto.deliveryDays ?? null,
+      proposal_text: proposalText,
     };
     const blob = this.sealed.seal(payload);
     const payloadHash = this.sealed.sha256(JSON.stringify(payload));
@@ -345,7 +391,7 @@ export class SourcingService {
        WHERE b.event_id = $1 AND b.state = 'SUBMITTED'`,
       [eventId],
     );
-    const receipt: Array<{ bid_id: string; payload_sha256: string; total_minor: number }> = [];
+    const receipt: Array<{ bid_id: string; payload_sha256: string; total_minor: number | null }> = [];
     for (const row of sealedRows) {
       const payload = this.sealed.open<SealedBidPayload>({
         ciphertext: row.ciphertext, iv: row.iv, wrappedKey: row.wrapped_key,
@@ -384,7 +430,8 @@ export class SourcingService {
     auth: AccessTokenPayload,
   ) {
     const m = this.rc.manager;
-    await this.requireEvent(eventId, ['EVALUATION']);
+    const evRow = await this.requireEvent(eventId, ['EVALUATION']);
+    if (evRow.type === 'RFI') throw new BadRequestException('RFI does not support evaluation');
     const weightSum = dto.criteria.reduce((s, c) => s + c.weight, 0);
     if (Math.abs(weightSum - 100) > 0.001) throw new BadRequestException('Criteria weights must sum to 100');
 
@@ -418,7 +465,8 @@ export class SourcingService {
     const m = this.rc.manager;
     await m.query(`SELECT id FROM sourcing_events WHERE id=$1 FOR UPDATE`, [eventId]);
     // AWARDED is allowed so a retried award of the same lot stays idempotent
-    await this.requireEvent(eventId, ['EVALUATION', 'AWARDED']);
+    const evRow = await this.requireEvent(eventId, ['EVALUATION', 'AWARDED']);
+    if (evRow.type === 'RFI') throw new BadRequestException('RFI does not support awarding');
 
     // Idempotency short-circuit BEFORE locking the bid: after the event is AWARDED the
     // ceremony RLS policy no longer lets the buyer lock bid rows (FOR UPDATE applies

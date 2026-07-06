@@ -142,3 +142,7 @@ e2e (happy + hostile isolation) → keep the full suite green → commit → pus
 - **PO amendments / change orders** (mig 0019): buyer proposes per-line qty/price changes
   on an ISSUED/CONFIRMED order; supplier accepts (lines + total update atomically via the
   SECURITY DEFINER seam) or rejects; old→new snapshot kept as history. Both UIs wired.
+- **RFI/RFP event types**: RFP = sealed prices + technical proposal (revealed only at the
+  opening ceremony, then normal weighted evaluation + award); RFI = information gathering —
+  text response only, sealed until opening for equal treatment, no evaluation/award. Buyer
+  picks RFQ/RFP/RFI when creating the event; supplier bid form adapts per type.

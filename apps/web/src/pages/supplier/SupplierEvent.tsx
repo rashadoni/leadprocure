@@ -12,6 +12,7 @@ export default function SupplierEvent() {
   const [ev, setEv] = useState<any>(null);
   const [prices, setPrices] = useState<Record<string, string>>({});
   const [deliveryDays, setDeliveryDays] = useState('14');
+  const [proposalText, setProposalText] = useState('');
   const [msg, setMsg] = useState('');
 
   const load = useCallback(() => api.get(`/events/${id}`).then((r) => setEv(r.data)), [id]);
@@ -26,8 +27,14 @@ export default function SupplierEvent() {
       if (ev.format === 'REVERSE') {
         const res = await api.post(`/events/${id}/auction/bids`, { items });
         setMsg(`OK · ${fmtMoney(res.data.total_minor, ev.evaluation_currency)}${res.data.extended ? ' · ⏱ +ext' : ''}`);
+      } else if (ev.type === 'RFI') {
+        const res = await api.post(`/events/${id}/bid`, { proposalText });
+        setMsg(`OK · sha256 ${res.data.payload_sha256.slice(0, 16)}…`);
       } else {
-        const res = await api.post(`/events/${id}/bid`, { items, deliveryDays: Number(deliveryDays) });
+        const res = await api.post(`/events/${id}/bid`, {
+          items, deliveryDays: Number(deliveryDays),
+          ...(ev.type === 'RFP' ? { proposalText } : {}),
+        });
         setMsg(`OK · sha256 ${res.data.payload_sha256.slice(0, 16)}…`);
       }
       load();
@@ -67,36 +74,53 @@ export default function SupplierEvent() {
       {ev.format === 'REVERSE' && <AuctionPanel eventId={id!} onChanged={load} />}
 
       <div className="card">
-        <h3>{t('items')} — {ev.format === 'REVERSE' ? `⚡ ${t('place_bid')}` : t('bid')}</h3>
-        <table>
-          <thead><tr><th>{t('name')}</th><th>{t('qty')}</th><th>Est.</th><th>{t('unit_price')} (AZN)</th></tr></thead>
-          <tbody>
-            {ev.items.map((i: any) => (
-              <tr key={i.id}>
-                <td>{i.name}</td>
-                <td>{Number(i.qty)}</td>
-                <td>{fmtMoney(i.est_unit_price_minor, ev.evaluation_currency)}</td>
-                <td>
-                  <input style={{ width: 130 }} type="number" step="0.01" min="0" value={prices[i.id] ?? ''}
-                    disabled={ev.status !== 'OPEN'}
-                    onChange={(e) => setPrices({ ...prices, [i.id]: e.target.value })} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <h3>
+          {ev.type === 'RFI' ? `❓ RFI — ${t('response_text')}`
+            : <>{t('items')} — {ev.format === 'REVERSE' ? `⚡ ${t('place_bid')}` : t('bid')}</>}
+        </h3>
+        {ev.type !== 'RFI' && (
+          <table>
+            <thead><tr><th>{t('name')}</th><th>{t('qty')}</th><th>Est.</th><th>{t('unit_price')} (AZN)</th></tr></thead>
+            <tbody>
+              {ev.items.map((i: any) => (
+                <tr key={i.id}>
+                  <td>{i.name}</td>
+                  <td>{Number(i.qty)}</td>
+                  <td>{fmtMoney(i.est_unit_price_minor, ev.evaluation_currency)}</td>
+                  <td>
+                    <input style={{ width: 130 }} type="number" step="0.01" min="0" value={prices[i.id] ?? ''}
+                      disabled={ev.status !== 'OPEN'}
+                      onChange={(e) => setPrices({ ...prices, [i.id]: e.target.value })} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {(ev.type === 'RFP' || ev.type === 'RFI') && (
+          <div style={{ marginTop: 10 }}>
+            <label>{ev.type === 'RFI' ? t('response_text') : t('proposal_text')}</label>
+            <textarea rows={5} style={{ width: '100%' }} value={proposalText}
+              disabled={ev.status !== 'OPEN'}
+              onChange={(e) => setProposalText(e.target.value)} />
+          </div>
+        )}
         <div className="row" style={{ marginTop: 12, maxWidth: 480 }}>
-          <div>
-            <label>Delivery (days)</label>
-            <input type="number" min={1} value={deliveryDays} disabled={ev.status !== 'OPEN'}
-              onChange={(e) => setDeliveryDays(e.target.value)} />
-          </div>
-          <div>
-            <label>{t('total')}</label>
-            <div style={{ padding: '8px 0', fontWeight: 700 }}>{fmtMoney(Math.round(total * 100), ev.evaluation_currency)}</div>
-          </div>
-          <button className="btn" disabled={ev.status !== 'OPEN'} onClick={submit}>
-            {ev.format === 'REVERSE' ? `⚡ ${t('place_bid')}` : `🔒 ${t('bid')}`}
+          {ev.type !== 'RFI' && (
+            <>
+              <div>
+                <label>Delivery (days)</label>
+                <input type="number" min={1} value={deliveryDays} disabled={ev.status !== 'OPEN'}
+                  onChange={(e) => setDeliveryDays(e.target.value)} />
+              </div>
+              <div>
+                <label>{t('total')}</label>
+                <div style={{ padding: '8px 0', fontWeight: 700 }}>{fmtMoney(Math.round(total * 100), ev.evaluation_currency)}</div>
+              </div>
+            </>
+          )}
+          <button className="btn" disabled={ev.status !== 'OPEN' || ((ev.type === 'RFP' || ev.type === 'RFI') && proposalText.trim().length < 3)} onClick={submit}>
+            {ev.format === 'REVERSE' ? `⚡ ${t('place_bid')}` : `🔒 ${ev.type === 'RFI' ? t('send') : t('bid')}`}
           </button>
         </div>
         {msg && <div className="hint">{msg}</div>}
