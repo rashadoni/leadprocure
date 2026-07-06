@@ -3,13 +3,11 @@
 // Tour texts are RU for the demo audience (MVP; move into i18n when needed).
 
 export interface TourStep { selector: string; title: string; text: string }
-export interface SectionGuide { video: string; poster: string; tour?: TourStep[] }
+export interface SectionGuide { key: string; tour?: TourStep[] }
 
-const g = (key: string, tour?: TourStep[]): SectionGuide => ({
-  video: `/guides/${key}.webm`,
-  poster: `/guides/${key}.png`,
-  tour,
-});
+// Videos are per-language: /guides/<key>.<lang>.webm (+ .png poster). The widget builds
+// the URL from the active UI language; see components/Guide.tsx.
+const g = (key: string, tour?: TourStep[]): SectionGuide => ({ key, tour });
 
 export const GUIDES: Record<string, SectionGuide> = {
   '/buyer/dashboard': g('buyer-dashboard', [

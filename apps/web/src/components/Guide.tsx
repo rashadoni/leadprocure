@@ -77,7 +77,7 @@ function Spotlight({ steps, onDone }: { steps: TourStep[]; onDone: () => void })
 
 export default function Guide() {
   const { pathname } = useLocation();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const guide = resolveGuide(pathname);
   const [video, setVideo] = useState(false);
   const [tour, setTour] = useState(false);
@@ -86,13 +86,18 @@ export default function Guide() {
   useEffect(() => { setVideo(false); setTour(false); }, [pathname]);
 
   if (!guide || hidden) return null;
+  // per-language asset, with a graceful fallback to the Russian recording if a language's
+  // video/poster isn't present yet (e.g. produced later).
+  const videoUrl = `/guides/${guide.key}.${lang}.webm`;
+  const videoFallback = `/guides/${guide.key}.ru.webm`;
+  const posterUrl = `/guides/${guide.key}.${lang}.png`;
   return (
     <>
       <div className="guide-widget">
         <button className="guide-close" title="✕"
           onClick={() => { sessionStorage.setItem('guide_hidden', '1'); setHidden(true); }}>✕</button>
         <div className="guide-thumb" onClick={() => setVideo(true)}>
-          <img src={guide.poster} alt="" />
+          <img src={posterUrl} alt="" onError={(e) => { (e.target as HTMLImageElement).src = `/guides/${guide.key}.ru.png`; }} />
           <div className="guide-play">▶</div>
         </div>
         <div className="guide-label">{t('guide')}</div>
@@ -105,8 +110,12 @@ export default function Guide() {
 
       {video && (
         <div className="guide-modal" onClick={() => setVideo(false)}>
-          <video src={guide.video} poster={guide.poster} controls autoPlay
-            onClick={(e) => e.stopPropagation()} />
+          <video key={videoUrl} src={videoUrl} poster={posterUrl} controls autoPlay
+            onClick={(e) => e.stopPropagation()}
+            onError={(e) => {
+              const v = e.target as HTMLVideoElement;
+              if (!v.src.endsWith(`${guide.key}.ru.webm`)) v.src = videoFallback;
+            }} />
         </div>
       )}
       {tour && guide.tour && <Spotlight steps={guide.tour} onDone={() => setTour(false)} />}

@@ -113,13 +113,16 @@ All functional roadmap blocks are built and green (**134 e2e, 16 suites**):
   same second as issuance produced an IDENTICAL token (rotation = silent no-op, flaky
   auth e2e). TokenService.signRefresh now adds a random jti to every refresh token.
 - **Section guides**: floating video-thumbnail widget + spotlight tour on every section
-  (components/Guide.tsx + guides.ts route→guide map; videos in web/public/guides,
-  produced by scripts/produce-guides.mjs against a demo-filled stand: per-SCENE Azure TTS
-  is measured first, the recording holds each block exactly for its narration, then
-  ffmpeg adelay+amix syncs voice to footage — video length is dictated by the story,
-  never by a timer). Producer uses
-  ONE browser context per role — reusing a static storageState across contexts replays a
-  rotated refresh token and trips the token-reuse breach detection (by design).
+  (components/Guide.tsx + guides.ts route→guide map). Videos are **per-language**:
+  web/public/guides/<key>.<lang>.webm (+ .png poster); the widget builds the URL from the
+  active UI language. Produced by scripts/produce-guides.mjs against a demo-filled stand:
+  per-SCENE Azure TTS (voices ru-RU-Svetlana / az-AZ-Banu / en-US-Jenny) is measured first,
+  each language re-records the UI in that language (addInitScript sets localStorage.lp_lang)
+  and holds each block exactly for its narration, then ffmpeg adelay+amix syncs voice to
+  footage — length is dictated by the story, never a timer. **Azure, not Google/Gemini,
+  because only Azure has an Azerbaijani neural voice.** Producer uses ONE browser context
+  per role — reusing a static storageState across contexts replays a rotated refresh token
+  and trips the token-reuse breach detection (by design).
 - **Email loop**: notifyOrg queues an email fan-out via `rc.onCommit()` — a post-commit
   queue on the request context flushed by TransactionInterceptor ONLY after commit
   (rolled-back actions never send mail). NotifyEmailer mails the recipient org's ACTIVE
