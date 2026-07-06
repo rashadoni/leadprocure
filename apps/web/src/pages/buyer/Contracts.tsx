@@ -30,6 +30,35 @@ export default function Contracts() {
     try { await fn(); load(); } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
+  // PO amendment (change order): buyer proposes new qty/price per line + reason.
+  const [amendFor, setAmendFor] = useState<string | null>(null);
+  const [amendItems, setAmendItems] = useState<any[]>([]);
+  const [amendVals, setAmendVals] = useState<Record<string, { qty: string; price: string }>>({});
+  const [amendReason, setAmendReason] = useState('');
+
+  const openAmend = async (poId: string) => {
+    const { data } = await api.get(`/orders/${poId}`);
+    setAmendItems(data.items); setAmendVals({}); setAmendReason('');
+    setAmendFor(poId);
+  };
+  const submitAmend = async () => {
+    const items = amendItems
+      .map((i) => {
+        const v = amendVals[i.id];
+        if (!v) return null;
+        const out: any = { poItemId: i.id };
+        if (v.qty !== '' && v.qty !== undefined && Number(v.qty) !== Number(i.qty)) out.qty = Number(v.qty);
+        if (v.price !== '' && v.price !== undefined && Math.round(Number(v.price) * 100) !== Number(i.unit_price_minor)) {
+          out.unitPriceMinor = Math.round(Number(v.price) * 100);
+        }
+        return out.qty !== undefined || out.unitPriceMinor !== undefined ? out : null;
+      })
+      .filter(Boolean);
+    if (!items.length) { alert('—'); return; }
+    await act(() => api.post(`/orders/${amendFor}/amendments`, { reason: amendReason, items }));
+    setAmendFor(null);
+  };
+
   // Receive all outstanding quantities (partial receipts are supported by the API).
   const receiveAll = async (poId: string) => {
     const { data } = await api.get(`/orders/${poId}/receipts`);
@@ -93,6 +122,9 @@ export default function Contracts() {
                   ))}{' '}
                   {isBuyerSide && ['SHIPPED', 'DELIVERED'].includes(p.status) && (
                     <button className="btn small" onClick={() => receiveAll(p.id)}>{t('receive')} 📥</button>
+                  )}{' '}
+                  {isBuyerSide && ['ISSUED', 'CONFIRMED'].includes(p.status) && (
+                    <button className="btn small ghost" onClick={() => openAmend(p.id)}>✎ {t('amend')}</button>
                   )}
                 </td>
               </tr>
@@ -101,6 +133,35 @@ export default function Contracts() {
         </table>
         <Pager total={oTotal} page={oPage} pageSize={PAGE_SIZE} onPage={setOPage} />
       </div>
+
+      {amendFor && (
+        <div className="card">
+          <h3>✎ {t('amendments')}</h3>
+          <table>
+            <thead><tr><th>{t('name')}</th><th>{t('qty')}</th><th>{t('unit_price')} (AZN)</th></tr></thead>
+            <tbody>
+              {amendItems.map((i) => (
+                <tr key={i.id}>
+                  <td>{i.name}</td>
+                  <td><input type="number" min={1} style={{ width: 90 }} placeholder={String(i.qty)}
+                    value={amendVals[i.id]?.qty ?? ''}
+                    onChange={(e) => setAmendVals({ ...amendVals, [i.id]: { qty: e.target.value, price: amendVals[i.id]?.price ?? '' } })} /></td>
+                  <td><input type="number" step="0.01" min={0} style={{ width: 120 }}
+                    placeholder={(Number(i.unit_price_minor) / 100).toFixed(2)}
+                    value={amendVals[i.id]?.price ?? ''}
+                    onChange={(e) => setAmendVals({ ...amendVals, [i.id]: { qty: amendVals[i.id]?.qty ?? '', price: e.target.value } })} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginTop: 10 }}>
+            <div style={{ flex: 1 }}><label>{t('reason')}</label>
+              <input value={amendReason} onChange={(e) => setAmendReason(e.target.value)} /></div>
+            <button className="btn" disabled={amendReason.trim().length < 3} onClick={submitAmend}>{t('send')}</button>
+            <button className="btn ghost" onClick={() => setAmendFor(null)}>✕</button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

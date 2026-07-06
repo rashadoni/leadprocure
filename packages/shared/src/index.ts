@@ -213,6 +213,9 @@ export const AUDIT_ACTIONS = [
   'BUDGET_CREATED',
   'BUDGET_UPDATED',
   'BUDGET_DELETED',
+  'PO_AMENDMENT_PROPOSED',
+  'PO_AMENDMENT_ACCEPTED',
+  'PO_AMENDMENT_REJECTED',
 ] as const;
 
 // ---------------- Invoices (P2P) ----------------

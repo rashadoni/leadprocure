@@ -43,6 +43,19 @@ export default function Orders() {
     } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
+  // Pending amendments (change orders) proposed by the buyer — supplier decides.
+  const [amends, setAmends] = useState<Record<string, any[]>>({});
+  const loadAmends = async (poId: string) => {
+    const r = await api.get(`/orders/${poId}/amendments`);
+    setAmends((s) => ({ ...s, [poId]: r.data }));
+  };
+  const decideAmend = async (poId: string, amendmentId: string, accept: boolean) => {
+    try {
+      await api.post(`/orders/${poId}/amendments/${amendmentId}/decision`, { accept });
+      await loadAmends(poId); load();
+    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  };
+
   const loadShip = async (poId: string) => {
     const r = await api.get(`/logistics/po/${poId}`);
     setShip((s) => ({ ...s, [poId]: r.data }));
@@ -81,7 +94,25 @@ export default function Orders() {
                     {next && <button className="btn small" onClick={() => advance(p.id, next)}>→ {next}</button>}{' '}
                     {['DELIVERED', 'ACCEPTED'].includes(p.status) && (
                       <button className="btn small ghost" onClick={() => submitInvoice(p.id)}>🧾 {t('invoice')}</button>
+                    )}{' '}
+                    {['ISSUED', 'CONFIRMED'].includes(p.status) && (
+                      <button className="btn small ghost" onClick={() => loadAmends(p.id)}>✎ {t('amendments')}</button>
                     )}
+                    {(amends[p.id] ?? []).filter((a) => a.status === 'PROPOSED').map((a) => (
+                      <div key={a.id} className="card" style={{ marginTop: 8, padding: 10 }}>
+                        <div className="hint">✎ {t('amendments')} #{a.amendment_no} · {a.reason}</div>
+                        {a.changes.map((c: any) => (
+                          <div key={c.poItemId} style={{ fontSize: 12, margin: '4px 0' }}>
+                            {c.name}: {c.oldQty} → <b>{c.newQty}</b> × {fmtMoney(c.oldUnitPriceMinor)} → <b>{fmtMoney(c.newUnitPriceMinor)}</b>
+                          </div>
+                        ))}
+                        <div style={{ fontSize: 12, marginBottom: 6 }}>
+                          {t('total')}: {fmtMoney(a.old_total_minor)} → <b>{fmtMoney(a.new_total_minor)}</b>
+                        </div>
+                        <button className="btn small" onClick={() => decideAmend(p.id, a.id, true)}>✓ {t('accept')}</button>{' '}
+                        <button className="btn small ghost" onClick={() => decideAmend(p.id, a.id, false)}>✕ {t('reject')}</button>
+                      </div>
+                    ))}
                   </td>
                   <td>
                     {s === undefined && <button className="btn small ghost" onClick={() => loadShip(p.id)}>🚚</button>}

@@ -13,7 +13,7 @@ import {
 import type { AccessTokenPayload, PoStatus } from '@leadprocure/shared';
 import { PO_STATUSES } from '@leadprocure/shared';
 import { pageFrom, parsePaging, Paging } from '../../common/http/paging';
-import { IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Min, MinLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { CurrentUser, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
@@ -297,6 +297,97 @@ export class ContractsService {
 
   // All transitions run through the SECURITY DEFINER seam — it enforces which side
   // may perform which transition; we just relay and audit.
+  // ---- PO amendments (change orders) ----
+  // Buyer proposes per-line qty/price changes to an ISSUED/CONFIRMED order; the snapshot
+  // of old→new values lives on the amendment row so history survives PO mutation.
+  async listAmendments(poId: string) {
+    return this.rc.manager.query(
+      `SELECT * FROM po_amendments WHERE po_id = $1 ORDER BY amendment_no DESC`,
+      [poId],
+    );
+  }
+
+  async proposeAmendment(
+    poId: string,
+    dto: { reason: string; items: Array<{ poItemId: string; qty?: number; unitPriceMinor?: number }> },
+    auth: AccessTokenPayload,
+  ) {
+    const m = this.rc.manager;
+    const po = (await m.query(`SELECT * FROM purchase_orders WHERE id = $1`, [poId]))[0];
+    if (!po) throw new NotFoundException('Order not found');
+    if (po.buyer_org_id !== auth.org_id) throw new BadRequestException('Only the buyer proposes amendments');
+    if (!['ISSUED', 'CONFIRMED'].includes(po.status)) {
+      throw new BadRequestException(`PO is ${po.status} — amendments only apply before fulfilment starts`);
+    }
+    if ((await m.query(`SELECT 1 FROM goods_receipts WHERE po_id = $1 LIMIT 1`, [poId])).length) {
+      throw new BadRequestException('Goods already received against this PO');
+    }
+    if ((await m.query(`SELECT 1 FROM po_amendments WHERE po_id = $1 AND status = 'PROPOSED'`, [poId])).length) {
+      throw new BadRequestException('An amendment is already pending on this PO');
+    }
+    if (!dto.items?.length) throw new BadRequestException('At least one line change is required');
+
+    const items = await m.query(
+      `SELECT id, name, qty, unit_price_minor FROM purchase_order_items WHERE po_id = $1`,
+      [poId],
+    );
+    const byId = new Map<string, any>(items.map((i: any) => [i.id, i]));
+    const changes = dto.items.map((ch) => {
+      const cur = byId.get(ch.poItemId);
+      if (!cur) throw new BadRequestException(`Item ${ch.poItemId} is not on this order`);
+      const newQty = ch.qty ?? Number(cur.qty);
+      const newPrice = ch.unitPriceMinor ?? Number(cur.unit_price_minor);
+      if (newQty === Number(cur.qty) && newPrice === Number(cur.unit_price_minor)) {
+        throw new BadRequestException(`Line "${cur.name}" has no actual change`);
+      }
+      return {
+        poItemId: ch.poItemId, name: cur.name,
+        oldQty: Number(cur.qty), newQty,
+        oldUnitPriceMinor: Number(cur.unit_price_minor), newUnitPriceMinor: newPrice,
+      };
+    });
+    const changed = new Map(changes.map((c) => [c.poItemId, c]));
+    const newTotal = items.reduce((sum: number, it: any) => {
+      const c = changed.get(it.id);
+      return sum + (c ? c.newQty * c.newUnitPriceMinor : Number(it.qty) * Number(it.unit_price_minor));
+    }, 0);
+
+    const no = Number(
+      (await m.query(`SELECT COALESCE(max(amendment_no), 0) + 1 AS n FROM po_amendments WHERE po_id = $1`, [poId]))[0].n,
+    );
+    const row = (
+      await m.query(
+        `INSERT INTO po_amendments(po_id, buyer_org_id, supplier_org_id, amendment_no, reason,
+                                   changes, old_total_minor, new_total_minor, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+        [poId, po.buyer_org_id, po.supplier_org_id, no, dto.reason,
+         JSON.stringify(changes), po.total_minor, newTotal, auth.sub],
+      )
+    )[0];
+    await this.audit.record('PO_AMENDMENT_PROPOSED', 'po_amendment', row.id, { po_id: poId, no, new_total_minor: newTotal });
+    await this.notify.notifyOrg(po.supplier_org_id, 'PO_AMENDMENT_PROPOSED', { po_no: po.po_no, po_id: poId, amendment_id: row.id });
+    return row;
+  }
+
+  async decideAmendment(poId: string, amendmentId: string, dto: { accept: boolean; note?: string }, auth: AccessTokenPayload) {
+    const m = this.rc.manager;
+    const am = (await m.query(`SELECT * FROM po_amendments WHERE id = $1 AND po_id = $2`, [amendmentId, poId]))[0];
+    if (!am) throw new NotFoundException('Amendment not found');
+    try {
+      // counterparty write: validates the actor, applies line changes + total atomically
+      const decided = (await m.query(`SELECT * FROM po_amendment_decide($1,$2,$3)`, [amendmentId, dto.accept, dto.note ?? null]))[0];
+      await this.audit.record(
+        dto.accept ? 'PO_AMENDMENT_ACCEPTED' : 'PO_AMENDMENT_REJECTED',
+        'po_amendment', amendmentId, { po_id: poId, by: auth.org_id },
+      );
+      await this.notify.notifyOrg(am.buyer_org_id, dto.accept ? 'PO_AMENDMENT_ACCEPTED' : 'PO_AMENDMENT_REJECTED',
+        { po_id: poId, amendment_id: amendmentId });
+      return decided;
+    } catch (e: any) {
+      throw new BadRequestException(e.message?.replace(/^.*ERROR:\s*/, '') ?? 'Decision failed');
+    }
+  }
+
   async setOrderStatus(id: string, status: PoStatus, note: string | undefined, auth: AccessTokenPayload) {
     try {
       const rows = await this.rc.manager.query(`SELECT * FROM po_apply_status($1, $2, $3)`, [
@@ -326,6 +417,19 @@ class SetPoStatusDto {
 class ReceiptItemDto {
   @IsUUID() poItemId!: string;
   @IsInt() @Min(0) qty!: number;
+}
+class AmendItemDto {
+  @IsUUID() poItemId!: string;
+  @IsOptional() @IsInt() @Min(1) qty?: number;
+  @IsOptional() @IsInt() @Min(0) unitPriceMinor?: number;
+}
+class ProposeAmendmentDto {
+  @IsString() @MinLength(3) reason!: string;
+  @IsArray() @ValidateNested({ each: true }) @Type(() => AmendItemDto) items!: AmendItemDto[];
+}
+class AmendmentDecisionDto {
+  @IsBoolean() accept!: boolean;
+  @IsOptional() @IsString() note?: string;
 }
 class CreateReceiptDto {
   @IsArray() @ValidateNested({ each: true }) @Type(() => ReceiptItemDto) items!: ReceiptItemDto[];
@@ -406,6 +510,32 @@ export class ContractsController {
     @CurrentUser() auth: AccessTokenPayload,
   ) {
     return this.contracts.createReceipt(id, body, auth);
+  }
+
+  @Get('orders/:id/amendments')
+  amendments(@Param('id') id: string) {
+    return this.contracts.listAmendments(id);
+  }
+
+  @Post('orders/:id/amendments')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  proposeAmendment(
+    @Param('id') id: string,
+    @Body() body: ProposeAmendmentDto,
+    @CurrentUser() auth: AccessTokenPayload,
+  ) {
+    return this.contracts.proposeAmendment(id, body, auth);
+  }
+
+  @Post('orders/:id/amendments/:amendmentId/decision')
+  @Roles('SUPPLIER_USER')
+  decideAmendment(
+    @Param('id') id: string,
+    @Param('amendmentId') amendmentId: string,
+    @Body() body: AmendmentDecisionDto,
+    @CurrentUser() auth: AccessTokenPayload,
+  ) {
+    return this.contracts.decideAmendment(id, amendmentId, body, auth);
   }
 }
 

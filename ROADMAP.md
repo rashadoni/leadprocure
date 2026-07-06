@@ -139,3 +139,6 @@ e2e (happy + hostile isolation) → keep the full suite green → commit → pus
 - **Spend analytics** (`/buyer/analytics`): 12-month spend chart (ACCEPTED POs), spend by
   category, top-5 suppliers, tender savings (estimate vs awarded, per event), invoices
   paid/outstanding — all RLS-scoped, no chart library.
+- **PO amendments / change orders** (mig 0019): buyer proposes per-line qty/price changes
+  on an ISSUED/CONFIRMED order; supplier accepts (lines + total update atomically via the
+  SECURITY DEFINER seam) or rejects; old→new snapshot kept as history. Both UIs wired.
