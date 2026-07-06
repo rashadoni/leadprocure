@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/auth';
 import { useI18n, LANGS } from '../i18n';
+import Guide from '../components/Guide';
 
 export default function Shell() {
   const { session, logout } = useAuth();
@@ -60,6 +61,7 @@ export default function Shell() {
       <main className="main">
         <Outlet />
       </main>
+      <Guide />
     </div>
   );
 }

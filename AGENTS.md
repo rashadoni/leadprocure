@@ -112,6 +112,11 @@ All functional roadmap blocks are built and green (**134 e2e, 16 suites**):
 - **Auth gotcha — JWT needs jti.** With 1-second iat resolution, a refresh rotation in the
   same second as issuance produced an IDENTICAL token (rotation = silent no-op, flaky
   auth e2e). TokenService.signRefresh now adds a random jti to every refresh token.
+- **Section guides**: floating video-thumbnail widget + spotlight tour on every section
+  (components/Guide.tsx + guides.ts route→guide map; videos in web/public/guides,
+  re-recorded by scripts/record-guides.mjs against a demo-filled stand). Recorder uses
+  ONE browser context per role — reusing a static storageState across contexts replays a
+  rotated refresh token and trips the token-reuse breach detection (by design).
 - **Email loop**: notifyOrg queues an email fan-out via `rc.onCommit()` — a post-commit
   queue on the request context flushed by TransactionInterceptor ONLY after commit
   (rolled-back actions never send mail). NotifyEmailer mails the recipient org's ACTIVE
