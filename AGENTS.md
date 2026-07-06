@@ -114,7 +114,10 @@ All functional roadmap blocks are built and green (**134 e2e, 16 suites**):
   auth e2e). TokenService.signRefresh now adds a random jti to every refresh token.
 - **Section guides**: floating video-thumbnail widget + spotlight tour on every section
   (components/Guide.tsx + guides.ts route→guide map; videos in web/public/guides,
-  re-recorded by scripts/record-guides.mjs against a demo-filled stand). Recorder uses
+  produced by scripts/produce-guides.mjs against a demo-filled stand: per-SCENE Azure TTS
+  is measured first, the recording holds each block exactly for its narration, then
+  ffmpeg adelay+amix syncs voice to footage — video length is dictated by the story,
+  never by a timer). Producer uses
   ONE browser context per role — reusing a static storageState across contexts replays a
   rotated refresh token and trips the token-reuse breach detection (by design).
 - **Email loop**: notifyOrg queues an email fan-out via `rc.onCommit()` — a post-commit
