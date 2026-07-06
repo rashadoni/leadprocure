@@ -80,7 +80,7 @@ Key gotchas learned (respect these): FOR UPDATE requires UPDATE policies under R
 
 ## 4d. ROADMAP groups 1–4 — DONE
 
-All functional roadmap blocks are built and green (**105 e2e, 12 suites**):
+All functional roadmap blocks are built and green (**111 e2e, 13 suites**):
 - **Group 1**: bid attachments (mig 0011, cross-org, buyer-after-opening), goods
   receipt/GRN (0012, partial→auto-accept), multi-lot award (per-lot totals),
   multi-step approval (0013, value-banded chains).
@@ -94,6 +94,10 @@ All functional roadmap blocks are built and green (**105 e2e, 12 suites**):
   encumbrance model — APPROVED requests commit against a matching budget (category + year +
   currency); utilization derived, not stored. Soft/non-blocking: request approval attaches
   `budgetWarnings` but never blocks. UI `/buyer/budgets`.
+- **Spend analytics** (`GET /dashboard/spend-analytics`, buyer roles): spend = ACCEPTED POs;
+  zero-filled 12-month series (generate_series), category via PO→contract→event→request
+  (direct POs = uncategorized), top-5 suppliers, per-event tender savings, invoice
+  paid/outstanding. UI `/buyer/analytics`, hand-rolled CSS bars (no chart lib).
 
 **Gotcha learned:** TypeORM `UPDATE … RETURNING` yields `[rows, count]` — never read a
 column off it; SELECT the value first (bit us in verification `decide`). Also: stop the

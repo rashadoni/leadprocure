@@ -22,6 +22,7 @@ export default function Shell() {
             <NavLink to="/buyer/invoices">{t('invoices')}</NavLink>
             <NavLink to="/buyer/catalogs">{t('catalogs')}</NavLink>
             <NavLink to="/buyer/budgets">{t('budgets')}</NavLink>
+            <NavLink to="/buyer/analytics">{t('analytics')}</NavLink>
             <NavLink to="/buyer/logistics">{t('logistics')}</NavLink>
             <NavLink to="/buyer/suppliers">{t('suppliers')}</NavLink>
             <NavLink to="/buyer/verification">{t('verification')}</NavLink>

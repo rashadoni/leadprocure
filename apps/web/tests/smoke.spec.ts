@@ -32,6 +32,7 @@ test.describe('buyer panel', () => {
     await assertRenders(page, '/buyer/invoices', /Счета|Invoices|Qaimə/);
     await assertRenders(page, '/buyer/catalogs', /Каталоги|Catalogs|Kataloq/);
     await assertRenders(page, '/buyer/budgets', /Бюджеты|Budgets|Büdcə/);
+    await assertRenders(page, '/buyer/analytics', /Аналитика|Analytics|Analitika/);
     await assertRenders(page, '/buyer/logistics', /Логистика|Logistics|Logistika/);
     await assertRenders(page, '/buyer/suppliers', /Поставщики|Suppliers|Təchizatçı/);
     await assertRenders(page, '/buyer/verification', /Верификация|Verification|Yoxlama/);

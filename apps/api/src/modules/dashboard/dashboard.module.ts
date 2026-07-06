@@ -74,6 +74,72 @@ export class DashboardService {
       unreadNotifications: unread, verificationStatus: ver[0]?.status ?? null, tasks,
     };
   }
+
+  // Spend analytics (buyer). "Spend" = ACCEPTED purchase orders — money the buyer has
+  // committed to pay after accepting delivery. Category comes via the PO→contract→event→
+  // request chain, so direct/bare POs land under '—' (uncategorized). Savings are grouped
+  // per awarded event so a multi-lot award doesn't double-count the request estimate.
+  async spendAnalytics() {
+    const m = this.rc.manager;
+
+    const [monthly, byCategory, topSuppliers, savingsRows, invoiceRows] = await Promise.all([
+      m.query(`
+        SELECT to_char(gs.m, 'YYYY-MM') AS month, COALESCE(sum(p.total_minor), 0)::bigint AS total
+        FROM generate_series(date_trunc('month', now()) - interval '11 months',
+                             date_trunc('month', now()), interval '1 month') gs(m)
+        LEFT JOIN purchase_orders p
+          ON date_trunc('month', p.created_at) = gs.m AND p.status = 'ACCEPTED'
+        GROUP BY gs.m ORDER BY gs.m`),
+      m.query(`
+        SELECT COALESCE(pr.category, '—') AS category,
+               sum(p.total_minor)::bigint AS total, count(*)::int AS po_count
+        FROM purchase_orders p
+        LEFT JOIN contracts c ON c.id = p.contract_id
+        LEFT JOIN sourcing_events e ON e.id = c.event_id
+        LEFT JOIN procurement_requests pr ON pr.id = e.request_id
+        WHERE p.status = 'ACCEPTED'
+        GROUP BY 1 ORDER BY 2 DESC`),
+      m.query(`
+        SELECT o.legal_name AS name, sum(p.total_minor)::bigint AS total, count(*)::int AS po_count
+        FROM purchase_orders p JOIN organizations o ON o.id = p.supplier_org_id
+        WHERE p.status = 'ACCEPTED'
+        GROUP BY o.id, o.legal_name ORDER BY 2 DESC LIMIT 5`),
+      m.query(`
+        WITH awarded AS (
+          SELECT e.id, pr.estimated_total_minor AS est, sum(b.total_minor)::bigint AS awd
+          FROM sourcing_events e
+          JOIN procurement_requests pr ON pr.id = e.request_id
+          JOIN awards a ON a.event_id = e.id
+          JOIN bids b ON b.id = a.winning_bid_id
+          GROUP BY e.id, pr.estimated_total_minor
+        )
+        SELECT COALESCE(sum(est), 0)::bigint AS estimated, COALESCE(sum(awd), 0)::bigint AS awarded,
+               COALESCE(sum(est - awd), 0)::bigint AS saved, count(*)::int AS events
+        FROM awarded`),
+      m.query(`
+        SELECT COALESCE(sum(gross_minor) FILTER (WHERE status = 'PAID'), 0)::bigint AS paid,
+               COALESCE(sum(gross_minor) FILTER (WHERE status NOT IN ('PAID','REJECTED')), 0)::bigint AS outstanding,
+               count(*) FILTER (WHERE status = 'PAID')::int AS paid_count,
+               count(*) FILTER (WHERE status NOT IN ('PAID','REJECTED'))::int AS outstanding_count
+        FROM invoices`),
+    ]);
+
+    const s = savingsRows[0];
+    const inv = invoiceRows[0];
+    return {
+      monthly: monthly.map((r: any) => ({ month: r.month, totalMinor: Number(r.total) })),
+      byCategory: byCategory.map((r: any) => ({ category: r.category, totalMinor: Number(r.total), poCount: r.po_count })),
+      topSuppliers: topSuppliers.map((r: any) => ({ name: r.name, totalMinor: Number(r.total), poCount: r.po_count })),
+      savings: {
+        estimatedMinor: Number(s.estimated), awardedMinor: Number(s.awarded),
+        savedMinor: Number(s.saved), events: s.events,
+      },
+      invoices: {
+        paidMinor: Number(inv.paid), outstandingMinor: Number(inv.outstanding),
+        paidCount: inv.paid_count, outstandingCount: inv.outstanding_count,
+      },
+    };
+  }
 }
 
 @Controller('dashboard')
@@ -90,6 +156,12 @@ export class DashboardController {
   @Roles('SUPPLIER_USER')
   supplier() {
     return this.dashboard.supplier();
+  }
+
+  @Get('spend-analytics')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  spendAnalytics() {
+    return this.dashboard.spendAnalytics();
   }
 }
 

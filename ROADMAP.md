@@ -136,3 +136,6 @@ e2e (happy + hostile isolation) → keep the full suite green → commit → pus
   spend ceiling per category + calendar year; APPROVED requests commit against the matching
   budget (encumbrance model). Utilization is derived; approval attaches a soft, non-blocking
   `budgetWarnings` when a budget is exceeded. UI `/buyer/budgets` with utilization bars.
+- **Spend analytics** (`/buyer/analytics`): 12-month spend chart (ACCEPTED POs), spend by
+  category, top-5 suppliers, tender savings (estimate vs awarded, per event), invoices
+  paid/outstanding — all RLS-scoped, no chart library.
