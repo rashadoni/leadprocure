@@ -17,6 +17,7 @@ import type { ProcurementMethod } from '@leadprocure/shared';
 import { CurrentUser, Roles } from '../../common/auth/decorators';
 import type { AccessTokenPayload } from '@leadprocure/shared';
 import { pageFrom, parsePaging, Paging } from '../../common/http/paging';
+import { BudgetsModule, BudgetsService } from '../budgets/budgets.module';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
 
@@ -48,6 +49,7 @@ export class RequestsService {
   constructor(
     private readonly rc: RequestContextService,
     private readonly audit: AuditService,
+    private readonly budgets: BudgetsService,
   ) {}
 
   async list(q?: string, paging: Paging = parsePaging()) {
@@ -201,7 +203,10 @@ export class RequestsService {
       [id, auth.sub, total, method],
     );
     await this.audit.record('REQUEST_APPROVED', 'procurement_request', id, { total, method });
-    return this.get(id);
+    const approved = await this.get(id);
+    // Soft, non-blocking budget control: flag any budget this approval tips over.
+    const budgetWarnings = await this.budgets.warningsForRequest(approved);
+    return { ...approved, budgetWarnings };
   }
 
   async reject(id: string, auth: AccessTokenPayload, reason?: string) {
@@ -343,5 +348,5 @@ export class RequestsController {
   }
 }
 
-@Module({ controllers: [RequestsController], providers: [RequestsService] })
+@Module({ imports: [BudgetsModule], controllers: [RequestsController], providers: [RequestsService] })
 export class RequestsModule {}

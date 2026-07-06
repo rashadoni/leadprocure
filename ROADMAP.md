@@ -128,3 +128,11 @@ Feature key `p2p.invoicing`. Closes the financial loop (Peppol e-invoicing is a 
 
 Each block: migration (grants + `release_versions` row) → service/controller → UI + i18n →
 e2e (happy + hostile isolation) → keep the full suite green → commit → push.
+
+---
+
+## Beyond the original roadmap (done)
+- **Budgets & commitment control** (mig 0018, feature `controls.budgets`): buyer defines a
+  spend ceiling per category + calendar year; APPROVED requests commit against the matching
+  budget (encumbrance model). Utilization is derived; approval attaches a soft, non-blocking
+  `budgetWarnings` when a budget is exceeded. UI `/buyer/budgets` with utilization bars.

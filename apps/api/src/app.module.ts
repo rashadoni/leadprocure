@@ -29,6 +29,7 @@ import { LogisticsModule } from './modules/logistics/logistics.module';
 import { CatalogsModule } from './modules/catalogs/catalogs.module';
 import { VerificationModule } from './modules/verification/verification.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
+import { BudgetsModule } from './modules/budgets/budgets.module';
 import { MailModule } from './common/mail/mail.module';
 
 @Module({
@@ -58,6 +59,7 @@ import { MailModule } from './common/mail/mail.module';
     CatalogsModule,
     VerificationModule,
     InvoicesModule,
+    BudgetsModule,
   ],
   controllers: [HealthController],
   providers: [

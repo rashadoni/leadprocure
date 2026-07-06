@@ -36,6 +36,7 @@ export const FEATURE_KEYS = [
   'contracts.catalog',
   'suppliers.verification',
   'p2p.invoicing',
+  'controls.budgets',
 ] as const;
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
 
@@ -209,6 +210,9 @@ export const AUDIT_ACTIONS = [
   'VERIFICATION_DECIDED',
   'INVOICE_SUBMITTED',
   'INVOICE_STATUS_CHANGED',
+  'BUDGET_CREATED',
+  'BUDGET_UPDATED',
+  'BUDGET_DELETED',
 ] as const;
 
 // ---------------- Invoices (P2P) ----------------
