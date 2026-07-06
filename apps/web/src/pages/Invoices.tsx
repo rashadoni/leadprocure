@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, fmtMoney } from '../api/client';
 import { useAuth } from '../auth/auth';
 import { useI18n } from '../i18n';
+import { Badge } from '../components/Badge';
 
 export default function Invoices() {
   const { t } = useI18n();
@@ -38,7 +39,7 @@ export default function Invoices() {
                 <td>{i.po_no}</td>
                 <td>{isBuyer ? i.supplier_name : i.buyer_name}</td>
                 <td>{fmtMoney(i.gross_minor, i.currency)}</td>
-                <td><span className={`badge ${badge(i.status)}`}>{i.status}</span></td>
+                <td><Badge status={i.status} cls={badge(i.status)} /></td>
                 <td>
                   {isBuyer && ['MATCHED', 'DISPUTED', 'SUBMITTED'].includes(i.status) && (
                     <>
@@ -59,7 +60,7 @@ export default function Invoices() {
 
       {Object.entries(open).filter(([, v]) => v).map(([id, inv]) => (
         <div className="card" key={id}>
-          <h3>{inv.invoice_no} · {fmtMoney(inv.gross_minor, inv.currency)} <span className={`badge ${badge(inv.status)}`}>{inv.status}</span></h3>
+          <h3>{inv.invoice_no} · {fmtMoney(inv.gross_minor, inv.currency)} <Badge status={inv.status} cls={badge(inv.status)} /></h3>
           <div className="hint">net {fmtMoney(inv.net_minor, inv.currency)} + ƏDV {fmtMoney(inv.vat_minor, inv.currency)}</div>
           <h3 style={{ marginTop: 10 }}>3-way match {inv.match?.ok ? '✅' : '⚠️'}</h3>
           <table>

@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import { PO_BUYER_NEXT } from '@leadprocure/shared';
 import Pager from '../../components/Pager';
+import { Badge } from '../../components/Badge';
 
 const PAGE_SIZE = 20;
 
@@ -82,7 +83,7 @@ export default function Contracts() {
                 <td>{c.title}</td>
                 <td>{isBuyerSide ? c.supplier_name : c.buyer_name}</td>
                 <td>{fmtMoney(c.total_minor, c.currency)}</td>
-                <td><span className={`badge ${c.status}`}>{c.status}</span></td>
+                <td><Badge status={c.status} /></td>
                 <td>{c.po_count}</td>
                 <td>
                   {isBuyerSide && c.status === 'DRAFT' && (
@@ -112,7 +113,7 @@ export default function Contracts() {
                 <td>{p.po_no}</td>
                 <td>{isBuyerSide ? p.supplier_name : p.buyer_name}</td>
                 <td>{fmtMoney(p.total_minor, p.currency)}</td>
-                <td><span className={`badge ${p.status}`}>{p.status}</span></td>
+                <td><Badge status={p.status} /></td>
                 <td>
                   {isBuyerSide && (PO_BUYER_NEXT[p.status] ?? []).map((next) => (
                     <button key={next} className={`btn small ${next === 'CANCELLED' || next === 'REJECTED' ? 'ghost' : ''}`}

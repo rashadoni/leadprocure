@@ -4,6 +4,7 @@ import { api, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { PO_SUPPLIER_TRANSITIONS, SHIPMENT_STATUSES } from '@leadprocure/shared';
 import Pager from '../../components/Pager';
+import { Badge } from '../../components/Badge';
 
 const PAGE_SIZE = 20;
 
@@ -89,7 +90,7 @@ export default function Orders() {
                   <td>{p.po_no}</td>
                   <td>{p.buyer_name}</td>
                   <td>{fmtMoney(p.total_minor, p.currency)}</td>
-                  <td><span className={`badge ${p.status}`}>{p.status}</span></td>
+                  <td><Badge status={p.status} /></td>
                   <td>
                     {next && <button className="btn small" onClick={() => advance(p.id, next)}>→ {next}</button>}{' '}
                     {['DELIVERED', 'ACCEPTED'].includes(p.status) && (
@@ -121,7 +122,7 @@ export default function Orders() {
                     )}
                     {s && s.shipment && (
                       <div style={{ fontSize: 12 }}>
-                        <b>{s.shipment.carrier}</b> · {s.shipment.tracking_no} · <span className={`badge ${s.shipment.status}`}>{s.shipment.status}</span>
+                        <b>{s.shipment.carrier}</b> · {s.shipment.tracking_no} · <Badge status={s.shipment.status} />
                         <div className="hint">{s.events.map((e: any) => `${e.status}@${e.location ?? '—'}`).join(' → ')}</div>
                         <select style={{ width: 150, marginTop: 4 }} value="" onChange={(e) => e.target.value && addEvent(p.id, e.target.value)}>
                           <option value="">+ {t('history')}…</option>

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useI18n } from '../../i18n';
 import Pager from '../../components/Pager';
+import { Badge } from '../../components/Badge';
 
 const PAGE_SIZE = 20;
 
@@ -25,7 +26,7 @@ export default function Events() {
             {rows.map((r) => (
               <tr key={r.id}>
                 <td><Link to={`/buyer/events/${r.id}`}>{r.title}</Link></td>
-                <td><span className={`badge ${r.status}`}>{r.status}</span></td>
+                <td><Badge status={r.status} /></td>
                 <td>{r.close_at ? new Date(r.close_at).toLocaleString() : '—'}</td>
                 <td>{r.bid_count}</td>
               </tr>

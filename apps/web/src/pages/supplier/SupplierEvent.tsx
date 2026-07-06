@@ -5,6 +5,7 @@ import { useI18n } from '../../i18n';
 import { AuctionPanel } from '../../components/AuctionPanel';
 import { QnaCard } from '../../components/QnaCard';
 import { BidDocs } from '../../components/BidDocs';
+import { Badge } from '../../components/Badge';
 
 export default function SupplierEvent() {
   const { id } = useParams();
@@ -53,12 +54,12 @@ export default function SupplierEvent() {
 
   return (
     <>
-      <h1>{ev.title} <span className={`badge ${ev.status}`}>{ev.status}</span></h1>
+      <h1>{ev.title} <Badge status={ev.status} /></h1>
       <div className="card">
         <b>{t('buyer_org')}:</b> {ev.buyer_name} · <b>{t('deadline')}:</b> {new Date(ev.close_at).toLocaleString()}
         {ev.my_bid && (
           <div style={{ marginTop: 8 }}>
-            {t('my_bid')}: <span className={`badge ${ev.my_bid.state}`}>{ev.my_bid.state}</span>{' '}
+            {t('my_bid')}: <Badge status={ev.my_bid.state} />{' '}
             {ev.my_bid.payload && <>· {fmtMoney(ev.my_bid.payload.total_minor, ev.my_bid.payload.currency)}</>}
             {ev.my_bid.state === 'SUBMITTED' && ev.status === 'OPEN' && (
               <> · <button className="btn small ghost" onClick={withdraw}>{t('withdraw')}</button></>

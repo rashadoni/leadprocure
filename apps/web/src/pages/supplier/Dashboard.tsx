@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useI18n } from '../../i18n';
+import { Badge } from '../../components/Badge';
 
 const TASK_LINK: Record<string, (id: string) => string> = {
   BID: (id) => `/supplier/events/${id}`,
@@ -41,9 +42,8 @@ export default function SupplierDashboard() {
         <div className="card" style={{ marginBottom: 0 }}>
           <div style={{ color: 'var(--muted)', fontSize: 12 }}>{t('verification')}</div>
           <div style={{ marginTop: 10 }}>
-            <span className={`badge ${kpi.verificationStatus === 'APPROVED' ? 'APPROVED' : kpi.verificationStatus === 'REJECTED' ? 'REJECTED' : 'INVITED'}`}>
-              {kpi.verificationStatus ?? '—'}
-            </span>
+            <Badge status={kpi.verificationStatus}
+              cls={kpi.verificationStatus === 'APPROVED' ? 'APPROVED' : kpi.verificationStatus === 'REJECTED' ? 'REJECTED' : 'INVITED'} />
           </div>
         </div>
       </div>

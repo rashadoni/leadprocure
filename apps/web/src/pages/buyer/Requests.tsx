@@ -4,6 +4,7 @@ import { api, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import Pager from '../../components/Pager';
+import { Badge } from '../../components/Badge';
 
 const PAGE_SIZE = 20;
 
@@ -121,7 +122,7 @@ export default function Requests() {
                 <td>{r.title}</td>
                 <td>{fmtMoney(r.estimated_total_minor, r.currency)}</td>
                 <td>
-                  <span className={`badge ${r.status}`}>{r.status}</span>
+                  <Badge status={r.status} />
                   {r.status === 'SUBMITTED' && r.steps_total > 0 && (
                     <div className="hint">✔ {r.steps_done}/{r.steps_total} · {r.current_role}</div>
                   )}

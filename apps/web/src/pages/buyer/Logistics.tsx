@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
+import { Badge } from '../../components/Badge';
 
 // Shipment tracking board — the buyer watches deliveries in flight (read-only;
 // the supplier drives the timeline from "Заказы в работе").
@@ -29,7 +30,7 @@ export default function Logistics() {
                 <td>{isBuyer ? s.supplier_name : s.buyer_name}</td>
                 <td>{s.carrier ?? '—'}</td>
                 <td>{s.tracking_no ?? '—'}</td>
-                <td><span className={`badge ${s.status}`}>{s.status}</span></td>
+                <td><Badge status={s.status} /></td>
                 <td>{s.eta ? new Date(s.eta).toLocaleDateString() : '—'}</td>
               </tr>
             ))}

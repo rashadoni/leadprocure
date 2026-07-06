@@ -6,6 +6,7 @@ import { useI18n } from '../../i18n';
 import { AuctionPanel } from '../../components/AuctionPanel';
 import { QnaCard } from '../../components/QnaCard';
 import { BidDocs } from '../../components/BidDocs';
+import { Badge } from '../../components/Badge';
 
 export default function EventDetail() {
   const { id } = useParams();
@@ -84,7 +85,7 @@ export default function EventDetail() {
     <>
       <h1>
         {ev.title} <span className="badge INVITED">{ev.type}</span>{' '}
-        <span className={`badge ${ev.status}`}>{ev.status}</span>
+        <Badge status={ev.status} />
       </h1>
       <div className="card">
         <b>{t('deadline')}:</b> {new Date(ev.close_at).toLocaleString()} · <b>{ev.visibility}</b> · {ev.evaluation_currency}
@@ -198,7 +199,7 @@ export default function EventDetail() {
                   )}
                   {ev.amounts_visible && <BidDocs bidId={b.id} canUpload={false} />}
                 </td>
-                <td><span className={`badge ${b.state}`}>{b.state}</span></td>
+                <td><Badge status={b.state} /></td>
                 <td>{ev.amounts_visible ? fmtMoney(b.total_minor, b.currency) : '🔒'}</td>
                 <td>{ev.amounts_visible ? (b.delivery_days ?? '—') : '🔒'}</td>
                 <td>{weightedByBid.has(b.id) ? weightedByBid.get(b.id)!.toFixed(1) : '—'}</td>

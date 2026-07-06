@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
+import { Badge } from '../../components/Badge';
 
 export default function Catalogs() {
   const { t } = useI18n();
@@ -45,7 +46,7 @@ export default function Catalogs() {
               <tr key={c.id}>
                 <td><a href="#" onClick={(e) => { e.preventDefault(); expand(c.id); }}>{c.title}</a></td>
                 <td>{isBuyer ? c.supplier_name : c.buyer_name}</td>
-                <td><span className={`badge ${c.status}`}>{c.status}</span></td>
+                <td><Badge status={c.status} /></td>
                 <td>{c.item_count}</td>
                 <td>
                   {isBuyer && c.status === 'DRAFT' && (
@@ -61,7 +62,7 @@ export default function Catalogs() {
 
       {Object.entries(open).filter(([, v]) => v).map(([id, cat]) => (
         <div className="card" key={id}>
-          <h3>{cat.title} <span className={`badge ${cat.status}`}>{cat.status}</span></h3>
+          <h3>{cat.title} <Badge status={cat.status} /></h3>
           <table>
             <thead><tr><th>{t('name')}</th><th>MOQ</th><th>{t('unit_price')}</th>{isBuyer && cat.status === 'ACTIVE' && <th>{t('qty')}</th>}</tr></thead>
             <tbody>

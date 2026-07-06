@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../api/client';
 import { useI18n } from '../../i18n';
+import { Badge } from '../../components/Badge';
 
 export default function Suppliers() {
   const { t } = useI18n();
@@ -44,7 +45,7 @@ export default function Suppliers() {
               <tr key={r.id}>
                 <td>{r.legal_name}</td>
                 <td>{r.voen ?? '—'}</td>
-                <td><span className={`badge ${r.status}`}>{r.status}</span></td>
+                <td><Badge status={r.status} /></td>
                 <td>
                   {r.status !== 'APPROVED' && <button className="btn small" onClick={() => setStatus(r.id, 'APPROVED')}>{t('approve')}</button>}{' '}
                   {r.status !== 'BLOCKED' && <button className="btn small ghost" onClick={() => setStatus(r.id, 'BLOCKED')}>Block</button>}{' '}
