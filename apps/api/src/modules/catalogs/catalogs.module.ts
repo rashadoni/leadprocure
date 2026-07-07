@@ -132,8 +132,8 @@ export class CatalogsService {
       poLines.push({ ci, qty: Number(l.qty), lineTotal });
     }
 
-    const n = await m.query(`SELECT count(*)::int AS n FROM purchase_orders`);
-    const poNo = `PO-${new Date().getFullYear()}-${String(n[0].n + 1).padStart(4, '0')}`;
+    const n = await m.query(`SELECT next_document_no($1,'PO') AS n`, [auth.org_id]);
+    const poNo = `PO-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
     const po = (
       await m.query(
         `INSERT INTO purchase_orders(contract_id, buyer_org_id, supplier_org_id, po_no, status, total_minor, currency, created_by)
