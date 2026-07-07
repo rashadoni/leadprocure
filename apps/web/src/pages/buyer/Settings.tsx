@@ -30,6 +30,17 @@ export default function Settings() {
   // Human-readable role name; falls back to the raw code if no translation exists.
   const roleLabel = (r: string) => { const l = t(`role_${r}`); return l === `role_${r}` ? r : l; };
 
+  // Auth-guarded CSV download (a plain <a> would hit the API without the bearer token).
+  const download1c = async () => {
+    try {
+      const { data } = await api.get('/invoices/export/1c', { responseType: 'blob' });
+      const url = URL.createObjectURL(data as Blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'invoices-1c.csv'; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  };
+
   // Approval-chain presets the admin can switch between (fixes the "one-shot button").
   const CHAIN_PRESETS: Record<string, { label: string; policies: any[] }> = {
     p0: { label: t('chain_p0'), policies: [] },
@@ -138,6 +149,12 @@ export default function Settings() {
             {t('method_set_default')}
           </button>
         )}
+      </div>
+
+      <div className="card">
+        <h3>{t('integrations')}</h3>
+        <div className="hint" style={{ marginBottom: 10 }}>{t('integ_standards')}</div>
+        <button className="btn small ghost" onClick={download1c}>📤 {t('integ_1c')}</button>
       </div>
 
       <div className="card">

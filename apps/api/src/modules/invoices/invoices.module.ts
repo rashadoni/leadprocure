@@ -116,6 +116,27 @@ export class InvoicesService {
     );
   }
 
+  // 1C-import bridge: the org's invoices as a `;`-separated CSV (UTF-8, the delimiter 1C
+  // expects). Not full CommerceML — a mappable flat file the accountant loads into 1C.
+  async export1cCsv(): Promise<string> {
+    const rows = await this.rc.manager.query(
+      `SELECT i.invoice_no, i.issued_at, i.created_at, i.status, i.net_minor, i.vat_minor, i.gross_minor,
+              i.currency, p.po_no, os.legal_name AS supplier, os.voen AS supplier_voen
+       FROM invoices i
+       JOIN organizations os ON os.id = i.supplier_org_id
+       JOIN purchase_orders p ON p.id = i.po_id
+       ORDER BY i.created_at`,
+    );
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const money = (m: unknown) => (Number(m) / 100).toFixed(2);
+    const header = ['Номер', 'Дата', 'Статус', 'Поставщик', 'ВОЕН', 'Заказ', 'Без НДС', 'НДС', 'Итого', 'Валюта'];
+    const lines = rows.map((r: any) => [
+      r.invoice_no, new Date(r.issued_at ?? r.created_at).toISOString().slice(0, 10), r.status,
+      r.supplier, r.supplier_voen, r.po_no, money(r.net_minor), money(r.vat_minor), money(r.gross_minor), r.currency,
+    ].map(esc).join(';'));
+    return '﻿' + [header.map(esc).join(';'), ...lines].join('\r\n'); // BOM so 1C/Excel read UTF-8
+  }
+
   async get(id: string) {
     const inv = (await this.rc.manager.query(`SELECT * FROM invoices WHERE id = $1`, [id]))[0];
     if (!inv) throw new NotFoundException('Invoice not found');
@@ -225,6 +246,16 @@ export class InvoicesController {
   @Get()
   list() {
     return this.invoices.list();
+  }
+
+  // Integrations → 1C: download all invoices as a CSV 1C can import.
+  @Get('export/1c')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  async export1c(@Res() res: Response) {
+    const csv = await this.invoices.export1cCsv();
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="invoices-1c.csv"');
+    res.send(csv);
   }
 
   @Get(':id')
