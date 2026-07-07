@@ -5,6 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
+import { addApprover } from './helpers';
 import { MailProvider, Mail } from '../src/common/mail/mail.module';
 
 // Email loop: in-app notifications fan out to the recipient org's ACTIVE users by email,
@@ -18,6 +19,7 @@ describe('email notifications (API e2e)', () => {
   const bearer = (t: string) => ['Authorization', `Bearer ${t}`] as [string, string];
   const sent: Mail[] = [];
   let buyer: string, supplier: string, supplierOrg: string;
+  let approver: string;
   let poId: string, poItemId: string;
 
   const waitForMail = async (pred: (m: Mail) => boolean, ms = 3000): Promise<Mail | undefined> => {
@@ -46,6 +48,7 @@ describe('email notifications (API e2e)', () => {
       return { token: r.body.accessToken as string, org: r.body.org.id as string };
     };
     ({ token: buyer } = await reg('/auth/register/buyer', `Ml Buyer ${tag}`, `mb-${tag}@t.test`));
+    approver = await addApprover(app, buyer, tag);
     ({ token: supplier, org: supplierOrg } = await reg('/auth/register/supplier', `Ml Sup ${tag}`, `ms-${tag}@t.test`));
 
     await http().post(`/suppliers/${supplierOrg}/invite`).set(...bearer(buyer)).expect(201);
@@ -66,7 +69,7 @@ describe('email notifications (API e2e)', () => {
     const req = await http().post('/requests').set(...bearer(buyer))
       .send({ title: `Ml req ${tag}`, items: [{ name: 'Cable', qty: 4, estUnitPriceMinor: 700_00 }] }).expect(201);
     await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
-    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approver)).expect(201);
     const po = await http().post(`/orders/direct/from-request/${req.body.id}`).set(...bearer(buyer))
       .send({ supplierOrgId: supplierOrg }).expect(201);
     poId = po.body.id;

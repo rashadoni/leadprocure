@@ -5,6 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
+import { addApprover } from './helpers';
 
 /**
  * Full sealed-RFQ lifecycle over the real API:
@@ -18,6 +19,7 @@ describe('sealed RFQ end-to-end flow', () => {
   const tag = randomUUID().slice(0, 8);
 
   let buyerToken: string;
+  let approverToken: string;
   let buyerOrgId: string;
   let supplierToken: string;
   let supplierOrgId: string;
@@ -50,6 +52,7 @@ describe('sealed RFQ end-to-end flow', () => {
     const b = await reg('/auth/register/buyer', `Flow Buyer ${tag}`, `buyer-${tag}@t.test`);
     buyerToken = b.token;
     buyerOrgId = b.orgId;
+    approverToken = await addApprover(app, buyerToken, tag);
     const s = await reg('/auth/register/supplier', `Flow Supplier ${tag}`, `sup-${tag}@t.test`);
     supplierToken = s.token;
     supplierOrgId = s.orgId;
@@ -91,7 +94,7 @@ describe('sealed RFQ end-to-end flow', () => {
     await http().post(`/requests/${requestId}/submit`).set('Authorization', `Bearer ${buyerToken}`).expect(201);
     const approved = await http()
       .post(`/requests/${requestId}/approve`)
-      .set('Authorization', `Bearer ${buyerToken}`)
+      .set('Authorization', `Bearer ${approverToken}`)
       .expect(201);
     expect(approved.body.method_resolved).toBe('RFQ');
   });
@@ -200,7 +203,6 @@ describe('sealed RFQ end-to-end flow', () => {
       .post(`/events/${eventId}/evaluate`)
       .set('Authorization', `Bearer ${buyerToken}`)
       .send({
-        criteria: [{ key: 'price', weight: 70 }, { key: 'delivery', weight: 30 }],
         scores: [
           { bidId, key: 'price', score: 100 },
           { bidId, key: 'delivery', score: 80 },
@@ -208,7 +210,7 @@ describe('sealed RFQ end-to-end flow', () => {
       })
       .expect(201);
     expect(res.body.ranking[0].bid_id).toBe(bidId);
-    expect(res.body.ranking[0].weighted_total).toBe(94);
+    expect(res.body.ranking[0].weighted_total).toBe(94); // locked criteria: price 70 / delivery 30
   });
 
   it('AI recommendation ranks the opened bid with an explainable rationale', async () => {
@@ -231,14 +233,14 @@ describe('sealed RFQ end-to-end flow', () => {
     const first = await http()
       .post(`/events/${eventId}/award`)
       .set('Authorization', `Bearer ${buyerToken}`)
-      .send({ lotId, bidId })
+      .send({ lotId, bidId, justification: 'best value' })
       .expect(201);
     expect(first.body.idempotent).toBe(false);
 
     const second = await http()
       .post(`/events/${eventId}/award`)
       .set('Authorization', `Bearer ${buyerToken}`)
-      .send({ lotId, bidId })
+      .send({ lotId, bidId, justification: 'best value' })
       .expect(201);
     expect(second.body.idempotent).toBe(true);
 
@@ -418,7 +420,7 @@ describe('sealed RFQ end-to-end flow', () => {
     const req = await http().post('/requests').set(...bearer(buyerToken))
       .send({ title: `Pens ${tag}`, items: [{ name: 'Pen box', qty: 10, estUnitPriceMinor: 10_000 }] }).expect(201);
     await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyerToken)).expect(201);
-    const approved = await http().post(`/requests/${req.body.id}/approve`).set(...bearer(buyerToken)).expect(201);
+    const approved = await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approverToken)).expect(201);
     expect(approved.body.method_resolved).toBe('DIRECT');
 
     const po = await http().post(`/orders/direct/from-request/${req.body.id}`).set(...bearer(buyerToken))

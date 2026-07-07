@@ -5,6 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
+import { addApprover } from './helpers';
 
 /**
  * Reverse auction: descending price with min-decrement, anti-sniping extension,
@@ -16,6 +17,7 @@ describe('reverse auction + Q&A flow', () => {
   const tag = randomUUID().slice(0, 8);
 
   let buyerToken: string, buyerOrgId: string;
+  let approverToken: string;
   let s1Token: string, s1OrgId: string;
   let s2Token: string, s2OrgId: string;
   let requestId: string, eventId: string, lotId: string, itemId: string;
@@ -38,6 +40,7 @@ describe('reverse auction + Q&A flow', () => {
       return { token: res.body.accessToken, orgId: res.body.org.id };
     };
     ({ token: buyerToken, orgId: buyerOrgId } = await reg('/auth/register/buyer', `Auc Buyer ${tag}`, `ab-${tag}@t.test`));
+    approverToken = await addApprover(app, buyerToken, tag);
     ({ token: s1Token, orgId: s1OrgId } = await reg('/auth/register/supplier', `Auc Sup1 ${tag}`, `as1-${tag}@t.test`));
     ({ token: s2Token, orgId: s2OrgId } = await reg('/auth/register/supplier', `Auc Sup2 ${tag}`, `as2-${tag}@t.test`));
 
@@ -51,7 +54,7 @@ describe('reverse auction + Q&A flow', () => {
       .expect(201);
     requestId = req.body.id;
     await http().post(`/requests/${requestId}/submit`).set(auth(buyerToken)).expect(201);
-    await http().post(`/requests/${requestId}/approve`).set(auth(buyerToken)).expect(201);
+    await http().post(`/requests/${requestId}/approve`).set(auth(approverToken)).expect(201);
   });
 
   afterAll(async () => {
@@ -161,7 +164,7 @@ describe('reverse auction + Q&A flow', () => {
         .send({ title: `Auc QnA ${tag}`, items: [{ name: 'Pipe', qty: 10, estUnitPriceMinor: 700_000 }] })
         .expect(201);
       await http().post(`/requests/${req.body.id}/submit`).set(auth(buyerToken)).expect(201);
-      await http().post(`/requests/${req.body.id}/approve`).set(auth(buyerToken)).expect(201);
+      await http().post(`/requests/${req.body.id}/approve`).set(auth(approverToken)).expect(201);
       const ev = await http().post(`/events/from-request/${req.body.id}`).set(auth(buyerToken))
         .send({ closeAt: new Date(Date.now() + 3600_000).toISOString(), visibility: 'INVITED' }).expect(201);
       qEventId = ev.body.id;

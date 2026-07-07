@@ -52,9 +52,29 @@ export class SourcingService {
 
   // ---------- buyer: create + publish ----------
 
+  // Default weighting mirrors the built-in evaluate UX (70% price / 30% delivery).
+  // Validates keys + that weights sum to exactly 100.
+  private normalizeCriteria(input?: Array<{ key: string; weight: number }>): Array<{ key: string; weight: number }> {
+    const criteria = input?.length ? input : [{ key: 'price', weight: 70 }, { key: 'delivery', weight: 30 }];
+    const seen = new Set<string>();
+    for (const c of criteria) {
+      const key = String(c.key ?? '').trim();
+      if (!key) throw new BadRequestException('Criterion key required');
+      if (seen.has(key)) throw new BadRequestException(`Duplicate criterion ${key}`);
+      seen.add(key);
+      if (!Number.isFinite(c.weight) || c.weight < 0) throw new BadRequestException('Criterion weight must be ≥ 0');
+    }
+    const sum = criteria.reduce((s, c) => s + c.weight, 0);
+    if (Math.abs(sum - 100) > 0.001) throw new BadRequestException('Criteria weights must sum to 100');
+    return criteria.map((c) => ({ key: String(c.key).trim(), weight: c.weight }));
+  }
+
   async createFromRequest(
     requestId: string,
-    dto: { title?: string; closeAt: string; visibility?: 'PUBLIC' | 'INVITED'; type?: 'RFQ' | 'RFP' | 'RFI' },
+    dto: {
+      title?: string; closeAt: string; visibility?: 'PUBLIC' | 'INVITED'; type?: 'RFQ' | 'RFP' | 'RFI';
+      criteria?: Array<{ key: string; weight: number }>;
+    },
     auth: AccessTokenPayload,
   ) {
     // License gate: new work blocked when expired_restricted/revoked; live events keep running.
@@ -71,16 +91,20 @@ export class SourcingService {
     }
     const closeAt = new Date(dto.closeAt);
     if (!(closeAt.getTime() > Date.now())) throw new BadRequestException('closeAt must be in the future');
+    // Evaluation criteria are FIXED here, before any bid is opened — they can never be
+    // re-weighted after seeing prices (UNCITRAL Art. 11). RFI has no scoring.
+    const type = dto.type ?? 'RFQ';
+    const criteria = type === 'RFI' ? [] : this.normalizeCriteria(dto.criteria);
 
     const ev = (
       await m.query(
         `INSERT INTO sourcing_events(buyer_org_id, request_id, type, format, status, visibility, title,
-           evaluation_currency, vat_mode, close_at, created_by)
-         VALUES ($1,$2,$9,'SEALED','DRAFT',$3,$4,$5,$6,$7,$8) RETURNING id`,
+           evaluation_currency, vat_mode, close_at, created_by, evaluation_criteria)
+         VALUES ($1,$2,$9,'SEALED','DRAFT',$3,$4,$5,$6,$7,$8,$10::jsonb) RETURNING id`,
         [
           auth.org_id, requestId, dto.visibility ?? 'INVITED', dto.title ?? req.title,
           req.currency, req.vat_mode, closeAt.toISOString(), auth.sub,
-          dto.type ?? 'RFQ',
+          type, JSON.stringify(criteria),
         ],
       )
     )[0];
@@ -221,7 +245,7 @@ export class SourcingService {
     // strip the total column here until then.
     const bids = await m.query(
       `SELECT b.id, b.supplier_org_id, s.legal_name AS supplier_name, b.state, b.submitted_at,
-              b.currency, b.delivery_days, b.total_minor
+              b.currency, b.delivery_days, b.total_minor, b.disqualified_reason
        FROM bids b JOIN organizations s ON s.id = b.supplier_org_id
        WHERE b.event_id = $1 ORDER BY b.submitted_at NULLS LAST`,
       [eventId],
@@ -424,29 +448,42 @@ export class SourcingService {
     return this.detail(eventId, auth);
   }
 
+  // Scores only — the criteria and weights are the ones LOCKED on the event before opening,
+  // never supplied (or changed) here. Re-evaluation is blocked while an award stands.
   async evaluate(
     eventId: string,
-    dto: { criteria: Array<{ key: string; weight: number }>; scores: Array<{ bidId: string; key: string; score: number }> },
+    dto: { scores: Array<{ bidId: string; key: string; score: number }> },
     auth: AccessTokenPayload,
   ) {
     const m = this.rc.manager;
     const evRow = await this.requireEvent(eventId, ['EVALUATION']);
     if (evRow.type === 'RFI') throw new BadRequestException('RFI does not support evaluation');
-    const weightSum = dto.criteria.reduce((s, c) => s + c.weight, 0);
-    if (Math.abs(weightSum - 100) > 0.001) throw new BadRequestException('Criteria weights must sum to 100');
+    if ((await m.query(`SELECT 1 FROM awards WHERE event_id=$1 AND cancelled_at IS NULL LIMIT 1`, [eventId])).length) {
+      throw new BadRequestException('Cancel the existing award before re-evaluating');
+    }
+    const criteria: Array<{ key: string; weight: number }> = evRow.evaluation_criteria ?? [];
+    if (!criteria.length) throw new BadRequestException('No locked evaluation criteria on this event');
+    const weightByKey = new Map(criteria.map((c) => [c.key, c.weight]));
+
+    // scores may only reference OPENED, non-disqualified bids of THIS event
+    const eligible = new Set<string>(
+      (await m.query(`SELECT id FROM bids WHERE event_id=$1 AND state='OPENED'`, [eventId])).map((b: any) => b.id),
+    );
+    for (const s of dto.scores) {
+      if (!eligible.has(s.bidId)) throw new BadRequestException(`Bid ${s.bidId} is not an opened bid on this event`);
+      if (!weightByKey.has(s.key)) throw new BadRequestException(`Unknown criterion ${s.key}`);
+      if (!(s.score >= 0 && s.score <= 100)) throw new BadRequestException('Score must be 0..100');
+    }
 
     const evaluation = (
       await m.query(
         `INSERT INTO evaluations(event_id, criteria, created_by) VALUES ($1,$2,$3) RETURNING id`,
-        [eventId, JSON.stringify(dto.criteria), auth.sub],
+        [eventId, JSON.stringify(criteria), auth.sub],
       )
     )[0];
-    const weightByKey = new Map(dto.criteria.map((c) => [c.key, c.weight]));
     const totals = new Map<string, number>();
     for (const s of dto.scores) {
-      const weight = weightByKey.get(s.key);
-      if (weight == null) throw new BadRequestException(`Unknown criterion ${s.key}`);
-      const weighted = (s.score * weight) / 100;
+      const weighted = (s.score * weightByKey.get(s.key)!) / 100;
       totals.set(s.bidId, (totals.get(s.bidId) ?? 0) + weighted);
       await m.query(
         `INSERT INTO evaluation_scores(evaluation_id, bid_id, criterion, score, weighted)
@@ -457,22 +494,66 @@ export class SourcingService {
     const ranking = [...totals.entries()]
       .map(([bidId, total]) => ({ bid_id: bidId, weighted_total: Math.round(total * 100) / 100 }))
       .sort((a, b) => b.weighted_total - a.weighted_total);
-    await this.audit.record('EVENT_EVALUATED', 'sourcing_event', eventId, { evaluation_id: evaluation.id, ranking });
-    return { evaluation_id: evaluation.id, ranking };
+    await this.audit.record('EVENT_EVALUATED', 'sourcing_event', eventId, { evaluation_id: evaluation.id, criteria, ranking });
+    return { evaluation_id: evaluation.id, criteria, ranking };
   }
 
-  async award(eventId: string, dto: { lotId: string; bidId: string }, auth: AccessTokenPayload) {
+  async award(eventId: string, dto: { lotId: string; bidId: string; justification?: string }, auth: AccessTokenPayload) {
     const m = this.rc.manager;
     await m.query(`SELECT id FROM sourcing_events WHERE id=$1 FOR UPDATE`, [eventId]);
     // AWARDED is allowed so a retried award of the same lot stays idempotent
     const evRow = await this.requireEvent(eventId, ['EVALUATION', 'AWARDED']);
     if (evRow.type === 'RFI') throw new BadRequestException('RFI does not support awarding');
 
-    // Idempotency short-circuit BEFORE locking the bid: after the event is AWARDED the
-    // ceremony RLS policy no longer lets the buyer lock bid rows (FOR UPDATE applies
-    // UPDATE policies), so a retry must return the stored award without touching bids.
-    const existing = await m.query(`SELECT * FROM awards WHERE event_id=$1 AND lot_id=$2`, [eventId, dto.lotId]);
-    if (existing.length) return { award: existing[0], idempotent: true };
+    // Idempotency: an ACTIVE award for the lot with the SAME bid replays; with a DIFFERENT
+    // bid it's a conflict (cancel the standing award first). Runs before FOR UPDATE on bids
+    // because after AWARDED the ceremony RLS no longer lets the buyer lock bid rows.
+    const active = await m.query(
+      `SELECT * FROM awards WHERE event_id=$1 AND lot_id=$2 AND cancelled_at IS NULL`, [eventId, dto.lotId]);
+    if (active.length) {
+      if (active[0].winning_bid_id === dto.bidId) return { award: active[0], idempotent: true };
+      throw new BadRequestException('Lot already awarded to another bid — cancel that award first');
+    }
+
+    // A reverse auction IS the evaluation — real-time price competition ranks the bids, so
+    // it awards the auction's best bid without a separate weighted scoring step.
+    const isAuction = evRow.type === 'AUCTION' || evRow.format === 'REVERSE';
+    // Otherwise the award must follow a real evaluation, and the bid must be eligible for the lot.
+    const evalRows = isAuction ? [] : await m.query(
+      `SELECT id FROM evaluations WHERE event_id=$1 ORDER BY created_at DESC LIMIT 1`, [eventId]);
+    if (!isAuction && !evalRows.length) throw new BadRequestException('Evaluate the bids before awarding');
+    const evaluationId = evalRows[0]?.id ?? null;
+    const justification = dto.justification?.trim() || null;
+    let isTop = true;
+    let singleBid = false;
+    if (!isAuction) {
+      const scoreRows = await m.query(
+        `SELECT bid_id, sum(weighted)::float AS total FROM evaluation_scores WHERE evaluation_id=$1 GROUP BY bid_id`,
+        [evaluationId]);
+      const totalByBid = new Map<string, number>(scoreRows.map((r: any) => [r.bid_id, Number(r.total)]));
+      // eligible = OPENED (not disqualified) bids that actually bid on this lot
+      const eligibleRows = await m.query(
+        `SELECT DISTINCT b.id FROM bids b
+           JOIN bid_items bi ON bi.bid_id = b.id
+           JOIN event_items ei ON ei.id = bi.event_item_id
+         WHERE b.event_id=$1 AND ei.lot_id=$2 AND b.state='OPENED'`, [eventId, dto.lotId]);
+      const eligible = eligibleRows.map((r: any) => r.id);
+      if (!eligible.includes(dto.bidId)) {
+        throw new BadRequestException('Bid is not an eligible (opened, non-disqualified) bid for this lot');
+      }
+      const topBid = eligible
+        .map((id: string) => ({ id, total: totalByBid.get(id) ?? -1 }))
+        .sort((a: any, b: any) => b.total - a.total)[0]?.id;
+      isTop = topBid === dto.bidId;
+      singleBid = eligible.length <= 1;
+      if ((!isTop || singleBid) && (!justification || justification.length < 3)) {
+        throw new BadRequestException(
+          singleBid
+            ? 'Only one eligible bid — a single-source justification is required to award'
+            : 'Awarding a bid that is not the top-ranked one requires a justification',
+        );
+      }
+    }
 
     const bidRows = await m.query(
       `SELECT id, state, total_minor FROM bids WHERE id=$1 AND event_id=$2 FOR UPDATE`,
@@ -481,16 +562,12 @@ export class SourcingService {
     if (!bidRows.length) throw new NotFoundException('Bid not found on this event');
     if (bidRows[0].state !== 'OPENED') throw new BadRequestException('Only OPENED bids can be awarded');
 
-    // Unique (event_id, lot_id) makes the award idempotent under concurrency.
+    // Partial unique index (awards_active_lot) makes the award idempotent under concurrency.
     const inserted = await m.query(
-      `INSERT INTO awards(event_id, lot_id, winning_bid_id, awarded_by)
-       VALUES ($1,$2,$3,$4) ON CONFLICT (event_id, lot_id) DO NOTHING RETURNING id`,
-      [eventId, dto.lotId, dto.bidId, auth.sub],
+      `INSERT INTO awards(event_id, lot_id, winning_bid_id, awarded_by, evaluation_id, justification)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [eventId, dto.lotId, dto.bidId, auth.sub, evaluationId, justification],
     );
-    if (!inserted.length) {
-      const existing = await m.query(`SELECT * FROM awards WHERE event_id=$1 AND lot_id=$2`, [eventId, dto.lotId]);
-      return { award: existing[0], idempotent: true };
-    }
     await m.query(`UPDATE event_lots SET awarded_bid_id=$2 WHERE id=$1`, [dto.lotId, dto.bidId]);
 
     const lots = await m.query(
@@ -506,6 +583,7 @@ export class SourcingService {
     const sig = await this.signature.sign(this.sealed.sha256(`${eventId}:${dto.lotId}:${dto.bidId}`));
     await this.audit.record('EVENT_AWARDED', 'sourcing_event', eventId, {
       lot_id: dto.lotId, winning_bid_id: dto.bidId, total_minor: bidRows[0].total_minor,
+      evaluation_id: evaluationId, top_ranked: isTop, single_bid: singleBid, justification,
       signature: sig, signer: this.signature.kind,
     });
     // Notify the winning supplier.
@@ -515,6 +593,50 @@ export class SourcingService {
     }
     this.rt(eventId, 'event.awarded', { lot_id: dto.lotId });
     return { award: inserted[0], idempotent: false };
+  }
+
+  // Buyer disqualifies an opened bid during evaluation, with a documented reason. A
+  // disqualified bid drops out of ranking and can't be awarded. Can't disqualify a bid
+  // that currently holds an active award (cancel the award first).
+  async disqualifyBid(eventId: string, bidId: string, reason: string, auth: AccessTokenPayload) {
+    const m = this.rc.manager;
+    await this.requireEvent(eventId, ['EVALUATION']);
+    if (!reason || reason.trim().length < 3) throw new BadRequestException('A disqualification reason is required');
+    const bid = (await m.query(`SELECT id, state FROM bids WHERE id=$1 AND event_id=$2 FOR UPDATE`, [bidId, eventId]))[0];
+    if (!bid) throw new NotFoundException('Bid not found on this event');
+    if (bid.state !== 'OPENED') throw new BadRequestException('Only an OPENED bid can be disqualified');
+    if ((await m.query(`SELECT 1 FROM awards WHERE winning_bid_id=$1 AND cancelled_at IS NULL LIMIT 1`, [bidId])).length) {
+      throw new BadRequestException('Bid holds an active award — cancel the award first');
+    }
+    await m.query(`UPDATE bids SET state='DISQUALIFIED', disqualified_reason=$2, updated_at=now() WHERE id=$1`,
+      [bidId, reason.trim()]);
+    await this.audit.record('BID_DISQUALIFIED', 'bid', bidId, { event_id: eventId, reason: reason.trim() });
+    return this.detail(eventId, auth);
+  }
+
+  // Soft-cancel a lot award (keeps the row for the audit trail) and reopen the lot for a
+  // fresh award. Blocked once a contract has been created from the award. Never locks bid
+  // rows while the event is AWARDED (ceremony RLS forbids it) — reverts to EVALUATION first.
+  async cancelAward(eventId: string, lotId: string, reason: string, auth: AccessTokenPayload) {
+    const m = this.rc.manager;
+    await m.query(`SELECT id FROM sourcing_events WHERE id=$1 FOR UPDATE`, [eventId]);
+    await this.requireEvent(eventId, ['EVALUATION', 'AWARDED']);
+    if (!reason || reason.trim().length < 3) throw new BadRequestException('A cancellation reason is required');
+    const award = (await m.query(
+      `SELECT * FROM awards WHERE event_id=$1 AND lot_id=$2 AND cancelled_at IS NULL FOR UPDATE`, [eventId, lotId]))[0];
+    if (!award) throw new NotFoundException('No active award for this lot');
+    if ((await m.query(`SELECT 1 FROM contracts WHERE award_id=$1 LIMIT 1`, [award.id])).length) {
+      throw new BadRequestException('A contract was already created from this award — cannot cancel');
+    }
+    await m.query(
+      `UPDATE awards SET cancelled_at=now(), cancelled_by=$2, cancel_reason=$3 WHERE id=$1`,
+      [award.id, auth.sub, reason.trim()]);
+    await m.query(`UPDATE event_lots SET awarded_bid_id=NULL WHERE id=$1`, [lotId]);
+    // reopening a lot moves a fully-awarded event back to EVALUATION
+    await m.query(`UPDATE sourcing_events SET status='EVALUATION', awarded_at=NULL, updated_at=now() WHERE id=$1 AND status='AWARDED'`, [eventId]);
+    await this.audit.record('EVENT_AWARD_CANCELLED', 'sourcing_event', eventId, { lot_id: lotId, award_id: award.id, reason: reason.trim() });
+    this.rt(eventId, 'event.status', { status: 'EVALUATION' });
+    return this.detail(eventId, auth);
   }
 
   // ---------- OCDS export ----------

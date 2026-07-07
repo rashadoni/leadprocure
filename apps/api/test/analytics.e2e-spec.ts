@@ -5,6 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
+import { addApprover } from './helpers';
 
 // Spend analytics: "spend" = ACCEPTED POs only; the monthly series is zero-filled over
 // 12 months; top suppliers rank by accepted volume; everything is RLS-scoped per buyer.
@@ -15,6 +16,7 @@ describe('spend analytics (API e2e)', () => {
   const http = () => request(app.getHttpServer());
   const bearer = (t: string) => ['Authorization', `Bearer ${t}`] as [string, string];
   let buyer: string, buyerB: string, supplier: string, supplierOrg: string;
+  let approver: string;
   let poId: string;
 
   beforeAll(async () => {
@@ -30,6 +32,7 @@ describe('spend analytics (API e2e)', () => {
       return { token: r.body.accessToken as string, org: r.body.org.id as string };
     };
     ({ token: buyer } = await reg('/auth/register/buyer', `Ana Buyer ${tag}`, `ab-${tag}@t.test`));
+    approver = await addApprover(app, buyer, tag);
     ({ token: buyerB } = await reg('/auth/register/buyer', `Ana BuyerB ${tag}`, `ab2-${tag}@t.test`));
     ({ token: supplier, org: supplierOrg } = await reg('/auth/register/supplier', `Ana Sup ${tag}`, `as-${tag}@t.test`));
 
@@ -45,7 +48,7 @@ describe('spend analytics (API e2e)', () => {
       const req = await http().post('/requests').set(...bearer(buyer))
         .send({ title, items: [{ name: 'Widget', qty: 2, estUnitPriceMinor: 150_000 }] }).expect(201);
       await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
-      await http().post(`/requests/${req.body.id}/approve`).set(...bearer(buyer)).expect(201);
+      await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approver)).expect(201);
       const po = await http().post(`/orders/direct/from-request/${req.body.id}`).set(...bearer(buyer))
         .send({ supplierOrgId: supplierOrg }).expect(201);
       await http().post(`/orders/${po.body.id}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Body,
   Controller,
   Get,
@@ -170,6 +171,12 @@ export class RequestsService {
     const m = this.rc.manager;
     await m.query(`SELECT id FROM procurement_requests WHERE id=$1 FOR UPDATE`, [id]);
     const req = await this.requireStatus(id, ['SUBMITTED']);
+
+    // Segregation of duties: the person who raised the request cannot approve it — the
+    // spend always needs a second pair of eyes. (Checked before any approval-step mutation.)
+    if (req.created_by && req.created_by === auth.sub) {
+      throw new ForbiddenException('You cannot approve a request you created (segregation of duties)');
+    }
 
     // Multi-step chain: advance the current step; only the FINAL step triggers the
     // full approval (total recompute + method resolution) below.

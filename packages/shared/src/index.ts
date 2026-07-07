@@ -216,6 +216,7 @@ export const AUDIT_ACTIONS = [
   'PO_AMENDMENT_PROPOSED',
   'PO_AMENDMENT_ACCEPTED',
   'PO_AMENDMENT_REJECTED',
+  'EVENT_AWARD_CANCELLED',
 ] as const;
 
 // ---------------- Invoices (P2P) ----------------

@@ -16,11 +16,17 @@ class BidItemDto {
   @IsUUID() eventItemId!: string;
   @IsInt() @Min(0) unitPriceMinor!: number;
 }
+class CriterionDto {
+  @IsString() @MinLength(1) key!: string;
+  @IsInt() @Min(0) weight!: number;
+}
 class CreateEventDto {
   @IsOptional() @IsString() title?: string;
   @IsISO8601() closeAt!: string;
   @IsOptional() @IsIn(['PUBLIC', 'INVITED']) visibility?: 'PUBLIC' | 'INVITED';
   @IsOptional() @IsIn(['RFQ', 'RFP', 'RFI']) type?: 'RFQ' | 'RFP' | 'RFI';
+  // evaluation criteria are LOCKED here, before opening (default 70/30 if omitted)
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => CriterionDto) criteria?: CriterionDto[];
 }
 class InviteDto {
   @IsUUID() supplierOrgId!: string;
@@ -38,22 +44,26 @@ class SubmitBidDto {
   @IsOptional() @IsInt() @Min(0) deliveryDays?: number;
   @IsOptional() @IsString() proposalText?: string;
 }
-class CriterionDto {
-  @IsString() @MinLength(1) key!: string;
-  @IsInt() @Min(0) weight!: number;
-}
 class ScoreDto {
   @IsUUID() bidId!: string;
   @IsString() @MinLength(1) key!: string;
   @IsInt() @Min(0) score!: number;
 }
 class EvaluateDto {
-  @IsArray() @ValidateNested({ each: true }) @Type(() => CriterionDto) criteria!: CriterionDto[];
+  // criteria come from the locked event, not the client — only scores are submitted here
   @IsArray() @ValidateNested({ each: true }) @Type(() => ScoreDto) scores!: ScoreDto[];
 }
 class AwardDto {
   @IsUUID() lotId!: string;
   @IsUUID() bidId!: string;
+  @IsOptional() @IsString() justification?: string;
+}
+class DisqualifyBidDto {
+  @IsString() @MinLength(3) reason!: string;
+}
+class CancelAwardDto {
+  @IsUUID() lotId!: string;
+  @IsString() @MinLength(3) reason!: string;
 }
 class CreateAuctionDto {
   @IsOptional() @IsString() title?: string;
@@ -190,6 +200,27 @@ export class SourcingController {
     @CurrentUser() auth: AccessTokenPayload,
   ) {
     return this.sourcing.award(id, body, auth);
+  }
+
+  @Post(':id/bids/:bidId/disqualify')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  disqualify(
+    @Param('id') id: string,
+    @Param('bidId') bidId: string,
+    @Body() body: DisqualifyBidDto,
+    @CurrentUser() auth: AccessTokenPayload,
+  ) {
+    return this.sourcing.disqualifyBid(id, bidId, body.reason, auth);
+  }
+
+  @Post(':id/cancel-award')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  cancelAward(
+    @Param('id') id: string,
+    @Body() body: CancelAwardDto,
+    @CurrentUser() auth: AccessTokenPayload,
+  ) {
+    return this.sourcing.cancelAward(id, body.lotId, body.reason, auth);
   }
 
   @Get(':id/ocds')

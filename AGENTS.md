@@ -80,7 +80,7 @@ Key gotchas learned (respect these): FOR UPDATE requires UPDATE policies under R
 
 ## 4d. ROADMAP groups 1–4 — DONE
 
-All functional roadmap blocks are built and green (**134 e2e, 16 suites**):
+All functional roadmap blocks are built and green (**143 e2e, 17 suites**):
 - **Group 1**: bid attachments (mig 0011, cross-org, buyer-after-opening), goods
   receipt/GRN (0012, partial→auto-accept), multi-lot award (per-lot totals),
   multi-step approval (0013, value-banded chains).
@@ -90,6 +90,15 @@ All functional roadmap blocks are built and green (**134 e2e, 16 suites**):
 - **Group 4**: P2P invoices + 3-way match + pay (0016, DEFINER `invoice_set_status`),
   feature `p2p.invoicing`.
 - Cross-org notifications via `app_notify` DEFINER (0010); DIRECT purchase→PO.
+- **Procurement-integrity controls** (0020, audit remediation): evaluation criteria are
+  LOCKED on `sourcing_events.evaluation_criteria` at creation (never re-weighted after
+  opening); `evaluate()` only takes scores; `award()` requires a real evaluation + a
+  `justification` when the winner isn't the lot's top-ranked bid or is the sole bid (auctions
+  bypass — price competition IS the evaluation); soft-cancel award (`awards.cancelled_at` +
+  partial unique index) → re-award; disqualify a bid with a reason; SoD — a request's
+  `created_by` can't approve it; DISPUTED invoice → APPROVED needs an override reason
+  (rebuilt `invoice_set_status(uuid, invoice_status, text)`); VÖEN validated (10 digits).
+  Tests: `integrity.e2e-spec.ts`. Test helper `addApprover()` gives specs a second approver.
 - **Budgets & commitment control** (0018, feature `controls.budgets`): private buyer table,
   encumbrance model — APPROVED requests commit against a matching budget (category + year +
   currency); utilization derived, not stored. Soft/non-blocking: request approval attaches

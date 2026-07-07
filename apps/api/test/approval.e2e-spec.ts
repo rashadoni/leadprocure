@@ -15,7 +15,7 @@ describe('multi-step approval workflow', () => {
   const http = () => request(app.getHttpServer());
   const bearer = (t: string) => ['Authorization', `Bearer ${t}`] as [string, string];
 
-  let admin: string, approver: string, reqId: string;
+  let admin: string, approver: string, requester: string, reqId: string;
 
   beforeAll(async () => {
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -36,6 +36,13 @@ describe('multi-step approval workflow', () => {
     const login = await http().post('/auth/login').send({ email: `apprv-${tag}@t.test`, password: 'password123' }).expect(201);
     approver = login.body.accessToken;
 
+    // a plain BUYER_USER raises the request — so the approver (step 1) and admin (step 2)
+    // are both someone OTHER than the creator (segregation of duties).
+    await http().post('/settings/users').set(...bearer(admin))
+      .send({ email: `req-${tag}@t.test`, fullName: 'Requester', password: 'password123', role: 'BUYER_USER' }).expect(201);
+    const rlogin = await http().post('/auth/login').send({ email: `req-${tag}@t.test`, password: 'password123' }).expect(201);
+    requester = rlogin.body.accessToken;
+
     // 2-step chain for large amounts
     await http().put('/requests/approval-policies').set(...bearer(admin)).send({
       policies: [
@@ -52,10 +59,10 @@ describe('multi-step approval workflow', () => {
   });
 
   it('a large request materializes a 2-step chain on submit', async () => {
-    const r = await http().post('/requests').set(...bearer(admin))
+    const r = await http().post('/requests').set(...bearer(requester))
       .send({ title: `Big ${tag}`, items: [{ name: 'Machine', qty: 1, estUnitPriceMinor: 6_000_000 }] }).expect(201);
     reqId = r.body.id;
-    const submitted = await http().post(`/requests/${reqId}/submit`).set(...bearer(admin)).expect(201);
+    const submitted = await http().post(`/requests/${reqId}/submit`).set(...bearer(requester)).expect(201);
     expect(submitted.body.approvals).toHaveLength(2);
     expect(submitted.body.approvals.map((a: any) => a.approver_role)).toEqual(['BUYER_APPROVER', 'BUYER_ADMIN']);
   });

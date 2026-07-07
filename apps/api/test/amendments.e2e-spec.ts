@@ -5,6 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
+import { addApprover } from './helpers';
 
 // PO amendments (change orders): buyer proposes per-line qty/price changes on an
 // ISSUED/CONFIRMED PO; supplier accepts (lines + total update atomically via the
@@ -16,6 +17,7 @@ describe('PO amendments (API e2e)', () => {
   const http = () => request(app.getHttpServer());
   const bearer = (t: string) => ['Authorization', `Bearer ${t}`] as [string, string];
   let buyer: string, supplier: string, supplierOrg: string, foreignBuyer: string, foreignSupplier: string;
+  let approver: string;
   let poId: string, poItemId: string, amendmentId: string;
 
   const mkPo = async () => {
@@ -23,7 +25,7 @@ describe('PO amendments (API e2e)', () => {
       .send({ title: `Am ${tag} ${randomUUID().slice(0, 4)}`, items: [{ name: 'Steel pipe', qty: 2, estUnitPriceMinor: 150_000 }] })
       .expect(201);
     await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
-    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approver)).expect(201);
     const po = await http().post(`/orders/direct/from-request/${req.body.id}`).set(...bearer(buyer))
       .send({ supplierOrgId: supplierOrg }).expect(201);
     await http().post(`/orders/${po.body.id}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
@@ -43,6 +45,7 @@ describe('PO amendments (API e2e)', () => {
       return { token: r.body.accessToken as string, org: r.body.org.id as string };
     };
     ({ token: buyer } = await reg('/auth/register/buyer', `Am Buyer ${tag}`, `amb-${tag}@t.test`));
+    approver = await addApprover(app, buyer, tag);
     ({ token: foreignBuyer } = await reg('/auth/register/buyer', `Am BuyerX ${tag}`, `ambx-${tag}@t.test`));
     ({ token: supplier, org: supplierOrg } = await reg('/auth/register/supplier', `Am Sup ${tag}`, `ams-${tag}@t.test`));
     ({ token: foreignSupplier } = await reg('/auth/register/supplier', `Am SupX ${tag}`, `amsx-${tag}@t.test`));

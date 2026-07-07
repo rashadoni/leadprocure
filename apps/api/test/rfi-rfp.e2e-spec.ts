@@ -5,6 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
+import { addApprover } from './helpers';
 
 // RFI/RFP event types on the sealed core. RFP = prices + technical proposal sealed
 // together, revealed only at opening, then normal evaluate/award. RFI = response text
@@ -15,17 +16,17 @@ describe('RFI / RFP events (API e2e)', () => {
   const tag = randomUUID().slice(0, 8);
   const http = () => request(app.getHttpServer());
   const bearer = (t: string) => ['Authorization', `Bearer ${t}`] as [string, string];
-  let buyer: string, supplier: string, supplierOrg: string;
+  let buyer: string, supplier: string, supplierOrg: string, approver: string;
 
-  const mkEvent = async (type: 'RFQ' | 'RFP' | 'RFI') => {
+  const mkEvent = async (type: 'RFQ' | 'RFP' | 'RFI', criteria?: any[]) => {
     const req = await http().post('/requests').set(...bearer(buyer))
       .send({ title: `${type} ${tag} ${randomUUID().slice(0, 4)}`, items: [{ name: 'Consulting', qty: 1, estUnitPriceMinor: 500_000 }] })
       .expect(201);
     await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
-    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approver)).expect(201);
     const closeAt = new Date(Date.now() + 3600_000).toISOString();
     const ev = await http().post(`/events/from-request/${req.body.id}`).set(...bearer(buyer))
-      .send({ closeAt, visibility: 'INVITED', type }).expect(201);
+      .send({ closeAt, visibility: 'INVITED', type, ...(criteria ? { criteria } : {}) }).expect(201);
     await http().post(`/events/${ev.body.id}/invite`).set(...bearer(buyer)).send({ supplierOrgId: supplierOrg }).expect(201);
     await http().post(`/events/${ev.body.id}/publish`).set(...bearer(buyer)).expect(201);
     const detail = await http().get(`/events/${ev.body.id}`).set(...bearer(buyer)).expect(200);
@@ -51,6 +52,7 @@ describe('RFI / RFP events (API e2e)', () => {
       return { token: r.body.accessToken as string, org: r.body.org.id as string };
     };
     ({ token: buyer } = await reg('/auth/register/buyer', `Rfx Buyer ${tag}`, `rb-${tag}@t.test`));
+    approver = await addApprover(app, buyer, tag);
     ({ token: supplier, org: supplierOrg } = await reg('/auth/register/supplier', `Rfx Sup ${tag}`, `rs-${tag}@t.test`));
     await http().put('/requests/method-policies').set(...bearer(buyer))
       .send({ policies: [{ category: '*', minAmountMinor: 0, maxAmountMinor: null, method: 'RFQ' }] }).expect(200);
@@ -66,7 +68,7 @@ describe('RFI / RFP events (API e2e)', () => {
     const req = await http().post('/requests').set(...bearer(buyer))
       .send({ title: `Def ${tag}`, items: [{ name: 'x', qty: 1, estUnitPriceMinor: 100 }] }).expect(201);
     await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
-    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approver)).expect(201);
     const ev = await http().post(`/events/from-request/${req.body.id}`).set(...bearer(buyer))
       .send({ closeAt: new Date(Date.now() + 3600_000).toISOString() }).expect(201);
     const detail = await http().get(`/events/${ev.body.id}`).set(...bearer(buyer)).expect(200);
@@ -77,7 +79,7 @@ describe('RFI / RFP events (API e2e)', () => {
     let evId: string, itemId: string;
 
     it('a bid without a technical proposal is rejected; with one it is sealed', async () => {
-      ({ id: evId, itemId } = await mkEvent('RFP'));
+      ({ id: evId, itemId } = await mkEvent('RFP', [{ key: 'price', weight: 60 }, { key: 'quality', weight: 40 }]));
       await http().post(`/events/${evId}/bid`).set(...bearer(supplier))
         .send({ items: [{ eventItemId: itemId, unitPriceMinor: 450_000 }] }).expect(400);
       await http().post(`/events/${evId}/bid`).set(...bearer(supplier))
@@ -99,9 +101,9 @@ describe('RFI / RFP events (API e2e)', () => {
       const bidId = detail.body.bids[0].id;
       const lotId = detail.body.lots[0].id;
       await http().post(`/events/${evId}/evaluate`).set(...bearer(buyer))
-        .send({ criteria: [{ key: 'price', weight: 60 }, { key: 'quality', weight: 40 }], scores: [{ bidId, key: 'price', score: 90 }, { bidId, key: 'quality', score: 80 }] })
+        .send({ scores: [{ bidId, key: 'price', score: 90 }, { bidId, key: 'quality', score: 80 }] })
         .expect(201);
-      await http().post(`/events/${evId}/award`).set(...bearer(buyer)).send({ lotId, bidId }).expect(201);
+      await http().post(`/events/${evId}/award`).set(...bearer(buyer)).send({ lotId, bidId, justification: 'sole compliant proposal' }).expect(201);
     });
   });
 

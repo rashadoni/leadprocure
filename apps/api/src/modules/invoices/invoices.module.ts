@@ -173,16 +173,22 @@ export class InvoicesService {
 </Invoice>`;
   }
 
-  async setStatus(id: string, status: InvoiceStatus, auth: AccessTokenPayload) {
+  // reason is required by the DB seam only for the DISPUTED → APPROVED override.
+  async setStatus(id: string, status: InvoiceStatus, auth: AccessTokenPayload, reason?: string) {
     try {
-      const rows = await this.rc.manager.query(`SELECT * FROM invoice_set_status($1, $2::invoice_status)`, [id, status]);
-      await this.audit.record('INVOICE_STATUS_CHANGED', 'invoice', id, { status, by_org: auth.org_id });
+      const rows = await this.rc.manager.query(
+        `SELECT * FROM invoice_set_status($1, $2::invoice_status, $3)`, [id, status, reason ?? null]);
+      await this.audit.record('INVOICE_STATUS_CHANGED', 'invoice', id, { status, by_org: auth.org_id, override_reason: reason ?? null });
       await this.notify.notifyOrg(rows[0].supplier_org_id, 'INVOICE_STATUS_CHANGED', { invoice_id: id, status });
       return rows[0];
     } catch (e: any) {
       throw new BadRequestException(e.message?.replace(/^.*ERROR:\s*/, '') ?? 'Transition failed');
     }
   }
+}
+
+class ApproveInvoiceDto {
+  @IsOptional() @IsString() reason?: string;
 }
 
 class InvoiceLineDto {
@@ -226,8 +232,8 @@ export class InvoicesController {
 
   @Post(':id/approve')
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
-  approve(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
-    return this.invoices.setStatus(id, 'APPROVED', auth);
+  approve(@Param('id') id: string, @Body() body: ApproveInvoiceDto, @CurrentUser() auth: AccessTokenPayload) {
+    return this.invoices.setStatus(id, 'APPROVED', auth, body.reason);
   }
 
   @Post(':id/reject')

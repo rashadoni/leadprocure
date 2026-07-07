@@ -5,6 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
+import { addApprover } from './helpers';
 
 // Budgets & commitment control: APPROVED requests commit against a matching budget
 // (category + calendar year + currency). Utilization is derived; over-budget approvals
@@ -16,7 +17,7 @@ describe('budgets & commitment control (API e2e)', () => {
   const YEAR = new Date().getFullYear();
   const http = () => request(app.getHttpServer());
   const bearer = (t: string) => ['Authorization', `Bearer ${t}`] as [string, string];
-  let buyerA: string, buyerB: string;
+  let buyerA: string, buyerB: string, approverA: string;
 
   const reg = async (name: string, email: string) => {
     const r = await http().post('/auth/register/buyer').send({ legalName: name, email, password: 'password123', fullName: name }).expect(201);
@@ -29,7 +30,7 @@ describe('budgets & commitment control (API e2e)', () => {
       .send({ title: `Req ${tag} ${randomUUID().slice(0, 4)}`, category, items: [{ name: 'x', qty: 1, estUnitPriceMinor: unitPriceMinor }] })
       .expect(201);
     await http().post(`/requests/${req.body.id}/submit`).set(...bearer(token)).expect(201);
-    const done = await http().post(`/requests/${req.body.id}/approve`).set(...bearer(token)).expect(201);
+    const done = await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approverA)).expect(201);
     return done.body;
   };
 
@@ -42,6 +43,7 @@ describe('budgets & commitment control (API e2e)', () => {
     db = new Client({ connectionString: process.env.DATABASE_URL });
     await db.connect();
     buyerA = await reg(`Bgt A ${tag}`, `ba-${tag}@t.test`);
+    approverA = await addApprover(app, buyerA, tag);
     buyerB = await reg(`Bgt B ${tag}`, `bb-${tag}@t.test`);
     // a wildcard method policy so approvals resolve a procurement method
     for (const tok of [buyerA, buyerB]) {

@@ -5,6 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
+import { addApprover } from './helpers';
 
 // P2P: supplier invoices a received PO; the 3-way match (invoice ↔ PO ↔ receipt) drives
 // MATCHED/DISPUTED; the buyer approves and pays.
@@ -16,6 +17,7 @@ describe('invoices + 3-way match', () => {
   const bearer = (t: string) => ['Authorization', `Bearer ${t}`] as [string, string];
 
   let buyer: string, supplier: string, s2: string, supplierOrg: string;
+  let approver: string;
   let poId: string, poItemId: string;
 
   beforeAll(async () => {
@@ -31,6 +33,7 @@ describe('invoices + 3-way match', () => {
       return { token: r.body.accessToken as string, org: r.body.org.id as string };
     };
     ({ token: buyer } = await reg('/auth/register/buyer', `Inv Buyer ${tag}`, `ib-${tag}@t.test`));
+    approver = await addApprover(app, buyer, tag);
     ({ token: supplier, org: supplierOrg } = await reg('/auth/register/supplier', `Inv Sup ${tag}`, `is-${tag}@t.test`));
     ({ token: s2 } = await reg('/auth/register/supplier', `Inv Sup2 ${tag}`, `is2-${tag}@t.test`));
 
@@ -45,7 +48,7 @@ describe('invoices + 3-way match', () => {
     const req = await http().post('/requests').set(...bearer(buyer))
       .send({ title: `Inv ${tag}`, items: [{ name: 'Widget', qty: 10, estUnitPriceMinor: 100_000 }] }).expect(201);
     await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
-    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approver)).expect(201);
     const po = await http().post(`/orders/direct/from-request/${req.body.id}`).set(...bearer(buyer)).send({ supplierOrgId: supplierOrg }).expect(201);
     poId = po.body.id;
     poItemId = po.body.items[0].id;
