@@ -36,7 +36,7 @@ export function QnaCard({ eventId, isBuyer }: { eventId: string; isBuyer: boolea
             <div className="row" style={{ marginTop: 6, maxWidth: 520 }}>
               <input placeholder={t('answer')} value={answers[r.id] ?? ''}
                 onChange={(e) => setAnswers({ ...answers, [r.id]: e.target.value })} />
-              <button className="btn small" disabled={!answers[r.id]}
+              <button className="btn small" disabled={!answers[r.id]} data-tip={t('tip_qna_answer')}
                 onClick={() => run(() => api.post(`/events/${eventId}/qna/${r.id}/answer`, { answer: answers[r.id] }))}>
                 {t('answer')} 📢
               </button>
@@ -49,7 +49,7 @@ export function QnaCard({ eventId, isBuyer }: { eventId: string; isBuyer: boolea
       {!isBuyer && (
         <div className="row" style={{ marginTop: 12, maxWidth: 520 }}>
           <input placeholder={`${t('ask')}…`} value={question} onChange={(e) => setQuestion(e.target.value)} />
-          <button className="btn small" disabled={!question}
+          <button className="btn small" disabled={!question} data-tip={t('tip_qna_ask')}
             onClick={() => run(async () => { await api.post(`/events/${eventId}/qna`, { question }); setQuestion(''); })}>
             {t('ask')}
           </button>
@@ -58,7 +58,7 @@ export function QnaCard({ eventId, isBuyer }: { eventId: string; isBuyer: boolea
       {isBuyer && (
         <div className="row" style={{ marginTop: 12, maxWidth: 520 }}>
           <input placeholder={`${t('addendum')}…`} value={addendum} onChange={(e) => setAddendum(e.target.value)} />
-          <button className="btn small ghost" disabled={!addendum}
+          <button className="btn small ghost" disabled={!addendum} data-tip={t('tip_addendum')}
             onClick={() => run(async () => { await api.post(`/events/${eventId}/addenda`, { text: addendum }); setAddendum(''); })}>
             📢 {t('addendum')}
           </button>

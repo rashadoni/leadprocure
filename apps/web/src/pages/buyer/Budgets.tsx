@@ -106,8 +106,8 @@ export default function Budgets() {
                   </td>
                   {isAdmin && (
                     <td>
-                      <button className="btn small ghost" onClick={() => edit(b)}>✎</button>{' '}
-                      <button className="btn small ghost" onClick={() => remove(b.id)}>🗑</button>
+                      <button className="btn small ghost" data-tip={t('tip_edit')} onClick={() => edit(b)}>✎</button>{' '}
+                      <button className="btn small ghost" data-tip={t('tip_delete')} onClick={() => remove(b.id)}>🗑</button>
                     </td>
                   )}
                 </tr>

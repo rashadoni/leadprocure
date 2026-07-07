@@ -89,8 +89,8 @@ export default function Verification() {
           )}
           {isBuyer && !['APPROVED', 'REJECTED'].includes(c.status) && (
             <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
-              <button className="btn small" onClick={() => decide(c.id, 'APPROVED')}>{t('approve')}</button>
-              <button className="btn small ghost" onClick={() => decide(c.id, 'REJECTED')}>{t('reject')}</button>
+              <button className="btn small" data-tip={t('tip_verify_approve')} onClick={() => decide(c.id, 'APPROVED')}>{t('approve')}</button>
+              <button className="btn small ghost" data-tip={t('tip_verify_reject')} onClick={() => decide(c.id, 'REJECTED')}>{t('reject')}</button>
             </div>
           )}
         </div>

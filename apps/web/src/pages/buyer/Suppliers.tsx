@@ -47,10 +47,10 @@ export default function Suppliers() {
                 <td>{r.voen ?? '—'}</td>
                 <td><Badge status={r.status} /></td>
                 <td>
-                  {r.status !== 'APPROVED' && <button className="btn small" onClick={() => setStatus(r.id, 'APPROVED')}>{t('approve')}</button>}{' '}
-                  {r.status !== 'BLOCKED' && <button className="btn small ghost" onClick={() => setStatus(r.id, 'BLOCKED')}>{t('block')}</button>}{' '}
-                  <button className="btn small ghost" onClick={() => rate(r.supplier_org_id)}>★ {t('scorecard')}</button>{' '}
-                  <button className="btn small ghost" onClick={async () => { await api.post('/verification/cases', { supplierOrgId: r.supplier_org_id }); alert(t('verification') + ' →'); }}>🛡</button>
+                  {r.status !== 'APPROVED' && <button className="btn small" data-tip={t('tip_supplier_approve')} onClick={() => setStatus(r.id, 'APPROVED')}>{t('approve')}</button>}{' '}
+                  {r.status !== 'BLOCKED' && <button className="btn small ghost" data-tip={t('tip_supplier_block')} onClick={() => setStatus(r.id, 'BLOCKED')}>{t('block')}</button>}{' '}
+                  <button className="btn small ghost" data-tip={t('tip_scorecard')} onClick={() => rate(r.supplier_org_id)}>★ {t('scorecard')}</button>{' '}
+                  <button className="btn small ghost" data-tip={t('tip_verify_open')} onClick={async () => { await api.post('/verification/cases', { supplierOrgId: r.supplier_org_id }); alert(t('verification') + ' →'); }}>🛡</button>
                   {scores[r.supplier_org_id] && (
                     <span className="hint" style={{ marginLeft: 6 }}>
                       {scores[r.supplier_org_id].map((a: any) => `${a.metric}:${a.avg_score}`).join(' ')}
@@ -72,7 +72,7 @@ export default function Suppliers() {
                 <td>{s.legal_name}</td>
                 <td>{s.voen ?? '—'}</td>
                 <td>{(s.categories ?? []).join(', ')}</td>
-                <td>{!inRegistry.has(s.id) && <button className="btn small" onClick={() => invite(s.id)}>{t('invite')}</button>}</td>
+                <td>{!inRegistry.has(s.id) && <button className="btn small" data-tip={t('tip_supplier_invite')} onClick={() => invite(s.id)}>{t('invite')}</button>}</td>
               </tr>
             ))}
           </tbody>

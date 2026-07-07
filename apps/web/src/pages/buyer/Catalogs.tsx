@@ -50,7 +50,7 @@ export default function Catalogs() {
                 <td>{c.item_count}</td>
                 <td>
                   {isBuyer && c.status === 'DRAFT' && (
-                    <button className="btn small" onClick={() => run(() => api.post(`/catalogs/${c.id}/activate`))}>{t('activate')}</button>
+                    <button className="btn small" data-tip={t('tip_catalog_activate')} onClick={() => run(() => api.post(`/catalogs/${c.id}/activate`))}>{t('activate')}</button>
                   )}
                 </td>
               </tr>
@@ -79,7 +79,7 @@ export default function Catalogs() {
             </tbody>
           </table>
           {isBuyer && cat.status === 'ACTIVE' && (
-            <button className="btn" style={{ marginTop: 10 }} onClick={() => order(cat.id, cat.items)}>📦 {t('quick_order')}</button>
+            <button className="btn" style={{ marginTop: 10 }} data-tip={t('tip_quick_order')} onClick={() => order(cat.id, cat.items)}>📦 {t('quick_order')}</button>
           )}
         </div>
       ))}
