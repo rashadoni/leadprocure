@@ -5,13 +5,17 @@ import {
   Get,
   Global,
   Injectable,
+  Logger,
   Module,
   NotFoundException,
   Param,
   Post,
   Query,
 } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { DataSource } from 'typeorm';
 import { PutObjectCommand, GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { ClamavService } from './clamav.service';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
 import { IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
@@ -29,6 +33,7 @@ import { AppConfig } from '../config/config.service';
 @Injectable()
 export class DocumentsService {
   private readonly s3: S3Client;
+  private readonly s3Public: S3Client;
   private readonly bucket: string;
 
   constructor(
@@ -37,8 +42,8 @@ export class DocumentsService {
     private readonly cfg: AppConfig,
   ) {
     this.bucket = process.env.S3_BUCKET ?? 'leadprocure';
-    this.s3 = new S3Client({
-      endpoint: process.env.S3_ENDPOINT ?? 'http://localhost:9000',
+    const mk = (endpoint: string) => new S3Client({
+      endpoint,
       region: process.env.S3_REGION ?? 'us-east-1',
       forcePathStyle: (process.env.S3_FORCE_PATH_STYLE ?? 'true') === 'true',
       credentials: {
@@ -46,12 +51,18 @@ export class DocumentsService {
         secretAccessKey: process.env.S3_SECRET_KEY ?? 'minioadmin',
       },
     });
+    const internal = process.env.S3_ENDPOINT ?? 'http://localhost:9000';
+    this.s3 = mk(internal);
+    // Presigned URLs are consumed by the BROWSER: they must carry a host the user can
+    // reach, and the SigV4 signature binds the host — rewriting it later breaks the
+    // signature. So URLs for the outside world are signed against the public endpoint.
+    this.s3Public = mk(process.env.S3_PUBLIC_ENDPOINT ?? internal);
   }
 
   async presign(orgId: string, filename: string, mime: string) {
     const storageKey = `${orgId}/${randomUUID()}/${filename.replace(/[^\w.\-]/g, '_')}`;
     const url = await getSignedUrl(
-      this.s3,
+      this.s3Public,
       new PutObjectCommand({ Bucket: this.bucket, Key: storageKey, ContentType: mime }),
       { expiresIn: 900 },
     );
@@ -92,14 +103,21 @@ export class DocumentsService {
   }
 
   async downloadUrl(id: string) {
-    const rows = await this.rc.manager.query(`SELECT storage_key FROM documents WHERE id=$1`, [id]);
+    const rows = await this.rc.manager.query(`SELECT storage_key, av_status FROM documents WHERE id=$1`, [id]);
     if (!rows.length) return { url: null };
+    if (rows[0].av_status === 'INFECTED') throw new BadRequestException('File is blocked by the antivirus scan');
     const url = await getSignedUrl(
-      this.s3,
+      this.s3Public,
       new GetObjectCommand({ Bucket: this.bucket, Key: rows[0].storage_key }),
       { expiresIn: 900 },
     );
     return { url };
+  }
+
+  // Worker access: fetch the raw object for scanning (never exposed over HTTP).
+  async getObjectBuffer(storageKey: string): Promise<Buffer> {
+    const res = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: storageKey }));
+    return Buffer.from(await res.Body!.transformToByteArray());
   }
 
   // ---- Bid attachments (cross-org; supplier writes, buyer reads after opening) ----
@@ -141,18 +159,73 @@ export class DocumentsService {
 
   // Generic signed GET for any storage key (used by verification docs etc.).
   async signedGetUrl(storageKey: string) {
-    return getSignedUrl(this.s3, new GetObjectCommand({ Bucket: this.bucket, Key: storageKey }), { expiresIn: 900 });
+    return getSignedUrl(this.s3Public, new GetObjectCommand({ Bucket: this.bucket, Key: storageKey }), { expiresIn: 900 });
   }
 
   async bidDocDownloadUrl(id: string) {
-    const rows = await this.rc.manager.query(`SELECT storage_key FROM bid_documents WHERE id=$1`, [id]);
+    const rows = await this.rc.manager.query(`SELECT storage_key, av_status FROM bid_documents WHERE id=$1`, [id]);
     if (!rows.length) return { url: null };
+    if (rows[0].av_status === 'INFECTED') throw new BadRequestException('File is blocked by the antivirus scan');
     const url = await getSignedUrl(
-      this.s3,
+      this.s3Public,
       new GetObjectCommand({ Bucket: this.bucket, Key: rows[0].storage_key }),
       { expiresIn: 900 },
     );
     return { url };
+  }
+}
+
+// Async AV pipeline: uploads are presigned (the API never touches the bytes), so a cron
+// worker pulls PENDING files from storage and streams them to clamd. Runs outside any
+// request context → goes through the SECURITY DEFINER seams (documents_pending_scan /
+// document_set_av_status), like the deadline scheduler does with close_due_events.
+@Injectable()
+export class AvScanWorker {
+  private readonly log = new Logger('AvScan');
+  private busy = false;
+
+  constructor(
+    private readonly ds: DataSource,
+    private readonly docs: DocumentsService,
+    private readonly clam: ClamavService,
+    private readonly cfg: AppConfig,
+  ) {}
+
+  @Cron(CronExpression.EVERY_30_SECONDS)
+  async tick() {
+    if (!this.cfg.clamavEnabled || this.busy) return;
+    this.busy = true;
+    try { await this.scanOnce(); } finally { this.busy = false; }
+  }
+
+  // Exposed for tests: one bounded pass over the queue. Failures (clamd down, S3 hiccup)
+  // leave the row PENDING — the next tick retries; verdicts are written through the
+  // DEFINER seam which only moves PENDING rows (idempotent under overlap).
+  async scanOnce(limit = 5): Promise<number> {
+    const rows: Array<{ src: string; id: string; storage_key: string; owner_org: string; filename: string }> =
+      await this.ds.query(`SELECT * FROM documents_pending_scan($1)`, [limit]);
+    for (const r of rows) {
+      try {
+        const buf = await this.docs.getObjectBuffer(r.storage_key);
+        if (buf.length > 24 * 1024 * 1024) {
+          // beyond clamd's stream limit — record as deliberately unscanned, don't retry forever
+          await this.ds.query(`SELECT document_set_av_status($1,$2,'SKIPPED')`, [r.src, r.id]);
+          this.log.warn(`skipped oversized ${r.filename} (${buf.length} bytes)`);
+          continue;
+        }
+        const verdict = await this.clam.scanBuffer(buf);
+        await this.ds.query(`SELECT document_set_av_status($1,$2,$3)`, [r.src, r.id, verdict]);
+        if (verdict === 'INFECTED') {
+          this.log.warn(`INFECTED: ${r.filename} (${r.src} ${r.id})`);
+          await this.ds.query(`SELECT app_notify($1, NULL, 'DOCUMENT_INFECTED', $2::jsonb)`, [
+            r.owner_org, JSON.stringify({ filename: r.filename }),
+          ]);
+        }
+      } catch (e: any) {
+        this.log.warn(`scan failed for ${r.filename}: ${e.message} — will retry`);
+      }
+    }
+    return rows.length;
   }
 }
 
@@ -227,5 +300,9 @@ export class DocumentsController {
 }
 
 @Global()
-@Module({ controllers: [DocumentsController], providers: [DocumentsService], exports: [DocumentsService] })
+@Module({
+  controllers: [DocumentsController],
+  providers: [DocumentsService, ClamavService, AvScanWorker],
+  exports: [DocumentsService, ClamavService, AvScanWorker],
+})
 export class DocumentsModule {}

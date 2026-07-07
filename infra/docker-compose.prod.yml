@@ -30,6 +30,10 @@ services:
       MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?set in .env.prod}
       # Browser presigned uploads come from the web app origin.
       MINIO_API_CORS_ALLOW_ORIGIN: ${WEB_ORIGIN}
+    # Presigned URLs are used by the BROWSER: the S3 port must be reachable from outside
+    # the compose network, and S3_PUBLIC_URL below must point at this public address.
+    ports:
+      - "9002:9000"   # 9002 on the host: the dev stack's minio already holds 9000
     volumes:
       - minio:/data
 
@@ -45,7 +49,7 @@ services:
     restart: "no"
 
   clamav:
-    image: clamav/clamav:latest
+    image: clamav/clamav-debian:latest  # multi-arch (arm64 incl.); clamav/clamav lacks arm64
     restart: unless-stopped
     volumes:
       - clamav:/var/lib/clamav
@@ -79,6 +83,8 @@ services:
       BID_MASTER_KEY_B64: ${BID_MASTER_KEY_B64:?set in .env.prod}
       WEB_ORIGIN: ${WEB_ORIGIN:?set in .env.prod}
       S3_ENDPOINT: http://minio:9000
+      # what the BROWSER can reach — presigned URLs are signed against this host
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_URL:-http://localhost:9002}
       S3_BUCKET: ${S3_BUCKET:-leadprocure}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
