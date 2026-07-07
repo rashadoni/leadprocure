@@ -34,10 +34,11 @@ td { padding: 10px; border-bottom: 1px solid var(--border); }
 tbody tr:last-child td { border-bottom: 0; }
 tr:hover td { background: rgba(4, 120, 87, .05); }
 
-.btn { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer; box-shadow: 0 1px 2px rgba(4, 120, 87, .25); transition: filter .12s, box-shadow .12s; }
-.btn:hover { filter: brightness(1.06); }
+.btn { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer; box-shadow: 0 1px 2px rgba(4, 120, 87, .25); transition: filter .12s, box-shadow .12s, transform .12s; }
+.btn:hover { filter: brightness(1.06); transform: translateY(-1px); box-shadow: 0 4px 10px rgba(4, 120, 87, .28); }
+.btn:active { transform: translateY(0); box-shadow: 0 1px 2px rgba(4, 120, 87, .25); }
 .btn.ghost { background: #fff; border: 1px solid var(--border); color: var(--text); box-shadow: none; }
-.btn.ghost:hover { background: var(--panel2); }
+.btn.ghost:hover { background: var(--panel2); border-color: var(--accent); box-shadow: 0 2px 6px rgba(16, 24, 40, .08); }
 .btn.small { padding: 4px 10px; font-size: 12px; }
 .btn:disabled { opacity: 0.45; cursor: default; box-shadow: none; }
 input, select, textarea { background: #fff; border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 10px; font: inherit; width: 100%; transition: border-color .12s, box-shadow .12s; }
@@ -46,7 +47,34 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 .row { display: flex; gap: 10px; align-items: end; }
 .row > * { flex: 1; }
 
-.badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+/* content links get a hover affordance (sidebar links keep their own styling) */
+.main a { transition: color .12s; }
+.main a:hover { text-decoration: underline; }
+
+.badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; border: 1px solid rgba(15, 23, 42, .05); }
+.badge[data-tip] { cursor: help; }
+
+/* Procedure-type chip (RFQ/RFP/RFI/auction): icon + label, hover-highlighted. */
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 8px;
+  font-size: 11px; font-weight: 700; letter-spacing: .02em; background: var(--panel2); color: var(--text);
+  border: 1px solid var(--border); cursor: help; transition: border-color .12s, background .12s, box-shadow .12s; }
+.chip:hover { border-color: var(--accent); background: rgba(4, 120, 87, .06); box-shadow: 0 2px 6px rgba(16, 24, 40, .06); }
+.chip .chip-ico { font-size: 13px; line-height: 1; }
+
+/* Styled hover tooltip: put data-tip="text" on any button / link / badge. Replaces the
+   slow, unstyled native title with an instant dark bubble + arrow above the element. */
+[data-tip] { position: relative; }
+[data-tip]::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 9px);
+  transform: translateX(-50%) translateY(4px); background: #10231c; color: #fff; font-size: 12px;
+  font-weight: 500; line-height: 1.35; letter-spacing: normal; text-align: left; padding: 7px 10px;
+  border-radius: 8px; white-space: normal; width: max-content; max-width: 240px; box-shadow: var(--shadow-lg);
+  opacity: 0; pointer-events: none; transition: opacity .14s ease, transform .14s ease; z-index: 90; }
+[data-tip]::before { content: ''; position: absolute; left: 50%; bottom: calc(100% + 4px);
+  transform: translateX(-50%); border: 5px solid transparent; border-top-color: #10231c;
+  opacity: 0; pointer-events: none; transition: opacity .14s ease; z-index: 90; }
+[data-tip]:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); }
+[data-tip]:hover::before { opacity: 1; }
+
 .badge.DRAFT { background: var(--panel2); color: var(--muted); }
 .badge.OPEN, .badge.SUBMITTED, .badge.APPROVED, .badge.AWARDED, .badge.OPENED { background: rgba(22, 163, 74, .12); color: var(--ok); }
 .badge.CLOSED, .badge.EVALUATION, .badge.PUBLISHED { background: rgba(217, 119, 6, .12); color: var(--warn); }

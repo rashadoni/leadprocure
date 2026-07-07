@@ -5,8 +5,11 @@ import { useI18n } from '../../i18n';
 import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
 
-// Procedure chip: the list must show WHAT kind of procedure each row is.
-const TYPE_CHIP: Record<string, string> = { RFQ: 'RFQ 🔒', RFP: 'RFP 📄', RFI: 'RFI ❓', AUCTION: '⚡' };
+// Procedure chip: icon + label so the list shows WHAT kind of procedure each row is.
+const TYPE_META: Record<string, { ico: string; label: string }> = {
+  RFQ: { ico: '🔒', label: 'RFQ' }, RFP: { ico: '📄', label: 'RFP' },
+  RFI: { ico: '❓', label: 'RFI' }, AUCTION: { ico: '⚡', label: 'AUKSION' },
+};
 
 const PAGE_SIZE = 20;
 
@@ -29,7 +32,12 @@ export default function Events() {
             {rows.map((r) => (
               <tr key={r.id}>
                 <td><Link to={`/buyer/events/${r.id}`}>{r.title}</Link></td>
-                <td><span className="badge INVITED" title={t(`tip_${(r.type ?? '').toLowerCase()}`)}>{TYPE_CHIP[r.type] ?? r.type}</span></td>
+                <td>
+                  <span className="chip" data-tip={t(`tip_${(r.type ?? '').toLowerCase()}`)}>
+                    <span className="chip-ico">{TYPE_META[r.type]?.ico ?? '•'}</span>
+                    {TYPE_META[r.type]?.label ?? r.type}
+                  </span>
+                </td>
                 <td><Badge status={r.status} /></td>
                 <td className="hint">{fmtDateTime(r.close_at)}</td>
                 <td>{r.bid_count}</td>

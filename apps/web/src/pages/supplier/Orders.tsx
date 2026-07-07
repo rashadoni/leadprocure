@@ -116,7 +116,7 @@ export default function Orders() {
                     ))}
                   </td>
                   <td>
-                    {s === undefined && <button className="btn small ghost" title={t('logistics')} onClick={() => loadShip(p.id)}>🚚</button>}
+                    {s === undefined && <button className="btn small ghost" data-tip={t('logistics')} onClick={() => loadShip(p.id)}>🚚</button>}
                     {s && !s.shipment && ['CONFIRMED', 'PACKED', 'SHIPPED'].includes(p.status) && (
                       <button className="btn small" onClick={() => startShipment(p.id)}>{t('create_shipment')}</button>
                     )}

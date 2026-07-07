@@ -160,21 +160,21 @@ export default function Requests() {
                 </td>
                 <td>{r.method_resolved ?? '—'}</td>
                 <td>
-                  {r.status === 'DRAFT' && <button className="btn small" title={t('tip_submit')} onClick={() => act(r.id, 'submit')}>{t('submit')}</button>}{' '}
+                  {r.status === 'DRAFT' && <button className="btn small" data-tip={t('tip_submit')} onClick={() => act(r.id, 'submit')}>{t('submit')}</button>}{' '}
                   {r.status === 'SUBMITTED' && canApprove && (
                     <>
-                      <button className="btn small" title={t('tip_approve')} onClick={() => approveGuard(r.id)}>
+                      <button className="btn small" data-tip={t('tip_approve')} onClick={() => approveGuard(r.id)}>
                         {preview[r.id] ? `✔ ${t('confirm_approve')}` : t('approve')}
                       </button>{' '}
-                      <button className="btn small ghost" title={t('tip_reject')} onClick={() => act(r.id, 'reject')}>{t('reject')}</button>
+                      <button className="btn small ghost" data-tip={t('tip_reject')} onClick={() => act(r.id, 'reject')}>{t('reject')}</button>
                     </>
                   )}
                   {r.status === 'APPROVED' && r.method_resolved !== 'DIRECT' && canApprove && (
                     <>
-                      <button className="btn small" title={t('tip_rfq')} onClick={() => makeRfq(r.id)}>RFQ 🔒</button>{' '}
-                      <button className="btn small ghost" title={t('tip_rfp')} onClick={() => makeRfq(r.id, 'RFP')}>RFP 📄</button>{' '}
-                      <button className="btn small ghost" title={t('tip_rfi')} onClick={() => makeRfq(r.id, 'RFI')}>RFI ❓</button>{' '}
-                      <button className="btn small ghost" title={t('tip_auction')} onClick={() => makeAuction(r)}>{t('auction')} ⚡</button>
+                      <button className="btn small" data-tip={t('tip_rfq')} onClick={() => makeRfq(r.id)}>RFQ 🔒</button>{' '}
+                      <button className="btn small ghost" data-tip={t('tip_rfp')} onClick={() => makeRfq(r.id, 'RFP')}>RFP 📄</button>{' '}
+                      <button className="btn small ghost" data-tip={t('tip_rfi')} onClick={() => makeRfq(r.id, 'RFI')}>RFI ❓</button>{' '}
+                      <button className="btn small ghost" data-tip={t('tip_auction')} onClick={() => makeAuction(r)}>{t('auction')} ⚡</button>
                     </>
                   )}
                   {r.status === 'APPROVED' && r.method_resolved === 'DIRECT' && canApprove && (
@@ -190,7 +190,7 @@ export default function Requests() {
                         }}>OK</button>
                       </span>
                     ) : (
-                      <button className="btn small" title={t('tip_direct')} onClick={() => openDirect(r.id)}>{t('direct_order')} 📦</button>
+                      <button className="btn small" data-tip={t('tip_direct')} onClick={() => openDirect(r.id)}>{t('direct_order')} 📦</button>
                     )
                   )}
                 </td>

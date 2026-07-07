@@ -55,12 +55,12 @@ export default function Invoices() {
                 <td>
                   {isBuyer && ['MATCHED', 'DISPUTED', 'SUBMITTED'].includes(i.status) && (
                     <>
-                      <button className="btn small" onClick={() => approveInvoice(i)}>{t('approve')}</button>{' '}
-                      <button className="btn small ghost" onClick={() => act(() => api.post(`/invoices/${i.id}/reject`))}>{t('reject')}</button>
+                      <button className="btn small" data-tip={t('tip_inv_approve')} onClick={() => approveInvoice(i)}>{t('approve')}</button>{' '}
+                      <button className="btn small ghost" data-tip={t('tip_inv_reject')} onClick={() => act(() => api.post(`/invoices/${i.id}/reject`))}>{t('reject')}</button>
                     </>
                   )}
                   {isBuyer && i.status === 'APPROVED' && (
-                    <button className="btn small" onClick={() => act(() => api.post(`/invoices/${i.id}/pay`))}>💳 {t('pay')}</button>
+                    <button className="btn small" data-tip={t('tip_pay')} onClick={() => act(() => api.post(`/invoices/${i.id}/pay`))}>💳 {t('pay')}</button>
                   )}
                 </td>
               </tr>

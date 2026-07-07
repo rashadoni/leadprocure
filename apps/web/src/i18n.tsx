@@ -81,6 +81,9 @@ const dict: Record<Lang, Record<string, string>> = {
     confirm_approve: 'Təsdiqi təsdiq et',
     reliability: 'Etibarlılıq', block: 'Blokla', role: 'Rol', method_policy: 'Metod siyasəti',
     from: 'Başlanğıc', to: 'Son', not_found: 'Səhifə tapılmadı', back_home: 'Əsas səhifəyə qayıt',
+    tip_activate: 'Müqaviləni aktivləşdir — sifariş vermək olar', tip_create_po: 'Müqavilə üzrə sifariş (PO) yarat',
+    tip_catalog_from: 'Müqavilədən kataloq yarat', tip_receive: 'Gələn malı qəbul et', tip_amend: 'Sifarişə dəyişiklik təklif et (say/qiymət)',
+    tip_inv_approve: 'Qaiməni ödənişə təsdiqlə', tip_inv_reject: 'Qaiməni rədd et', tip_pay: 'Qaiməni ödənilmiş kimi işarələ',
   },
   ru: {
     login: 'Войти', logout: 'Выход', email: 'Email', password: 'Пароль', register: 'Регистрация',
@@ -160,6 +163,9 @@ const dict: Record<Lang, Record<string, string>> = {
     confirm_approve: 'Подтвердить утверждение',
     reliability: 'Надёжность', block: 'Блокировать', role: 'Роль', method_policy: 'Политика метода закупки',
     from: 'От', to: 'До', not_found: 'Страница не найдена', back_home: 'Вернуться на главную',
+    tip_activate: 'Активировать контракт — можно выпускать заказы', tip_create_po: 'Сформировать заказ (PO) по контракту',
+    tip_catalog_from: 'Создать каталог из контракта', tip_receive: 'Оприходовать полученный товар', tip_amend: 'Предложить изменение заказа (кол-во/цена)',
+    tip_inv_approve: 'Одобрить счёт к оплате', tip_inv_reject: 'Отклонить счёт', tip_pay: 'Отметить счёт оплаченным',
   },
   en: {
     login: 'Log in', logout: 'Log out', email: 'Email', password: 'Password', register: 'Register',
@@ -239,6 +245,9 @@ const dict: Record<Lang, Record<string, string>> = {
     confirm_approve: 'Confirm approval',
     reliability: 'Reliability', block: 'Block', role: 'Role', method_policy: 'Method policy',
     from: 'From', to: 'To', not_found: 'Page not found', back_home: 'Back to home',
+    tip_activate: 'Activate the contract — orders can be issued', tip_create_po: 'Create a purchase order from the contract',
+    tip_catalog_from: 'Create a catalog from the contract', tip_receive: 'Record the goods received', tip_amend: 'Propose a change order (qty / price)',
+    tip_inv_approve: 'Approve the invoice for payment', tip_inv_reject: 'Reject the invoice', tip_pay: 'Mark the invoice as paid',
   },
 };
 

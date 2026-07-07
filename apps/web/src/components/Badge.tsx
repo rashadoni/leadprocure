@@ -9,7 +9,7 @@ export function Badge({ status, cls }: { status?: string | null; cls?: string })
   const key = `st_${status}`;
   const tip = t(key);
   return (
-    <span className={`badge ${cls ?? status}`} title={tip !== key ? tip : undefined}>
+    <span className={`badge ${cls ?? status}`} data-tip={tip !== key ? tip : undefined}>
       {status}
     </span>
   );

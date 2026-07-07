@@ -94,12 +94,12 @@ export default function Contracts() {
                 <td>{c.po_count}</td>
                 <td>
                   {isBuyerSide && c.status === 'DRAFT' && (
-                    <button className="btn small" onClick={() => act(() => api.post(`/contracts/${c.id}/activate`))}>{t('activate')}</button>
+                    <button className="btn small" data-tip={t('tip_activate')} onClick={() => act(() => api.post(`/contracts/${c.id}/activate`))}>{t('activate')}</button>
                   )}{' '}
                   {isBuyerSide && c.status === 'ACTIVE' && (
                     <>
-                      <button className="btn small" onClick={() => act(() => api.post(`/contracts/${c.id}/orders`))}>{t('create_po')}</button>{' '}
-                      <button className="btn small ghost" onClick={() => act(() => api.post(`/catalogs/from-contract/${c.id}`))}>📖 {t('catalogs')}</button>
+                      <button className="btn small" data-tip={t('tip_create_po')} onClick={() => act(() => api.post(`/contracts/${c.id}/orders`))}>{t('create_po')}</button>{' '}
+                      <button className="btn small ghost" data-tip={t('tip_catalog_from')} onClick={() => act(() => api.post(`/catalogs/from-contract/${c.id}`))}>📖 {t('catalogs')}</button>
                     </>
                   )}
                 </td>
@@ -130,10 +130,10 @@ export default function Contracts() {
                     </button>
                   ))}{' '}
                   {isBuyerSide && ['SHIPPED', 'DELIVERED'].includes(p.status) && (
-                    <button className="btn small" onClick={() => receiveAll(p.id)}>{t('receive')} 📥</button>
+                    <button className="btn small" data-tip={t('tip_receive')} onClick={() => receiveAll(p.id)}>{t('receive')} 📥</button>
                   )}{' '}
                   {isBuyerSide && ['ISSUED', 'CONFIRMED'].includes(p.status) && (
-                    <button className="btn small ghost" onClick={() => openAmend(p.id)}>✎ {t('amend')}</button>
+                    <button className="btn small ghost" data-tip={t('tip_amend')} onClick={() => openAmend(p.id)}>✎ {t('amend')}</button>
                   )}
                 </td>
               </tr>

@@ -239,7 +239,7 @@ export default function EventDetail() {
                         onChange={(e) => setScores({ ...scores, [b.id]: { ...(scores[b.id] ?? { delivery: 50 }), price: Number(e.target.value) } })} />
                       <input style={{ width: 64 }} type="number" placeholder="deliv" min={0} max={100}
                         onChange={(e) => setScores({ ...scores, [b.id]: { ...(scores[b.id] ?? { price: 50 }), delivery: Number(e.target.value) } })} />
-                      <button className="btn small ghost" title={t('disqualify')} onClick={() => disqualify(b.id)}>⛔</button>
+                      <button className="btn small ghost" data-tip={t('disqualify')} onClick={() => disqualify(b.id)}>⛔</button>
                     </span>
                   )}
                   {b.state === 'DISQUALIFIED' && b.disqualified_reason && (
