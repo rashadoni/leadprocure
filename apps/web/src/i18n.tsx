@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 type Lang = 'az' | 'ru' | 'en';
 
@@ -302,6 +302,9 @@ const I18nCtx = createContext<{ lang: Lang; setLang: (l: Lang) => void; t: (k: s
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>((localStorage.getItem('lp_lang') as Lang) || 'ru');
+  // Keep the document locale in sync so CSS text-transform:uppercase uses the right
+  // casing rules (otherwise a hardcoded <html lang="az"> turns English "bid" → "BİD").
+  useEffect(() => { document.documentElement.lang = lang; }, [lang]);
   const setLang = (l: Lang) => { localStorage.setItem('lp_lang', l); setLangState(l); };
   const t = (k: string) => dict[lang][k] ?? k;
   return <I18nCtx.Provider value={{ lang, setLang, t }}>{children}</I18nCtx.Provider>;
