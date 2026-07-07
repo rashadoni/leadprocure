@@ -20,3 +20,7 @@ license-private.pem
 apps/web/test-results/
 apps/web/playwright-report/
 apps/web/.playwright/
+
+# ad-hoc TTS/preview samples (not source)
+*-az-sample.*
+buyer-requests-az-gemini.mp4
