@@ -23,6 +23,16 @@ export default function Invoices() {
     setOpen((o) => ({ ...o, [id]: data }));
   };
 
+  // A DISPUTED invoice (failed 3-way match) can only be approved with a documented override.
+  const approveInvoice = (i: any) => act(async () => {
+    let reason: string | undefined;
+    if (i.status === 'DISPUTED') {
+      reason = window.prompt(t('override_reason_prompt')) ?? undefined;
+      if (!reason) return;
+    }
+    await api.post(`/invoices/${i.id}/approve`, reason ? { reason } : {});
+  });
+
   const badge = (s: string) =>
     s === 'PAID' || s === 'MATCHED' || s === 'APPROVED' ? s : s === 'DISPUTED' || s === 'REJECTED' ? 'REJECTED' : 'INVITED';
 
@@ -43,7 +53,7 @@ export default function Invoices() {
                 <td>
                   {isBuyer && ['MATCHED', 'DISPUTED', 'SUBMITTED'].includes(i.status) && (
                     <>
-                      <button className="btn small" onClick={() => act(() => api.post(`/invoices/${i.id}/approve`))}>{t('approve')}</button>{' '}
+                      <button className="btn small" onClick={() => approveInvoice(i)}>{t('approve')}</button>{' '}
                       <button className="btn small ghost" onClick={() => act(() => api.post(`/invoices/${i.id}/reject`))}>{t('reject')}</button>
                     </>
                   )}

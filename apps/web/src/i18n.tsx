@@ -9,6 +9,9 @@ const dict: Record<Lang, Record<string, string>> = {
     create: 'Yarat', submit: 'Göndər', approve: 'Təsdiqlə', reject: 'Rədd et', publish: 'Dərc et',
     invite: 'Dəvət et', bid: 'Təklif ver', withdraw: 'Geri götür', open_bids: 'Zərfləri aç',
     award: 'Qalib seç', title: 'Başlıq', status: 'Status', total: 'Məbləğ', deadline: 'Son tarix',
+    disqualify: 'Diskvalifikasiya', cancel_award: 'Qalibi ləğv et',
+    award_justification_prompt: 'Əsaslandırma (ən yaxşı/yeganə təklif deyilsə):',
+    disqualify_prompt: 'Diskvalifikasiyanın səbəbi:', cancel_award_prompt: 'Qalibin ləğvinin səbəbi:',
     items: 'Mövqelər', my_bid: 'Mənim təklifim', amounts_hidden: 'Məbləğlər açılışa qədər gizlidir',
     company: 'Şirkət', buyer_org: 'Sifarişçi', supplier_org: 'Təchizatçı', qty: 'Say',
     unit_price: 'Vahid qiymət', name: 'Ad', actions: 'Əməliyyatlar', directory: 'Kataloq',
@@ -46,6 +49,7 @@ const dict: Record<Lang, Record<string, string>> = {
     bidders: 'İştirakçılar', extensions: 'Uzadılmalar', finalize: 'Yekunlaşdır',
     place_bid: 'Təklif ver', qna: 'Sual-cavab', ask: 'Soruş', answer: 'Cavabla',
     addendum: 'Əlavə', settings: 'Parametrlər', users: 'İstifadəçilər', scorecard: 'Reytinq', ai_reco: 'Süni intellekt tövsiyəsi', ai_run: 'Təhlil et', ai_model: 'Model', logistics: 'Logistika', create_shipment: 'Göndəriş yarat', direct_order: 'Birbaşa sifariş', attachments: 'Əlavələr', receive: 'Qəbul et', lots: 'Lotlar', approval_chain: 'Təsdiq zənciri', catalogs: 'Kataloqlar', quick_order: 'Sifariş', verification: 'Yoxlama', invoices: 'Qaimələr', invoice: 'Qaimə', pay: 'Ödə', my_bids: 'Mənim təkliflərim', forgot: 'Şifrəni unutdunuz?', reset_password: 'Şifrəni yenilə', reset_sent: 'Linki e-poçtunuza göndərdik.',
+    override_reason_prompt: 'Qaimə 3 tərəfli uyğunluqdan keçmədi. Təsdiq üçün əsaslandırma yazın:',
   },
   ru: {
     login: 'Войти', logout: 'Выход', email: 'Email', password: 'Пароль', register: 'Регистрация',
@@ -53,6 +57,9 @@ const dict: Record<Lang, Record<string, string>> = {
     create: 'Создать', submit: 'Отправить', approve: 'Утвердить', reject: 'Отклонить', publish: 'Опубликовать',
     invite: 'Пригласить', bid: 'Подать ставку', withdraw: 'Отозвать', open_bids: 'Вскрыть ставки',
     award: 'Выбрать победителя', title: 'Название', status: 'Статус', total: 'Сумма', deadline: 'Дедлайн',
+    disqualify: 'Дисквалификация', cancel_award: 'Отменить награждение',
+    award_justification_prompt: 'Обоснование (если это не лучшая/единственная ставка):',
+    disqualify_prompt: 'Причина дисквалификации:', cancel_award_prompt: 'Причина отмены награждения:',
     items: 'Позиции', my_bid: 'Моя ставка', amounts_hidden: 'Суммы скрыты до вскрытия',
     company: 'Компания', buyer_org: 'Заказчик', supplier_org: 'Поставщик', qty: 'Кол-во',
     unit_price: 'Цена за ед.', name: 'Наименование', actions: 'Действия', directory: 'Каталог',
@@ -90,6 +97,7 @@ const dict: Record<Lang, Record<string, string>> = {
     bidders: 'Участники', extensions: 'Продления', finalize: 'Завершить торги',
     place_bid: 'Сделать ставку', qna: 'Вопросы и ответы', ask: 'Спросить', answer: 'Ответить',
     addendum: 'Аддендум', settings: 'Настройки', users: 'Пользователи', scorecard: 'Рейтинг', ai_reco: 'ИИ-рекомендация', ai_run: 'Проанализировать', ai_model: 'Модель', logistics: 'Логистика', create_shipment: 'Оформить отгрузку', direct_order: 'Прямой заказ', attachments: 'Вложения', receive: 'Приёмка', lots: 'Лоты', approval_chain: 'Цепочка согласования', catalogs: 'Каталоги', quick_order: 'Заказать', verification: 'Верификация', invoices: 'Счета', invoice: 'Счёт', pay: 'Оплатить', my_bids: 'Мои ставки', forgot: 'Забыли пароль?', reset_password: 'Сбросить пароль', reset_sent: 'Ссылка отправлена на почту.',
+    override_reason_prompt: 'Счёт не прошёл 3-стороннюю сверку. Укажите обоснование для одобрения:',
   },
   en: {
     login: 'Log in', logout: 'Log out', email: 'Email', password: 'Password', register: 'Register',
@@ -97,6 +105,9 @@ const dict: Record<Lang, Record<string, string>> = {
     create: 'Create', submit: 'Submit', approve: 'Approve', reject: 'Reject', publish: 'Publish',
     invite: 'Invite', bid: 'Place bid', withdraw: 'Withdraw', open_bids: 'Open bids',
     award: 'Award winner', title: 'Title', status: 'Status', total: 'Total', deadline: 'Deadline',
+    disqualify: 'Disqualify', cancel_award: 'Cancel award',
+    award_justification_prompt: 'Justification (if not the best/only bid):',
+    disqualify_prompt: 'Reason for disqualification:', cancel_award_prompt: 'Reason for cancelling the award:',
     items: 'Items', my_bid: 'My bid', amounts_hidden: 'Amounts sealed until opening',
     company: 'Company', buyer_org: 'Buyer', supplier_org: 'Supplier', qty: 'Qty',
     unit_price: 'Unit price', name: 'Name', actions: 'Actions', directory: 'Directory',
@@ -134,6 +145,7 @@ const dict: Record<Lang, Record<string, string>> = {
     bidders: 'Bidders', extensions: 'Extensions', finalize: 'Finalize',
     place_bid: 'Place bid', qna: 'Q&A', ask: 'Ask', answer: 'Answer',
     addendum: 'Addendum', settings: 'Settings', users: 'Users', scorecard: 'Scorecard', ai_reco: 'AI recommendation', ai_run: 'Analyze', ai_model: 'Model', logistics: 'Logistics', create_shipment: 'Create shipment', direct_order: 'Direct order', attachments: 'Attachments', receive: 'Receive', lots: 'Lots', approval_chain: 'Approval chain', catalogs: 'Catalogs', quick_order: 'Quick order', verification: 'Verification', invoices: 'Invoices', invoice: 'Invoice', pay: 'Pay', my_bids: 'My bids', forgot: 'Forgot password?', reset_password: 'Reset password', reset_sent: 'Reset link sent to your email.',
+    override_reason_prompt: 'Invoice failed the 3-way match. Enter a justification to approve it:',
   },
 };
 

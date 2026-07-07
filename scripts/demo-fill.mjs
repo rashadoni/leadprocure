@@ -55,6 +55,7 @@ const log = (s) => console.log(s);
 (async () => {
   log(`Filling demo data via ${API}`);
   const buyer = await login('admin@acme.test');
+  const approver = await login('approver@acme.test'); // SoD: approves what admin creates
   const sup1 = await login('seller@supply-one.test');
   const sup2 = await login('seller@baku-metal.test');
 
@@ -89,7 +90,7 @@ const log = (s) => console.log(s);
   const mkApprovedRequest = async (title, category, items) => {
     const r = await post('/requests', buyer, { title, category, items });
     await post(`/requests/${r.id}/submit`, buyer);
-    await post(`/requests/${r.id}/approve`, buyer);
+    await post(`/requests/${r.id}/approve`, approver);
     return r.id;
   };
   const mkEvent = async (reqId, title, type, closeAt, invite = [org1, org2]) => {
@@ -125,7 +126,6 @@ const log = (s) => console.log(s);
     const opened = await post(`/events/${evA}/open`, buyer);
     const bids = opened.bids.filter((b) => b.state === 'OPENED');
     await post(`/events/${evA}/evaluate`, buyer, {
-      criteria: [{ key: 'price', weight: 70 }, { key: 'delivery', weight: 30 }],
       scores: bids.flatMap((b) => [
         { bidId: b.id, key: 'price', score: b.supplier_name.includes('Supply One') ? 95 : 82 },
         { bidId: b.id, key: 'delivery', score: b.supplier_name.includes('Supply One') ? 75 : 90 },
@@ -133,7 +133,7 @@ const log = (s) => console.log(s);
     });
     const best = bids.find((b) => b.supplier_name.includes('Supply One'));
     const lot = opened.lots[0];
-    await post(`/events/${evA}/award`, buyer, { lotId: lot.id, bidId: best.id });
+    await post(`/events/${evA}/award`, buyer, { lotId: lot.id, bidId: best.id, justification: 'Лучшее соотношение цена/срок по взвешенной оценке' });
     const award = (await get(`/events/${evA}`, buyer)).awards[0];
     const contract = await post(`/contracts/from-award/${award.id}`, buyer);
     await post(`/contracts/${contract.id}/activate`, buyer);

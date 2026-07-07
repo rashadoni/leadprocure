@@ -54,14 +54,35 @@ export default function EventDetail() {
   };
 
   const doEvaluate = async () => {
+    // criteria are the ones locked on the event before opening — we submit only scores
     const list = (ev.bids ?? []).filter((b: any) => b.state === 'OPENED');
     await act('evaluate', {
-      criteria: [{ key: 'price', weight: 70 }, { key: 'delivery', weight: 30 }],
       scores: list.flatMap((b: any) => [
         { bidId: b.id, key: 'price', score: scores[b.id]?.price ?? 50 },
         { bidId: b.id, key: 'delivery', score: scores[b.id]?.delivery ?? 50 },
       ]),
     });
+  };
+
+  // Award needs a justification when the winner isn't the top-ranked or is the sole bid.
+  const awardBid = async (lotId: string, bidId: string) => {
+    const justification = window.prompt(t('award_justification_prompt')) ?? undefined;
+    try {
+      await api.post(`/events/${id}/award`, { lotId, bidId, justification });
+      load();
+    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  };
+  const disqualify = async (bidId: string) => {
+    const reason = window.prompt(t('disqualify_prompt'));
+    if (!reason) return;
+    try { await api.post(`/events/${id}/bids/${bidId}/disqualify`, { reason }); load(); }
+    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  };
+  const cancelAward = async (lotId: string) => {
+    const reason = window.prompt(t('cancel_award_prompt'));
+    if (!reason) return;
+    try { await api.post(`/events/${id}/cancel-award`, { lotId, reason }); load(); }
+    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
   const weightedByBid = useMemo(() => {
@@ -153,24 +174,32 @@ export default function EventDetail() {
         </table>
       </div>
 
-      {ev.status === 'EVALUATION' && !isRfi && ev.lots.length > 0 && (
+      {['EVALUATION', 'AWARDED'].includes(ev.status) && !isRfi && ev.lots.length > 0 && (
         <div className="card" style={{ borderColor: 'var(--ok)' }}>
           <h3>{t('award')} · {t('lots')}</h3>
           {ev.lots.map((l: any) => {
-            const awarded = (ev.awards ?? []).find((a: any) => a.lot_id === l.id);
+            const awarded = (ev.awards ?? []).find((a: any) => a.lot_id === l.id && !a.cancelled_at);
             const totals = (ev.lot_bid_totals ?? [])
               .filter((t2: any) => t2.lot_id === l.id)
+              .filter((t2: any) => (ev.bids ?? []).find((b: any) => b.id === t2.bid_id)?.state !== 'DISQUALIFIED')
               .sort((a: any, b: any) => Number(a.total_minor) - Number(b.total_minor));
             return (
               <div key={l.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                <b>{l.title}</b> {awarded && <span className="badge AWARDED">🏆 awarded</span>}
+                <b>{l.title}</b>{' '}
+                {awarded && (
+                  <>
+                    <span className="badge AWARDED">🏆 {t('award')}</span>{' '}
+                    <button className="btn small ghost" onClick={() => cancelAward(l.id)}>✕ {t('cancel_award')}</button>
+                    {awarded.justification && <div className="hint" style={{ marginTop: 4 }}>📝 {awarded.justification}</div>}
+                  </>
+                )}
                 {!awarded && (
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
                     {totals.map((t2: any, idx: number) => {
                       const bid = (ev.bids ?? []).find((b: any) => b.id === t2.bid_id);
                       return (
                         <button key={t2.bid_id} className={`btn small ${idx === 0 ? '' : 'ghost'}`}
-                          onClick={() => act('award', { lotId: l.id, bidId: t2.bid_id })}>
+                          onClick={() => awardBid(l.id, t2.bid_id)}>
                           {bid?.supplier_name} · {fmtMoney(t2.total_minor, ev.evaluation_currency)}{idx === 0 ? ' ⭐' : ''}
                         </button>
                       );
@@ -205,12 +234,16 @@ export default function EventDetail() {
                 <td>{weightedByBid.has(b.id) ? weightedByBid.get(b.id)!.toFixed(1) : '—'}</td>
                 <td>
                   {ev.status === 'EVALUATION' && !isRfi && b.state === 'OPENED' && (
-                    <span style={{ display: 'inline-flex', gap: 6 }}>
+                    <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
                       <input style={{ width: 64 }} type="number" placeholder="price" min={0} max={100}
                         onChange={(e) => setScores({ ...scores, [b.id]: { ...(scores[b.id] ?? { delivery: 50 }), price: Number(e.target.value) } })} />
                       <input style={{ width: 64 }} type="number" placeholder="deliv" min={0} max={100}
                         onChange={(e) => setScores({ ...scores, [b.id]: { ...(scores[b.id] ?? { price: 50 }), delivery: Number(e.target.value) } })} />
+                      <button className="btn small ghost" title={t('disqualify')} onClick={() => disqualify(b.id)}>⛔</button>
                     </span>
+                  )}
+                  {b.state === 'DISQUALIFIED' && b.disqualified_reason && (
+                    <span className="hint" title={b.disqualified_reason}>⛔ {b.disqualified_reason}</span>
                   )}
                 </td>
               </tr>
@@ -247,7 +280,7 @@ export default function EventDetail() {
                       <td><b>{r.weightedTotal}</b></td>
                       <td>
                         {ev.status === 'EVALUATION' && !awardedBidId && lot && (
-                          <button className="btn small" onClick={() => act('award', { lotId: lot.id, bidId: r.bidId })}>{t('award')}</button>
+                          <button className="btn small" onClick={() => awardBid(lot.id, r.bidId)}>{t('award')}</button>
                         )}
                       </td>
                     </tr>
