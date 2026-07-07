@@ -30,6 +30,7 @@ import { CatalogsModule } from './modules/catalogs/catalogs.module';
 import { VerificationModule } from './modules/verification/verification.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
 import { BudgetsModule } from './modules/budgets/budgets.module';
+import { CategoriesModule } from './modules/categories/categories.module';
 import { MailModule } from './common/mail/mail.module';
 
 @Module({
@@ -60,6 +61,7 @@ import { MailModule } from './common/mail/mail.module';
     VerificationModule,
     InvoicesModule,
     BudgetsModule,
+    CategoriesModule,
   ],
   controllers: [HealthController],
   providers: [

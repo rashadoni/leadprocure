@@ -24,6 +24,8 @@ export default function Requests() {
   const [total, setTotal] = useState(0);
   const [directFor, setDirectFor] = useState<string | null>(null);
   const [approvedSuppliers, setApprovedSuppliers] = useState<any[]>([]);
+  const [cats, setCats] = useState<string[]>([]);
+  useEffect(() => { api.get('/categories').then((r) => setCats(r.data.map((c: any) => c.code))).catch(() => {}); }, []);
   const canApprove = ['BUYER_ADMIN', 'BUYER_APPROVER'].includes(session?.org.role ?? '');
 
   const load = () => api.get('/requests', { params: { ...(q ? { q } : {}), page, pageSize: PAGE_SIZE } })
@@ -114,7 +116,8 @@ export default function Requests() {
               <input value={category} onChange={(e) => setCategory(e.target.value)}
                 placeholder="IT, construction…" list="req-categories" />
               <datalist id="req-categories">
-                {[...new Set(rows.map((r) => r.category).filter((c) => c && c !== '*'))].map((c) => (
+                {/* curated categories (Settings) first, plus any already used on requests */}
+                {[...new Set([...cats, ...rows.map((r) => r.category).filter((c) => c && c !== '*')])].map((c) => (
                   <option key={c} value={c} />
                 ))}
               </datalist></div>

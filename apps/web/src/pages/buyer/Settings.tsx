@@ -10,6 +10,8 @@ export default function Settings() {
   const [users, setUsers] = useState<any[]>([]);
   const [policies, setPolicies] = useState<any[]>([]);
   const [approvals, setApprovals] = useState<any[]>([]);
+  const [cats, setCats] = useState<any[]>([]);
+  const [newCat, setNewCat] = useState({ code: '', name: '' });
   const [nu, setNu] = useState({ email: '', fullName: '', password: '', role: 'BUYER_USER' });
   const isAdmin = session?.org.role === 'BUYER_ADMIN';
 
@@ -17,6 +19,7 @@ export default function Settings() {
     api.get('/settings/users').then((r) => setUsers(r.data));
     api.get('/requests/method-policies').then((r) => setPolicies(r.data));
     api.get('/requests/approval-policies').then((r) => setApprovals(r.data));
+    api.get('/categories').then((r) => setCats(r.data)).catch(() => {});
   };
   useEffect(load, []);
 
@@ -79,6 +82,31 @@ export default function Settings() {
                 {BUYER_ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
               </select>
             </div>
+            <button className="btn">+</button>
+          </form>
+        )}
+      </div>
+
+      <div className="card">
+        <h3>{t('cat_hdr')}</h3>
+        <div className="hint" style={{ marginBottom: 10 }}>{t('cat_hint')}</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: isAdmin ? 12 : 0 }}>
+          {cats.length === 0 && <span className="hint">—</span>}
+          {cats.map((c) => (
+            <span key={c.id} className="badge INVITED" data-tip={c.name || undefined}>
+              {c.code}{c.name ? ` · ${c.name}` : ''}
+              {isAdmin && (
+                <button className="btn small ghost" style={{ marginLeft: 6, padding: '0 6px' }}
+                  onClick={() => run(() => api.delete(`/categories/${c.id}`))}>✕</button>
+              )}
+            </span>
+          ))}
+        </div>
+        {isAdmin && (
+          <form className="row" style={{ maxWidth: 560 }}
+            onSubmit={(e) => { e.preventDefault(); if (newCat.code.trim()) run(() => api.post('/categories', newCat)).then(() => setNewCat({ code: '', name: '' })); }}>
+            <div><label>{t('cat_code')}</label><input value={newCat.code} onChange={(e) => setNewCat({ ...newCat, code: e.target.value })} placeholder="IT" /></div>
+            <div><label>{t('name')}</label><input value={newCat.name} onChange={(e) => setNewCat({ ...newCat, name: e.target.value })} /></div>
             <button className="btn">+</button>
           </form>
         )}

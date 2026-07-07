@@ -235,9 +235,9 @@ export default function EventDetail() {
                 <td>
                   {ev.status === 'EVALUATION' && !isRfi && b.state === 'OPENED' && (
                     <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                      <input style={{ width: 64 }} type="number" placeholder="price" min={0} max={100}
+                      <input style={{ width: 64 }} type="number" placeholder={t('crit_price')} data-tip={t('score_hint')} min={0} max={100}
                         onChange={(e) => setScores({ ...scores, [b.id]: { ...(scores[b.id] ?? { delivery: 50 }), price: Number(e.target.value) } })} />
-                      <input style={{ width: 64 }} type="number" placeholder="deliv" min={0} max={100}
+                      <input style={{ width: 64 }} type="number" placeholder={t('crit_delivery')} data-tip={t('score_hint')} min={0} max={100}
                         onChange={(e) => setScores({ ...scores, [b.id]: { ...(scores[b.id] ?? { price: 50 }), delivery: Number(e.target.value) } })} />
                       <button className="btn small ghost" data-tip={t('disqualify')} onClick={() => disqualify(b.id)}>⛔</button>
                     </span>
