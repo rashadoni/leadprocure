@@ -17,7 +17,7 @@ function resolveGuide(pathname: string): SectionGuide | null {
 }
 
 function Spotlight({ steps, onDone }: { steps: TourStep[]; onDone: () => void }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [i, setI] = useState(0);
   const present = useMemo(
     () => steps.filter((s) => document.querySelector(s.selector)),
@@ -61,8 +61,8 @@ function Spotlight({ steps, onDone }: { steps: TourStep[]; onDone: () => void })
           left: Math.min(Math.max(10, rect.left), window.innerWidth - 340),
         }}
       >
-        <b>{step.title}</b>
-        <p>{step.text}</p>
+        <b>{step.title[lang] ?? step.title.ru}</b>
+        <p>{step.text[lang] ?? step.text.ru}</p>
         <div className="tour-nav">
           <span className="hint">{i + 1} / {present.length}</span>
           {i > 0 && <button className="btn small ghost" onClick={() => setI(i - 1)}>‹ {t('prev')}</button>}
