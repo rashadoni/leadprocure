@@ -141,7 +141,13 @@ export class IdentityService {
       dto.email,
     ]);
     const user = users[0];
-    if (!user || user.status !== 'ACTIVE') throw new UnauthorizedException('Invalid credentials');
+    if (!user || user.status !== 'ACTIVE') {
+      // Anti-enumeration (CWE-208): a missing/inactive account must cost the SAME time as a
+      // real one, or response latency reveals which emails are registered. Burn an argon2
+      // verify against a dummy hash before the identical 401.
+      await argon2.verify(await this.dummyHash(), dto.password).catch(() => false);
+      throw new UnauthorizedException('Invalid credentials');
+    }
     const ok = await argon2.verify(user.password_hash, dto.password);
     if (!ok) throw new UnauthorizedException('Invalid credentials');
 
@@ -294,5 +300,12 @@ export class IdentityService {
 
   private hashToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');
+  }
+
+  // A real argon2id hash computed once, used to equalize login timing for unknown accounts
+  // (same cost params as live hashes, so a failed verify against it matches a real one).
+  private dummyHashPromise?: Promise<string>;
+  private dummyHash(): Promise<string> {
+    return (this.dummyHashPromise ??= argon2.hash(randomBytes(24).toString('base64'), { type: argon2.argon2id }));
   }
 }

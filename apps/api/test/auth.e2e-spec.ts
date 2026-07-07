@@ -87,6 +87,22 @@ describe('auth flow (API e2e)', () => {
       .expect(401);
   });
 
+  it('does not leak account existence via login timing (anti-enumeration)', async () => {
+    const time = async (payload: { email: string; password: string }) => {
+      const t0 = performance.now();
+      await request(app.getHttpServer()).post('/auth/login').send(payload).expect(401);
+      return performance.now() - t0;
+    };
+    // warm up (first argon2 + dummy-hash memoization) so neither run pays a one-off cost
+    await time({ email: 'warmup@none.test', password: 'x' });
+    const knownWrong = await time({ email, password: 'wrong-password' }); // real account, bad pw
+    const unknown = await time({ email: `ghost-${Date.now()}@none.test`, password: 'wrong-password' });
+    // If the unknown path skipped argon2 it would return near-instantly; the dummy verify
+    // keeps it within the same order of magnitude as a real failed verify. Generous bound
+    // (relative, not absolute) so it's robust under CI load but still catches a skipped hash.
+    expect(unknown).toBeGreaterThan(knownWrong * 0.3);
+  });
+
   it('rotates the cookie, tolerates a benign replay within leeway, but nukes the family on stale reuse', async () => {
     const res = await request(app.getHttpServer())
       .post('/auth/refresh')
