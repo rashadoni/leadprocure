@@ -176,6 +176,18 @@ export class ContractsService {
     if (!items.length) throw new BadRequestException('No priced items on the awarded bid');
     const total = items.reduce((s: number, it: any) => s + Number(it.line_total_minor), 0);
 
+    // Contract value = ceiling for cumulative live call-off orders. Framework contracts legitimately
+    // spawn many call-offs, so — consistent with the budget-commitment control — this is a soft,
+    // audited warning rather than a hard block; cancelled/rejected POs free the ceiling again.
+    const drawn = Number(
+      (await m.query(
+        `SELECT COALESCE(SUM(total_minor),0) AS s FROM purchase_orders
+         WHERE contract_id=$1 AND status NOT IN ('CANCELLED','REJECTED')`,
+        [contractId],
+      ))[0].s,
+    );
+    const overByMinor = drawn + total - Number(c.total_minor);
+
     const n = await m.query(`SELECT count(*)::int AS n FROM purchase_orders`);
     const poNo = `PO-${new Date().getFullYear()}-${String(n[0].n + 1).padStart(4, '0')}`;
     const po = (
@@ -197,8 +209,14 @@ export class ContractsService {
         ],
       );
     }
-    await this.audit.record('PO_CREATED', 'purchase_order', po.id, { contract_id: contractId, po_no: poNo, total_minor: total });
-    return this.getOrder(po.id);
+    await this.audit.record('PO_CREATED', 'purchase_order', po.id, {
+      contract_id: contractId, po_no: poNo, total_minor: total,
+      over_ceiling_minor: overByMinor > 0 ? overByMinor : undefined,
+    });
+    const order = await this.getOrder(po.id);
+    return overByMinor > 0
+      ? { ...order, ceilingWarning: { ceilingMinor: Number(c.total_minor), drawnBeforeMinor: drawn, thisOrderMinor: total, overByMinor } }
+      : order;
   }
 
   async listOrders(paging: Paging = parsePaging()) {

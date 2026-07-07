@@ -255,4 +255,17 @@ describe('procurement integrity controls (API e2e)', () => {
     expect(approved.body.method_resolved).toBe('OPEN_TENDER'); // fail-safe: not DIRECT
     await http().post(`/orders/direct/from-request/${req.body.id}`).set(...bearer(buyer)).send({ supplierOrgId: s1Org }).expect(400);
   });
+
+  it('a contract call-off over its ceiling is flagged (soft control, like budgets)', async () => {
+    // reuse the first tender's active award (bid1, from the re-award test)
+    const detail = await http().get(`/events/${eventId}`).set(...bearer(buyer)).expect(200);
+    const award = detail.body.awards.find((a: any) => !a.cancelled_at);
+    const contract = await http().post(`/contracts/from-award/${award.id}`).set(...bearer(buyer)).expect(201);
+    await http().post(`/contracts/${contract.body.id}/activate`).set(...bearer(buyer)).expect(201);
+    const first = await http().post(`/contracts/${contract.body.id}/orders`).set(...bearer(buyer)).expect(201); // draws the full award
+    expect(first.body.ceilingWarning).toBeUndefined();
+    const second = await http().post(`/contracts/${contract.body.id}/orders`).set(...bearer(buyer)).expect(201); // over ceiling
+    expect(second.body.ceilingWarning).toBeDefined();
+    expect(second.body.ceilingWarning.overByMinor).toBeGreaterThan(0);
+  });
 });
