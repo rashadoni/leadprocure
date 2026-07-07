@@ -59,3 +59,13 @@ export const fmtMoney = (minor: number | string | null, currency = 'AZN'): strin
   if (minor == null) return '···';
   return `${(Number(minor) / 100).toLocaleString('az-AZ', { minimumFractionDigits: 2 })} ${currency}`;
 };
+
+// Locale-aware dates driven by the UI language (US-style 7/14/2026 reads wrong for az/ru).
+const dateLocale = () => {
+  const lang = localStorage.getItem('lp_lang') || 'ru';
+  return lang === 'az' ? 'az-AZ' : lang === 'en' ? 'en-GB' : 'ru-RU';
+};
+export const fmtDate = (iso: string | Date | null | undefined): string =>
+  iso ? new Date(iso).toLocaleDateString(dateLocale()) : '—';
+export const fmtDateTime = (iso: string | Date | null | undefined): string =>
+  iso ? new Date(iso).toLocaleString(dateLocale(), { dateStyle: 'short', timeStyle: 'short' }) : '—';

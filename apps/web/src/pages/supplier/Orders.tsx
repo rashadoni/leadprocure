@@ -92,7 +92,7 @@ export default function Orders() {
                   <td>{fmtMoney(p.total_minor, p.currency)}</td>
                   <td><Badge status={p.status} /></td>
                   <td>
-                    {next && <button className="btn small" onClick={() => advance(p.id, next)}>→ {next}</button>}{' '}
+                    {next && <button className="btn small" onClick={() => advance(p.id, next)}>→ {t(`po_act_${next}`)}</button>}{' '}
                     {['DELIVERED', 'ACCEPTED'].includes(p.status) && (
                       <button className="btn small ghost" onClick={() => submitInvoice(p.id)}>🧾 {t('invoice')}</button>
                     )}{' '}

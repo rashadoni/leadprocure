@@ -29,16 +29,20 @@ export class DashboardService {
              WHERE status NOT IN ('ACCEPTED','REJECTED','CANCELLED')`),
       ]);
 
-    // Actionable tasks: what needs a human decision right now.
+    // Actionable tasks: what needs a human decision right now. ref/amount let the UI
+    // distinguish same-titled documents (4 × "Ремонт кровли" must not look identical).
     const tasks = await m.query(`
-      SELECT 'APPROVE_REQUEST' AS kind, id, title, created_at FROM procurement_requests WHERE status='SUBMITTED'
+      SELECT 'APPROVE_REQUEST' AS kind, id, title, request_no AS ref,
+             estimated_total_minor AS amount_minor, currency, created_at AS at
+      FROM procurement_requests WHERE status='SUBMITTED'
       UNION ALL
-      SELECT 'OPEN_BIDS', id, title, updated_at FROM sourcing_events WHERE status='CLOSED'
+      SELECT 'OPEN_BIDS', id, title, NULL, NULL, NULL, updated_at FROM sourcing_events WHERE status='CLOSED'
       UNION ALL
-      SELECT 'AWARD', id, title, updated_at FROM sourcing_events WHERE status='EVALUATION'
+      SELECT 'AWARD', id, title, NULL, NULL, NULL, updated_at FROM sourcing_events WHERE status='EVALUATION'
       UNION ALL
-      SELECT 'ACCEPT_DELIVERY', id, po_no, updated_at FROM purchase_orders WHERE status='DELIVERED'
-      ORDER BY 4 DESC LIMIT 10`);
+      SELECT 'ACCEPT_DELIVERY', id, po_no, po_no, total_minor, currency, updated_at
+      FROM purchase_orders WHERE status='DELIVERED'
+      ORDER BY 7 DESC LIMIT 10`);
 
     return { awardedSpend, savings, activeEvents, pendingApprovals, unreadNotifications, openPos, tasks };
   }
@@ -59,15 +63,19 @@ export class DashboardService {
     const ver = await m.query(`SELECT status FROM supplier_verification_cases ORDER BY created_at DESC LIMIT 1`);
 
     const tasks = await m.query(`
-      SELECT 'BID' AS kind, e.id, e.title, e.close_at AS at FROM sourcing_events e
+      SELECT 'BID' AS kind, e.id, e.title, NULL AS ref, NULL AS amount_minor, NULL AS currency,
+             e.close_at AS at
+      FROM sourcing_events e
         WHERE e.status = 'OPEN' AND NOT EXISTS (SELECT 1 FROM bids b WHERE b.event_id = e.id)
       UNION ALL
-      SELECT 'ADVANCE_DELIVERY', p.id, p.po_no, p.updated_at FROM purchase_orders p
+      SELECT 'ADVANCE_DELIVERY', p.id, p.po_no, p.po_no, p.total_minor, p.currency, p.updated_at
+      FROM purchase_orders p
         WHERE p.status IN ('ISSUED','CONFIRMED','PACKED','SHIPPED')
       UNION ALL
-      SELECT 'INVOICE', p.id, p.po_no, p.updated_at FROM purchase_orders p
+      SELECT 'INVOICE', p.id, p.po_no, p.po_no, p.total_minor, p.currency, p.updated_at
+      FROM purchase_orders p
         WHERE p.status = 'ACCEPTED' AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.po_id = p.id)
-      ORDER BY 4 DESC LIMIT 10`);
+      ORDER BY 7 DESC LIMIT 10`);
 
     return {
       openTenders, myActiveBids, contractsWon, ordersInProgress, invoicesPending,

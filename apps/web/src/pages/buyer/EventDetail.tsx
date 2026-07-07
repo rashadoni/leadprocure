@@ -188,7 +188,7 @@ export default function EventDetail() {
                 <b>{l.title}</b>{' '}
                 {awarded && (
                   <>
-                    <span className="badge AWARDED">🏆 {t('award')}</span>{' '}
+                    <span className="badge AWARDED">🏆 {t('st_AWARDED')}</span>{' '}
                     <button className="btn small ghost" onClick={() => cancelAward(l.id)}>✕ {t('cancel_award')}</button>
                     {awarded.justification && <div className="hint" style={{ marginTop: 4 }}>📝 {awarded.justification}</div>}
                   </>

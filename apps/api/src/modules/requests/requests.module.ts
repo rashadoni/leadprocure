@@ -57,6 +57,7 @@ export class RequestsService {
     const rows = await this.rc.manager.query(
       `SELECT pr.id, pr.request_no, pr.title, pr.status, pr.estimated_total_minor, pr.currency, pr.category,
               pr.method_resolved, pr.created_at,
+              (SELECT u.full_name FROM organization_users u WHERE u.id = pr.created_by) AS created_by_name,
               count(*) OVER()::int AS total_count,
               (SELECT count(*)::int FROM approval_steps s WHERE s.request_id = pr.id) AS steps_total,
               (SELECT count(*)::int FROM approval_steps s WHERE s.request_id = pr.id AND s.status = 'APPROVED') AS steps_done,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, fmtMoney } from '../api/client';
+import { api, fmtDate, fmtMoney } from '../api/client';
 import { useAuth } from '../auth/auth';
 import { useI18n } from '../i18n';
 import { Badge } from '../components/Badge';
@@ -41,13 +41,15 @@ export default function Invoices() {
       <h1>🧾 {t('invoices')}</h1>
       <div className="card">
         <table>
-          <thead><tr><th>#</th><th>PO</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>#</th><th>PO</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th>{t('date')}</th><th>{t('due_date')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
             {rows.map((i) => (
               <tr key={i.id}>
                 <td><a href="#" onClick={(e) => { e.preventDefault(); expand(i.id); }}>{i.invoice_no}</a></td>
                 <td>{i.po_no}</td>
                 <td>{isBuyer ? i.supplier_name : i.buyer_name}</td>
+                <td className="hint">{fmtDate(i.issued_at ?? i.created_at)}</td>
+                <td className="hint">{fmtDate(i.due_date)}</td>
                 <td>{fmtMoney(i.gross_minor, i.currency)}</td>
                 <td><Badge status={i.status} cls={badge(i.status)} /></td>
                 <td>

@@ -127,7 +127,9 @@ export class ContractsService {
     const rows = await this.rc.manager.query(
       `SELECT c.*, ob.legal_name AS buyer_name, os.legal_name AS supplier_name,
               count(*) OVER()::int AS total_count,
-              (SELECT count(*)::int FROM purchase_orders p WHERE p.contract_id = c.id) AS po_count
+              (SELECT count(*)::int FROM purchase_orders p WHERE p.contract_id = c.id) AS po_count,
+              (SELECT COALESCE(SUM(p.total_minor),0)::bigint FROM purchase_orders p
+               WHERE p.contract_id = c.id AND p.status NOT IN ('CANCELLED','REJECTED')) AS drawn_minor
        FROM contracts c
        JOIN organizations ob ON ob.id = c.buyer_org_id
        JOIN organizations os ON os.id = c.supplier_org_id

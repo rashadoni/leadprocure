@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, fmtMoney } from '../../api/client';
+import { api, fmtDate, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import Pager from '../../components/Pager';
@@ -16,6 +16,7 @@ export default function Requests() {
   const nav = useNavigate();
   const [rows, setRows] = useState<any[]>([]);
   const [title, setTitle] = useState('');
+  const [category, setCategory] = useState('');
   const [items, setItems] = useState<Item[]>([{ name: '', qty: 1, price: '' }]);
   const [err, setErr] = useState('');
   const [q, setQ] = useState('');
@@ -48,11 +49,13 @@ export default function Requests() {
     try {
       await api.post('/requests', {
         title,
+        ...(category.trim() ? { category: category.trim() } : {}),
         items: items
           .filter((i) => i.name)
           .map((i) => ({ name: i.name, qty: Number(i.qty), estUnitPriceMinor: Math.round(Number(i.price) * 100) })),
       });
       setTitle('');
+      setCategory('');
       setItems([{ name: '', qty: 1, price: '' }]);
       load();
     } catch (e: any) { setErr(e.response?.data?.message?.toString() ?? 'Error'); }
@@ -90,8 +93,19 @@ export default function Requests() {
       <h1>{t('requests')}</h1>
       <div className="card">
         <form onSubmit={create}>
-          <label>{t('title')}</label>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} required />
+          <div className="row">
+            <div style={{ flex: 2 }}><label>{t('title')}</label>
+              <input value={title} onChange={(e) => setTitle(e.target.value)} required /></div>
+            <div style={{ flex: 1 }}><label>{t('category')}</label>
+              {/* category drives the method policy, budgets and per-category analytics */}
+              <input value={category} onChange={(e) => setCategory(e.target.value)}
+                placeholder="IT, construction…" list="req-categories" />
+              <datalist id="req-categories">
+                {[...new Set(rows.map((r) => r.category).filter((c) => c && c !== '*'))].map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist></div>
+          </div>
           <h3>{t('items')}</h3>
           {items.map((it, idx) => (
             <div className="row" key={idx}>
@@ -114,12 +128,15 @@ export default function Requests() {
         <input placeholder={`🔎 ${t('title')}…`} value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} style={{ maxWidth: 320, marginBottom: 6 }} />
         <div className="hint" style={{ marginBottom: 10 }}>{t('legend_procedures')}</div>
         <table>
-          <thead><tr><th>#</th><th>{t('title')}</th><th>{t('total')}</th><th>{t('status')}</th><th>Method</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>#</th><th>{t('title')}</th><th>{t('category')}</th><th>{t('date')}</th><th>{t('requester')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('method')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.id}>
                 <td>{r.request_no}</td>
                 <td>{r.title}</td>
+                <td>{r.category && r.category !== '*' ? r.category : '—'}</td>
+                <td className="hint">{fmtDate(r.created_at)}</td>
+                <td className="hint">{r.created_by_name ?? '—'}</td>
                 <td>{fmtMoney(r.estimated_total_minor, r.currency)}</td>
                 <td>
                   <Badge status={r.status} />

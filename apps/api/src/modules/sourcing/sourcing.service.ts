@@ -237,7 +237,9 @@ export class SourcingService {
 
     if (auth.role === 'SUPPLIER_USER') {
       const myBid = await this.myBid(eventId);
-      return { ...ev, lots, items, my_bid: myBid, amounts_visible: amountsVisible };
+      // The buyer's own estimate is not for bidders' eyes — publishing it anchors prices.
+      const supplierItems = items.map((i: any) => ({ ...i, est_unit_price_minor: null }));
+      return { ...ev, lots, items: supplierItems, my_bid: myBid, amounts_visible: amountsVisible };
     }
 
     // Buyer view: participation always; amounts only once the ceremony opened them.

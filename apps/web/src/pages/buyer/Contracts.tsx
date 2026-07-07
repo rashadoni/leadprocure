@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, fmtMoney } from '../../api/client';
+import { api, fmtDate, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import { PO_BUYER_NEXT } from '@leadprocure/shared';
@@ -75,14 +75,21 @@ export default function Contracts() {
       <h1>{t('contracts')}</h1>
       <div className="card">
         <table>
-          <thead><tr><th>#</th><th>{t('title')}</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th>{t('total')}</th><th>{t('status')}</th><th>PO</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>#</th><th>{t('title')}</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th>{t('validity')}</th><th>{t('total')}</th><th>{t('drawn')}</th><th>{t('status')}</th><th>PO</th><th>{t('actions')}</th></tr></thead>
           <tbody>
-            {contracts.map((c) => (
+            {contracts.map((c) => {
+              const over = Number(c.drawn_minor) > Number(c.total_minor);
+              return (
               <tr key={c.id}>
                 <td>{c.contract_no}</td>
                 <td>{c.title}</td>
                 <td>{isBuyerSide ? c.supplier_name : c.buyer_name}</td>
+                <td className="hint">{fmtDate(c.valid_from)} – {fmtDate(c.valid_to)}</td>
                 <td>{fmtMoney(c.total_minor, c.currency)}</td>
+                <td style={over ? { color: 'var(--bad, #e5484d)' } : undefined}
+                    title={over ? t('over_ceiling') : undefined}>
+                  {fmtMoney(c.drawn_minor, c.currency)}{over ? ' ⚠' : ''}
+                </td>
                 <td><Badge status={c.status} /></td>
                 <td>{c.po_count}</td>
                 <td>
@@ -97,7 +104,7 @@ export default function Contracts() {
                   )}
                 </td>
               </tr>
-            ))}
+            );})}
           </tbody>
         </table>
         <Pager total={cTotal} page={cPage} pageSize={PAGE_SIZE} onPage={setCPage} />
@@ -106,19 +113,20 @@ export default function Contracts() {
       <h1>{t('orders')}</h1>
       <div className="card">
         <table>
-          <thead><tr><th>#</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>#</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th>{t('date')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
             {orders.map((p) => (
               <tr key={p.id}>
                 <td>{p.po_no}</td>
                 <td>{isBuyerSide ? p.supplier_name : p.buyer_name}</td>
+                <td className="hint">{fmtDate(p.created_at)}</td>
                 <td>{fmtMoney(p.total_minor, p.currency)}</td>
                 <td><Badge status={p.status} /></td>
                 <td>
                   {isBuyerSide && (PO_BUYER_NEXT[p.status] ?? []).map((next) => (
                     <button key={next} className={`btn small ${next === 'CANCELLED' || next === 'REJECTED' ? 'ghost' : ''}`}
                       onClick={() => act(() => api.post(`/orders/${p.id}/status`, { status: next }))}>
-                      {next}
+                      {t(`po_act_${next}`)}
                     </button>
                   ))}{' '}
                   {isBuyerSide && ['SHIPPED', 'DELIVERED'].includes(p.status) && (

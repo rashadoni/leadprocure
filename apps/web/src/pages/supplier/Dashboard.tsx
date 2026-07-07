@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../../api/client';
+import { api, fmtDate, fmtDateTime, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { Badge } from '../../components/Badge';
+import { notifText, taskLabel } from '../../components/humanize';
 
 const TASK_LINK: Record<string, (id: string) => string> = {
   BID: (id) => `/supplier/events/${id}`,
@@ -55,8 +56,12 @@ export default function SupplierDashboard() {
           <tbody>
             {kpi.tasks.map((task: any, i: number) => (
               <tr key={i}>
-                <td><span className="badge INVITED">{task.kind}</span></td>
-                <td>{task.title}</td>
+                <td><span className="badge INVITED">{taskLabel(t, task.kind)}</span></td>
+                <td>
+                  {task.ref && task.ref !== task.title && <b>{task.ref} · </b>}{task.title}
+                  {task.amount_minor != null && <> · {fmtMoney(task.amount_minor, task.currency ?? 'AZN')}</>}
+                  {task.at && <span className="hint"> · {fmtDate(task.at)}</span>}
+                </td>
                 <td><Link to={TASK_LINK[task.kind]?.(task.id) ?? '#'}>→</Link></td>
               </tr>
             ))}
@@ -71,8 +76,8 @@ export default function SupplierDashboard() {
           <tbody>
             {notes.map((n) => (
               <tr key={n.id} style={{ opacity: n.read_at ? 0.5 : 1 }}>
-                <td>{n.type}</td>
-                <td className="hint">{new Date(n.created_at).toLocaleString()}</td>
+                <td>{notifText(t, n)}</td>
+                <td className="hint">{fmtDateTime(n.created_at)}</td>
               </tr>
             ))}
           </tbody>

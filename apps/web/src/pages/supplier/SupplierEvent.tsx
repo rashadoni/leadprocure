@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { api, fmtMoney } from '../../api/client';
+import { api, fmtDateTime, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { AuctionPanel } from '../../components/AuctionPanel';
 import { QnaCard } from '../../components/QnaCard';
@@ -51,12 +51,29 @@ export default function SupplierEvent() {
   const total = ev.items.reduce(
     (s: number, i: any) => s + (Number(prices[i.id] || 0) * Number(i.qty)), 0,
   );
+  // Award outcome for THIS supplier: any lot awarded to my bid = won.
+  const won = ev.status === 'AWARDED' && ev.my_bid
+    && (ev.lots ?? []).some((l: any) => l.awarded_bid_id === ev.my_bid.id);
+  const lost = ev.status === 'AWARDED' && !won && !!ev.my_bid;
+  const canBid = ['PUBLISHED', 'OPEN'].includes(ev.status);
 
   return (
     <>
       <h1>{ev.title} <Badge status={ev.status} /></h1>
+      {won && (
+        <div className="card" style={{ borderColor: 'var(--ok)' }}>
+          <b>🏆 {t('you_won')}</b>
+          <div className="hint">{t('you_won_hint')}</div>
+        </div>
+      )}
+      {lost && (
+        <div className="card">
+          <b>{t('you_lost')}</b>
+          <div className="hint">{t('you_lost_hint')}</div>
+        </div>
+      )}
       <div className="card">
-        <b>{t('buyer_org')}:</b> {ev.buyer_name} · <b>{t('deadline')}:</b> {new Date(ev.close_at).toLocaleString()}
+        <b>{t('buyer_org')}:</b> {ev.buyer_name} · <b>{t('deadline')}:</b> {fmtDateTime(ev.close_at)}
         {ev.my_bid && (
           <div style={{ marginTop: 8 }}>
             {t('my_bid')}: <Badge status={ev.my_bid.state} />{' '}
@@ -74,6 +91,7 @@ export default function SupplierEvent() {
 
       {ev.format === 'REVERSE' && <AuctionPanel eventId={id!} onChanged={load} />}
 
+      {canBid && (
       <div className="card">
         <h3>
           {ev.type === 'RFI' ? `❓ RFI — ${t('response_text')}`
@@ -81,13 +99,13 @@ export default function SupplierEvent() {
         </h3>
         {ev.type !== 'RFI' && (
           <table>
-            <thead><tr><th>{t('name')}</th><th>{t('qty')}</th><th>Est.</th><th>{t('unit_price')} (AZN)</th></tr></thead>
+            {/* no buyer estimate here — publishing it to bidders anchors their prices */}
+            <thead><tr><th>{t('name')}</th><th>{t('qty')}</th><th>{t('unit_price')} (AZN)</th></tr></thead>
             <tbody>
               {ev.items.map((i: any) => (
                 <tr key={i.id}>
                   <td>{i.name}</td>
                   <td>{Number(i.qty)}</td>
-                  <td>{fmtMoney(i.est_unit_price_minor, ev.evaluation_currency)}</td>
                   <td>
                     <input style={{ width: 130 }} type="number" step="0.01" min="0" value={prices[i.id] ?? ''}
                       disabled={ev.status !== 'OPEN'}
@@ -110,7 +128,7 @@ export default function SupplierEvent() {
           {ev.type !== 'RFI' && (
             <>
               <div>
-                <label>Delivery (days)</label>
+                <label>{t('delivery_days')}</label>
                 <input type="number" min={1} value={deliveryDays} disabled={ev.status !== 'OPEN'}
                   onChange={(e) => setDeliveryDays(e.target.value)} />
               </div>
@@ -127,6 +145,7 @@ export default function SupplierEvent() {
         {msg && <div className="hint">{msg}</div>}
         {ev.format !== 'REVERSE' && <div className="hint">🔒 {t('amounts_hidden')}</div>}
       </div>
+      )}
 
       <QnaCard eventId={id!} isBuyer={false} />
     </>
