@@ -1,5 +1,6 @@
 import {
-  Body, Controller, Delete, Get, Injectable, Module, NotFoundException, Param, Post, Put, Query,
+  Body, ConflictException, Controller, Delete, Get, Injectable, Module, NotFoundException,
+  Param, Post, Put, Query,
 } from '@nestjs/common';
 import { IsInt, IsOptional, IsString, Length, Min, MinLength } from 'class-validator';
 import type { AccessTokenPayload } from '@leadprocure/shared';
@@ -66,13 +67,22 @@ export class BudgetsService {
   }
 
   async create(dto: UpsertBudgetDto, auth: AccessTokenPayload) {
-    const row = (
-      await this.rc.manager.query(
-        `INSERT INTO budgets(buyer_org_id, name, category, period_year, amount_minor, currency)
-         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-        [auth.org_id, dto.name, dto.category?.trim() || '*', dto.periodYear, dto.amountMinor, dto.currency ?? 'AZN'],
-      )
-    )[0];
+    let row: { id: string };
+    try {
+      row = (
+        await this.rc.manager.query(
+          `INSERT INTO budgets(buyer_org_id, name, category, period_year, amount_minor, currency)
+           VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+          [auth.org_id, dto.name, dto.category?.trim() || '*', dto.periodYear, dto.amountMinor, dto.currency ?? 'AZN'],
+        )
+      )[0];
+    } catch (e: any) {
+      // one budget per (org, name, year) — surface the collision as a clean 409, not a 500
+      if (e?.code === '23505') {
+        throw new ConflictException(`A budget named "${dto.name}" already exists for ${dto.periodYear}`);
+      }
+      throw e;
+    }
     await this.audit.record('BUDGET_CREATED', 'budget', row.id, { name: dto.name, periodYear: dto.periodYear });
     return this.getOne(row.id);
   }

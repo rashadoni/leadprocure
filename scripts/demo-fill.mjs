@@ -34,6 +34,11 @@ async function call(method, path, token, body) {
 const get = (p, t) => call('GET', p, t);
 const post = (p, t, b = {}) => call('POST', p, t, b);
 const put = (p, t, b) => call('PUT', p, t, b);
+// tolerate "already exists" so re-running the filler on a populated stand doesn't abort
+const postIdempotent = async (p, t, b = {}) => {
+  try { return await post(p, t, b); }
+  catch (e) { if (/→ 409/.test(e.message)) return null; throw e; }
+};
 
 const login = async (email) => (await post('/auth/login', undefined, { email, password: PASS })).accessToken;
 
@@ -223,8 +228,8 @@ const log = (s) => console.log(s);
 
   // ---------- Бюджеты ----------
   const year = new Date().getFullYear();
-  await post('/budgets', buyer, { name: `Общий бюджет ${year}`, category: '*', periodYear: year, amountMinor: 20_000_000 });
-  await post('/budgets', buyer, { name: `IT-бюджет ${year}`, category: 'IT', periodYear: year, amountMinor: 8_000_000 });
+  await postIdempotent('/budgets', buyer, { name: `Общий бюджет ${year}`, category: '*', periodYear: year, amountMinor: 20_000_000 });
+  await postIdempotent('/budgets', buyer, { name: `IT-бюджет ${year}`, category: 'IT', periodYear: year, amountMinor: 8_000_000 });
   log('✓ бюджеты созданы (использование посчитается из утверждённых заявок)');
 
   // ---------- Каталог + мгновенный заказ ----------

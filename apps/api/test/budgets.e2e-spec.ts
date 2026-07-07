@@ -108,4 +108,10 @@ describe('budgets & commitment control (API e2e)', () => {
     await http().post('/budgets').set(...bearer(buyerA))
       .send({ name: `Bad ${tag}`, periodYear: YEAR, amountMinor: -5 }).expect(400);
   });
+
+  it('a duplicate (name, year) budget is a clean 409, not a 500', async () => {
+    const body = { name: `Dup ${tag}`, category: 'IT', periodYear: YEAR, amountMinor: 100_000 };
+    await http().post('/budgets').set(...bearer(buyerA)).send(body).expect(201);
+    await http().post('/budgets').set(...bearer(buyerA)).send(body).expect(409);
+  });
 });
