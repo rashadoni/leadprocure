@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, Fragment, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, fmtDate, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
@@ -66,6 +66,19 @@ export default function Requests() {
     catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
+  // Forced look-before-approve: the first click reveals the line items, the second
+  // actually approves — nobody waves 36 000 ₼ through without seeing what's in it.
+  const [preview, setPreview] = useState<Record<string, any>>({});
+  const approveGuard = async (id: string) => {
+    if (!preview[id]) {
+      const { data } = await api.get(`/requests/${id}`);
+      setPreview((p) => ({ ...p, [id]: data }));
+      return;
+    }
+    await act(id, 'approve');
+    setPreview((p) => { const q = { ...p }; delete q[id]; return q; });
+  };
+
   const makeRfq = async (id: string, type: 'RFQ' | 'RFP' | 'RFI' = 'RFQ') => {
     try {
       const closeAt = new Date(Date.now() + 24 * 3600_000).toISOString();
@@ -131,7 +144,8 @@ export default function Requests() {
           <thead><tr><th>#</th><th>{t('title')}</th><th>{t('category')}</th><th>{t('date')}</th><th>{t('requester')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('method')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id}>
+              <Fragment key={r.id}>
+              <tr>
                 <td>{r.request_no}</td>
                 <td>{r.title}</td>
                 <td>{r.category && r.category !== '*' ? r.category : '—'}</td>
@@ -149,7 +163,9 @@ export default function Requests() {
                   {r.status === 'DRAFT' && <button className="btn small" title={t('tip_submit')} onClick={() => act(r.id, 'submit')}>{t('submit')}</button>}{' '}
                   {r.status === 'SUBMITTED' && canApprove && (
                     <>
-                      <button className="btn small" title={t('tip_approve')} onClick={() => act(r.id, 'approve')}>{t('approve')}</button>{' '}
+                      <button className="btn small" title={t('tip_approve')} onClick={() => approveGuard(r.id)}>
+                        {preview[r.id] ? `✔ ${t('confirm_approve')}` : t('approve')}
+                      </button>{' '}
                       <button className="btn small ghost" title={t('tip_reject')} onClick={() => act(r.id, 'reject')}>{t('reject')}</button>
                     </>
                   )}
@@ -179,6 +195,28 @@ export default function Requests() {
                   )}
                 </td>
               </tr>
+              {preview[r.id] && (
+                <tr>
+                  <td colSpan={9} style={{ background: 'rgba(79,140,255,0.05)' }}>
+                    <b>{t('items')}</b>
+                    <table style={{ margin: '6px 0' }}>
+                      <thead><tr><th>{t('name')}</th><th>{t('qty')}</th><th>{t('unit_price')}</th><th>{t('total')}</th></tr></thead>
+                      <tbody>
+                        {preview[r.id].items.map((it: any) => (
+                          <tr key={it.id}>
+                            <td>{it.name}</td>
+                            <td>{Number(it.qty)} {it.uom}</td>
+                            <td>{fmtMoney(it.est_unit_price_minor, r.currency)}</td>
+                            <td>{fmtMoney(it.est_total_minor, r.currency)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <span className="hint">{t('tip_approve')}</span>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
           </tbody>
         </table>

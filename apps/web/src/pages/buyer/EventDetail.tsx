@@ -154,7 +154,7 @@ export default function EventDetail() {
           </button>
         )}
         <table>
-          <thead><tr><th>{t('name')}</th><th>{t('qty')}</th><th>Est. {t('unit_price')}</th><th>{t('lots')}</th></tr></thead>
+          <thead><tr><th>{t('name')}</th><th>{t('qty')}</th><th>{t('unit_price')} (est.)</th><th>{t('lots')}</th></tr></thead>
           <tbody>
             {ev.items.map((i: any) => (
               <tr key={i.id}>
@@ -215,7 +215,7 @@ export default function EventDetail() {
       <div className="card">
         <h3>Bids {!ev.amounts_visible && <span className="sealed">🔒 {t('amounts_hidden')}</span>}</h3>
         <table>
-          <thead><tr><th>{t('supplier_org')}</th><th>{t('status')}</th><th>{t('total')}</th><th>Delivery</th><th>Score</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>{t('supplier_org')}</th><th>{t('status')}</th><th>{t('total')}</th><th>{t('delivery_days')}</th><th>{t('score')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
             {(ev.bids ?? []).map((b: any) => (
               <tr key={b.id} style={awardedBidId === b.id ? { outline: '1px solid var(--ok)' } : undefined}>
@@ -267,7 +267,7 @@ export default function EventDetail() {
             <>
               <div style={{ margin: '10px 0', color: 'var(--accent)' }}>{ai.rationale}</div>
               <table>
-                <thead><tr><th>#</th><th>{t('supplier_org')}</th><th>Price</th><th>Delivery</th><th>Reliability</th><th>Score</th><th></th></tr></thead>
+                <thead><tr><th>#</th><th>{t('supplier_org')}</th><th>{t('unit_price')}</th><th>{t('delivery_days')}</th><th>{t('reliability')}</th><th>{t('score')}</th><th></th></tr></thead>
                 <tbody>
                   {ai.ranking.map((r: any, i: number) => (
                     <tr key={r.bidId} style={r.bidId === ai.recommendedBidId ? { outline: '1px solid var(--accent2)' } : undefined}>

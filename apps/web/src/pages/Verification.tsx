@@ -56,7 +56,7 @@ export default function Verification() {
       <h1>🛡 {t('verification')}</h1>
       <div className="card">
         <table>
-          <thead><tr><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th>{t('status')}</th><th>Docs</th></tr></thead>
+          <thead><tr><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th>{t('status')}</th><th>{t('attachments')}</th></tr></thead>
           <tbody>
             {cases.map((c) => (
               <tr key={c.id}>

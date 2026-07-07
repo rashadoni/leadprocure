@@ -15,10 +15,13 @@ export default function Dashboard() {
   const { t } = useI18n();
   const [kpi, setKpi] = useState<any>(null);
   const [notes, setNotes] = useState<any[]>([]);
+  const [overBudgets, setOverBudgets] = useState<any[]>([]);
 
   const load = () => {
     api.get('/dashboard/buyer').then((r) => setKpi(r.data));
     api.get('/notifications').then((r) => setNotes(r.data.slice(0, 8)));
+    // a 9× overspend must scream on the front page, not hide in the budgets tab
+    api.get('/budgets').then((r) => setOverBudgets(r.data.filter((b: any) => b.committedMinor > b.amountMinor))).catch(() => {});
   };
   useEffect(load, []);
 
@@ -43,6 +46,18 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      {overBudgets.length > 0 && (
+        <div className="card" style={{ borderColor: 'var(--bad)', marginTop: 16 }}>
+          <b style={{ color: 'var(--bad)' }}>⚠ {t('budget_over')}</b>
+          {overBudgets.map((b: any) => (
+            <div key={b.id} className="hint" style={{ marginTop: 4 }}>
+              {b.name}: {fmtMoney(b.committedMinor)} / {fmtMoney(b.amountMinor)} · {b.utilizationPct}%
+            </div>
+          ))}
+          <div style={{ marginTop: 6 }}><Link to="/buyer/budgets">→ {t('budgets')}</Link></div>
+        </div>
+      )}
 
       <div className="card" style={{ marginTop: 16 }}>
         <h3>{t('tasks')}</h3>

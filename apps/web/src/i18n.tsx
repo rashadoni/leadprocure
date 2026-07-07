@@ -75,6 +75,11 @@ const dict: Record<Lang, Record<string, string>> = {
     po_act_SHIPPED: 'Göndər', po_act_DELIVERED: 'Çatdırıldı', po_act_ACCEPTED: 'Qəbul et',
     po_act_REJECTED: 'Rədd et', po_act_CANCELLED: 'Ləğv et',
     bids_received: 'Təkliflər',
+    net_label: 'ƏDV-siz', gross_label: 'ƏDV daxil',
+    savings_hint: 'Qənaət = sifarişin smetası − qalib təklifin məbləği',
+    confirm_approve: 'Təsdiqi təsdiq et',
+    reliability: 'Etibarlılıq', block: 'Blokla', role: 'Rol', method_policy: 'Metod siyasəti',
+    from: 'Başlanğıc', to: 'Son', not_found: 'Səhifə tapılmadı', back_home: 'Əsas səhifəyə qayıt',
   },
   ru: {
     login: 'Войти', logout: 'Выход', email: 'Email', password: 'Пароль', register: 'Регистрация',
@@ -148,6 +153,11 @@ const dict: Record<Lang, Record<string, string>> = {
     po_act_SHIPPED: 'Отгрузить', po_act_DELIVERED: 'Доставлено', po_act_ACCEPTED: 'Принять',
     po_act_REJECTED: 'Отклонить', po_act_CANCELLED: 'Отменить',
     bids_received: 'Предложения',
+    net_label: 'без НДС', gross_label: 'с НДС',
+    savings_hint: 'Экономия = оценка заявки − сумма награждения',
+    confirm_approve: 'Подтвердить утверждение',
+    reliability: 'Надёжность', block: 'Блокировать', role: 'Роль', method_policy: 'Политика метода закупки',
+    from: 'От', to: 'До', not_found: 'Страница не найдена', back_home: 'Вернуться на главную',
   },
   en: {
     login: 'Log in', logout: 'Log out', email: 'Email', password: 'Password', register: 'Register',
@@ -221,6 +231,11 @@ const dict: Record<Lang, Record<string, string>> = {
     po_act_SHIPPED: 'Ship', po_act_DELIVERED: 'Delivered', po_act_ACCEPTED: 'Accept',
     po_act_REJECTED: 'Reject', po_act_CANCELLED: 'Cancel',
     bids_received: 'Bids',
+    net_label: 'excl. VAT', gross_label: 'incl. VAT',
+    savings_hint: 'Savings = request estimate − awarded amount',
+    confirm_approve: 'Confirm approval',
+    reliability: 'Reliability', block: 'Block', role: 'Role', method_policy: 'Method policy',
+    from: 'From', to: 'To', not_found: 'Page not found', back_home: 'Back to home',
   },
 };
 

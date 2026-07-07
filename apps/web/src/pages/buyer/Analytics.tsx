@@ -26,13 +26,16 @@ export default function Analytics() {
       <h1>{t('analytics')}</h1>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12, marginBottom: 16 }}>
+        {/* PO volume is net; invoices are gross — label the VAT basis so «paid > spend» never
+            reads as a data error. */}
         {[
-          { label: t('spend'), value: fmtMoney(d.monthly.reduce((s, m) => s + m.totalMinor, 0)) },
-          { label: `${t('savings')} · ${d.savings.events}`, value: `${fmtMoney(d.savings.savedMinor)} (${savingsPct}%)` },
-          { label: `${t('paid')} · ${d.invoices.paidCount}`, value: fmtMoney(d.invoices.paidMinor) },
-          { label: `${t('outstanding')} · ${d.invoices.outstandingCount}`, value: fmtMoney(d.invoices.outstandingMinor) },
-        ].map((c) => (
-          <div className="card" key={c.label} style={{ marginBottom: 0 }}>
+          { label: `${t('spend')} · ${t('net_label')}`, value: fmtMoney(d.monthly.reduce((s, m) => s + m.totalMinor, 0)) },
+          { label: `${t('savings')} · ${d.savings.events}`, value: `${fmtMoney(d.savings.savedMinor)} (${savingsPct}%)`,
+            hint: t('savings_hint') },
+          { label: `${t('paid')} · ${d.invoices.paidCount} · ${t('gross_label')}`, value: fmtMoney(d.invoices.paidMinor) },
+          { label: `${t('outstanding')} · ${d.invoices.outstandingCount} · ${t('gross_label')}`, value: fmtMoney(d.invoices.outstandingMinor) },
+        ].map((c: any) => (
+          <div className="card" key={c.label} style={{ marginBottom: 0 }} title={c.hint}>
             <div style={{ color: 'var(--muted)', fontSize: 12 }}>{c.label}</div>
             <div style={{ fontSize: 20, fontWeight: 800, marginTop: 6 }}>{c.value}</div>
           </div>

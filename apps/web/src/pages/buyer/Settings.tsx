@@ -35,7 +35,7 @@ export default function Settings() {
       <div className="card">
         <h3>{t('users')}</h3>
         <table>
-          <thead><tr><th>{t('email')}</th><th>{t('name')}</th><th>Role</th></tr></thead>
+          <thead><tr><th>{t('email')}</th><th>{t('name')}</th><th>{t('role')}</th></tr></thead>
           <tbody>
             {users.map((u) => (
               <tr key={u.id}>
@@ -60,7 +60,7 @@ export default function Settings() {
             <div><label>{t('email')}</label><input type="email" required value={nu.email} onChange={(e) => setNu({ ...nu, email: e.target.value })} /></div>
             <div><label>{t('name')}</label><input required value={nu.fullName} onChange={(e) => setNu({ ...nu, fullName: e.target.value })} /></div>
             <div><label>{t('password')}</label><input required minLength={8} value={nu.password} onChange={(e) => setNu({ ...nu, password: e.target.value })} /></div>
-            <div><label>Role</label>
+            <div><label>{t('role')}</label>
               <select value={nu.role} onChange={(e) => setNu({ ...nu, role: e.target.value })}>
                 {BUYER_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
@@ -71,9 +71,9 @@ export default function Settings() {
       </div>
 
       <div className="card">
-        <h3>Method policy</h3>
+        <h3>{t('method_policy')}</h3>
         <table>
-          <thead><tr><th>Category</th><th>From</th><th>To</th><th>Method</th></tr></thead>
+          <thead><tr><th>{t('category')}</th><th>{t('from')}</th><th>{t('to')}</th><th>{t('method')}</th></tr></thead>
           <tbody>
             {policies.map((p) => (
               <tr key={p.id}>

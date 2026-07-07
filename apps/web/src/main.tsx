@@ -32,6 +32,17 @@ function Home() {
   return <Navigate to={session.org.kind === 'SUPPLIER' ? '/supplier/dashboard' : '/buyer/requests'} replace />;
 }
 
+// Own 404 — users must never see React Router's "Hey developer 👋" page.
+function NotFound() {
+  return (
+    <div className="center" style={{ flexDirection: 'column', gap: 12 }}>
+      <div style={{ fontSize: 48 }}>🔍</div>
+      <h2>404</h2>
+      <a className="btn" href="/">← Leadprocure</a>
+    </div>
+  );
+}
+
 const BUYER = ['BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER'];
 const SUPPLIER = ['SUPPLIER_USER'];
 
@@ -39,8 +50,10 @@ const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
   { path: '/reset', element: <ResetPassword /> },
   { path: '/', element: <Home /> },
+  { path: '*', element: <NotFound /> },
   {
     element: <Protected><Shell /></Protected>,
+    errorElement: <NotFound />,
     children: [
       { path: '/buyer/dashboard', element: <Protected roles={BUYER}><Dashboard /></Protected> },
       { path: '/buyer/settings', element: <Protected roles={BUYER}><Settings /></Protected> },

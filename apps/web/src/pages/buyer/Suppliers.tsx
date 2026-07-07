@@ -48,7 +48,7 @@ export default function Suppliers() {
                 <td><Badge status={r.status} /></td>
                 <td>
                   {r.status !== 'APPROVED' && <button className="btn small" onClick={() => setStatus(r.id, 'APPROVED')}>{t('approve')}</button>}{' '}
-                  {r.status !== 'BLOCKED' && <button className="btn small ghost" onClick={() => setStatus(r.id, 'BLOCKED')}>Block</button>}{' '}
+                  {r.status !== 'BLOCKED' && <button className="btn small ghost" onClick={() => setStatus(r.id, 'BLOCKED')}>{t('block')}</button>}{' '}
                   <button className="btn small ghost" onClick={() => rate(r.supplier_org_id)}>★ {t('scorecard')}</button>{' '}
                   <button className="btn small ghost" onClick={async () => { await api.post('/verification/cases', { supplierOrgId: r.supplier_org_id }); alert(t('verification') + ' →'); }}>🛡</button>
                   {scores[r.supplier_org_id] && (
@@ -65,7 +65,7 @@ export default function Suppliers() {
       <div className="card">
         <h3>{t('directory')}</h3>
         <table>
-          <thead><tr><th>{t('company')}</th><th>VÖEN</th><th>Categories</th><th></th></tr></thead>
+          <thead><tr><th>{t('company')}</th><th>VÖEN</th><th>{t('category')}</th><th></th></tr></thead>
           <tbody>
             {directory.map((s) => (
               <tr key={s.id}>
