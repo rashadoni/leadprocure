@@ -243,6 +243,19 @@ export class ContractsService {
     if (po.buyer_org_id !== auth.org_id) throw new BadRequestException('Only the buyer records receipts');
     if (!dto.items?.length) throw new BadRequestException('At least one line is required');
 
+    // Ordered vs already-received per line — you can't receive more than was ordered
+    // (an inflated receipt would otherwise authorise over-billing in the 3-way match).
+    const poLines = await m.query(
+      `SELECT poi.id, poi.name, poi.qty AS ordered, COALESCE(SUM(gri.qty_received),0) AS received
+       FROM purchase_order_items poi
+       LEFT JOIN goods_receipt_items gri ON gri.po_item_id = poi.id
+       WHERE poi.po_id = $1 GROUP BY poi.id, poi.name, poi.qty`,
+      [poId],
+    );
+    const ordered = new Map<string, { name: string; remaining: number }>(
+      poLines.map((r: any) => [r.id, { name: r.name, remaining: Number(r.ordered) - Number(r.received) }]),
+    );
+
     const gr = (
       await m.query(
         `INSERT INTO goods_receipts(po_id, buyer_org_id, supplier_org_id, received_by, note)
@@ -252,6 +265,12 @@ export class ContractsService {
     )[0];
     for (const it of dto.items) {
       if (!(Number(it.qty) > 0)) throw new BadRequestException('qty must be positive');
+      const line = ordered.get(it.poItemId);
+      if (!line) throw new BadRequestException(`Item ${it.poItemId} is not on this order`);
+      if (Number(it.qty) > line.remaining) {
+        throw new BadRequestException(`Cannot receive ${it.qty} of "${line.name}" — only ${line.remaining} remain on the order`);
+      }
+      line.remaining -= Number(it.qty); // guard duplicate lines within one receipt
       await m.query(
         `INSERT INTO goods_receipt_items(gr_id, po_item_id, buyer_org_id, supplier_org_id, qty_received)
          VALUES ($1,$2,$3,$4,$5)`,

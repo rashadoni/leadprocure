@@ -228,4 +228,31 @@ describe('procurement integrity controls (API e2e)', () => {
     expect(Number(inv.body.net_minor)).toBe(200_000);
     expect(Number(inv.body.vat_minor)).toBe(18_000); // only the taxed line
   });
+
+  it('cannot receive more than was ordered', async () => {
+    await http().put('/requests/method-policies').set(...bearer(buyer))
+      .send({ policies: [{ category: '*', minAmountMinor: 0, maxAmountMinor: 500_000, method: 'DIRECT' }, { category: '*', minAmountMinor: 500_000, maxAmountMinor: null, method: 'RFQ' }] }).expect(200);
+    const req = await http().post('/requests').set(...bearer(buyer))
+      .send({ title: `Over ${tag}`, items: [{ name: 'O', qty: 2, estUnitPriceMinor: 100_000 }] }).expect(201);
+    await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approver)).expect(201);
+    const po = await http().post(`/orders/direct/from-request/${req.body.id}`).set(...bearer(buyer)).send({ supplierOrgId: s1Org }).expect(201);
+    const poId = po.body.id, poItemId = po.body.items[0].id;
+    await http().post(`/orders/${poId}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
+    for (const st of ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED']) await http().post(`/orders/${poId}/status`).set(...bearer(s1)).send({ status: st }).expect(201);
+    await http().post(`/orders/${poId}/receipts`).set(...bearer(buyer)).send({ items: [{ poItemId, qty: 3 }] }).expect(400); // ordered only 2
+    await http().post(`/orders/${poId}/receipts`).set(...bearer(buyer)).send({ items: [{ poItemId, qty: 2 }] }).expect(201);
+  });
+
+  it('a spend in a policy gap resolves to OPEN_TENDER, not a direct order', async () => {
+    // policy covers only [0, 100k) → a 300k request falls in the gap
+    await http().put('/requests/method-policies').set(...bearer(buyer))
+      .send({ policies: [{ category: '*', minAmountMinor: 0, maxAmountMinor: 100_000, method: 'DIRECT' }] }).expect(200);
+    const req = await http().post('/requests').set(...bearer(buyer))
+      .send({ title: `Gap ${tag}`, items: [{ name: 'G', qty: 1, estUnitPriceMinor: 300_000 }] }).expect(201);
+    await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
+    const approved = await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approver)).expect(201);
+    expect(approved.body.method_resolved).toBe('OPEN_TENDER'); // fail-safe: not DIRECT
+    await http().post(`/orders/direct/from-request/${req.body.id}`).set(...bearer(buyer)).send({ supplierOrgId: s1Org }).expect(400);
+  });
 });

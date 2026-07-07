@@ -270,7 +270,9 @@ export class RequestsService {
        ORDER BY (category = '*') ASC, min_amount_minor DESC LIMIT 1`,
       [category, total],
     );
-    return rows.length ? rows[0].method : 'DIRECT';
+    // Fail-safe: a spend that falls in a policy gap must go to the MOST competitive method
+    // (open tender), never silently to a no-tender direct purchase.
+    return rows.length ? rows[0].method : 'OPEN_TENDER';
   }
 
   private computeTotal(items: ItemDto[]): number {
