@@ -145,12 +145,20 @@ export class AuctionService {
     const qtyById = new Map<string, number>(eventItems.map((i: any) => [i.id, Number(i.qty)]));
     if (!dto.items?.length) throw new BadRequestException('Bid items required');
     let total = 0;
+    const submitted = new Set<string>();
     for (const it of dto.items) {
       const qty = qtyById.get(it.eventItemId);
       if (qty == null) throw new BadRequestException(`Unknown event item ${it.eventItemId}`);
       if (!Number.isInteger(it.unitPriceMinor) || it.unitPriceMinor < 0)
         throw new BadRequestException('unitPriceMinor must be a non-negative integer');
+      if (submitted.has(it.eventItemId)) throw new BadRequestException(`Duplicate line for item ${it.eventItemId}`);
+      submitted.add(it.eventItemId);
       total += qty * it.unitPriceMinor;
+    }
+    // Responsiveness: an auction bid must price EVERY line item — a partial bid would post an
+    // artificially low total and falsely "win" against complete bids.
+    if (submitted.size !== eventItems.length) {
+      throw new BadRequestException('Bid must price every line item of the auction');
     }
 
     const agg = (await m.query(`SELECT * FROM auction_state($1)`, [eventId]))[0];

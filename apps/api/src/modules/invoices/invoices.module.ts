@@ -44,26 +44,42 @@ export class InvoicesService {
 
     const matchLines: any[] = [];
     let net = 0;
+    let vat = 0;
     let allOk = true;
     for (const it of dto.items) {
       if (!Number.isInteger(it.unitPriceMinor) || it.unitPriceMinor < 0) throw new BadRequestException('unitPriceMinor must be a non-negative integer');
       if (!(Number(it.qty) > 0)) throw new BadRequestException('qty must be positive');
-      const poItem = (await m.query(`SELECT unit_price_minor, qty FROM purchase_order_items WHERE id=$1 AND po_id=$2`, [it.poItemId, poId]))[0];
+      const poItem = (await m.query(`SELECT unit_price_minor, qty, vat_rate_bp FROM purchase_order_items WHERE id=$1 AND po_id=$2`, [it.poItemId, poId]))[0];
       if (!poItem) throw new BadRequestException(`Item ${it.poItemId} is not on this order`);
       const received = Number(
         (await m.query(`SELECT COALESCE(SUM(qty_received),0) AS r FROM goods_receipt_items WHERE po_item_id=$1`, [it.poItemId]))[0].r,
       );
+      // Draw-down: quantities already billed on prior, non-rejected invoices cannot be billed
+      // again — otherwise the same delivery could be invoiced (and paid) twice.
+      const invoiced = Number(
+        (await m.query(
+          `SELECT COALESCE(SUM(ii.qty),0) AS q FROM invoice_items ii
+           JOIN invoices i ON i.id = ii.invoice_id
+           WHERE ii.po_item_id=$1 AND i.status <> 'REJECTED'`,
+          [it.poItemId],
+        ))[0].q,
+      );
+      const billable = received - invoiced;
       const priceOk = it.unitPriceMinor <= Number(poItem.unit_price_minor);
-      const qtyOk = Number(it.qty) <= received; // bill only what was received
+      const qtyOk = Number(it.qty) <= billable; // received, minus what was already invoiced
       if (!priceOk || !qtyOk) allOk = false;
       matchLines.push({
         po_item_id: it.poItemId, price_ok: priceOk, qty_ok: qtyOk,
         invoice_price: it.unitPriceMinor, po_price: Number(poItem.unit_price_minor),
-        invoice_qty: Number(it.qty), received,
+        invoice_qty: Number(it.qty), received, already_invoiced: invoiced, billable,
       });
-      net += Number(it.qty) * it.unitPriceMinor;
+      // Per-line ƏDV from the PO line's own rate (0% / exempt lines carry vat_rate_bp = 0),
+      // not a flat 18% on the whole invoice.
+      const lineNet = Number(it.qty) * it.unitPriceMinor;
+      const rateBp = poItem.vat_rate_bp == null ? VAT_RATE_BP : Number(poItem.vat_rate_bp);
+      net += lineNet;
+      vat += Math.round((lineNet * rateBp) / 10000);
     }
-    const vat = Math.round((net * VAT_RATE_BP) / 10000);
     const gross = net + vat;
     const status: InvoiceStatus = allOk ? 'MATCHED' : 'DISPUTED';
 

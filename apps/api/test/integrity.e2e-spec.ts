@@ -165,4 +165,67 @@ describe('procurement integrity controls (API e2e)', () => {
     await http().post(`/invoices/${inv.body.id}/approve`).set(...bearer(buyer)).expect(400); // no reason
     await http().post(`/invoices/${inv.body.id}/approve`).set(...bearer(buyer)).send({ reason: 'price variance accepted by CFO' }).expect(201);
   });
+
+  it('an incomplete lot bid is non-responsive (400); a full bid is accepted', async () => {
+    const req = await http().post('/requests').set(...bearer(buyer))
+      .send({ title: `Resp ${tag}`, items: [
+        { name: 'A', qty: 1, estUnitPriceMinor: 300_000 },
+        { name: 'B', qty: 1, estUnitPriceMinor: 300_000 }, // 600k → RFQ regardless of policy state
+      ] }).expect(201);
+    await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approver)).expect(201);
+    const ev = await http().post(`/events/from-request/${req.body.id}`).set(...bearer(buyer))
+      .send({ closeAt: new Date(Date.now() + 3600_000).toISOString(), visibility: 'INVITED' }).expect(201);
+    const eid = ev.body.id, items = ev.body.items;
+    await http().post(`/events/${eid}/invite`).set(...bearer(buyer)).send({ supplierOrgId: s1Org }).expect(201);
+    await http().post(`/events/${eid}/publish`).set(...bearer(buyer)).expect(201);
+    // only 1 of the lot's 2 items priced → rejected
+    await http().post(`/events/${eid}/bid`).set(...bearer(s1))
+      .send({ items: [{ eventItemId: items[0].id, unitPriceMinor: 50_000 }] }).expect(400);
+    // full coverage accepted
+    await http().post(`/events/${eid}/bid`).set(...bearer(s1))
+      .send({ items: [
+        { eventItemId: items[0].id, unitPriceMinor: 50_000 },
+        { eventItemId: items[1].id, unitPriceMinor: 50_000 },
+      ] }).expect(201);
+  });
+
+  it('the same delivery cannot be invoiced twice (3-way match draw-down)', async () => {
+    // policy is DIRECT ≤500k from the DISPUTED test; s1 relationship is APPROVED
+    const req = await http().post('/requests').set(...bearer(buyer))
+      .send({ title: `Draw ${tag}`, items: [{ name: 'D', qty: 3, estUnitPriceMinor: 100_000 }] }).expect(201);
+    await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approver)).expect(201);
+    const po = await http().post(`/orders/direct/from-request/${req.body.id}`).set(...bearer(buyer)).send({ supplierOrgId: s1Org }).expect(201);
+    const poId = po.body.id, poItemId = po.body.items[0].id;
+    await http().post(`/orders/${poId}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
+    for (const st of ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED']) await http().post(`/orders/${poId}/status`).set(...bearer(s1)).send({ status: st }).expect(201);
+    await http().post(`/orders/${poId}/receipts`).set(...bearer(buyer)).send({ items: [{ poItemId, qty: 3 }] }).expect(201);
+    const inv1 = await http().post(`/invoices/from-po/${poId}`).set(...bearer(s1)).send({ items: [{ poItemId, qty: 3, unitPriceMinor: 100_000 }] }).expect(201);
+    expect(inv1.body.status).toBe('MATCHED');
+    // re-billing the same 3 units → nothing left billable → DISPUTED
+    const inv2 = await http().post(`/invoices/from-po/${poId}`).set(...bearer(s1)).send({ items: [{ poItemId, qty: 3, unitPriceMinor: 100_000 }] }).expect(201);
+    expect(inv2.body.status).toBe('DISPUTED');
+  });
+
+  it('invoice ƏDV is per-line: a 0% line carries no VAT', async () => {
+    const req = await http().post('/requests').set(...bearer(buyer))
+      .send({ title: `Vat ${tag}`, items: [
+        { name: 'Taxed', qty: 1, estUnitPriceMinor: 100_000, vatRateBp: 1800 },
+        { name: 'Exempt', qty: 1, estUnitPriceMinor: 100_000, vatRateBp: 0 },
+      ] }).expect(201);
+    await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approver)).expect(201);
+    const po = await http().post(`/orders/direct/from-request/${req.body.id}`).set(...bearer(buyer)).send({ supplierOrgId: s1Org }).expect(201);
+    const poId = po.body.id;
+    await http().post(`/orders/${poId}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
+    for (const st of ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED']) await http().post(`/orders/${poId}/status`).set(...bearer(s1)).send({ status: st }).expect(201);
+    await http().post(`/orders/${poId}/receipts`).set(...bearer(buyer))
+      .send({ items: po.body.items.map((i: any) => ({ poItemId: i.id, qty: 1 })) }).expect(201);
+    const inv = await http().post(`/invoices/from-po/${poId}`).set(...bearer(s1))
+      .send({ items: po.body.items.map((i: any) => ({ poItemId: i.id, qty: 1, unitPriceMinor: 100_000 })) }).expect(201);
+    expect(inv.body.status).toBe('MATCHED');
+    expect(Number(inv.body.net_minor)).toBe(200_000);
+    expect(Number(inv.body.vat_minor)).toBe(18_000); // only the taxed line
+  });
 });

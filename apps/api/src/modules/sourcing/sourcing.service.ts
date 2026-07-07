@@ -302,6 +302,26 @@ export class SourcingService {
 
   // ---------- supplier: sealed bid ----------
 
+  // Non-responsive-bid guard: for every lot the bidder priced at least one item of, ALL of that
+  // lot's items must be present. Shared by sealed bids and (single-lot) reverse auctions.
+  assertLotsFullyCovered(eventItems: Array<{ id: string; lot_id: string | null }>, submitted: Set<string>) {
+    const itemsByLot = new Map<string, string[]>();
+    for (const it of eventItems) {
+      const key = String(it.lot_id ?? '_');
+      const list = itemsByLot.get(key) ?? [];
+      list.push(it.id);
+      itemsByLot.set(key, list);
+    }
+    for (const itemIds of itemsByLot.values()) {
+      const touched = itemIds.some((id) => submitted.has(id));
+      if (touched && !itemIds.every((id) => submitted.has(id))) {
+        throw new BadRequestException(
+          'Incomplete lot bid is non-responsive: price every item of a lot, or omit the lot entirely',
+        );
+      }
+    }
+  }
+
   async submitBid(
     eventId: string,
     dto: {
@@ -333,19 +353,26 @@ export class SourcingService {
       if (ev.type === 'RFP' && !proposalText) throw new BadRequestException('RFP requires a technical proposal');
     }
 
-    const eventItems = await m.query(`SELECT id, qty FROM event_items WHERE event_id = $1`, [eventId]);
+    const eventItems = await m.query(`SELECT id, qty, lot_id FROM event_items WHERE event_id = $1`, [eventId]);
     const qtyById = new Map<string, number>(eventItems.map((i: any) => [i.id, Number(i.qty)]));
     let total: number | null = null;
     if (ev.type !== 'RFI') {
       total = 0;
+      const submitted = new Set<string>();
       for (const it of dto.items!) {
         const qty = qtyById.get(it.eventItemId);
         if (qty == null) throw new BadRequestException(`Unknown event item ${it.eventItemId}`);
         if (!Number.isInteger(it.unitPriceMinor) || it.unitPriceMinor < 0) {
           throw new BadRequestException('unitPriceMinor must be a non-negative integer');
         }
+        if (submitted.has(it.eventItemId)) throw new BadRequestException(`Duplicate line for item ${it.eventItemId}`);
+        submitted.add(it.eventItemId);
         total += qty * it.unitPriceMinor; // server-side total — client totals are ignored
       }
+      // Responsiveness (UNCITRAL Art. 43): a bid that touches a lot must price EVERY item of
+      // that lot. Multi-lot — a supplier may omit whole lots, but a partially-priced lot is
+      // non-responsive (its artificially low total would otherwise out-rank complete bids).
+      this.assertLotsFullyCovered(eventItems, submitted);
     }
 
     const payload: SealedBidPayload = {
