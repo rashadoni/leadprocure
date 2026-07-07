@@ -84,4 +84,23 @@ describe('multi-step approval workflow', () => {
     expect(res.body.approvals.every((a: any) => a.status === 'APPROVED')).toBe(true);
     expect(res.body.method_resolved).toBeDefined();
   });
+
+  it('the same person cannot clear two steps of one request (segregation of duties)', async () => {
+    // a second admin, so step 2 can be completed by someone OTHER than whoever did step 1
+    await http().post('/settings/users').set(...bearer(admin))
+      .send({ email: `admin2-${tag}@t.test`, fullName: 'Admin2', password: 'password123', role: 'BUYER_ADMIN' }).expect(201);
+    const admin2 = (await http().post('/auth/login').send({ email: `admin2-${tag}@t.test`, password: 'password123' }).expect(201)).body.accessToken;
+
+    const r = await http().post('/requests').set(...bearer(requester))
+      .send({ title: `SoD chain ${tag}`, items: [{ name: 'M', qty: 1, estUnitPriceMinor: 6_000_000 }] }).expect(201);
+    await http().post(`/requests/${r.body.id}/submit`).set(...bearer(requester)).expect(201);
+    // admin clears step 1 (BUYER_ADMIN satisfies the BUYER_APPROVER role) …
+    const s1 = await http().post(`/requests/${r.body.id}/approve`).set(...bearer(admin)).expect(201);
+    expect(s1.body.status).toBe('SUBMITTED');
+    // … but is blocked from also clearing step 2 of the same request
+    await http().post(`/requests/${r.body.id}/approve`).set(...bearer(admin)).expect(403);
+    // a different admin can
+    const s2 = await http().post(`/requests/${r.body.id}/approve`).set(...bearer(admin2)).expect(201);
+    expect(s2.body.status).toBe('APPROVED');
+  });
 });

@@ -189,6 +189,16 @@ export class RequestsService {
       if (auth.role !== current.approver_role && auth.role !== 'BUYER_ADMIN') {
         throw new BadRequestException(`This step requires role ${current.approver_role}`);
       }
+      // Segregation of duties across the chain: no single person may clear two steps of the
+      // same request (a BUYER_ADMIN can satisfy any step's role, so this is the real guard
+      // that keeps a multi-step chain a genuine four-eyes control).
+      const actedBefore = await m.query(
+        `SELECT 1 FROM approval_steps WHERE request_id=$1 AND acted_by=$2 AND status='APPROVED' LIMIT 1`,
+        [id, auth.sub],
+      );
+      if (actedBefore.length) {
+        throw new ForbiddenException('Segregation of duties: a different approver must act each approval step');
+      }
       await m.query(
         `UPDATE approval_steps SET status='APPROVED', acted_by=$2, acted_at=now() WHERE id=$1`,
         [current.id, auth.sub],
