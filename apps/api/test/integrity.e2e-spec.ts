@@ -268,4 +268,12 @@ describe('procurement integrity controls (API e2e)', () => {
     expect(second.body.ceilingWarning).toBeDefined();
     expect(second.body.ceilingWarning.overByMinor).toBeGreaterThan(0);
   });
+
+  it('concurrent document creation yields distinct numbers (no count(*) race)', async () => {
+    const mk = () => http().post('/requests').set(...bearer(buyer))
+      .send({ title: `Race ${tag}`, items: [{ name: 'r', qty: 1, estUnitPriceMinor: 1000 }] }).expect(201);
+    const results = await Promise.all([mk(), mk(), mk(), mk(), mk()]);
+    const nos = results.map((r) => r.body.request_no);
+    expect(new Set(nos).size).toBe(5); // all five requests got a unique REQ-… number
+  });
 });

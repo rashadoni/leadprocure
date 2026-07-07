@@ -83,8 +83,8 @@ export class InvoicesService {
     const gross = net + vat;
     const status: InvoiceStatus = allOk ? 'MATCHED' : 'DISPUTED';
 
-    const n = await m.query(`SELECT count(*)::int AS n FROM invoices WHERE supplier_org_id=$1`, [auth.org_id]);
-    const invoiceNo = `INV-${new Date().getFullYear()}-${String(n[0].n + 1).padStart(4, '0')}`;
+    const n = await m.query(`SELECT next_document_no($1,'INV') AS n`, [auth.org_id]);
+    const invoiceNo = `INV-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
     const inv = (
       await m.query(
         `INSERT INTO invoices(buyer_org_id, supplier_org_id, po_id, invoice_no, currency, net_minor, vat_minor, gross_minor, status, match, due_date, created_by)

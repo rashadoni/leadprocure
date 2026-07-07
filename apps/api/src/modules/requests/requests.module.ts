@@ -108,8 +108,8 @@ export class RequestsService {
 
   async create(dto: UpsertRequestDto, auth: AccessTokenPayload) {
     const m = this.rc.manager;
-    const countRows = await m.query(`SELECT count(*)::int AS n FROM procurement_requests`);
-    const requestNo = `REQ-${new Date().getFullYear()}-${String(countRows[0].n + 1).padStart(4, '0')}`;
+    const seq = await m.query(`SELECT next_document_no($1,'REQ') AS n`, [auth.org_id]);
+    const requestNo = `REQ-${new Date().getFullYear()}-${String(Number(seq[0].n)).padStart(4, '0')}`;
     const total = this.computeTotal(dto.items);
     const req = (
       await m.query(

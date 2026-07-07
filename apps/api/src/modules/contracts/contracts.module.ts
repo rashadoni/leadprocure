@@ -53,8 +53,8 @@ export class ContractsService {
       [requestId],
     );
     const total = items.reduce((s: number, it: any) => s + Number(it.qty) * Number(it.est_unit_price_minor), 0);
-    const n = await m.query(`SELECT count(*)::int AS n FROM purchase_orders`);
-    const poNo = `PO-${new Date().getFullYear()}-${String(n[0].n + 1).padStart(4, '0')}`;
+    const n = await m.query(`SELECT next_document_no($1,'PO') AS n`, [auth.org_id]);
+    const poNo = `PO-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
     const po = (
       await m.query(
         `INSERT INTO purchase_orders(contract_id, buyer_org_id, supplier_org_id, po_no, status, total_minor, currency, created_by)
@@ -95,8 +95,8 @@ export class ContractsService {
     const dup = await m.query(`SELECT id FROM contracts WHERE award_id = $1`, [awardId]);
     if (dup.length) return this.get(dup[0].id); // idempotent
 
-    const n = await m.query(`SELECT count(*)::int AS n FROM contracts`);
-    const contractNo = `CTR-${new Date().getFullYear()}-${String(n[0].n + 1).padStart(4, '0')}`;
+    const n = await m.query(`SELECT next_document_no($1,'CTR') AS n`, [auth.org_id]);
+    const contractNo = `CTR-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
     const c = (
       await m.query(
         `INSERT INTO contracts(buyer_org_id, supplier_org_id, event_id, award_id, contract_no,
@@ -188,8 +188,8 @@ export class ContractsService {
     );
     const overByMinor = drawn + total - Number(c.total_minor);
 
-    const n = await m.query(`SELECT count(*)::int AS n FROM purchase_orders`);
-    const poNo = `PO-${new Date().getFullYear()}-${String(n[0].n + 1).padStart(4, '0')}`;
+    const n = await m.query(`SELECT next_document_no($1,'PO') AS n`, [auth.org_id]);
+    const poNo = `PO-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
     const po = (
       await m.query(
         `INSERT INTO purchase_orders(contract_id, buyer_org_id, supplier_org_id, po_no, status,
