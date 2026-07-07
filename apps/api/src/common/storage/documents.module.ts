@@ -28,8 +28,9 @@ import { AppConfig } from '../config/config.service';
 // Attachments via S3-compatible storage (MinIO locally). Flow:
 //   1) POST /documents/presign → client PUTs the file straight to storage
 //   2) POST /documents/confirm → row with sha256/mime/size; AV status recorded
-// ClamAV scanning is stubbed behind CLAMAV_ENABLED (SKIPPED when off) — the column
-// and seam exist so a real scanner slots in without schema changes.
+// Antivirus: when CLAMAV_ENABLED, a file lands PENDING and AvScanWorker streams it to
+// clamd (see clamav.service + migration 0022); INFECTED files are refused a download URL.
+// When disabled, uploads are recorded as SKIPPED.
 @Injectable()
 export class DocumentsService {
   private readonly s3: S3Client;
