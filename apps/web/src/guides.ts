@@ -296,4 +296,26 @@ export const GUIDES: Record<string, SectionGuide> = {
       },
     },
   ]),
+  '/supplier/invoices': g('sup-invoices', [
+    {
+      selector: 'table',
+      title: { ru: 'Мои счета', az: 'Qaimələrim', en: 'My invoices' },
+      text: {
+        ru: 'Счета по вашим заказам и их статусы. MATCHED — сверка прошла, счёт утвердят и оплатят; DISPUTED — расхождение. Кнопка UBL выгружает счёт в международном формате.',
+        az: 'Sifarişləriniz üzrə qaimələr və statuslar. MATCHED — yoxlama keçdi, qaimə təsdiqlənib ödəniləcək; DISPUTED — uyğunsuzluq. UBL düyməsi qaiməni beynəlxalq formatda ixrac edir.',
+        en: 'Invoices for your orders and their statuses. MATCHED — reconciled, will be approved and paid; DISPUTED — a discrepancy. The UBL button exports the invoice in an international format.',
+      },
+    },
+  ]),
+  '/supplier/verification': g('sup-verification', [
+    {
+      selector: 'table, .card',
+      title: { ru: 'Верификация (KYC)', az: 'Yoxlama (KYC)', en: 'Verification (KYC)' },
+      text: {
+        ru: 'Загрузите запрошенные документы (VÖEN, лицензии). После одобрения закупщик открывает вам прямые заказы и каталоги без отдельного тендера.',
+        az: 'Tələb olunan sənədləri yükləyin (VÖEN, lisenziyalar). Təsdiqdən sonra alıcı sizə ayrıca tender olmadan birbaşa sifarişləri və kataloqları açır.',
+        en: 'Upload the requested documents (VÖEN, licenses). After approval the buyer unlocks direct orders and catalogs for you without a separate tender.',
+      },
+    },
+  ]),
 };
