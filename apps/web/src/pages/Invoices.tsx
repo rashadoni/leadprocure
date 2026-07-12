@@ -67,7 +67,7 @@ export default function Invoices() {
             ))}
           </tbody>
         </table>
-        {rows.length === 0 && <div className="hint">—{!isBuyer ? ' выставите счёт кнопкой на принятом заказе' : ''}</div>}
+        {rows.length === 0 && <div className="hint">—{!isBuyer ? ` ${t('hint_invoices_empty')}` : ''}</div>}
       </div>
 
       {Object.entries(open).filter(([, v]) => v).map(([id, inv]) => (

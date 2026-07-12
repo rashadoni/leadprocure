@@ -57,7 +57,7 @@ export default function Catalogs() {
             ))}
           </tbody>
         </table>
-        {rows.length === 0 && <div className="hint">— {isBuyer ? 'создайте каталог из контракта (кнопка «Каталог» на контракте)' : ''}</div>}
+        {rows.length === 0 && <div className="hint">— {isBuyer ? t('hint_catalogs_empty') : ''}</div>}
       </div>
 
       {Object.entries(open).filter(([, v]) => v).map(([id, cat]) => (

@@ -105,6 +105,9 @@ const dict: Record<Lang, Record<string, string>> = {
     tip_followups_enroll: 'Cavab verməyən təchizatçılara avtomatik e-mail/WhatsApp xatırlatmaları göndərilir — təklif gələn kimi zəncir dayanır',
     fu_ACTIVE: 'Aktiv', fu_RESPONDED: 'Cavab verdi', fu_STOPPED: 'Dayandırılıb', fu_EXHAUSTED: 'Bitdi', fu_EVENT_CLOSED: 'Tender bağlandı',
     bids: 'Təkliflər', carrier: 'Daşıyıcı', tracking_no: 'İzləmə №', eta: 'Çatma tarixi',
+    auction_start: 'Başlanğıc', hint_verification_empty: 'Təchizatçılar səhifəsindəki 🛡 düyməsi ilə yoxlama işi açın',
+    hint_invoices_empty: 'qəbul edilmiş sifarişdəki düymə ilə qaimə göndərin',
+    hint_catalogs_empty: 'kataloqu müqavilədən yaradın (müqavilədəki «Kataloq» düyməsi)',
   },
   ru: {
     login: 'Войти', logout: 'Выход', email: 'Email', password: 'Пароль', register: 'Регистрация',
@@ -208,6 +211,9 @@ const dict: Record<Lang, Record<string, string>> = {
     tip_followups_enroll: 'Не ответившим поставщикам автоматически уходят e-mail/WhatsApp-напоминания — цепочка останавливается, как только придёт ставка',
     fu_ACTIVE: 'Активна', fu_RESPONDED: 'Ответил', fu_STOPPED: 'Остановлена', fu_EXHAUSTED: 'Исчерпана', fu_EVENT_CLOSED: 'Тендер закрыт',
     bids: 'Ставки', carrier: 'Перевозчик', tracking_no: 'Трек-номер', eta: 'Ожид. прибытие',
+    auction_start: 'Старт', hint_verification_empty: 'откройте кейс кнопкой 🛡 на странице Поставщики',
+    hint_invoices_empty: 'выставите счёт кнопкой на принятом заказе',
+    hint_catalogs_empty: 'создайте каталог из контракта (кнопка «Каталог» на контракте)',
   },
   en: {
     login: 'Log in', logout: 'Log out', email: 'Email', password: 'Password', register: 'Register',
@@ -311,6 +317,9 @@ const dict: Record<Lang, Record<string, string>> = {
     tip_followups_enroll: 'Non-responding suppliers get automatic email/WhatsApp reminders — the chain stops the moment a bid arrives',
     fu_ACTIVE: 'Active', fu_RESPONDED: 'Responded', fu_STOPPED: 'Stopped', fu_EXHAUSTED: 'Exhausted', fu_EVENT_CLOSED: 'Event closed',
     bids: 'Bids', carrier: 'Carrier', tracking_no: 'Tracking №', eta: 'ETA',
+    auction_start: 'Start', hint_verification_empty: 'open a case with the 🛡 button on the Suppliers page',
+    hint_invoices_empty: 'submit an invoice from an accepted order',
+    hint_catalogs_empty: 'create a catalog from a contract (the «Catalog» button on the contract)',
   },
 };
 

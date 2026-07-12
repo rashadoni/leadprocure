@@ -23,7 +23,7 @@ export function AuctionPanel({ eventId, onChanged }: { eventId: string; onChange
     <div className="card" style={{ borderColor: 'var(--accent2)' }}>
       <h3>⚡ {t('auction')} — REVERSE</h3>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-        <div><div className="hint">Start</div><b>{fmtMoney(state.start_price_minor, state.currency)}</b></div>
+        <div><div className="hint">{t('auction_start')}</div><b>{fmtMoney(state.start_price_minor, state.currency)}</b></div>
         <div><div className="hint">{t('best_price')}</div>
           <b style={{ color: 'var(--ok)' }}>{state.best_total_minor != null ? fmtMoney(state.best_total_minor, state.currency) : '—'}</b></div>
         <div><div className="hint">{t('next_max')}</div><b>{fmtMoney(state.next_max_total_minor, state.currency)}</b></div>
