@@ -20,6 +20,14 @@ export default function EventDetail() {
   const load = useCallback(() => api.get(`/events/${id}`).then((r) => setEv(r.data)), [id]);
   useEffect(() => { load(); api.get('/suppliers/directory').then((r) => setSuppliers(r.data)); }, [load]);
 
+  // Follow-up chains: reminder status per invited supplier (email → … → WhatsApp).
+  const [fups, setFups] = useState<any[]>([]);
+  const loadFups = useCallback(
+    () => api.get(`/events/${id}/followups`).then((r) => setFups(r.data)).catch(() => setFups([])),
+    [id],
+  );
+  useEffect(() => { loadFups(); }, [loadFups]);
+
   // Live updates: statuses/counters arrive over WS; amounts only ever via REST.
   useEffect(() => {
     const base = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000') as string;
@@ -142,6 +150,52 @@ export default function EventDetail() {
           </div>
         )}
       </div>
+
+      {(['PUBLISHED', 'OPEN'].includes(ev.status) || fups.length > 0) && (
+        <div className="card">
+          <h3>⏰ {t('followups')}</h3>
+          {['PUBLISHED', 'OPEN'].includes(ev.status) && (
+            <button className="btn small" style={{ marginBottom: 8 }} data-tip={t('tip_followups_enroll')}
+              onClick={async () => {
+                try { await api.post(`/events/${id}/followups`, {}); loadFups(); }
+                catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+              }}>
+              {t('followups_enroll')}
+            </button>
+          )}
+          {fups.length === 0 ? (
+            <p style={{ color: 'var(--muted, #6b7280)' }}>{t('followups_empty')}</p>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>{t('supplier_org')}</th><th>{t('status')}</th><th>{t('followups_step')}</th>
+                  <th>{t('followups_next')}</th><th>{t('followups_sent')}</th><th>{t('actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fups.map((f: any) => (
+                  <tr key={f.id}>
+                    <td>{f.supplier_name}</td>
+                    <td><Badge status={t(`fu_${f.status}`)} cls={f.status === 'RESPONDED' ? 'APPROVED' : f.status === 'ACTIVE' ? 'INVITED' : 'REJECTED'} /></td>
+                    <td>{f.current_step}/{f.total_steps}</td>
+                    <td>{f.next_run_at ? new Date(f.next_run_at).toLocaleString() : '—'}</td>
+                    <td>{f.sent_count}</td>
+                    <td>
+                      {f.status === 'ACTIVE' && (
+                        <button className="btn small ghost" onClick={async () => {
+                          try { await api.post(`/events/${id}/followups/${f.supplier_org_id}/stop`); loadFups(); }
+                          catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+                        }}>{t('followups_stop')}</button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       {ev.format === 'REVERSE' && <AuctionPanel eventId={id!} />}
 

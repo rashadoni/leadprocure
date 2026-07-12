@@ -99,6 +99,11 @@ const dict: Record<Lang, Record<string, string>> = {
     tip_publish: 'Tenderi dərc et — təkliflər qəbulu başlayır', tip_open_bids: 'Möhürlü təklifləri aç (açılış mərasimi)', tip_finalize: 'Auksionu yekunlaşdır',
     tip_ocds: 'Açıq satınalma standartı OCDS ixracı', tip_make_contract: 'Qalibdən müqavilə yarat', tip_add_lot: 'Lot əlavə et',
     tip_score: 'Çəkili qiymətləndirmə: 70% qiymət / 30% müddət', tip_ai: 'Süni intellekt qalib tövsiyəsi', tip_award_bid: 'Bu təchizatçını qalib seç',
+    followups: 'Avtomatik xatırlatmalar', followups_enroll: 'Dəvət olunanlara xatırlatma zənciri qur',
+    followups_empty: 'Xatırlatma zənciri yoxdur', followups_step: 'Addım', followups_next: 'Növbəti göndəriş',
+    followups_sent: 'Göndərilib', followups_stop: 'Dayandır',
+    tip_followups_enroll: 'Cavab verməyən təchizatçılara avtomatik e-mail/WhatsApp xatırlatmaları göndərilir — təklif gələn kimi zəncir dayanır',
+    fu_ACTIVE: 'Aktiv', fu_RESPONDED: 'Cavab verdi', fu_STOPPED: 'Dayandırılıb', fu_EXHAUSTED: 'Bitdi', fu_EVENT_CLOSED: 'Tender bağlandı',
   },
   ru: {
     login: 'Войти', logout: 'Выход', email: 'Email', password: 'Пароль', register: 'Регистрация',
@@ -196,6 +201,11 @@ const dict: Record<Lang, Record<string, string>> = {
     tip_publish: 'Опубликовать тендер — начинается приём ставок', tip_open_bids: 'Вскрыть запечатанные ставки (церемония вскрытия)', tip_finalize: 'Завершить аукцион',
     tip_ocds: 'Экспорт в открытый стандарт закупок OCDS', tip_make_contract: 'Создать контракт из награждения', tip_add_lot: 'Добавить лот',
     tip_score: 'Взвешенная оценка: 70% цена / 30% срок', tip_ai: 'ИИ-рекомендация победителя', tip_award_bid: 'Наградить этого поставщика',
+    followups: 'Авто-напоминания', followups_enroll: 'Запустить цепочку напоминаний приглашённым',
+    followups_empty: 'Цепочек напоминаний нет', followups_step: 'Шаг', followups_next: 'Следующая отправка',
+    followups_sent: 'Отправлено', followups_stop: 'Стоп',
+    tip_followups_enroll: 'Не ответившим поставщикам автоматически уходят e-mail/WhatsApp-напоминания — цепочка останавливается, как только придёт ставка',
+    fu_ACTIVE: 'Активна', fu_RESPONDED: 'Ответил', fu_STOPPED: 'Остановлена', fu_EXHAUSTED: 'Исчерпана', fu_EVENT_CLOSED: 'Тендер закрыт',
   },
   en: {
     login: 'Log in', logout: 'Log out', email: 'Email', password: 'Password', register: 'Register',
@@ -293,6 +303,11 @@ const dict: Record<Lang, Record<string, string>> = {
     tip_publish: 'Publish the tender — bidding opens', tip_open_bids: 'Open the sealed bids (opening ceremony)', tip_finalize: 'Finalize the auction',
     tip_ocds: 'Export to the OCDS open-contracting standard', tip_make_contract: 'Create a contract from the award', tip_add_lot: 'Add a lot',
     tip_score: 'Weighted scoring: 70% price / 30% delivery', tip_ai: 'AI winner recommendation', tip_award_bid: 'Award this supplier',
+    followups: 'Auto follow-ups', followups_enroll: 'Start reminder chain for invited suppliers',
+    followups_empty: 'No follow-up chains', followups_step: 'Step', followups_next: 'Next send',
+    followups_sent: 'Sent', followups_stop: 'Stop',
+    tip_followups_enroll: 'Non-responding suppliers get automatic email/WhatsApp reminders — the chain stops the moment a bid arrives',
+    fu_ACTIVE: 'Active', fu_RESPONDED: 'Responded', fu_STOPPED: 'Stopped', fu_EXHAUSTED: 'Exhausted', fu_EVENT_CLOSED: 'Event closed',
   },
 };
 

@@ -192,6 +192,8 @@ export class AuctionService {
        DO UPDATE SET total_minor=$5, submitted_at=now(), state='OPENED', updated_at=now()`,
       [eventId, auth.org_id, auth.sub, ev.evaluation_currency, total],
     );
+    // Follow-up chains stop on first response (buyer-private row → DEFINER seam).
+    await m.query(`SELECT followup_mark_responded($1, $2)`, [eventId, auth.org_id]);
 
     // Anti-sniping: late bid pushes the deadline out (bounded). Runs through the
     // SECURITY DEFINER seam because the bidder has no UPDATE rights on the event.

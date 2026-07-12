@@ -37,6 +37,7 @@ export const FEATURE_KEYS = [
   'suppliers.verification',
   'p2p.invoicing',
   'controls.budgets',
+  'outreach.followups',
 ] as const;
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
 
@@ -219,6 +220,10 @@ export const AUDIT_ACTIONS = [
   'PO_AMENDMENT_ACCEPTED',
   'PO_AMENDMENT_REJECTED',
   'EVENT_AWARD_CANCELLED',
+  'FOLLOWUP_PLAN_UPDATED',
+  'FOLLOWUP_ENROLLED',
+  'FOLLOWUP_STOPPED',
+  'FOLLOWUP_STEP_SENT',
 ] as const;
 
 // ---------------- Invoices (P2P) ----------------
@@ -240,6 +245,22 @@ export const SHIPMENT_STATUSES = [
   'CREATED', 'PICKED_UP', 'IN_TRANSIT', 'CUSTOMS', 'ARRIVED', 'DELIVERED', 'EXCEPTION',
 ] as const;
 export type ShipmentStatus = (typeof SHIPMENT_STATUSES)[number];
+
+// ---------------- Outreach follow-ups ----------------
+export const FOLLOWUP_CHANNELS = ['EMAIL', 'WHATSAPP'] as const;
+export type FollowupChannel = (typeof FOLLOWUP_CHANNELS)[number];
+export const FOLLOWUP_STATUSES = ['ACTIVE', 'RESPONDED', 'STOPPED', 'EXHAUSTED', 'EVENT_CLOSED'] as const;
+export type FollowupStatus = (typeof FOLLOWUP_STATUSES)[number];
+export interface FollowupStep {
+  channel: FollowupChannel;
+  afterHours: number; // delay from the previous step (or from enrollment for step 0)
+}
+// Default chain when the buyer org has no plan of its own: two email nudges, then WhatsApp.
+export const DEFAULT_FOLLOWUP_STEPS: FollowupStep[] = [
+  { channel: 'EMAIL', afterHours: 24 },
+  { channel: 'EMAIL', afterHours: 48 },
+  { channel: 'WHATSAPP', afterHours: 48 },
+];
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 // ---------------- Auth payloads ----------------

@@ -409,6 +409,9 @@ export class SourcingService {
     await this.audit.record('BID_SUBMITTED', 'bid', bid.id, {
       event_id: eventId, payload_sha256: payloadHash, signature: sig, signer: this.signature.kind,
     });
+    // Follow-up chains stop the moment the supplier responds. The enrollment is a
+    // buyer-private row the supplier can't touch under RLS → DEFINER seam, same tx.
+    await m.query(`SELECT followup_mark_responded($1, $2)`, [eventId, auth.org_id]);
     this.rt(eventId, 'bid.activity', { bid_count_delta: 1 }); // no amounts over the wire
     return { id: bid.id, state: 'SUBMITTED', payload_sha256: payloadHash };
   }
