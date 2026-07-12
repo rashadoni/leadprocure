@@ -312,6 +312,21 @@ export class ContractsService {
       }
     }
     await this.notify.notifyOrg(po.supplier_org_id, 'GRN_RECORDED', { po_id: poId });
+
+    // The receipt changes what is billable → re-run the 3-way match of every still-open
+    // invoice on this PO (DEFINER seam: invoices are supplier-owned rows). An invoice
+    // submitted before the goods arrived flips DISPUTED → MATCHED here instead of
+    // staying disputed forever.
+    const rematched: Array<{ invoice_id: string; invoice_no: string; supplier_org_id: string; old_status: string; new_status: string }> =
+      await m.query(`SELECT * FROM invoice_rematch($1)`, [poId]);
+    for (const r of rematched) {
+      await this.audit.record('INVOICE_STATUS_CHANGED', 'invoice', r.invoice_id, {
+        status: r.new_status, from: r.old_status, via: 'rematch_on_receipt',
+      });
+      await this.notify.notifyOrg(r.supplier_org_id, 'INVOICE_STATUS_CHANGED', {
+        invoice_no: r.invoice_no, status: r.new_status,
+      });
+    }
     return this.getReceipts(poId);
   }
 

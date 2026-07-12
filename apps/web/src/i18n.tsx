@@ -104,6 +104,7 @@ const dict: Record<Lang, Record<string, string>> = {
     followups_sent: 'Göndərilib', followups_stop: 'Dayandır',
     tip_followups_enroll: 'Cavab verməyən təchizatçılara avtomatik e-mail/WhatsApp xatırlatmaları göndərilir — təklif gələn kimi zəncir dayanır',
     fu_ACTIVE: 'Aktiv', fu_RESPONDED: 'Cavab verdi', fu_STOPPED: 'Dayandırılıb', fu_EXHAUSTED: 'Bitdi', fu_EVENT_CLOSED: 'Tender bağlandı',
+    bids: 'Təkliflər', carrier: 'Daşıyıcı', tracking_no: 'İzləmə №', eta: 'Çatma tarixi',
   },
   ru: {
     login: 'Войти', logout: 'Выход', email: 'Email', password: 'Пароль', register: 'Регистрация',
@@ -206,6 +207,7 @@ const dict: Record<Lang, Record<string, string>> = {
     followups_sent: 'Отправлено', followups_stop: 'Стоп',
     tip_followups_enroll: 'Не ответившим поставщикам автоматически уходят e-mail/WhatsApp-напоминания — цепочка останавливается, как только придёт ставка',
     fu_ACTIVE: 'Активна', fu_RESPONDED: 'Ответил', fu_STOPPED: 'Остановлена', fu_EXHAUSTED: 'Исчерпана', fu_EVENT_CLOSED: 'Тендер закрыт',
+    bids: 'Ставки', carrier: 'Перевозчик', tracking_no: 'Трек-номер', eta: 'Ожид. прибытие',
   },
   en: {
     login: 'Log in', logout: 'Log out', email: 'Email', password: 'Password', register: 'Register',
@@ -308,6 +310,7 @@ const dict: Record<Lang, Record<string, string>> = {
     followups_sent: 'Sent', followups_stop: 'Stop',
     tip_followups_enroll: 'Non-responding suppliers get automatic email/WhatsApp reminders — the chain stops the moment a bid arrives',
     fu_ACTIVE: 'Active', fu_RESPONDED: 'Responded', fu_STOPPED: 'Stopped', fu_EXHAUSTED: 'Exhausted', fu_EVENT_CLOSED: 'Event closed',
+    bids: 'Bids', carrier: 'Carrier', tracking_no: 'Tracking №', eta: 'ETA',
   },
 };
 

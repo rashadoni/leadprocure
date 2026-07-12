@@ -267,7 +267,7 @@ export default function EventDetail() {
       )}
 
       <div className="card">
-        <h3>Bids {!ev.amounts_visible && <span className="sealed">🔒 {t('amounts_hidden')}</span>}</h3>
+        <h3>{t('bids')} {!ev.amounts_visible && <span className="sealed">🔒 {t('amounts_hidden')}</span>}</h3>
         <table>
           <thead><tr><th>{t('supplier_org')}</th><th>{t('status')}</th><th>{t('total')}</th><th>{t('delivery_days')}</th><th>{t('score')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
