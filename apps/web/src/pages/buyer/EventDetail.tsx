@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
 import { api, fmtMoney, getToken } from '../../api/client';
 import { useI18n } from '../../i18n';
+import { useAuth } from '../../auth/auth';
 import { AuctionPanel } from '../../components/AuctionPanel';
 import { QnaCard } from '../../components/QnaCard';
 import { BidDocs } from '../../components/BidDocs';
@@ -11,6 +12,7 @@ import { Badge } from '../../components/Badge';
 export default function EventDetail() {
   const { id } = useParams();
   const { t } = useI18n();
+  const { session } = useAuth();
   const [ev, setEv] = useState<any>(null);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [inviteOrg, setInviteOrg] = useState('');
@@ -22,11 +24,18 @@ export default function EventDetail() {
 
   // Follow-up chains: reminder status per invited supplier (email → … → WhatsApp).
   const [fups, setFups] = useState<any[]>([]);
+  const [fuPlan, setFuPlan] = useState<any>(null);
+  const [fuOpenRow, setFuOpenRow] = useState<string | null>(null); // expanded send history
+  const [fuEditing, setFuEditing] = useState(false);
+  const [fuDraft, setFuDraft] = useState<Array<{ channel: string; afterHours: number }>>([]);
   const loadFups = useCallback(
     () => api.get(`/events/${id}/followups`).then((r) => setFups(r.data)).catch(() => setFups([])),
     [id],
   );
-  useEffect(() => { loadFups(); }, [loadFups]);
+  useEffect(() => {
+    loadFups();
+    api.get('/settings/followup-plan').then((r) => setFuPlan(r.data)).catch(() => setFuPlan(null));
+  }, [loadFups]);
 
   // Live updates: statuses/counters arrive over WS; amounts only ever via REST.
   useEffect(() => {
@@ -151,51 +160,172 @@ export default function EventDetail() {
         )}
       </div>
 
-      {(['PUBLISHED', 'OPEN'].includes(ev.status) || fups.length > 0) && (
-        <div className="card">
-          <h3>⏰ {t('followups')}</h3>
-          {['PUBLISHED', 'OPEN'].includes(ev.status) && (
-            <button className="btn small" style={{ marginBottom: 8 }} data-tip={t('tip_followups_enroll')}
-              onClick={async () => {
-                try { await api.post(`/events/${id}/followups`, {}); loadFups(); }
-                catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
-              }}>
-              {t('followups_enroll')}
-            </button>
-          )}
-          {fups.length === 0 ? (
-            <p style={{ color: 'var(--muted, #6b7280)' }}>{t('followups_empty')}</p>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>{t('supplier_org')}</th><th>{t('status')}</th><th>{t('followups_step')}</th>
-                  <th>{t('followups_next')}</th><th>{t('followups_sent')}</th><th>{t('actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fups.map((f: any) => (
-                  <tr key={f.id}>
-                    <td>{f.supplier_name}</td>
-                    <td><Badge status={t(`fu_${f.status}`)} cls={f.status === 'RESPONDED' ? 'APPROVED' : f.status === 'ACTIVE' ? 'INVITED' : 'REJECTED'} /></td>
-                    <td>{f.current_step}/{f.total_steps}</td>
-                    <td>{f.next_run_at ? new Date(f.next_run_at).toLocaleString() : '—'}</td>
-                    <td>{f.sent_count}</td>
-                    <td>
-                      {f.status === 'ACTIVE' && (
-                        <button className="btn small ghost" onClick={async () => {
-                          try { await api.post(`/events/${id}/followups/${f.supplier_org_id}/stop`); loadFups(); }
-                          catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
-                        }}>{t('followups_stop')}</button>
-                      )}
-                    </td>
+      {(['PUBLISHED', 'OPEN'].includes(ev.status) || fups.some((f: any) => f.enrolled)) && (() => {
+        const bidding = ['PUBLISHED', 'OPEN'].includes(ev.status);
+        const isAdmin = session?.org.role === 'BUYER_ADMIN';
+        const chIco = (c: string) => (c === 'WHATSAPP' ? '📱' : '✉️');
+        const chName = (c: string) => t(`ch_${c}`);
+        const hoursTo = (iso: string) => Math.max(1, Math.round((new Date(iso).getTime() - Date.now()) / 3600_000));
+        const planSteps: Array<{ channel: string; afterHours: number }> = fuPlan?.steps ?? [];
+        const eligible = fups.filter((f: any) => !f.enrolled && !f.has_bid);
+        const fuAct = async (fn: () => Promise<unknown>) => {
+          try { await fn(); loadFups(); } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+        };
+        // One visual step chip: icon + channel + when; state colours the chip.
+        const StepChip = ({ s, state, hint }: { s: any; state: 'done' | 'next' | 'todo' | 'off'; hint?: string }) => (
+          <span className="chip" data-tip={hint} style={{
+            marginRight: 4,
+            opacity: state === 'off' ? 0.35 : state === 'todo' ? 0.55 : 1,
+            borderColor: state === 'next' ? 'var(--accent2)' : undefined,
+            background: state === 'done' ? 'var(--ok-bg, #e7f6ec)' : undefined,
+          }}>
+            {state === 'done' ? '✓ ' : ''}{chIco(s.channel)} {state === 'todo' || state === 'next' ? `+${s.afterHours}${t('hours_short')}` : chName(s.channel)}
+          </span>
+        );
+        return (
+          <div className="card">
+            <h3>⏰ {t('followups')}</h3>
+            <p className="hint" style={{ marginTop: 2 }}>{t('followups_desc')}</p>
+
+            {/* The org-wide chain plan, visible before anything is enrolled — so the
+                buyer sees exactly WHAT will happen. Admin edits it inline. */}
+            <div style={{ margin: '8px 0 12px' }}>
+              <span className="hint" style={{ marginRight: 8 }}>{t('followups_plan')}:</span>
+              {!fuEditing && planSteps.map((s, i) => (
+                <span key={i} className="chip" style={{ marginRight: 4 }}
+                  data-tip={`${i + 1}. ${chName(s.channel)} — +${s.afterHours}${t('hours_short')}`}>
+                  {chIco(s.channel)} +{s.afterHours}{t('hours_short')}
+                </span>
+              ))}
+              {!fuEditing && isAdmin && (
+                <button className="btn small ghost" style={{ marginLeft: 6 }}
+                  onClick={() => { setFuDraft(planSteps.map((s) => ({ ...s }))); setFuEditing(true); }}>
+                  ✎ {t('followups_edit')}
+                </button>
+              )}
+              {fuEditing && (
+                <span>
+                  {fuDraft.map((s, i) => (
+                    <span key={i} style={{ marginRight: 8, whiteSpace: 'nowrap' }}>
+                      <select value={s.channel} onChange={(e) => setFuDraft(fuDraft.map((x, j) => j === i ? { ...x, channel: e.target.value } : x))}>
+                        <option value="EMAIL">{t('ch_EMAIL')}</option>
+                        <option value="WHATSAPP">{t('ch_WHATSAPP')}</option>
+                      </select>
+                      {' +'}
+                      <input type="number" min={1} max={2160} value={s.afterHours} style={{ width: 64 }}
+                        onChange={(e) => setFuDraft(fuDraft.map((x, j) => j === i ? { ...x, afterHours: Number(e.target.value) } : x))} />
+                      {t('hours_short')}
+                      <button className="btn small ghost" onClick={() => setFuDraft(fuDraft.filter((_, j) => j !== i))}>✕</button>
+                    </span>
+                  ))}
+                  <button className="btn small ghost" disabled={fuDraft.length >= 10}
+                    onClick={() => setFuDraft([...fuDraft, { channel: 'EMAIL', afterHours: 24 }])}>{t('followups_add_step')}</button>
+                  <button className="btn small" style={{ marginLeft: 6 }} disabled={!fuDraft.length}
+                    onClick={() => fuAct(async () => {
+                      const r = await api.put('/settings/followup-plan', { steps: fuDraft });
+                      setFuPlan(r.data); setFuEditing(false);
+                    })}>{t('followups_save')}</button>
+                  <button className="btn small ghost" onClick={() => setFuEditing(false)}>{t('followups_cancel')}</button>
+                </span>
+              )}
+            </div>
+
+            {fups.length === 0 ? (
+              <p className="hint">{t('followups_none_invited')}</p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>{t('supplier_org')}</th><th>{t('status')}</th>
+                    <th>{t('followups_plan')}</th><th>{t('actions')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
+                </thead>
+                <tbody>
+                  {fups.map((f: any) => {
+                    const steps: any[] = f.enrolled ? (f.steps ?? []) : planSteps;
+                    const msgs: any[] = f.messages ?? [];
+                    const open = fuOpenRow === f.supplier_org_id;
+                    return (
+                      <Fragment key={f.supplier_org_id}>
+                        <tr>
+                          <td>{f.supplier_name}</td>
+                          <td>
+                            {f.has_bid && !f.enrolled && <span className="badge APPROVED">✓ {t('fu_has_bid')}</span>}
+                            {!f.has_bid && !f.enrolled && <span className="badge" style={{ opacity: 0.6 }}>{t('fu_NOT_ENROLLED')}</span>}
+                            {f.enrolled && (
+                              <span className={`badge ${f.status === 'RESPONDED' ? 'APPROVED' : f.status === 'ACTIVE' ? 'INVITED' : 'REJECTED'}`}
+                                data-tip={t(`tip_fu_${f.status}`) !== `tip_fu_${f.status}` ? t(`tip_fu_${f.status}`) : undefined}>
+                                {f.status === 'RESPONDED' ? '✓ ' : ''}{t(`fu_${f.status}`)}
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            {steps.map((s: any, i: number) => {
+                              const done = f.enrolled && i < f.current_step;
+                              const isNext = f.enrolled && f.status === 'ACTIVE' && i === f.current_step;
+                              const off = f.enrolled && f.status !== 'ACTIVE' && i >= f.current_step;
+                              const sentMsg = msgs.find((m: any) => m.step_no === i);
+                              const hint = done && sentMsg
+                                ? `${chName(s.channel)} · ${new Date(sentMsg.at).toLocaleString()} · ${sentMsg.recipient}`
+                                : isNext && f.next_run_at
+                                  ? t('fu_next_in').replace('{h}', String(hoursTo(f.next_run_at)))
+                                  : `${chName(s.channel)} — +${s.afterHours}${t('hours_short')}`;
+                              return <StepChip key={i} s={s} hint={hint} state={done ? 'done' : isNext ? 'next' : off ? 'off' : 'todo'} />;
+                            })}
+                            {f.enrolled && f.status === 'ACTIVE' && f.next_run_at && (
+                              <span className="hint" style={{ marginLeft: 4 }}>
+                                → {t('fu_next_in').replace('{h}', String(hoursTo(f.next_run_at)))}
+                              </span>
+                            )}
+                            {f.sent_count > 0 && (
+                              <button className="btn small ghost" style={{ marginLeft: 6 }}
+                                onClick={() => setFuOpenRow(open ? null : f.supplier_org_id)}>
+                                {t('followups_history')} ({f.sent_count}) {open ? '▴' : '▾'}
+                              </button>
+                            )}
+                          </td>
+                          <td>
+                            {!f.enrolled && !f.has_bid && bidding && (
+                              <button className="btn small" data-tip={t('tip_followups_enroll')}
+                                onClick={() => fuAct(() => api.post(`/events/${id}/followups`, { supplierOrgIds: [f.supplier_org_id] }))}>
+                                ▶ {t('followups_enroll_one')}
+                              </button>
+                            )}
+                            {f.enrolled && f.status === 'ACTIVE' && (
+                              <button className="btn small ghost"
+                                onClick={() => fuAct(() => api.post(`/events/${id}/followups/${f.supplier_org_id}/stop`))}>
+                                ⏹ {t('followups_stop')}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                        {open && (
+                          <tr>
+                            <td colSpan={4} style={{ background: 'var(--card2, #fafafa)' }}>
+                              {msgs.map((m: any, i: number) => (
+                                <div key={i} className="hint" style={{ padding: '2px 0' }}>
+                                  {chIco(m.channel)} {new Date(m.at).toLocaleString()} → {m.recipient} · {m.status}
+                                </div>
+                              ))}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+
+            {bidding && eligible.length > 1 && (
+              <button className="btn small" style={{ marginTop: 8 }} data-tip={t('tip_followups_enroll')}
+                onClick={() => fuAct(() => api.post(`/events/${id}/followups`, {}))}>
+                ▶▶ {t('followups_enroll')} ({eligible.length})
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {ev.format === 'REVERSE' && <AuctionPanel eventId={id!} />}
 

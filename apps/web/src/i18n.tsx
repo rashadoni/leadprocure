@@ -108,6 +108,12 @@ const dict: Record<Lang, Record<string, string>> = {
     auction_start: 'Başlanğıc', hint_verification_empty: 'Təchizatçılar səhifəsindəki 🛡 düyməsi ilə yoxlama işi açın',
     hint_invoices_empty: 'qəbul edilmiş sifarişdəki düymə ilə qaimə göndərin',
     hint_catalogs_empty: 'kataloqu müqavilədən yaradın (müqavilədəki «Kataloq» düyməsi)',
+    followups_desc: 'Hələ təklif verməyən dəvətlilərə aşağıdakı addımlarla avtomatik xatırlatmalar göndərilir. İlk təklifdə zəncir özü dayanır.',
+    followups_plan: 'Xatırlatma planı', followups_edit: 'Dəyiş', followups_save: 'Yadda saxla',
+    followups_cancel: 'Ləğv et', followups_add_step: '+ addım', followups_enroll_one: 'Aktivləşdir',
+    fu_NOT_ENROLLED: 'Zəncirdə deyil', fu_has_bid: 'Artıq cavab verib',
+    fu_next_in: 'növbəti ~{h} saat sonra', followups_none_invited: 'Əvvəlcə təchizatçıları dəvət edin',
+    followups_history: 'Tarixçə', ch_EMAIL: 'E-mail', ch_WHATSAPP: 'WhatsApp', hours_short: 's',
   },
   ru: {
     login: 'Войти', logout: 'Выход', email: 'Email', password: 'Пароль', register: 'Регистрация',
@@ -214,6 +220,12 @@ const dict: Record<Lang, Record<string, string>> = {
     auction_start: 'Старт', hint_verification_empty: 'откройте кейс кнопкой 🛡 на странице Поставщики',
     hint_invoices_empty: 'выставите счёт кнопкой на принятом заказе',
     hint_catalogs_empty: 'создайте каталог из контракта (кнопка «Каталог» на контракте)',
+    followups_desc: 'Приглашённым, кто ещё не подал ставку, автоматически уходят напоминания по шагам ниже. Цепочка сама остановится при первой ставке.',
+    followups_plan: 'План напоминаний', followups_edit: 'Изменить', followups_save: 'Сохранить',
+    followups_cancel: 'Отмена', followups_add_step: '+ шаг', followups_enroll_one: 'Включить',
+    fu_NOT_ENROLLED: 'Не в цепочке', fu_has_bid: 'Уже ответил',
+    fu_next_in: 'след. через ~{h} ч', followups_none_invited: 'Сначала пригласите поставщиков',
+    followups_history: 'История', ch_EMAIL: 'E-mail', ch_WHATSAPP: 'WhatsApp', hours_short: 'ч',
   },
   en: {
     login: 'Log in', logout: 'Log out', email: 'Email', password: 'Password', register: 'Register',
@@ -320,6 +332,12 @@ const dict: Record<Lang, Record<string, string>> = {
     auction_start: 'Start', hint_verification_empty: 'open a case with the 🛡 button on the Suppliers page',
     hint_invoices_empty: 'submit an invoice from an accepted order',
     hint_catalogs_empty: 'create a catalog from a contract (the «Catalog» button on the contract)',
+    followups_desc: 'Invited suppliers who have not bid yet get automatic reminders following the steps below. The chain stops itself on the first bid.',
+    followups_plan: 'Reminder plan', followups_edit: 'Edit', followups_save: 'Save',
+    followups_cancel: 'Cancel', followups_add_step: '+ step', followups_enroll_one: 'Enable',
+    fu_NOT_ENROLLED: 'Not in a chain', fu_has_bid: 'Already responded',
+    fu_next_in: 'next in ~{h} h', followups_none_invited: 'Invite suppliers first',
+    followups_history: 'History', ch_EMAIL: 'E-mail', ch_WHATSAPP: 'WhatsApp', hours_short: 'h',
   },
 };
 

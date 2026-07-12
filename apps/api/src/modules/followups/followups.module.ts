@@ -140,15 +140,28 @@ export class FollowupsService {
     return { ok: true };
   }
 
+  // Every INVITED supplier is a row (not only enrolled ones), so the UI can show the
+  // whole picture at once: already responded / not in a chain yet / chain progress.
+  // Per-row `messages` carries the send history for an expandable timeline.
   async list(eventId: string, _auth: AccessTokenPayload) {
     return this.rc.manager.query(
-      `SELECT fe.id, fe.supplier_org_id, o.legal_name AS supplier_name, fe.status,
-              fe.current_step, jsonb_array_length(fe.steps) AS total_steps, fe.next_run_at,
-              (SELECT count(*)::int FROM followup_messages fm WHERE fm.enrollment_id = fe.id) AS sent_count,
-              (SELECT max(fm.created_at) FROM followup_messages fm WHERE fm.enrollment_id = fe.id) AS last_sent_at
-       FROM followup_enrollments fe
-       JOIN organizations o ON o.id = fe.supplier_org_id
-       WHERE fe.event_id = $1
+      `SELECT ei.supplier_org_id, o.legal_name AS supplier_name,
+              (fe.id IS NOT NULL) AS enrolled,
+              EXISTS(SELECT 1 FROM bids b WHERE b.event_id = ei.event_id
+                       AND b.supplier_org_id = ei.supplier_org_id AND b.state <> 'WITHDRAWN') AS has_bid,
+              fe.status, fe.current_step,
+              COALESCE(jsonb_array_length(fe.steps), 0) AS total_steps,
+              fe.steps, fe.next_run_at,
+              COALESCE((SELECT count(*)::int FROM followup_messages fm WHERE fm.enrollment_id = fe.id), 0) AS sent_count,
+              COALESCE((SELECT jsonb_agg(jsonb_build_object(
+                          'step_no', fm.step_no, 'channel', fm.channel, 'recipient', fm.recipient,
+                          'status', fm.status, 'at', fm.created_at) ORDER BY fm.created_at)
+                        FROM followup_messages fm WHERE fm.enrollment_id = fe.id), '[]'::jsonb) AS messages
+       FROM event_invitations ei
+       JOIN organizations o ON o.id = ei.supplier_org_id
+       LEFT JOIN followup_enrollments fe
+         ON fe.event_id = ei.event_id AND fe.supplier_org_id = ei.supplier_org_id
+       WHERE ei.event_id = $1
        ORDER BY o.legal_name`,
       [eventId],
     );
