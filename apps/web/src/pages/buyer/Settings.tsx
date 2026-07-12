@@ -58,6 +58,18 @@ export default function Settings() {
     ] },
   };
   const setChain = (key: string) => run(() => api.put('/requests/approval-policies', { policies: CHAIN_PRESETS[key].policies }));
+  const ROLE_ICO: Record<string, string> = { BUYER_ADMIN: '👑', BUYER_APPROVER: '🖊', BUYER_USER: '👤' };
+  // Which preset matches the currently saved chain (normalize camel/snake + ordering).
+  const chainSig = (list: any[]) => JSON.stringify(
+    (list ?? [])
+      .map((p: any) => ({
+        min: Number(p.minAmountMinor ?? p.min_amount_minor ?? 0),
+        max: (p.maxAmountMinor ?? p.max_amount_minor) == null ? null : Number(p.maxAmountMinor ?? p.max_amount_minor),
+        steps: (p.steps ?? []).slice().sort((a: any, b: any) => a.order - b.order).map((s: any) => s.role),
+      }))
+      .sort((a, b) => a.min - b.min),
+  );
+  const activeChainKey = Object.entries(CHAIN_PRESETS).find(([, pr]) => chainSig(pr.policies) === chainSig(approvals))?.[0];
 
   const addUser = (e: FormEvent) => {
     e.preventDefault();
@@ -244,29 +256,56 @@ export default function Settings() {
       </div>
 
       <div className="card">
-        <h3>{t('approval_chain')}</h3>
-        <div className="hint" style={{ marginBottom: 10 }}>{t('chain_explain')}</div>
+        <h3>🖊 {t('approval_chain')}</h3>
+        <div className="hint" style={{ marginBottom: 4 }}>{t('chain_explain')}</div>
+        <div className="hint" style={{ marginBottom: 10 }}>🛡 {t('chain_sod_note')}</div>
+
         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>{t('chain_current')}</div>
-        {approvals.length === 0 && <div>{t('chain_none')}</div>}
+        {approvals.length === 0 && <div style={{ marginBottom: 8 }}>{t('chain_none')}</div>}
         {approvals
           .slice()
           .sort((a: any, b: any) => Number(a.min_amount_minor) - Number(b.min_amount_minor))
           .map((p) => (
             <div key={p.id} style={{ padding: '6px 0', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <b>{fmtMoney(p.min_amount_minor)} – {p.max_amount_minor ? fmtMoney(p.max_amount_minor) : '∞'}</b>
-              <span style={{ color: 'var(--muted)' }}>→</span>
-              {(p.steps ?? []).sort((a: any, b: any) => a.order - b.order).map((s: any, i: number) => (
-                <span key={i} className="badge INVITED">{i + 1}. {roleLabel(s.role)}</span>
+              <span style={{ color: 'var(--muted)' }}>:</span>
+              {(p.steps ?? []).sort((a: any, b: any) => a.order - b.order).map((s: any, i: number, arr: any[]) => (
+                <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <span className="badge INVITED">{ROLE_ICO[s.role] ?? '👤'} {i + 1} · {roleLabel(s.role)}</span>
+                  {i < arr.length - 1 && <span style={{ color: 'var(--muted)' }}>→</span>}
+                </span>
               ))}
             </div>
           ))}
+
         {isAdmin && (
           <div style={{ marginTop: 14 }}>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>{t('chain_presets')}</div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {Object.entries(CHAIN_PRESETS).map(([key, preset]) => (
-                <button key={key} className="btn small ghost" onClick={() => setChain(key)}>{preset.label}</button>
-              ))}
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {Object.entries(CHAIN_PRESETS).map(([key, preset]) => {
+                const active = activeChainKey === key;
+                return (
+                  <div key={key} role="button" tabIndex={0}
+                    onClick={() => !active && setChain(key)}
+                    onKeyDown={(e) => e.key === 'Enter' && !active && setChain(key)}
+                    style={{
+                      cursor: active ? 'default' : 'pointer', minWidth: 220, flex: '1 1 220px', maxWidth: 340,
+                      border: `2px solid ${active ? 'var(--accent, #2f7050)' : '#e2e6ea'}`,
+                      background: active ? '#f2faf5' : '#fff', borderRadius: 10, padding: '10px 12px',
+                    }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                      {preset.label} {active && <span className="badge APPROVED" style={{ marginLeft: 4 }}>✓ {t('chain_active')}</span>}
+                    </div>
+                    {preset.policies.length === 0 && <div className="hint">{t('chain_p0_desc')}</div>}
+                    {preset.policies.map((b: any, i: number) => (
+                      <div key={i} className="hint" style={{ padding: '2px 0' }}>
+                        {fmtMoney(b.minAmountMinor)} – {b.maxAmountMinor ? fmtMoney(b.maxAmountMinor) : '∞'}:{' '}
+                        {b.steps.map((s: any) => `${ROLE_ICO[s.role] ?? '👤'} ${roleLabel(s.role)}`).join(' → ')}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

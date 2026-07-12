@@ -119,6 +119,8 @@ const dict: Record<Lang, Record<string, string>> = {
     mp_empty: 'Siyasət qurulmayıb — bütün sifarişlər üçün metod təyin olunmur',
     mp_empty_admin: 'Siyasət qurulmayıb — «Dəyiş» düyməsi ilə aralıqları təyin edin',
     mt_DIRECT: 'Birbaşa sifariş', mt_RFQ: 'Qapalı tender (RFQ)', mt_OPEN_TENDER: 'Açıq tender',
+    chain_sod_note: 'Bir nəfər eyni sifarişin iki addımını bağlaya bilməz, müəllif isə öz sifarişini təsdiqləyə bilməz (səlahiyyətlərin bölünməsi).',
+    chain_active: 'Aktiv', chain_p0_desc: 'İstənilən təsdiqləyən bir kliklə təsdiqləyir — kiçik komandalar üçün.',
   },
   ru: {
     login: 'Войти', logout: 'Выход', email: 'Email', password: 'Пароль', register: 'Регистрация',
@@ -236,6 +238,8 @@ const dict: Record<Lang, Record<string, string>> = {
     mp_empty: 'Политика не настроена — метод заявкам не проставляется',
     mp_empty_admin: 'Политика не настроена — задайте диапазоны кнопкой «Изменить»',
     mt_DIRECT: 'Прямой заказ', mt_RFQ: 'Закрытый тендер (RFQ)', mt_OPEN_TENDER: 'Открытый тендер',
+    chain_sod_note: 'Один человек не может закрыть два шага одной заявки, а автор не может согласовать свою собственную (разделение полномочий).',
+    chain_active: 'Активна', chain_p0_desc: 'Любой согласующий утверждает в один клик — для маленьких команд.',
   },
   en: {
     login: 'Log in', logout: 'Log out', email: 'Email', password: 'Password', register: 'Register',
@@ -353,6 +357,8 @@ const dict: Record<Lang, Record<string, string>> = {
     mp_empty: 'No policy configured — requests get no method',
     mp_empty_admin: 'No policy configured — set the bands via «Edit»',
     mt_DIRECT: 'Direct order', mt_RFQ: 'Sealed tender (RFQ)', mt_OPEN_TENDER: 'Open tender',
+    chain_sod_note: 'No single person may clear two steps of one request, and the author cannot approve their own (segregation of duties).',
+    chain_active: 'Active', chain_p0_desc: 'Any approver clears it in one click — for small teams.',
   },
 };
 
