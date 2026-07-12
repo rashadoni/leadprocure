@@ -114,6 +114,11 @@ const dict: Record<Lang, Record<string, string>> = {
     fu_NOT_ENROLLED: 'Zəncirdə deyil', fu_has_bid: 'Artıq cavab verib',
     fu_next_in: 'növbəti ~{h} saat sonra', followups_none_invited: 'Əvvəlcə təchizatçıları dəvət edin',
     followups_history: 'Tarixçə', ch_EMAIL: 'E-mail', ch_WHATSAPP: 'WhatsApp', hours_short: 's',
+    method_policy_desc: 'Sifariş təsdiqlənən kimi satınalma metodu bu cədvəllə avtomatik təyin olunur: hansı məbləğə qədər birbaşa sifariş, hansından tender. Sifarişi yaradan metodu seçə bilməz.',
+    mp_all_categories: 'Bütün kateqoriyalar', mp_add_band: '+ aralıq',
+    mp_empty: 'Siyasət qurulmayıb — bütün sifarişlər üçün metod təyin olunmur',
+    mp_empty_admin: 'Siyasət qurulmayıb — «Dəyiş» düyməsi ilə aralıqları təyin edin',
+    mt_DIRECT: 'Birbaşa sifariş', mt_RFQ: 'Qapalı tender (RFQ)', mt_OPEN_TENDER: 'Açıq tender',
   },
   ru: {
     login: 'Войти', logout: 'Выход', email: 'Email', password: 'Пароль', register: 'Регистрация',
@@ -226,6 +231,11 @@ const dict: Record<Lang, Record<string, string>> = {
     fu_NOT_ENROLLED: 'Не в цепочке', fu_has_bid: 'Уже ответил',
     fu_next_in: 'след. через ~{h} ч', followups_none_invited: 'Сначала пригласите поставщиков',
     followups_history: 'История', ch_EMAIL: 'E-mail', ch_WHATSAPP: 'WhatsApp', hours_short: 'ч',
+    method_policy_desc: 'Как только заявку утверждают, метод закупки проставляется автоматически по этой шкале: до какой суммы — прямой заказ, с какой — тендер. Автор заявки выбрать метод не может.',
+    mp_all_categories: 'Все категории', mp_add_band: '+ диапазон',
+    mp_empty: 'Политика не настроена — метод заявкам не проставляется',
+    mp_empty_admin: 'Политика не настроена — задайте диапазоны кнопкой «Изменить»',
+    mt_DIRECT: 'Прямой заказ', mt_RFQ: 'Закрытый тендер (RFQ)', mt_OPEN_TENDER: 'Открытый тендер',
   },
   en: {
     login: 'Log in', logout: 'Log out', email: 'Email', password: 'Password', register: 'Register',
@@ -338,6 +348,11 @@ const dict: Record<Lang, Record<string, string>> = {
     fu_NOT_ENROLLED: 'Not in a chain', fu_has_bid: 'Already responded',
     fu_next_in: 'next in ~{h} h', followups_none_invited: 'Invite suppliers first',
     followups_history: 'History', ch_EMAIL: 'E-mail', ch_WHATSAPP: 'WhatsApp', hours_short: 'h',
+    method_policy_desc: 'The moment a request is approved, its procurement method is set automatically from this scale: up to which amount — a direct order, from which — a tender. The requester cannot pick the method.',
+    mp_all_categories: 'All categories', mp_add_band: '+ band',
+    mp_empty: 'No policy configured — requests get no method',
+    mp_empty_admin: 'No policy configured — set the bands via «Edit»',
+    mt_DIRECT: 'Direct order', mt_RFQ: 'Sealed tender (RFQ)', mt_OPEN_TENDER: 'Open tender',
   },
 };
 
