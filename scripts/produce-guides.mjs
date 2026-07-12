@@ -197,6 +197,12 @@ const NAV = {
   furnitureTender: { ru: 'офисная мебель', az: 'ofis mebeli', en: 'office furniture' },
   fuelTender: { ru: 'дизельное топливо', az: 'dizel yanacağı', en: 'diesel fuel' },
 };
+// Localized button captions the scenarios click (t() keys from apps/web/src/i18n.tsx).
+const BTN = {
+  invite: { ru: 'Пригласить', az: 'Dəvət et', en: 'Invite' },
+  cancel: { ru: 'Отмена', az: 'Ləğv et', en: 'Cancel' },
+  bids: { ru: 'Ставки', az: 'Təkliflər', en: 'Bids' },
+};
 const API_URL = process.env.DEMO_API ?? 'http://localhost:3000';
 
 // ---------------- scenes: {ru,az,en} narration + camera action ----------------
@@ -248,6 +254,13 @@ const SECTIONS = {
         await hoverTip(p, 'button:has-text("RFP")');
         await hoverTip(p, 'button:has-text("RFI")');
       } },
+    { ru: 'Кто решает, будет тендер или прямой заказ? Не автор заявки — колонку «метод» заполняет система в момент утверждения, по политике организации: до какой суммы прямой заказ, с какой — тендер. Настроить шкалу администратор может по ссылке с весами прямо отсюда — так исключаются закупки в обход конкуренции.',
+      az: 'Tender, yoxsa birbaşa sifariş olacağını kim həll edir? Sifarişin müəllifi yox — «metod» sütununu sistem təsdiq anında doldurur, təşkilatın siyasətinə görə: hansı məbləğə qədər birbaşa sifariş, hansından tender. Şkalanı administrator elə buradakı tərəzili keçidlə tənzimləyə bilər — beləcə rəqabətdən yan keçən satınalmalar istisna olunur.',
+      en: 'Who decides between a tender and a direct order? Not the requester — the method column is filled by the system at approval time, from the organisation’s policy: up to which amount a direct order, from which a tender. The admin tunes the scale via the scales link right here — which rules out purchases that dodge competition.',
+      do: async (p) => {
+        await hoverTip(p, 'a:has-text("⚖️")', 1600);
+        await scrollTo(p, 'table');
+      } },
   ]},
   'buyer-events': { role: 'buyer', path: '/buyer/events', scenes: [
     { ru: 'Раздел «Тендеры». Все процедуры со статусами — наведите на статус, и он объяснит себя — и количество поданных ставок по каждой.',
@@ -264,7 +277,48 @@ const SECTIONS = {
     { ru: 'Ставки. До вскрытия закупщик видит только факт участия — суммы зашифрованы. После вскрытия появляются цены, сроки, взвешенная оценка и награждение. Здесь победил поставщик со ставкой ниже оценки — экономия видна сразу.',
       az: 'Təkliflər. Açılışa qədər alıcı yalnız iştirak faktını görür — məbləğlər şifrələnib. Açılışdan sonra qiymətlər, müddətlər, çəkili qiymətləndirmə və qalib seçimi görünür. Burada təxmindən aşağı təkliflə təchizatçı qalib gəldi — qənaət dərhal görünür.',
       en: 'The bids. Before opening, the buyer sees only that a supplier took part — the amounts are encrypted. After opening come the prices, lead times, the weighted score and the award. Here the winner bid below the estimate — the saving is visible at once.',
-      do: async (p) => { await scrollTo(p, 'h3:has-text("Bids")'); await slowScroll(p, 3); } },
+      do: async (p, lang) => { await scrollTo(p, `h3:has-text("${BTN.bids[lang]}")`); await slowScroll(p, 3); } },
+    { ru: 'А теперь тендер, который идёт прямо сейчас — офисная мебель. Здесь работает новая функция: автоматические напоминания поставщикам.',
+      az: 'İndi isə hazırda gedən tender — ofis mebeli. Burada yeni funksiya işləyir: təchizatçılara avtomatik xatırlatmalar.',
+      en: 'And now a tender that is running right now — office furniture. This is where a new feature works: automatic supplier reminders.',
+      do: async (p, lang) => {
+        await p.goto(`${BASE}/buyer/events`);
+        await p.waitForSelector('h1', { timeout: 15000 });
+        await injectCursor(p);
+        await clickAt(p, `a:has-text("${NAV.furnitureTender[lang]}")`, 1400);
+        await p.waitForSelector('h1', { timeout: 15000 });
+        await injectCursor(p);
+      } },
+    { ru: 'Карточка «Авто-напоминания». План виден заранее: письмо через сутки, ещё одно через двое, затем ватсап. Приглашённые без ставки получают напоминания сами — вам не нужно никого дёргать. Как только поставщик подаёт ставку, его цепочка мгновенно останавливается.',
+      az: 'Avtomatik xatırlatmalar kartı. Plan əvvəlcədən görünür: bir gündən sonra məktub, iki gündən sonra daha biri, sonra vatsap. Təklif verməyən dəvətlilər xatırlatmaları özləri alır — heç kimi narahat etməyə ehtiyac yoxdur. Təchizatçı təklif verən kimi onun zənciri dərhal dayanır.',
+      en: 'The auto follow-ups card. The plan is visible up front: an email after a day, another after two, then WhatsApp. Invited suppliers who haven’t bid get reminded automatically — you chase no one. The moment a supplier bids, their chain stops instantly.',
+      do: async (p) => {
+        await scrollTo(p, 'h3:has-text("⏰")');
+        const chips = p.locator('.chip');
+        const n = Math.min(await chips.count(), 3);
+        for (let i = 0; i < n; i++) await moveToLoc(p, chips.nth(i), 800);
+      } },
+    { ru: 'Покажем в деле: приглашаем второго поставщика и включаем ему цепочку одной кнопкой. Статус сразу «активна», рядом — когда уйдёт первое письмо. Кнопка «стоп» в любой момент останавливает напоминания вручную.',
+      az: 'Gəlin əməldə göstərək: ikinci təchizatçını dəvət edib bir düymə ilə zəncirini aktivləşdiririk. Status dərhal «aktiv», yanında ilk məktubun nə vaxt gedəcəyi görünür. «Dayandır» düyməsi xatırlatmaları istənilən an əl ilə dayandırır.',
+      en: 'Let’s see it live: we invite the second supplier and enable their chain with one button. The status turns active at once, with the time of the first email next to it. The stop button halts the reminders manually at any moment.',
+      do: async (p, lang) => {
+        // invite Baku Metal if the dropdown offers it, then enable their chain
+        const sel = p.locator('select').first();
+        if (await sel.count()) {
+          const opt = sel.locator('option', { hasText: 'Baku Metal' });
+          if (await opt.count()) {
+            await moveToLoc(p, sel, 500);
+            await sel.selectOption({ label: (await opt.first().textContent()) ?? 'Baku Metal ASC' }).catch(() => {});
+            await clickAt(p, `button:has-text("${BTN.invite[lang]}")`, 1200);
+          }
+        }
+        const enable = p.locator('button:has-text("▶")').first();
+        if (await enable.count()) await clickAt(p, enable, 1400);
+        const badge = p.locator('h3:has-text("⏰")').locator('..').locator('.badge').first();
+        if (await badge.count()) await moveToLoc(p, badge, 900);
+        const stop = p.locator('button:has-text("⏹")').first();
+        if (await stop.count()) await moveToLoc(p, stop, 1100); // show it — never click
+      } },
   ]},
   'buyer-contracts': { role: 'buyer', path: '/buyer/contracts', scenes: [
     { ru: 'Контракты и заказы. Контракт создаётся из награждённого тендера одним нажатием и фиксирует цены победителя.',
@@ -283,10 +337,14 @@ const SECTIONS = {
     { ru: 'Счета. Поставщик выставляет счёт по заказу, и система автоматически проводит трёхстороннюю сверку: что заказано, что принято по факту и что в счёте.',
       az: 'Qaimələr. Təchizatçı sifariş üzrə qaimə verir və sistem avtomatik üçtərəfli yoxlama aparır: nə sifariş olunub, faktiki nə qəbul edilib və qaimədə nə var.',
       en: 'Invoices. The supplier issues an invoice against the order, and the system runs an automatic three-way match: what was ordered, what was actually received and what’s on the invoice.' },
-    { ru: 'Совпало — статус MATCHED: счёт можно утвердить и оплатить. Расхождение — DISPUTED, с деталями по каждой строке. Кнопка UBL выгружает счёт в международном формате.',
-      az: 'Uyğun gəldi — MATCHED statusu: qaiməni təsdiqləyib ödəmək olar. Uyğunsuzluq — DISPUTED, hər sətir üzrə təfərrüatla. UBL düyməsi qaiməni beynəlxalq formatda ixrac edir.',
-      en: 'A match gives the MATCHED status: the invoice can be approved and paid. A discrepancy is DISPUTED, with details per line. The UBL button exports the invoice in an international format.',
-      do: (p) => slowScroll(p, 4) },
+    { ru: 'Совпало — счёт помечается «сошёлся»: его можно утвердить и оплатить. Расхождение — «спорный», с деталями по каждой строке. Наведите на статус — подсказка объяснит, что именно не сошлось.',
+      az: 'Uyğun gəldi — qaimə «uyğundur» kimi işarələnir: onu təsdiqləyib ödəmək olar. Uyğunsuzluq — «mübahisəli», hər sətir üzrə təfərrüatla. Statusun üzərinə gətirin — ipucu nəyin uyğun gəlmədiyini izah edəcək.',
+      en: 'A match marks the invoice as matched: it can be approved and paid. A discrepancy makes it disputed, with per-line details. Hover the status — the tooltip explains exactly what didn’t add up.',
+      do: async (p) => { await hoverTip(p, '.badge[data-tip]', 1600); await slowScroll(p, 2); } },
+    { ru: 'Важно: сверка живая. Если поставщик выставил счёт раньше, чем товар доехал, счёт временно спорный — но как только вы оформите приёмку, система пересчитает сверку сама и счёт станет «сошёлся» без единого клика. Ручное утверждение с обоснованием остаётся только для настоящих исключений. Кнопка UBL выгружает счёт в международном формате.',
+      az: 'Vacib: yoxlama canlıdır. Təchizatçı qaiməni mal çatmamışdan əvvəl veribsə, qaimə müvəqqəti mübahisəlidir — amma qəbulu rəsmiləşdirən kimi sistem yoxlamanı özü yenidən hesablayır və qaimə bir klik olmadan «uyğundur» olur. Əsaslandırma ilə əl təsdiqi yalnız əsl istisnalar üçün qalır. UBL düyməsi qaiməni beynəlxalq formatda ixrac edir.',
+      en: 'Importantly, the match is live. If the supplier invoices before the goods arrive, the invoice is disputed only temporarily — the moment you record the receipt, the system re-runs the match by itself and the invoice turns matched without a single click. Manual approval with a justification remains for genuine exceptions only. The UBL button exports the invoice in the international format.',
+      do: (p) => slowScroll(p, 3) },
   ]},
   'buyer-catalogs': { role: 'buyer', path: '/buyer/catalogs', scenes: [
     { ru: 'Каталоги — согласованные прайс-листы поставщиков, обычно созданные из выигранного тендера.',
@@ -346,6 +404,45 @@ const SECTIONS = {
       az: 'Siz hər sənədi yoxlayıb qərar verirsiniz. Təsdiq təchizatçının reyestrdəki statusunu avtomatik yüksəldir.',
       en: 'You review each document and make a decision. Approval automatically raises the supplier’s status in the registry.',
       do: (p) => slowScroll(p, 3) },
+  ]},
+  'buyer-settings': { role: 'buyer', path: '/buyer/settings', scenes: [
+    { ru: 'Настройки — центр управления организацией. Начнём с пользователей: администратор управляет всем, согласующий утверждает заявки, обычный пользователь их создаёт. Роль меняется прямо в таблице, а новый сотрудник добавляется формой ниже.',
+      az: 'Parametrlər — təşkilatın idarəetmə mərkəzi. İstifadəçilərdən başlayaq: administrator hər şeyi idarə edir, təsdiqləyən sifarişləri təsdiqləyir, adi istifadəçi onları yaradır. Rol cədvəldə dəyişdirilir, yeni əməkdaş isə aşağıdakı forma ilə əlavə olunur.',
+      en: 'Settings — the organisation’s control centre. Starting with users: the admin manages everything, the approver clears requests, a regular user creates them. Roles change right in the table, and a new colleague is added with the form below.',
+      do: async (p) => { await moveTo(p, 'table select, table .badge', 900); await slowScroll(p, 2); } },
+    { ru: 'Справочник категорий. Единый список нужен, чтобы «АйТи» и «IT» не жили раздельно: по категории срабатывает политика метода, считаются бюджеты и строится аналитика.',
+      az: 'Kateqoriya sorğu kitabçası. Vahid siyahı ona görə lazımdır ki, «AyTi» və «IT» ayrı yaşamasın: kateqoriyaya görə metod siyasəti işə düşür, büdcələr hesablanır və analitika qurulur.',
+      en: 'The category directory. One list keeps “IT” and “I.T.” from living apart: the category drives the method policy, the budgets and the analytics.',
+      do: async (p) => { await scrollTo(p, '.card:nth-of-type(2)'); await moveTo(p, '.card:nth-of-type(2) .badge', 900); } },
+    { ru: 'Политика метода закупки — та самая шкала, по которой система сама решает судьбу утверждённой заявки. Зелёная зона — мелкие суммы, прямой заказ без тендера. Дальше — закрытый тендер с запечатанными ценами. Автор заявки метод не выбирает — это защита от закупок в обход конкуренции.',
+      az: 'Satınalma metodu siyasəti — sistemin təsdiqlənmiş sifarişin taleyini özü həll etdiyi həmin şkala. Yaşıl zona — kiçik məbləğlər, tendersiz birbaşa sifariş. Sonra — möhürlü qiymətlərlə qapalı tender. Sifarişin müəllifi metodu seçmir — bu, rəqabətdən yan keçən satınalmalardan qorunmadır.',
+      en: 'The procurement-method policy — the very scale by which the system decides an approved request’s fate on its own. The green zone is small amounts: a direct order, no tender. Beyond it — a sealed tender with encrypted prices. The requester never picks the method — that guards against dodging competition.',
+      do: async (p) => {
+        await scrollTo(p, 'h3:has-text("⚖️")');
+        const segs = p.locator('.card:nth-of-type(3) > div > div > div');
+        const n = Math.min(await segs.count(), 2);
+        for (let i = 0; i < n; i++) await moveToLoc(p, segs.nth(i), 1000);
+      } },
+    { ru: 'Шкала полностью редактируется: нажимаем «изменить» — и каждый диапазон открыт для правки. Категория, суммы в манатах, метод из списка; кнопкой «плюс диапазон» добавляются новые полосы — например, отдельное правило для строительства. Сейчас ничего не сохраняем — «отмена».',
+      az: 'Şkala tam redaktə olunur: «dəyiş» düyməsini basırıq — və hər aralıq düzəlişə açıqdır. Kateqoriya, manatla məbləğlər, siyahıdan metod; «aralıq əlavə et» düyməsi ilə yeni zolaqlar əlavə olunur — məsələn, tikinti üçün ayrıca qayda. İndi heç nə saxlamırıq — «ləğv et».',
+      en: 'The scale is fully editable: we click Edit — and every band opens up. Category, amounts in manats, the method from a list; the add-band button creates new bands — say, a separate rule for construction. We save nothing now — Cancel.',
+      do: async (p, lang) => {
+        await clickAt(p, 'button:has-text("✎")', 1100);
+        const inp = p.locator('.card:nth-of-type(3) input[type=number]').first();
+        if (await inp.count()) await moveToLoc(p, inp, 900);
+        const sel = p.locator('.card:nth-of-type(3) select').first();
+        if (await sel.count()) await moveToLoc(p, sel, 900);
+        await clickAt(p, `.card:nth-of-type(3) button:has-text("${BTN.cancel[lang]}")`, 800);
+      } },
+    { ru: 'И цепочка согласования: сколько подписей нужно заявке в зависимости от суммы. Готовые схемы показаны карточками, активная отмечена галочкой; переключение — один клик. Один человек не может закрыть два шага одной заявки, а автор — согласовать свою собственную: разделение полномочий встроено в саму систему.',
+      az: 'Və təsdiq zənciri: məbləğdən asılı olaraq sifarişə neçə imza lazımdır. Hazır sxemlər kartlarla göstərilib, aktiv olanı işarələnib; keçid — bir klik. Bir nəfər eyni sifarişin iki addımını bağlaya bilməz, müəllif isə özününkünü təsdiqləyə bilməz: səlahiyyətlərin bölünməsi sistemin özünə hörülüb.',
+      en: 'And the approval chain: how many sign-offs a request needs depending on its amount. The presets are cards, the active one is ticked; switching is one click. No single person can clear two steps of one request, and the author can never approve their own: segregation of duties is built into the system itself.',
+      do: async (p) => {
+        await scrollTo(p, 'h3:has-text("🖊")');
+        const cards = p.locator('[role=button]');
+        const n = Math.min(await cards.count(), 3);
+        for (let i = 0; i < n; i++) await moveToLoc(p, cards.nth(i), 950);
+      } },
   ]},
   'sup-dashboard': { role: 'sup', path: '/supplier/dashboard', scenes: [
     { ru: 'Рабочий стол поставщика. Открытые тендеры, мои ставки, выигранные контракты, заказы в работе и счета — всё на одном экране.',
