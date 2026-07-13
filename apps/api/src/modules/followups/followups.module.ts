@@ -230,9 +230,18 @@ export class FollowupsScheduler {
           await log('-', 'SKIPPED', 'no phone on supplier org');
         } else {
           try {
-            if (cfg?.phoneNumberId) await sendWhatsappVia(cfg, w.phone, text);
+            let wamid: string | undefined;
+            if (cfg?.phoneNumberId) wamid = await sendWhatsappVia(cfg, w.phone, text);
             else await this.wa.send(w.phone, text);
-            await log(w.phone, 'SENT');
+            // Log with the provider message id so the delivery-status webhook can
+            // later flip SENT → DELIVERED → READ for this exact reminder.
+            if (wamid) {
+              await this.ds.query(`SELECT followup_log_message_ex($1, $2, $3, $4, $5, $6, $7)`, [
+                w.enrollment_id, w.step_no, w.channel, w.phone, 'SENT', null, wamid,
+              ]).catch((e) => this.logger.warn(`log_ex failed: ${e?.message}`));
+            } else {
+              await log(w.phone, 'SENT');
+            }
           } catch (e: any) {
             await log(w.phone, 'FAILED', e?.message?.slice(0, 300));
           }

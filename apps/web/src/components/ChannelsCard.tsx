@@ -24,9 +24,20 @@ export function ChannelsCard({ isAdmin }: { isAdmin: boolean }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, any>>({});
   const [busy, setBusy] = useState(false);
+  const [templates, setTemplates] = useState<Array<{ name: string; language: string }> | null>(null);
+  // Public webhook URL the buyer pastes into Meta (callback + verify token).
+  const webhookUrl = `${(import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000')}/channels/whatsapp/webhook`;
 
   const load = useCallback(() => api.get('/channels').then((r) => setRows(r.data)).catch(() => setRows([])), []);
   useEffect(() => { load(); }, [load]);
+
+  // Pull the org's APPROVED Meta templates into the dropdown (needs WABA + token saved).
+  const syncTemplates = async () => {
+    setBusy(true);
+    try { const r = await api.get('/channels/WHATSAPP/templates'); setTemplates(r.data); }
+    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); setTemplates([]); }
+    finally { setBusy(false); }
+  };
 
   const openForm = (c: ChannelState) => {
     // prefill non-secret fields; secrets stay blank (means "keep existing" on save)
@@ -105,9 +116,33 @@ export function ChannelsCard({ isAdmin }: { isAdmin: boolean }) {
                       <p className="hint" style={{ margin: '0 0 8px' }}>{t('ch_wa_meta_hint')}</p>
                       {field('accessToken', t('ch_wa_token'), 'password', secretSaved ? '•••••• ' + t('ch_keep_hint') : 'EAAG...')}
                       {field('phoneNumberId', t('ch_wa_phone_id'), 'text', '1012345678901234')}
-                      {field('businessAccountId', t('ch_wa_waba'), 'text', '(optional)')}
-                      {field('templateName', t('ch_wa_template'), 'text', 'tender_reminder')}
+                      {field('businessAccountId', t('ch_wa_waba'), 'text', 'WABA id')}
+                      {/* Template: dropdown of APPROVED Meta templates once synced, else manual */}
+                      <div style={{ marginBottom: 8 }}>
+                        <label>{t('ch_wa_template')}</label>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {templates && templates.length ? (
+                            <select value={draft.templateName ?? ''} style={{ flex: 1 }}
+                              onChange={(e) => {
+                                const tpl = templates.find((x) => x.name === e.target.value);
+                                setDraft({ ...draft, templateName: e.target.value, templateLang: tpl?.language ?? draft.templateLang });
+                              }}>
+                              <option value="">—</option>
+                              {templates.map((tpl) => <option key={tpl.name + tpl.language} value={tpl.name}>{tpl.name} · {tpl.language}</option>)}
+                            </select>
+                          ) : (
+                            <input style={{ flex: 1 }} value={draft.templateName ?? ''} placeholder="tender_reminder"
+                              onChange={(e) => setDraft({ ...draft, templateName: e.target.value })} />
+                          )}
+                          <button type="button" className="btn small ghost" disabled={busy} data-tip={t('ch_wa_sync_tip')}
+                            onClick={syncTemplates}>↻ {t('ch_wa_sync')}</button>
+                        </div>
+                      </div>
                       {field('templateLang', t('ch_wa_lang'), 'text', 'az / en_US')}
+                      {field('verifyToken', t('ch_wa_verify'), 'text', 'my-verify-token')}
+                      <div className="hint" style={{ margin: '2px 0 10px', wordBreak: 'break-all' }}>
+                        {t('ch_wa_webhook')}: <code>{webhookUrl}</code>
+                      </div>
                     </>
                   )}
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '4px 0 10px' }}>

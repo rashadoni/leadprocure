@@ -1,10 +1,11 @@
 import {
-  BadRequestException, Body, Controller, Delete, Get, Injectable, Module, Param, Post, Put,
+  BadRequestException, Body, Controller, Delete, Get, Injectable, Logger, Module, Param, Post, Put, Query,
 } from '@nestjs/common';
 import { IsBoolean, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { DataSource } from 'typeorm';
 import * as nodemailer from 'nodemailer';
 import type { AccessTokenPayload } from '@leadprocure/shared';
-import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
+import { CurrentUser, Public, RequiresFeature, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
 
@@ -32,9 +33,10 @@ class EmailConfigDto {
 class WhatsappConfigDto {
   @IsOptional() @IsString() accessToken?: string; // Meta permanent token — omit/empty = keep existing
   @IsString() phoneNumberId!: string;
-  @IsOptional() @IsString() businessAccountId?: string; // WABA id
+  @IsOptional() @IsString() businessAccountId?: string; // WABA id (needed to sync templates)
   @IsOptional() @IsString() templateName?: string; // approved template for cold outreach
   @IsOptional() @IsString() templateLang?: string;  // e.g. az / en_US
+  @IsOptional() @IsString() verifyToken?: string;   // webhook handshake token (Meta setup)
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 class TestDto {
@@ -54,7 +56,7 @@ export async function sendEmailVia(cfg: any, to: string, subject: string, text: 
 // Send via Meta Cloud API. With a template configured → template message (works for cold
 // business-initiated outreach, the reminder text goes into the {{1}} body param); without
 // one → plain text (only delivered inside the 24h window). Errors surface Meta's message.
-export async function sendWhatsappVia(cfg: any, to: string, text: string): Promise<void> {
+export async function sendWhatsappVia(cfg: any, to: string, text: string): Promise<string | undefined> {
   const phone = String(to).replace(/[^\d]/g, ''); // Meta wants digits only
   const body = cfg.templateName
     ? {
@@ -71,10 +73,22 @@ export async function sendWhatsappVia(cfg: any, to: string, text: string): Promi
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.accessToken ?? ''}` },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message ?? `Meta API ${res.status}`);
-  }
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j?.error?.message ?? `Meta API ${res.status}`);
+  return j?.messages?.[0]?.id; // wamid — matched later by the delivery-status webhook
+}
+
+// Approved templates for the org's WABA — populates the "template name" dropdown so the
+// buyer picks an existing approved template instead of typing a name that might not exist.
+export async function listWhatsappTemplates(cfg: any): Promise<Array<{ name: string; language: string; status: string; category?: string }>> {
+  if (!cfg?.businessAccountId) throw new Error('businessAccountId is required to list templates');
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${cfg.businessAccountId}/message_templates?fields=name,language,status,category&limit=200`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${cfg.accessToken ?? ''}` } });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j?.error?.message ?? `Meta API ${res.status}`);
+  return (j.data ?? [])
+    .filter((t: any) => t.status === 'APPROVED')
+    .map((t: any) => ({ name: t.name, language: t.language, status: t.status, category: t.category }));
 }
 
 // Connection check the CRM also does: GET the phone number's verified name — proves the
@@ -168,6 +182,14 @@ export class ChannelsService {
     return this.list(auth);
   }
 
+  // Live-fetch the org's APPROVED Meta templates for the dropdown.
+  async templates(auth: AccessTokenPayload) {
+    const cfg = await this.currentConfig('WHATSAPP', auth);
+    if (!cfg?.phoneNumberId) throw new BadRequestException('Connect WhatsApp first');
+    try { return await listWhatsappTemplates(cfg); }
+    catch (e: any) { throw new BadRequestException(`Meta: ${e?.message?.slice(0, 250) ?? 'failed to list templates'}`); }
+  }
+
   // Uses the STORED config (secrets included) so the buyer can verify a connection
   // without re-typing credentials. A failure surfaces the gateway/SMTP error verbatim.
   async test(channel: string, dto: TestDto, auth: AccessTokenPayload) {
@@ -200,6 +222,12 @@ export class ChannelsController {
     return this.channels.list(auth);
   }
 
+  @Get('WHATSAPP/templates')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  templates(@CurrentUser() auth: AccessTokenPayload) {
+    return this.channels.templates(auth);
+  }
+
   @Put('EMAIL')
   @Roles('BUYER_ADMIN')
   saveEmail(@Body() dto: EmailConfigDto, @CurrentUser() auth: AccessTokenPayload) {
@@ -227,9 +255,50 @@ export class ChannelsController {
   }
 }
 
+// Public Meta webhook: GET is the one-time verify handshake (echo hub.challenge when the
+// token matches any org's config); POST delivers message-status callbacks (sent →
+// delivered → read / failed) which we map to the follow-up log by wamid. No auth guard —
+// authenticity is the shared verify token; the status update only touches our own rows.
+@Controller('channels/whatsapp/webhook')
+export class WhatsappWebhookController {
+  private readonly logger = new Logger('WhatsappWebhook');
+  constructor(private readonly ds: DataSource) {}
+
+  @Public()
+  @Get()
+  async verify(
+    @Query('hub.mode') mode: string,
+    @Query('hub.verify_token') token: string,
+    @Query('hub.challenge') challenge: string,
+  ) {
+    const ok = mode === 'subscribe' && (await this.ds.query(`SELECT whatsapp_verify_token_ok($1) AS ok`, [token ?? '']))[0]?.ok;
+    if (!ok) throw new BadRequestException('verify token mismatch');
+    return Number(challenge) || challenge; // Meta expects the raw challenge echoed back
+  }
+
+  @Public()
+  @Post()
+  async receive(@Body() body: any) {
+    try {
+      const statuses = body?.entry?.[0]?.changes?.[0]?.value?.statuses;
+      if (Array.isArray(statuses)) {
+        for (const s of statuses) {
+          if (s?.id && s?.status) {
+            await this.ds.query(`SELECT followup_msg_set_status($1, $2)`, [s.id, s.status])
+              .catch((e) => this.logger.warn(`status update failed: ${e?.message}`));
+          }
+        }
+      }
+    } catch (e: any) {
+      this.logger.warn(`webhook parse failed: ${e?.message}`);
+    }
+    return { received: true }; // always 200 so Meta doesn't retry-storm
+  }
+}
+
 @Module({
   providers: [ChannelsService],
-  controllers: [ChannelsController],
+  controllers: [ChannelsController, WhatsappWebhookController],
   exports: [ChannelsService],
 })
 export class ChannelsModule {}
