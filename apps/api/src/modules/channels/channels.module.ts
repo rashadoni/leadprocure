@@ -8,11 +8,14 @@ import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorator
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
 
+// Meta WhatsApp Cloud API version (matches the CRM's leaddrive integration).
+const GRAPH_API_VERSION = 'v21.0';
+
 // Secret fields per channel — never returned to the client (masked to a boolean), and
 // preserved on update when the client submits an empty value (i.e. "keep existing").
 const SECRET_KEYS: Record<string, string[]> = {
   EMAIL: ['password'],
-  WHATSAPP: ['token'],
+  WHATSAPP: ['accessToken'],
 };
 
 class EmailConfigDto {
@@ -23,10 +26,15 @@ class EmailConfigDto {
   @IsString() from!: string;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
+// Meta WhatsApp Cloud API: the same credential set the CRM connects. accessToken is the
+// secret; the phone number ID identifies the sender; a pre-approved template is required
+// for business-initiated (cold) messages outside the 24h customer-service window.
 class WhatsappConfigDto {
-  @IsString() apiUrl!: string;
-  @IsOptional() @IsString() token?: string; // omit/empty = keep existing
-  @IsString() from!: string;
+  @IsOptional() @IsString() accessToken?: string; // Meta permanent token — omit/empty = keep existing
+  @IsString() phoneNumberId!: string;
+  @IsOptional() @IsString() businessAccountId?: string; // WABA id
+  @IsOptional() @IsString() templateName?: string; // approved template for cold outreach
+  @IsOptional() @IsString() templateLang?: string;  // e.g. az / en_US
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 class TestDto {
@@ -43,13 +51,42 @@ export async function sendEmailVia(cfg: any, to: string, subject: string, text: 
   });
   await transport.sendMail({ from: cfg.from, to, subject, text, html: `<pre>${text}</pre>` });
 }
+// Send via Meta Cloud API. With a template configured → template message (works for cold
+// business-initiated outreach, the reminder text goes into the {{1}} body param); without
+// one → plain text (only delivered inside the 24h window). Errors surface Meta's message.
 export async function sendWhatsappVia(cfg: any, to: string, text: string): Promise<void> {
-  const res = await fetch(cfg.apiUrl, {
+  const phone = String(to).replace(/[^\d]/g, ''); // Meta wants digits only
+  const body = cfg.templateName
+    ? {
+        messaging_product: 'whatsapp', to: phone, type: 'template',
+        template: {
+          name: cfg.templateName,
+          language: { code: cfg.templateLang || 'en_US' },
+          components: [{ type: 'body', parameters: [{ type: 'text', text }] }],
+        },
+      }
+    : { messaging_product: 'whatsapp', to: phone, type: 'text', text: { body: text, preview_url: false } };
+  const res = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${cfg.phoneNumberId}/messages`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.token ?? ''}` },
-    body: JSON.stringify({ from: cfg.from, to, body: text }),
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.accessToken ?? ''}` },
+    body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`WhatsApp gateway ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message ?? `Meta API ${res.status}`);
+  }
+}
+
+// Connection check the CRM also does: GET the phone number's verified name — proves the
+// token + phone id are valid and gives a friendly "connected as …" label.
+export async function validateWhatsapp(cfg: any): Promise<{ verifiedName?: string; displayPhone?: string }> {
+  const res = await fetch(
+    `https://graph.facebook.com/${GRAPH_API_VERSION}/${cfg.phoneNumberId}?fields=verified_name,display_phone_number`,
+    { headers: { Authorization: `Bearer ${cfg.accessToken ?? ''}` } },
+  );
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j?.error?.message ?? `Meta API ${res.status}`);
+  return { verifiedName: j.verified_name, displayPhone: j.display_phone_number };
 }
 
 @Injectable()
@@ -101,6 +138,15 @@ export class ChannelsService {
     // blank secret = keep the stored one (so the UI never has to re-enter it)
     for (const key of SECRET_KEYS[channel]) {
       if (incoming[key] == null || incoming[key] === '') config[key] = existing[key] ?? '';
+    }
+    // WhatsApp: verify the Meta token + phone id on connect (best-effort) and store the
+    // verified business name for a friendly "connected as …" label, like the CRM.
+    if (channel === 'WHATSAPP' && config.phoneNumberId && config.accessToken) {
+      try {
+        const v = await validateWhatsapp(config);
+        config.verifiedName = v.verifiedName;
+        config.displayPhone = v.displayPhone;
+      } catch { /* keep the config; the Test button surfaces the real Meta error */ }
     }
     await this.rc.manager.query(
       `INSERT INTO channel_connections(buyer_org_id, channel, config, is_active)

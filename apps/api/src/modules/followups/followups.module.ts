@@ -230,7 +230,7 @@ export class FollowupsScheduler {
           await log('-', 'SKIPPED', 'no phone on supplier org');
         } else {
           try {
-            if (cfg?.apiUrl) await sendWhatsappVia(cfg, w.phone, text);
+            if (cfg?.phoneNumberId) await sendWhatsappVia(cfg, w.phone, text);
             else await this.wa.send(w.phone, text);
             await log(w.phone, 'SENT');
           } catch (e: any) {

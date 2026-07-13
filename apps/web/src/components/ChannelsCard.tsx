@@ -83,7 +83,9 @@ export function ChannelsCard({ isAdmin }: { isAdmin: boolean }) {
                     {c.connected
                       ? <span className="badge APPROVED">✓ {t('ch_connected')}</span>
                       : <span className="badge" style={{ opacity: 0.6 }}>{t('ch_not_connected')}</span>}
-                    {c.connected && c.config.from ? ` · ${c.config.from}` : ''}
+                    {c.connected ? ` · ${c.channel === 'WHATSAPP'
+                      ? (c.config.verifiedName || c.config.displayPhone || t('ch_wa_meta'))
+                      : (c.config.from || '')}` : ''}
                   </div>
                 </div>
               </div>
@@ -100,9 +102,12 @@ export function ChannelsCard({ isAdmin }: { isAdmin: boolean }) {
                     </>
                   ) : (
                     <>
-                      {field('apiUrl', t('ch_wa_url'), 'text', 'https://gateway.example.com/send')}
-                      {field('token', t('ch_wa_token'), 'password', secretSaved ? '•••••• ' + t('ch_keep_hint') : '')}
-                      {field('from', t('ch_wa_from'), 'text', '+994...')}
+                      <p className="hint" style={{ margin: '0 0 8px' }}>{t('ch_wa_meta_hint')}</p>
+                      {field('accessToken', t('ch_wa_token'), 'password', secretSaved ? '•••••• ' + t('ch_keep_hint') : 'EAAG...')}
+                      {field('phoneNumberId', t('ch_wa_phone_id'), 'text', '1012345678901234')}
+                      {field('businessAccountId', t('ch_wa_waba'), 'text', '(optional)')}
+                      {field('templateName', t('ch_wa_template'), 'text', 'tender_reminder')}
+                      {field('templateLang', t('ch_wa_lang'), 'text', 'az / en_US')}
                     </>
                   )}
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '4px 0 10px' }}>
