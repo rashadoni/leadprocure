@@ -179,7 +179,7 @@ export default function EventDetail() {
             borderColor: state === 'next' ? 'var(--accent2)' : undefined,
             background: state === 'done' ? 'var(--ok-bg, #e7f6ec)' : undefined,
           }}>
-            {state === 'done' ? '✓ ' : ''}{chIco(s.channel)} {state === 'todo' || state === 'next' ? `+${s.afterHours}${t('hours_short')}` : chName(s.channel)}
+            {state === 'done' ? '✓ ' : ''}{chIco(s.channel)} {state === 'todo' || state === 'next' ? `+${s.afterHours} ${t('hours_short')}` : chName(s.channel)}
           </span>
         );
         return (
@@ -193,8 +193,8 @@ export default function EventDetail() {
               <span className="hint" style={{ marginRight: 8 }}>{t('followups_plan')}:</span>
               {!fuEditing && planSteps.map((s, i) => (
                 <span key={i} className="chip" style={{ marginRight: 4 }}
-                  data-tip={`${i + 1}. ${chName(s.channel)} — +${s.afterHours}${t('hours_short')}`}>
-                  {chIco(s.channel)} +{s.afterHours}{t('hours_short')}
+                  data-tip={`${i + 1}. ${chName(s.channel)} — +${s.afterHours} ${t('hours_short')}`}>
+                  {chIco(s.channel)} +{s.afterHours} {t('hours_short')}
                 </span>
               ))}
               {!fuEditing && isAdmin && (
@@ -204,29 +204,35 @@ export default function EventDetail() {
                 </button>
               )}
               {fuEditing && (
-                <span>
+                <div className="fu-editor">
                   {fuDraft.map((s, i) => (
-                    <span key={i} style={{ marginRight: 8, whiteSpace: 'nowrap' }}>
+                    <div className="fu-step" key={i}>
+                      <span className="fu-step-no">{i + 1}</span>
                       <select value={s.channel} onChange={(e) => setFuDraft(fuDraft.map((x, j) => j === i ? { ...x, channel: e.target.value } : x))}>
-                        <option value="EMAIL">{t('ch_EMAIL')}</option>
-                        <option value="WHATSAPP">{t('ch_WHATSAPP')}</option>
+                        <option value="EMAIL">✉️ {t('ch_EMAIL')}</option>
+                        <option value="WHATSAPP">📱 {t('ch_WHATSAPP')}</option>
                       </select>
-                      {' +'}
-                      <input type="number" min={1} max={2160} value={s.afterHours} style={{ width: 64 }}
-                        onChange={(e) => setFuDraft(fuDraft.map((x, j) => j === i ? { ...x, afterHours: Number(e.target.value) } : x))} />
-                      {t('hours_short')}
-                      <button className="btn small ghost" onClick={() => setFuDraft(fuDraft.filter((_, j) => j !== i))}>✕</button>
-                    </span>
+                      <span className="fu-delay">
+                        {t('fu_after_pre')}
+                        <input type="number" min={1} max={2160} value={s.afterHours}
+                          onChange={(e) => setFuDraft(fuDraft.map((x, j) => j === i ? { ...x, afterHours: Number(e.target.value) } : x))} />
+                        {t('fu_after_post')}
+                      </span>
+                      <button className="fu-del" data-tip={t('followups_remove_step')}
+                        onClick={() => setFuDraft(fuDraft.filter((_, j) => j !== i))}>✕</button>
+                    </div>
                   ))}
-                  <button className="btn small ghost" disabled={fuDraft.length >= 10}
-                    onClick={() => setFuDraft([...fuDraft, { channel: 'EMAIL', afterHours: 24 }])}>{t('followups_add_step')}</button>
-                  <button className="btn small" style={{ marginLeft: 6 }} disabled={!fuDraft.length}
-                    onClick={() => fuAct(async () => {
-                      const r = await api.put('/settings/followup-plan', { steps: fuDraft });
-                      setFuPlan(r.data); setFuEditing(false);
-                    })}>{t('followups_save')}</button>
-                  <button className="btn small ghost" onClick={() => setFuEditing(false)}>{t('followups_cancel')}</button>
-                </span>
+                  <div className="fu-actions">
+                    <button className="btn small ghost" disabled={fuDraft.length >= 10}
+                      onClick={() => setFuDraft([...fuDraft, { channel: 'EMAIL', afterHours: 24 }])}>＋ {t('followups_add_step')}</button>
+                    <button className="btn small" disabled={!fuDraft.length}
+                      onClick={() => fuAct(async () => {
+                        const r = await api.put('/settings/followup-plan', { steps: fuDraft });
+                        setFuPlan(r.data); setFuEditing(false);
+                      })}>{t('followups_save')}</button>
+                    <button className="btn small ghost" onClick={() => setFuEditing(false)}>{t('followups_cancel')}</button>
+                  </div>
+                </div>
               )}
             </div>
 

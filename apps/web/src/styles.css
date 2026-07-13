@@ -61,6 +61,20 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 .chip:hover { border-color: var(--accent); background: rgba(4, 120, 87, .06); box-shadow: 0 2px 6px rgba(16, 24, 40, .06); }
 .chip .chip-ico { font-size: 13px; line-height: 1; }
 
+/* Follow-up chain editor: each step is a tidy grid row (order · channel · delay · remove),
+   so the channel <select> can't stretch full-width and push the rest out of bounds. */
+.fu-editor { margin-top: 10px; max-width: 620px; display: flex; flex-direction: column; gap: 8px; }
+.fu-step { display: grid; grid-template-columns: 26px minmax(150px, 260px) auto 34px; align-items: center; gap: 12px; }
+.fu-step-no { width: 24px; height: 24px; border-radius: 999px; background: var(--accent); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+.fu-step select { width: 100%; }
+.fu-delay { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); white-space: nowrap; font-size: 13px; }
+.fu-delay input { width: 68px; text-align: center; }
+.fu-del { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 8px;
+  width: 32px; height: 32px; padding: 0; cursor: pointer; transition: border-color .12s, color .12s, background .12s; }
+.fu-del:hover { border-color: #dc2626; color: #dc2626; background: rgba(220, 38, 38, .06); }
+.fu-editor .fu-actions { display: flex; gap: 8px; margin-top: 4px; align-items: center; }
+
 /* Styled hover tooltip: put data-tip="text" on any button / link / badge. Replaces the
    slow, unstyled native title with an instant dark bubble + arrow above the element. */
 [data-tip] { position: relative; }
