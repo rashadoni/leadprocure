@@ -109,7 +109,7 @@ export class ChannelsService {
        DO UPDATE SET config = $3, is_active = $4, updated_at = now()`,
       [auth.org_id, channel, JSON.stringify(config), isActive ?? true],
     );
-    await this.audit.record('CHANNEL_SAVED', 'channel_connection', channel, { channel });
+    await this.audit.record('CHANNEL_SAVED', 'channel_connection', auth.org_id, { channel });
     return this.list(auth);
   }
 
@@ -118,7 +118,7 @@ export class ChannelsService {
       `DELETE FROM channel_connections WHERE buyer_org_id = $1 AND channel = $2`,
       [auth.org_id, channel],
     );
-    await this.audit.record('CHANNEL_REMOVED', 'channel_connection', channel, { channel });
+    await this.audit.record('CHANNEL_REMOVED', 'channel_connection', auth.org_id, { channel });
     return this.list(auth);
   }
 
@@ -138,7 +138,7 @@ export class ChannelsService {
       `UPDATE channel_connections SET last_test_at = now() WHERE buyer_org_id = $1 AND channel = $2`,
       [auth.org_id, channel],
     );
-    await this.audit.record('CHANNEL_TEST_SENT', 'channel_connection', channel, { channel, to: dto.to });
+    await this.audit.record('CHANNEL_TEST_SENT', 'channel_connection', auth.org_id, { channel, to: dto.to });
     return { ok: true };
   }
 }
