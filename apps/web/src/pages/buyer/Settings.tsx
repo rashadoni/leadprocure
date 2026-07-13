@@ -3,6 +3,7 @@ import { api, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import { BUYER_ROLES } from '@leadprocure/shared';
+import { ChannelsCard } from '../../components/ChannelsCard';
 
 export default function Settings() {
   const { t } = useI18n();
@@ -248,6 +249,8 @@ export default function Settings() {
           </div>
         )}
       </div>
+
+      <ChannelsCard isAdmin={isAdmin} />
 
       <div className="card">
         <h3>{t('integrations')}</h3>

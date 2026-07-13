@@ -224,6 +224,9 @@ export const AUDIT_ACTIONS = [
   'FOLLOWUP_ENROLLED',
   'FOLLOWUP_STOPPED',
   'FOLLOWUP_STEP_SENT',
+  'CHANNEL_SAVED',
+  'CHANNEL_REMOVED',
+  'CHANNEL_TEST_SENT',
 ] as const;
 
 // ---------------- Invoices (P2P) ----------------
@@ -261,6 +264,10 @@ export const DEFAULT_FOLLOWUP_STEPS: FollowupStep[] = [
   { channel: 'EMAIL', afterHours: 48 },
   { channel: 'WHATSAPP', afterHours: 48 },
 ];
+
+// ---------------- Sending channels (per buyer org) ----------------
+export const CHANNEL_TYPES = ['EMAIL', 'WHATSAPP'] as const;
+export type ChannelType = (typeof CHANNEL_TYPES)[number];
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 // ---------------- Auth payloads ----------------

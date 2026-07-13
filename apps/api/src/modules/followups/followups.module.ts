@@ -16,6 +16,7 @@ import { RequestContextService } from '../../common/context/request-context.serv
 import { AuditService } from '../../common/audit/audit.service';
 import { AppConfig } from '../../common/config/config.service';
 import { MailProvider } from '../../common/mail/mail.module';
+import { sendEmailVia, sendWhatsappVia } from '../channels/channels.module';
 
 class StepDto {
   @IsIn(FOLLOWUP_CHANNELS as unknown as string[]) channel!: FollowupChannel;
@@ -185,28 +186,38 @@ export class FollowupsScheduler {
   @Cron(CronExpression.EVERY_MINUTE)
   async tick(): Promise<number> {
     const due: Array<{
-      enrollment_id: string; step_no: number; channel: string; event_title: string;
+      enrollment_id: string; buyer_org_id: string; step_no: number; channel: string; event_title: string;
       buyer_name: string; close_at: string | null; emails: string[] | null; phone: string | null;
     }> = await this.ds.query(`SELECT * FROM followup_advance_due(50)`);
+
+    // Per-org channel config the buyer connected in Settings (secrets included; DEFINER
+    // seam so the RLS-less cron can read it). Cached per tick to avoid re-querying.
+    const orgCfg = new Map<string, any>();
+    const getCfg = async (org: string, channel: string) => {
+      const key = `${org}:${channel}`;
+      if (!orgCfg.has(key)) {
+        const r = await this.ds.query(`SELECT channel_config_get($1, $2) AS c`, [org, channel]).catch(() => [{ c: null }]);
+        orgCfg.set(key, r[0]?.c ?? null);
+      }
+      return orgCfg.get(key);
+    };
 
     for (const w of due) {
       const deadline = w.close_at ? new Date(w.close_at).toISOString().slice(0, 16).replace('T', ' ') : '—';
       // Whitelisted fields only: title, buyer, deadline, link. Never amounts.
       const text = `${w.buyer_name} · Leadprocure\n\nNapominaniye / Xatırlatma: tender "${w.event_title}" hələ açıqdır — приглашение ещё открыто.\nDeadline / Son tarix: ${deadline} (UTC)\n\n→ ${this.cfg.webBaseUrl}`;
+      const subject = `Leadprocure — Напоминание о тендере · Tender xatırlatması`;
       const log = (recipient: string, status: 'SENT' | 'FAILED' | 'SKIPPED', detail?: string) =>
         this.ds.query(`SELECT followup_log_message($1, $2, $3, $4, $5, $6)`, [
           w.enrollment_id, w.step_no, w.channel, recipient, status, detail ?? null,
         ]).catch((e) => this.logger.warn(`log_message failed: ${e?.message}`));
 
       if (w.channel === 'EMAIL') {
+        const cfg = await getCfg(w.buyer_org_id, 'EMAIL'); // buyer's own mailbox, else global provider
         for (const to of w.emails ?? []) {
           try {
-            await this.mail.send({
-              to,
-              subject: `Leadprocure — Напоминание о тендере · Tender xatırlatması`,
-              html: `<pre>${text}</pre>`,
-              text,
-            });
+            if (cfg?.host) await sendEmailVia(cfg, to, subject, text);
+            else await this.mail.send({ to, subject, html: `<pre>${text}</pre>`, text });
             await log(to, 'SENT');
           } catch (e: any) {
             await log(to, 'FAILED', e?.message?.slice(0, 300));
@@ -214,11 +225,13 @@ export class FollowupsScheduler {
         }
         if (!w.emails?.length) await log('-', 'SKIPPED', 'no active users');
       } else if (w.channel === 'WHATSAPP') {
+        const cfg = await getCfg(w.buyer_org_id, 'WHATSAPP');
         if (!w.phone) {
           await log('-', 'SKIPPED', 'no phone on supplier org');
         } else {
           try {
-            await this.wa.send(w.phone, text);
+            if (cfg?.apiUrl) await sendWhatsappVia(cfg, w.phone, text);
+            else await this.wa.send(w.phone, text);
             await log(w.phone, 'SENT');
           } catch (e: any) {
             await log(w.phone, 'FAILED', e?.message?.slice(0, 300));
