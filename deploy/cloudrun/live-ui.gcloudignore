@@ -1,0 +1,7 @@
+.gcloudignore
+.git
+.git/**
+**/node_modules/**
+apps/web/public/guides/**
+scripts/.tts-cache/**
+**/*.tsbuildinfo

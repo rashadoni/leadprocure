@@ -1,0 +1,16 @@
+steps:
+  - name: mcr.microsoft.com/playwright:v1.61.1-noble
+    entrypoint: bash
+    env:
+      - PLAYWRIGHT_BASE_URL=https://leadprocure-web-788756088862.europe-west3.run.app
+    args:
+      - -ceu
+      - |
+        corepack enable
+        corepack prepare pnpm@10.33.4 --activate
+        pnpm install --frozen-lockfile --filter web...
+        pnpm --filter web exec playwright test \
+          --grep 'all buyer sections render|dashboard shows real KPI money|all supplier sections render|role guard'
+timeout: 1200s
+options:
+  logging: CLOUD_LOGGING_ONLY
