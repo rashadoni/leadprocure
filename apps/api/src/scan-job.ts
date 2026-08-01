@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { createHash } from 'crypto';
-import { GetObjectCommand, HeadObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, HeadObjectCommand, S3Client, type HeadObjectCommandOutput } from '@aws-sdk/client-s3';
 import { DataSource, QueryRunner } from 'typeorm';
 import { loadRootEnv } from './common/config/env';
 import { AppConfig } from './common/config/config.service';
@@ -34,6 +34,10 @@ function storageClient(): { client: S3Client; bucket: string } {
     }),
     bucket: process.env.S3_BUCKET ?? 'leadprocure',
   };
+}
+
+function isNotFound(error: any): boolean {
+  return error?.$metadata?.httpStatusCode === 404 || error?.name === 'NoSuchKey' || error?.name === 'NotFound';
 }
 
 async function waitForClamd(clam: ClamavService): Promise<void> {
@@ -81,7 +85,16 @@ async function main(): Promise<void> {
     const files: PendingFile[] = await q.query(`SELECT * FROM documents_pending_scan($1)`, [maxFiles]);
     for (const file of files) {
       try {
-        const metadata = await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: file.storage_key }));
+        let metadata: HeadObjectCommandOutput;
+        try {
+          metadata = await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: file.storage_key }));
+        } catch (error: any) {
+          if (!isNotFound(error)) throw error;
+          await setStatus(q, file, 'ERROR');
+          blocked += 1;
+          console.warn(`AV object missing: ${file.src}/${file.id} ${file.filename}`);
+          continue;
+        }
         const objectSize = metadata.ContentLength;
         const expectedSize = Number(file.size_bytes);
         if (objectSize === undefined || objectSize !== expectedSize) {
