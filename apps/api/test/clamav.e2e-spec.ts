@@ -76,6 +76,7 @@ describe('antivirus scanning (clamd e2e)', () => {
     for (const id of [cleanId, eicarId]) {
       expect(list.body.find((d: any) => d.id === id).av_status).toBe('PENDING');
     }
+    await http().get(`/documents/${cleanId}/download`).set(...bearer(buyer)).expect(400);
   });
 
   it('the worker turns PENDING into CLEAN / INFECTED verdicts', async () => {

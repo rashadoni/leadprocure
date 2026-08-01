@@ -49,7 +49,10 @@ describe('supplier verification (KYC)', () => {
     const pre = await http().post('/verification/presign').set(...bearer(supplier))
       .send({ filename: 'voen.pdf', mime: 'application/pdf' }).expect(201);
     const withDoc = await http().post(`/verification/cases/${caseId}/documents`).set(...bearer(supplier))
-      .send({ docType: 'VOEN', storageKey: pre.body.storageKey, filename: 'voen.pdf', sha256: 'a'.repeat(64) }).expect(201);
+      .send({
+        docType: 'VOEN', storageKey: pre.body.storageKey, filename: 'voen.pdf',
+        mime: 'application/pdf', sizeBytes: 123, sha256: 'a'.repeat(64),
+      }).expect(201);
     expect(withDoc.body.documents).toHaveLength(1);
     expect(withDoc.body.documents[0].doc_type).toBe('VOEN');
   });

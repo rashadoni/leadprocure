@@ -47,6 +47,10 @@ export class AppConfig {
   readonly clamavEnabled = bool('CLAMAV_ENABLED', false);
   readonly clamavHost = opt('CLAMAV_HOST', 'localhost');
   readonly clamavPort = int('CLAMAV_PORT', 3310);
+  readonly avScanJobEnabled = bool('AV_SCAN_JOB_ENABLED', false);
+  readonly avScanJobProject = opt('AV_SCAN_JOB_PROJECT', opt('GOOGLE_CLOUD_PROJECT', ''));
+  readonly avScanJobRegion = opt('AV_SCAN_JOB_REGION', 'europe-west3');
+  readonly avScanJobName = opt('AV_SCAN_JOB_NAME', 'leadprocure-av-scan');
 
   // Comma-separated allowed browser origins for CORS (credentials mode requires
   // an explicit origin, never a wildcard).

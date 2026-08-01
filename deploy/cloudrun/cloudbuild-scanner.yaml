@@ -1,0 +1,14 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file=apps/api/Dockerfile.scanner
+      - --tag=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/scanner:${_TAG}
+      - .
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/scanner:${_TAG}
+substitutions:
+  _REGION: europe-west3
+  _REPOSITORY: leadprocure
+  _TAG: manual
+timeout: 2400s

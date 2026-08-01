@@ -40,7 +40,14 @@ export default function Verification() {
       const { data: pre } = await api.post('/verification/presign', { filename: file.name, mime: file.type || 'application/octet-stream' });
       const put = await fetch(pre.uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type || 'application/octet-stream' } });
       if (!put.ok) throw new Error(`upload failed (${put.status})`);
-      await api.post(`/verification/cases/${caseId}/documents`, { docType, storageKey: pre.storageKey, filename: file.name, sha256: await sha256(file) });
+      await api.post(`/verification/cases/${caseId}/documents`, {
+        docType,
+        storageKey: pre.storageKey,
+        filename: file.name,
+        mime: file.type || 'application/octet-stream',
+        sizeBytes: file.size,
+        sha256: await sha256(file),
+      });
       refresh(caseId);
     } catch (e: any) { alert(e.response?.data?.message?.toString() ?? e.message ?? 'Error'); }
     finally { if (fileRef.current) fileRef.current.value = ''; }

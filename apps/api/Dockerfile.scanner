@@ -1,0 +1,42 @@
+# A one-shot scanner image. It starts clamd only for the duration of one Cloud Run
+# Job execution, scans the bounded database queue, then exits and scales to zero.
+FROM node:20-bookworm-slim AS build
+RUN corepack enable && corepack prepare pnpm@10.33.4 --activate
+WORKDIR /repo
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml .npmrc ./
+COPY packages/shared/package.json packages/shared/
+COPY apps/api/package.json apps/api/
+RUN pnpm install --frozen-lockfile
+COPY packages/shared packages/shared
+COPY apps/api apps/api
+RUN pnpm --filter @leadprocure/shared build && pnpm --filter api build
+
+FROM node:20-bookworm-slim AS run
+ENV NODE_ENV=production \
+    CLAMAV_ENABLED=true \
+    CLAMAV_HOST=127.0.0.1 \
+    CLAMAV_PORT=3310
+RUN apt-get update \
+  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends clamav clamav-daemon ca-certificates \
+  && freshclam --stdout \
+  && rm -rf /var/lib/apt/lists/* \
+  && printf '%s\n' \
+       'Foreground true' \
+       'TCPSocket 3310' \
+       'TCPAddr 127.0.0.1' \
+       'StreamMaxLength 25M' \
+       'MaxFileSize 25M' \
+       'MaxScanSize 25M' \
+       'DatabaseDirectory /var/lib/clamav' \
+       'User clamav' \
+       'LogTime true' \
+       'LogFile /dev/stdout' \
+       'LogFileUnlock true' \
+       > /etc/clamav/clamd.conf
+WORKDIR /repo
+COPY --from=build /repo /repo
+COPY apps/api/scanner-entrypoint.sh /scanner-entrypoint.sh
+RUN chmod +x /scanner-entrypoint.sh \
+  && mkdir -p /run/clamav \
+  && chown clamav:clamav /run/clamav /var/lib/clamav
+ENTRYPOINT ["/scanner-entrypoint.sh"]

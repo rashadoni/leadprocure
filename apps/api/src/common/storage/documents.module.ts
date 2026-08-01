@@ -25,6 +25,55 @@ import { RequestContextService } from '../context/request-context.service';
 import { AuditService } from '../audit/audit.service';
 import { AppConfig } from '../config/config.service';
 
+@Injectable()
+export class AvScanJobTrigger {
+  private readonly log = new Logger('AvScanJobTrigger');
+
+  constructor(private readonly cfg: AppConfig) {}
+
+  get enabled(): boolean {
+    return this.cfg.avScanJobEnabled;
+  }
+
+  async request(): Promise<boolean> {
+    if (!this.cfg.avScanJobEnabled) return false;
+    if (!this.cfg.avScanJobProject) {
+      this.log.error('AV scan job is enabled but AV_SCAN_JOB_PROJECT is empty');
+      return false;
+    }
+
+    try {
+      const tokenResponse = await fetch(
+        'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token',
+        { headers: { 'Metadata-Flavor': 'Google' }, signal: AbortSignal.timeout(5_000) },
+      );
+      if (!tokenResponse.ok) throw new Error(`metadata token returned ${tokenResponse.status}`);
+      const token = (await tokenResponse.json()) as { access_token?: string };
+      if (!token.access_token) throw new Error('metadata token response did not contain access_token');
+
+      const runUrl =
+        `https://run.googleapis.com/v2/projects/${encodeURIComponent(this.cfg.avScanJobProject)}` +
+        `/locations/${encodeURIComponent(this.cfg.avScanJobRegion)}` +
+        `/jobs/${encodeURIComponent(this.cfg.avScanJobName)}:run`;
+      const runResponse = await fetch(runUrl, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token.access_token}`, 'Content-Type': 'application/json' },
+        body: '{}',
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!runResponse.ok) {
+        throw new Error(`Cloud Run Jobs API returned ${runResponse.status}: ${(await runResponse.text()).slice(0, 300)}`);
+      }
+      return true;
+    } catch (error: any) {
+      // Fail closed: the database row stays PENDING and downloads remain blocked.
+      // The catch-up scheduler will request another bounded scan execution.
+      this.log.error(`could not request AV scan job: ${error.message}`);
+      return false;
+    }
+  }
+}
+
 // Attachments via S3-compatible storage (MinIO locally). Flow:
 //   1) POST /documents/presign → client PUTs the file straight to storage
 //   2) POST /documents/confirm → row with sha256/mime/size; AV status recorded
@@ -41,6 +90,7 @@ export class DocumentsService {
     private readonly rc: RequestContextService,
     private readonly audit: AuditService,
     private readonly cfg: AppConfig,
+    private readonly scanTrigger: AvScanJobTrigger,
   ) {
     this.bucket = process.env.S3_BUCKET ?? 'leadprocure';
     const mk = (endpoint: string) => new S3Client({
@@ -60,6 +110,27 @@ export class DocumentsService {
     this.s3Public = mk(process.env.S3_PUBLIC_ENDPOINT ?? internal);
   }
 
+  uploadAvStatus(): 'PENDING' | 'SKIPPED' {
+    return this.cfg.clamavEnabled ? 'PENDING' : 'SKIPPED';
+  }
+
+  requestAvScan(): boolean {
+    if (!this.scanTrigger.enabled) return false;
+    // Launch only after the RLS transaction commits; otherwise a fast job could
+    // inspect the queue before the PENDING row becomes visible.
+    this.rc.onCommit(async () => { await this.scanTrigger.request(); });
+    return true;
+  }
+
+  private assertDownloadAllowed(avStatus: string): void {
+    if (avStatus === 'INFECTED') {
+      throw new BadRequestException('File is blocked by the antivirus scan');
+    }
+    if (this.cfg.clamavEnabled && avStatus !== 'CLEAN') {
+      throw new BadRequestException(`File has not passed the antivirus scan (${avStatus})`);
+    }
+  }
+
   async presign(orgId: string, filename: string, mime: string) {
     const storageKey = `${orgId}/${randomUUID()}/${filename.replace(/[^\w.\-]/g, '_')}`;
     const url = await getSignedUrl(
@@ -74,7 +145,7 @@ export class DocumentsService {
     auth: AccessTokenPayload,
     dto: { storageKey: string; filename: string; mime: string; sizeBytes: number; sha256: string; entityType: string; entityId?: string },
   ) {
-    const avStatus = this.cfg.clamavEnabled ? 'PENDING' : 'SKIPPED';
+    const avStatus = this.uploadAvStatus();
     const rows = await this.rc.manager.query(
       `INSERT INTO documents(owner_org_id, entity_type, entity_id, storage_key, filename, mime, size_bytes, sha256, av_status, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
@@ -86,7 +157,8 @@ export class DocumentsService {
     await this.audit.record('DOCUMENT_UPLOADED', 'document', rows[0].id, {
       sha256: dto.sha256, entity_type: dto.entityType, entity_id: dto.entityId ?? null,
     });
-    return { id: rows[0].id, avStatus };
+    const scanQueued = avStatus === 'PENDING' ? this.requestAvScan() : false;
+    return { id: rows[0].id, avStatus, scanQueued };
   }
 
   async list(entityType?: string, entityId?: string) {
@@ -106,7 +178,7 @@ export class DocumentsService {
   async downloadUrl(id: string) {
     const rows = await this.rc.manager.query(`SELECT storage_key, av_status FROM documents WHERE id=$1`, [id]);
     if (!rows.length) return { url: null };
-    if (rows[0].av_status === 'INFECTED') throw new BadRequestException('File is blocked by the antivirus scan');
+    this.assertDownloadAllowed(rows[0].av_status);
     const url = await getSignedUrl(
       this.s3Public,
       new GetObjectCommand({ Bucket: this.bucket, Key: rows[0].storage_key }),
@@ -139,14 +211,15 @@ export class DocumentsService {
     )[0];
     if (!bid) throw new NotFoundException('Bid not found');
     if (bid.supplier_org_id !== auth.org_id) throw new BadRequestException('Not your bid');
-    const avStatus = this.cfg.clamavEnabled ? 'PENDING' : 'SKIPPED';
+    const avStatus = this.uploadAvStatus();
     const rows = await m.query(
       `INSERT INTO bid_documents(bid_id, buyer_org_id, supplier_org_id, storage_key, filename, mime, size_bytes, sha256, av_status, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
       [bidId, bid.buyer_org_id, auth.org_id, dto.storageKey, dto.filename, dto.mime, dto.sizeBytes, dto.sha256, avStatus, auth.sub],
     );
     await this.audit.record('DOCUMENT_UPLOADED', 'bid_document', rows[0].id, { bid_id: bidId, sha256: dto.sha256 });
-    return { id: rows[0].id, avStatus };
+    const scanQueued = avStatus === 'PENDING' ? this.requestAvScan() : false;
+    return { id: rows[0].id, avStatus, scanQueued };
   }
 
   async listBidDocs(bidId: string) {
@@ -159,14 +232,15 @@ export class DocumentsService {
   }
 
   // Generic signed GET for any storage key (used by verification docs etc.).
-  async signedGetUrl(storageKey: string) {
+  async signedGetUrl(storageKey: string, avStatus?: string) {
+    if (avStatus) this.assertDownloadAllowed(avStatus);
     return getSignedUrl(this.s3Public, new GetObjectCommand({ Bucket: this.bucket, Key: storageKey }), { expiresIn: 900 });
   }
 
   async bidDocDownloadUrl(id: string) {
     const rows = await this.rc.manager.query(`SELECT storage_key, av_status FROM bid_documents WHERE id=$1`, [id]);
     if (!rows.length) return { url: null };
-    if (rows[0].av_status === 'INFECTED') throw new BadRequestException('File is blocked by the antivirus scan');
+    this.assertDownloadAllowed(rows[0].av_status);
     const url = await getSignedUrl(
       this.s3Public,
       new GetObjectCommand({ Bucket: this.bucket, Key: rows[0].storage_key }),
@@ -194,7 +268,7 @@ export class AvScanWorker {
 
   @Cron(CronExpression.EVERY_30_SECONDS)
   async tick() {
-    if (!this.cfg.clamavEnabled || this.busy) return;
+    if (!this.cfg.clamavEnabled || this.cfg.avScanJobEnabled || this.busy) return;
     this.busy = true;
     try { await this.scanOnce(); } finally { this.busy = false; }
   }
@@ -303,7 +377,7 @@ export class DocumentsController {
 @Global()
 @Module({
   controllers: [DocumentsController],
-  providers: [DocumentsService, ClamavService, AvScanWorker],
-  exports: [DocumentsService, ClamavService, AvScanWorker],
+  providers: [DocumentsService, ClamavService, AvScanWorker, AvScanJobTrigger],
+  exports: [DocumentsService, ClamavService, AvScanWorker, AvScanJobTrigger],
 })
 export class DocumentsModule {}
