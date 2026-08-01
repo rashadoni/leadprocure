@@ -17,6 +17,12 @@ export class FixInvitationPolicyRecursion1720000000001 implements MigrationInter
   name = 'FixInvitationPolicyRecursion1720000000001';
 
   public async up(q: QueryRunner): Promise<void> {
+    // PostgreSQL validates the SQL function body when CREATE FUNCTION runs. If FORCE
+    // is still enabled at that point, even the owner must traverse the recursive
+    // event_invitations policy and fresh-database migrations fail before the helper
+    // exists. This change is transactional, so a later failure restores FORCE.
+    await q.query(`ALTER TABLE event_invitations NO FORCE ROW LEVEL SECURITY`);
+
     await q.query(`
       CREATE FUNCTION is_invited_supplier(p_event_id uuid) RETURNS boolean
       LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS
@@ -24,10 +30,6 @@ export class FixInvitationPolicyRecursion1720000000001 implements MigrationInter
            SELECT 1 FROM event_invitations ei
            WHERE ei.event_id = p_event_id AND ei.supplier_org_id = app_org_id()
          ) $$`);
-
-    // FORCE only affects the owner role; app_user is not the owner and stays constrained.
-    // Dropping FORCE lets the owner-owned SECURITY DEFINER helper bypass the recursion.
-    await q.query(`ALTER TABLE event_invitations NO FORCE ROW LEVEL SECURITY`);
 
     await q.query(`DROP POLICY se_select ON sourcing_events`);
     await q.query(`
