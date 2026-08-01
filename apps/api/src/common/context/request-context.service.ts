@@ -13,6 +13,9 @@ export interface RequestContext {
   // Jobs to run AFTER the request transaction commits (e.g. outbound email fan-out).
   // Never run on rollback — side effects must not fire for actions that didn't happen.
   postCommit?: Array<() => void | Promise<void>>;
+  // Bounded side effects that must finish before a scale-to-zero runtime may
+  // suspend CPU after the response (for example, requesting a Cloud Run Job).
+  postCommitWait?: Array<() => void | Promise<void>>;
 }
 
 @Injectable()
@@ -54,6 +57,14 @@ export class RequestContextService {
       return;
     }
     (ctx.postCommit ??= []).push(fn);
+  }
+
+  onCommitAndWait(fn: () => void | Promise<void>): void {
+    const ctx = this.optional();
+    if (!ctx) {
+      throw new Error('A waited post-commit callback requires a request transaction');
+    }
+    (ctx.postCommitWait ??= []).push(fn);
   }
 
   // Used during registration: once the owning org exists we elevate the request's

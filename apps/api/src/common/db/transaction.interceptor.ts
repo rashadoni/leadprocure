@@ -36,6 +36,11 @@ export class TransactionInterceptor implements NestInterceptor {
       };
       const result = await this.rc.run(ctx, () => firstValueFrom(next.handle()));
       await qr.commitTransaction();
+      // Cloud Run may suspend CPU as soon as the HTTP response is returned. Run
+      // bounded, delivery-critical callbacks now that the transaction is visible.
+      for (const job of ctx.postCommitWait ?? []) {
+        await job();
+      }
       // Post-commit side effects (email fan-out etc.): fire-and-forget so they neither
       // delay the response nor ever run for rolled-back requests (the error path above
       // never reaches this flush).

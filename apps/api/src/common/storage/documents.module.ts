@@ -118,7 +118,7 @@ export class DocumentsService {
     if (!this.scanTrigger.enabled) return false;
     // Launch only after the RLS transaction commits; otherwise a fast job could
     // inspect the queue before the PENDING row becomes visible.
-    this.rc.onCommit(async () => { await this.scanTrigger.request(); });
+    this.rc.onCommitAndWait(async () => { await this.scanTrigger.request(); });
     return true;
   }
 
