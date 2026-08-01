@@ -198,7 +198,7 @@ they're never benign-replayable. Client coalesces concurrent refreshes into one 
    - **Opening ceremony**: decrypt payloads → populate `bid_items`+`bids.total_minor`, state OPENED, event OPENING→EVALUATION, audit receipt.
    - **Weighted scoring** (`evaluations`/`evaluation_scores`): criteria+weights, compute weighted totals.
    - **Award per lot**: `SELECT … FOR UPDATE` event+bids, one winner per lot (`awards` unique `(event_id,lot_id)`), event AWARDED, audit.
-4. **Cross-cutting**: documents (S3/MinIO presigned upload + `ClamAV` scan stub + sha256 + versions), notifications (with `delivered_at`), **WebSocket gateway** (event status / participant count / amounts-after-opening), **OCDS export** endpoint (event→tender, award→award releases), **i18n** az/ru/en.
+4. **Cross-cutting**: documents (S3/MinIO presigned upload + event-driven `ClamAV` Cloud Run Job + fail-closed download gate + sha256 + versions), notifications (with `delivered_at`), **WebSocket gateway** (event status / participant count / amounts-after-opening), **OCDS export** endpoint (event→tender, award→award releases), **i18n** az/ru/en.
 5. **Signature provider** (§6).
 6. **React SPA** (`apps/web`): axios (`baseURL=VITE_API_BASE_URL`, `withCredentials`, in-memory access token, 401→`/auth/refresh`→retry); `BuyerLayout`/`SupplierLayout`; `ProtectedRoute` by role; features requests/sourcing/suppliers; entitlements-aware UI; language switcher.
 7. **Seed** (`apps/api/src/seed.ts`, wired to `pnpm --filter api seed`): buyer org `acme` (admin/approver/user), supplier org `supply-one` (user), a method policy, an fx rate. Print passwords.
