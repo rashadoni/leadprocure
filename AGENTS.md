@@ -4,6 +4,32 @@ Procurement/tender SaaS. Market: **Azerbaijan**, built to **international standa
 
 Full design plan (deep detail): `~/.claude/plans/mossy-nibbling-badger.md` (v2). This file is the working brief — follow it exactly so new code matches what already exists.
 
+## 0. Remote execution and deployment boundary
+
+- The default pilot runtime is Google Cloud Run in project `it-audit-pilot-rr-260801`,
+  region `europe-west3`: `leadprocure-web`, `leadprocure-api`, and
+  `leadprocure-ai`. All three services must remain at service-level `min=0,
+  max=1` unless the owner explicitly approves a cost change.
+- Persistent pilot state is external to Cloud Run: PostgreSQL is in Neon and
+  documents are in the private bucket
+  `gs://leadprocure-pilot-files-788756088862`. Never treat a Cloud Run container
+  filesystem as durable storage.
+- Do **not** run `docker compose up`, `docker build`, migrations, seed, or preview
+  servers on the Hetzner host during ordinary Codex work. The existing
+  `leadprocure-prod-*` Docker stack is a rollback contour and must stay untouched
+  until an explicit cutover request.
+- Build and test in ephemeral Cloud Build workers. Use
+  `deploy/cloudrun/cloudbuild-test.yaml` for the isolated API/database suite and
+  `deploy/cloudrun/cloudbuild-live-ui.yaml` for the read-only live UI smoke.
+- Release migrations only through the `leadprocure-migrate` Cloud Run job using
+  the owner DB secret. The API service must keep `RUN_MIGRATIONS=false` and must
+  never receive `DATABASE_OWNER_URL`.
+- File scanning is currently the cutover blocker: Cloud Run runs with
+  `CLAMAV_ENABLED=false`. Do not stop the Hetzner rollback contour or call this
+  client-production-ready until an event-driven scanner is deployed and tested.
+- The Docker commands below are for an explicitly requested isolated local
+  development environment only; they are not the remote deployment path.
+
 ---
 
 ## 1. Current state — DONE and VERIFIED (do NOT rebuild)
@@ -17,7 +43,7 @@ Full design plan (deep detail): `~/.claude/plans/mossy-nibbling-badger.md` (v2).
 - **Regression harness (27 e2e tests, all green)**: `apps/api/test/rls-acl.e2e-spec.ts` (hostile DB-level isolation: RLS, ACL visibility, sealed-before-opening, forged-row rejection, append-only audit) + `test/auth.e2e-spec.ts` (API auth flow). **Run `pnpm --filter api test:e2e` after EVERY module you build and keep it green** — this suite is the security net; extend it (don't weaken it) when adding features.
 - Second migration `1720000000001-fix-invitation-policy-recursion.ts` (applied): broke the `sourcing_events ↔ event_invitations` policy cycle via a `SECURITY DEFINER` helper `is_invited_supplier(uuid)` and tightened invited-supplier visibility (no DRAFT/CANCELLED leakage).
 
-## 2. How to run
+## 2. How to run an isolated local environment
 
 ```bash
 docker compose -f infra/docker-compose.yml up -d          # postgres (+minio +clamav)

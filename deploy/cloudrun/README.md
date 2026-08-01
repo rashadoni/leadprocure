@@ -19,3 +19,19 @@ ClamAV is deliberately not deployed as a permanently running Cloud Run service:
 `CLAMAV_ENABLED=false` until the event-driven scanner job is deployed and tested.
 This is acceptable for an isolated test stand, not for client production.
 
+## Verified release order
+
+1. Run `cloudbuild-test.yaml` against an ephemeral PostgreSQL database.
+2. Build immutable API, web and AI images tagged with the source commit.
+3. Point `leadprocure-migrate` at the new API image, execute it once, then
+   execute it again and require `No migrations are pending`.
+4. Update the services without changing their secret bindings. Keep the
+   service-level scaling limits at `min=0, max=1`.
+5. Verify `/health`, login/refresh, one protected read, a presigned GCS
+   upload/download with matching SHA-256, AI internal-token auth, and
+   `cloudbuild-live-ui.yaml`.
+6. Verify the Hetzner `leadprocure-prod-*` rollback stack is still healthy.
+
+Do not deploy automatically from an arbitrary dirty checkout. The pilot branch
+is `codex/cloud-run-pilot`; merge or change the production source branch only
+after the owner approves the cutover.
