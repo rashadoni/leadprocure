@@ -1,0 +1,57 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        docker network create leadprocure-e2e
+        docker run --detach --name leadprocure-e2e-db --network leadprocure-e2e \
+          --env POSTGRES_PASSWORD=postgres postgres:16-alpine
+
+        for attempt in $$(seq 1 60); do
+          if docker exec leadprocure-e2e-db pg_isready --username postgres >/dev/null 2>&1; then
+            break
+          fi
+          if [ "$$attempt" = 60 ]; then
+            echo "Postgres did not become ready" >&2
+            exit 1
+          fi
+          sleep 1
+        done
+
+        docker exec leadprocure-e2e-db psql --username postgres --set ON_ERROR_STOP=1 \
+          --command "CREATE ROLE owner_user LOGIN PASSWORD 'owner_pass';" \
+          --command "CREATE ROLE app_user LOGIN PASSWORD 'app_pass' NOSUPERUSER NOCREATEDB NOCREATEROLE;" \
+          --command "CREATE DATABASE leadprocure_e2e OWNER owner_user;" \
+          --command "GRANT CONNECT ON DATABASE leadprocure_e2e TO app_user;"
+
+        image="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/api:${_TAG}"
+        owner_url="postgresql://owner_user:owner_pass@leadprocure-e2e-db:5432/leadprocure_e2e"
+        app_url="postgresql://app_user:app_pass@leadprocure-e2e-db:5432/leadprocure_e2e"
+
+        docker run --rm --network leadprocure-e2e --entrypoint pnpm \
+          --env DATABASE_OWNER_URL="$$owner_url" \
+          "$$image" --filter api migration:run
+
+        docker run --rm --network leadprocure-e2e --entrypoint pnpm \
+          --env NODE_ENV=test \
+          --env DATABASE_URL="$$app_url" \
+          --env DATABASE_OWNER_URL="$$owner_url" \
+          --env JWT_ACCESS_SECRET=e2e_access_secret \
+          --env JWT_REFRESH_SECRET=e2e_refresh_secret \
+          --env BID_MASTER_KEY_B64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
+          --env WEB_ORIGIN=http://localhost:5173 \
+          --env S3_ENDPOINT=http://storage.invalid:9000 \
+          --env S3_PUBLIC_ENDPOINT=http://storage.invalid:9000 \
+          --env S3_BUCKET=leadprocure-e2e \
+          --env S3_ACCESS_KEY=e2e_access \
+          --env S3_SECRET_KEY=e2e_secret \
+          --env S3_FORCE_PATH_STYLE=true \
+          --env CLAMAV_ENABLED=false \
+          "$$image" --filter api exec jest --config test/jest-e2e.json --runInBand \
+            --testPathIgnorePatterns=clamav.e2e-spec.ts
+substitutions:
+  _REGION: europe-west3
+  _REPOSITORY: leadprocure
+  _TAG: manual
+timeout: 1800s
