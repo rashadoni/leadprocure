@@ -30,7 +30,7 @@ RUN apt-get update \
        'DatabaseDirectory /var/lib/clamav' \
        'User clamav' \
        'LogTime true' \
-       'LogFile /dev/stdout' \
+       'LogFile /tmp/clamd.log' \
        'LogFileUnlock true' \
        > /etc/clamav/clamd.conf
 WORKDIR /repo
@@ -38,5 +38,6 @@ COPY --from=build /repo /repo
 COPY apps/api/scanner-entrypoint.sh /scanner-entrypoint.sh
 RUN chmod +x /scanner-entrypoint.sh \
   && mkdir -p /run/clamav \
-  && chown clamav:clamav /run/clamav /var/lib/clamav
+  && touch /tmp/clamd.log \
+  && chown clamav:clamav /run/clamav /var/lib/clamav /tmp/clamd.log
 ENTRYPOINT ["/scanner-entrypoint.sh"]

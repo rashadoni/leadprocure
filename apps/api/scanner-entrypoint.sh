@@ -16,11 +16,17 @@ if ! freshclam --stdout; then
   echo 'Freshclam update failed; using recent baked signatures' >&2
 fi
 
+: > /tmp/clamd.log
+chown clamav:clamav /tmp/clamd.log
+tail -n +1 -F /tmp/clamd.log &
+log_pid=$!
 clamd --foreground=true &
 clamd_pid=$!
 cleanup() {
   kill "$clamd_pid" 2>/dev/null || true
+  kill "$log_pid" 2>/dev/null || true
   wait "$clamd_pid" 2>/dev/null || true
+  wait "$log_pid" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
