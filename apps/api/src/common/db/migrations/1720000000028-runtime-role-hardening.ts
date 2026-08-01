@@ -27,6 +27,7 @@ export class RuntimeRoleHardening1720000000028 implements MigrationInterface {
 
     for (const table of [
       'notifications',
+      'audit_events',
       'sourcing_events',
       'bids',
       'documents',
@@ -45,6 +46,7 @@ export class RuntimeRoleHardening1720000000028 implements MigrationInterface {
     await q.query(`DELETE FROM release_versions WHERE version = '2.8.0-runtime-role-hardening'`);
     for (const table of [
       'notifications',
+      'audit_events',
       'sourcing_events',
       'bids',
       'documents',
