@@ -1,0 +1,19 @@
+[
+  {
+    "origin": [
+      "https://leadprocure-web-788756088862.europe-west3.run.app"
+    ],
+    "method": [
+      "GET",
+      "HEAD",
+      "PUT"
+    ],
+    "responseHeader": [
+      "Content-Type",
+      "ETag",
+      "x-goog-generation",
+      "x-goog-hash"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]
