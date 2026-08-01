@@ -40,7 +40,14 @@ export default function EventDetail() {
   // Live updates: statuses/counters arrive over WS; amounts only ever via REST.
   useEffect(() => {
     const base = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000') as string;
-    const s: Socket = io(`${base}/rt`, { auth: { token: getToken() }, transports: ['websocket'] });
+    const proxied = base.startsWith('/');
+    const socketUrl = proxied ? '/rt' : `${base}/rt`;
+    const socketPath = proxied ? `${base.replace(/\/$/, '')}/socket.io` : '/socket.io';
+    const s: Socket = io(socketUrl, {
+      path: socketPath,
+      auth: { token: getToken() },
+      transports: ['websocket'],
+    });
     s.emit('join', id);
     const refresh = () => load();
     s.on('event.status', refresh);

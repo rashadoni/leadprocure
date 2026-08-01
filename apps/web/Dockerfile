@@ -11,6 +11,8 @@ COPY apps/web apps/web
 # Baked into the bundle at build time — point it at your public API URL.
 ARG VITE_API_BASE_URL=http://localhost:3000
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ARG API_UPSTREAM_HOST=localhost:3000
+ENV API_UPSTREAM_HOST=$API_UPSTREAM_HOST
 # Opt-in demo-credentials hint on the login page (demo stands only; default off).
 ARG VITE_DEMO_HINT=
 ENV VITE_DEMO_HINT=$VITE_DEMO_HINT
@@ -18,6 +20,9 @@ ENV VITE_DEMO_HINT=$VITE_DEMO_HINT
 RUN pnpm --filter @leadprocure/shared build && pnpm --filter web build
 
 FROM nginx:alpine AS run
-COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+ARG API_UPSTREAM_HOST=localhost:3000
+ENV API_UPSTREAM_HOST=$API_UPSTREAM_HOST
+ENV NGINX_ENVSUBST_FILTER=API_UPSTREAM_HOST
+COPY apps/web/nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
 EXPOSE 80

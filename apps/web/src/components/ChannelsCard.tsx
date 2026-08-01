@@ -26,7 +26,8 @@ export function ChannelsCard({ isAdmin }: { isAdmin: boolean }) {
   const [busy, setBusy] = useState(false);
   const [templates, setTemplates] = useState<Array<{ name: string; language: string }> | null>(null);
   // Public webhook URL the buyer pastes into Meta (callback + verify token).
-  const webhookUrl = `${(import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000')}/channels/whatsapp/webhook`;
+  const apiBase = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000') as string;
+  const webhookUrl = new URL(`${apiBase.replace(/\/$/, '')}/channels/whatsapp/webhook`, window.location.origin).toString();
 
   const load = useCallback(() => api.get('/channels').then((r) => setRows(r.data)).catch(() => setRows([])), []);
   useEffect(() => { load(); }, [load]);

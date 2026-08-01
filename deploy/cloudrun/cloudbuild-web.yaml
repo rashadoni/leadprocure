@@ -4,6 +4,7 @@ steps:
       - build
       - --file=apps/web/Dockerfile
       - --build-arg=VITE_API_BASE_URL=${_API_URL}
+      - --build-arg=API_UPSTREAM_HOST=${_API_HOST}
       - --build-arg=VITE_DEMO_HINT=${_DEMO_HINT}
       - --tag=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/web:${_TAG}
       - .
@@ -13,7 +14,7 @@ substitutions:
   _REGION: europe-west3
   _REPOSITORY: leadprocure
   _TAG: manual
-  _API_URL: http://localhost:3000
+  _API_URL: /api
+  _API_HOST: localhost:3000
   _DEMO_HINT: ""
 timeout: 1800s
-
