@@ -18,7 +18,7 @@ async function bootstrap(): Promise<void> {
   // Credentials mode → reflect only known origins, never a wildcard.
   app.enableCors({ origin: cfg.webOrigins, credentials: true });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  const port = parseInt(process.env.API_PORT ?? '3000', 10);
+  const port = cfg.apiPort;
   await app.listen(port);
   // eslint-disable-next-line no-console
   console.log(`Leadprocure API listening on :${port}`);

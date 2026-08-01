@@ -22,7 +22,7 @@ function bool(name: string, fallback: boolean): boolean {
 @Injectable()
 export class AppConfig {
   readonly nodeEnv = opt('NODE_ENV', 'development');
-  readonly apiPort = int('API_PORT', 3000);
+  readonly apiPort = int('PORT', int('API_PORT', 3000));
   readonly deploymentMode = opt('DEPLOYMENT_MODE', 'cloud_multi_tenant') as DeploymentMode;
 
   readonly databaseUrl = req('DATABASE_URL');

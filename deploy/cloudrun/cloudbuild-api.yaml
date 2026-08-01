@@ -1,0 +1,15 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file=apps/api/Dockerfile
+      - --tag=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/api:${_TAG}
+      - .
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/api:${_TAG}
+substitutions:
+  _REGION: europe-west3
+  _REPOSITORY: leadprocure
+  _TAG: manual
+timeout: 1800s
+

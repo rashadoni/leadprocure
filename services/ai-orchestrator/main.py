@@ -10,12 +10,13 @@ Modes:
 The NestJS side calls this via HttpAiScorer and falls back to its local heuristic if
 this service is unreachable — the platform never depends on the AI service being up.
 """
+import hmac
 import json
 import os
-from typing import Optional
+from typing import Annotated, Optional
 
 import httpx
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 app = FastAPI(title="Leadprocure AI Orchestrator", version="1.0.0")
@@ -23,6 +24,16 @@ app = FastAPI(title="Leadprocure AI Orchestrator", version="1.0.0")
 WEIGHTS = {"price": 0.5, "delivery": 0.2, "reliability": 0.3}
 ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
+INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "")
+
+
+def require_internal_token(
+    token: Annotated[Optional[str], Header(alias="X-Leadprocure-Internal-Token")] = None,
+) -> None:
+    if not INTERNAL_TOKEN:
+        raise HTTPException(status_code=503, detail="Internal authentication is not configured")
+    if token is None or not hmac.compare_digest(token, INTERNAL_TOKEN):
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 class BidIn(BaseModel):
@@ -94,7 +105,7 @@ async def llm_rationale(ranking: list[dict], currency: str) -> Optional[str]:
 
 
 @app.post("/recommend")
-async def recommend(inp: RecommendIn) -> dict:
+async def recommend(inp: RecommendIn, _: None = Depends(require_internal_token)) -> dict:
     if not inp.bids:
         return {"model": "orchestrator-heuristic-v1", "weights": WEIGHTS, "ranking": [], "recommendedBidId": None,
                 "rationale": "No opened bids to score yet."}

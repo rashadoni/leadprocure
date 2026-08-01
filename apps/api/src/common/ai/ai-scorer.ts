@@ -113,6 +113,7 @@ export class HttpAiScorer extends AiScorer {
     private readonly rc: RequestContextService,
     private readonly local: HeuristicScorer,
     private readonly baseUrl: string,
+    private readonly internalToken: string,
   ) {
     super();
   }
@@ -137,7 +138,10 @@ export class HttpAiScorer extends AiScorer {
 
       const res = await fetch(`${this.baseUrl}/recommend`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Leadprocure-Internal-Token': this.internalToken,
+        },
         signal: AbortSignal.timeout(25_000),
         body: JSON.stringify({
           currency: ev?.evaluation_currency ?? 'AZN',
@@ -178,7 +182,8 @@ export class HttpAiScorer extends AiScorer {
       provide: AiScorer,
       useFactory: (rc: RequestContextService, local: HeuristicScorer) => {
         const url = process.env.AI_ORCHESTRATOR_URL;
-        return url ? new HttpAiScorer(rc, local, url.replace(/\/$/, '')) : local;
+        const token = process.env.AI_ORCHESTRATOR_TOKEN;
+        return url && token ? new HttpAiScorer(rc, local, url.replace(/\/$/, ''), token) : local;
       },
       inject: [RequestContextService, HeuristicScorer],
     },
