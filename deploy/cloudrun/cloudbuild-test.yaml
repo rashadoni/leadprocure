@@ -31,6 +31,7 @@ steps:
 
         docker run --rm --network leadprocure-e2e --entrypoint pnpm \
           --env DATABASE_OWNER_URL="$$owner_url" \
+          --env DATABASE_APP_ROLE=app_user \
           "$$image" --filter api migration:run
 
         docker run --rm --network leadprocure-e2e --entrypoint pnpm \
