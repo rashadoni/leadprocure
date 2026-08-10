@@ -429,18 +429,32 @@ const SECTIONS = {
       en: 'An order at the catalog price is created instantly, with no new procedure. The minimum order quantity and prices are enforced automatically.',
       do: (p) => slowScroll(p, 4) },
   ]},
+  // Budgets: the section finance actually runs the company from. Every scene performs the
+  // thing it is talking about — the beats are fractions of the narration (holdUntil), so
+  // the cursor never runs ahead of the voice or freezes waiting for it.
   'buyer-budgets': { role: 'buyer', path: '/buyer/budgets', scenes: [
-    { ru: 'Бюджеты. Задайте лимит расходов на категорию и год — звёздочка означает все категории.',
-      az: 'Büdcələr. Kateqoriya və il üzrə xərc limiti təyin edin — ulduz bütün kateqoriyaları bildirir.',
-      en: 'Budgets. Set a spending limit per category and year — a star means all categories.' },
-    { ru: 'Например, отдельный бюджет на транспорт.',
-      az: 'Məsələn, nəqliyyat üçün ayrıca büdcə.',
-      en: 'For example, a separate budget for transport.',
-      do: (p) => type(p, 'form input', 'Транспорт 2026') },
-    { ru: 'Каждая утверждённая заявка расходует свой бюджет. Полоса показывает использование и остаток. При превышении система предупредит в момент утверждения, но решение оставит за вами.',
-      az: 'Hər təsdiqlənmiş sifariş öz büdcəsini xərcləyir. Zolaq istifadəni və qalığı göstərir. Aşarkən sistem təsdiq anında xəbərdarlıq edir, amma qərarı sizə buraxır.',
-      en: 'Every approved request draws down its budget. The bar shows usage and what’s left. If it goes over, the system warns you at approval time, but leaves the decision to you.',
-      do: async (p) => { await scrollTo(p, '.budget-bar'); await slowScroll(p, 2); } },
+    { az: 'Büdcələr bölməsi. Burada şirkətin xərc planı yaşayır: hansı şöbənin nə qədər pulu var, nə qədəri artıq öhdəliyə gedib və nə qədəri real olaraq xərclənib. Gəlin yuxarıdan başlayaq — şöbələr üzrə yekun cədvəlindən.',
+      do: async (p, l, h) => { await h.scrollTo('h3:text-is("Şöbələr üzrə yekun")'); await h.holdUntil(0.45); await h.moveTo('.card:has(h3:text-is("Şöbələr üzrə yekun")) table'); await h.holdUntil(0.9); } },
+    { az: 'Hər sətir bir məsrəf mərkəzidir. «Bütün təşkilat» sətri ümumi tavandır, aşağıdakılar isə ayrı-ayrı şöbələr. Məbləğ sütunu plandır — ilin və ya rübün əvvəlində razılaşdırılmış rəqəm.',
+      do: async (p, l, h) => { const rows = p.locator('.card:has(h3:text-is("Şöbələr üzrə yekun")) tbody tr'); await h.moveTo(rows.nth(0)); await h.holdUntil(0.4); await h.moveTo(rows.nth(1)); await h.holdUntil(0.72); await h.moveTo(rows.nth(2)); await h.holdUntil(0.92); } },
+    { az: 'İndi ən vacib fərq. Öhdəlik — təsdiqlənmiş, amma hələ sifariş verilməmiş sorğulardır: pul ayrılıb, hələ xərclənməyib. Faktiki isə artıq verilmiş sifarişlərdir. Sistem eyni xərci heç vaxt iki dəfə saymır: sifariş veriləndə məbləğ öhdəlikdən faktikiyə keçir.',
+      do: async (p, l, h) => { const r = p.locator('.card:has(h3:text-is("Şöbələr üzrə yekun")) tbody tr').nth(1); await h.moveTo(r.locator('td').nth(2)); await h.holdUntil(0.5); await h.moveTo(r.locator('td').nth(3)); await h.holdUntil(0.95); } },
+    { az: 'Ödənilib sütunu ayrıca dayanır — bu, ödənişi tamamlanmış qaimələrdir. Diqqət edin: o, istifadəyə əlavə olunmur. Qaimə artıq faktiki kimi sayılmış sifarişin ödənişidir, toplasaq xərc iki dəfə görünərdi.',
+      do: async (p, l, h) => { const r = p.locator('.card:has(h3:text-is("Şöbələr üzrə yekun")) tbody tr').nth(0); await h.moveTo(r.locator('td').nth(4)); await h.holdUntil(0.55); await h.moveTo(r.locator('td').nth(6)); await h.holdUntil(0.92); } },
+    { az: 'Yeni büdcə yaratmaq üçün yuxarıdakı formadan istifadə edirik. Əvvəlcə ad veririk — məsələn, marketinq üçün illik büdcə.',
+      do: async (p, l, h) => { await h.scrollTo('form input'); await h.holdUntil(0.3); await h.fill(p.locator('form input').nth(0), 'Marketinq 2026'); await h.holdUntil(0.9); } },
+    { az: 'Sonra şöbəni seçirik. Boş buraxsanız, büdcə bütün təşkilata aid olur. Konkret şöbə seçəndə isə yalnız həmin şöbənin xərcləri ora yazılır — və şöbə büdcəsi həmişə ümumi büdcədən üstündür.',
+      do: async (p, l, h) => { await h.moveTo(p.locator('form select').nth(0)); await h.holdUntil(0.4); await p.locator('form select').nth(0).selectOption({ label: 'IT' }).catch(() => {}); await h.holdUntil(0.95); } },
+    { az: 'Dövr — illik, rüblük və ya aylıq. Maliyyəçi çox vaxt rübləri izləyir, ona görə rüblük seçirik: sistem dərhal rüb nömrəsini soruşur və büdcənin tarix aralığını özü hesablayır.',
+      do: async (p, l, h) => { await h.moveTo(p.locator('form select').nth(1)); await h.holdUntil(0.35); await p.locator('form select').nth(1).selectOption('QUARTER').catch(() => {}); await h.holdUntil(0.7); await h.moveTo(p.locator('form select').nth(2)); await h.holdUntil(0.95); } },
+    { az: 'Məbləği yazırıq və səbəb sahəsini doldururuq. Səbəb təsadüfi deyil: hər məbləğ dəyişikliyi tarixçəyə düşür, ona görə sonradan «plan niyə artıb» sualına cavab həmişə qalır. Formanı təsdiq etmirik — bu, sadəcə nümayişdir.',
+      do: async (p, l, h) => { await h.fill(p.locator('form input').nth(2), '12000'); await h.holdUntil(0.55); await h.fill(p.locator('form input').nth(3), 'rüblük plan'); await h.holdUntil(0.95); } },
+    { az: 'Aşağıda büdcə hədləri var. Xəbərdarlıq həddi keçiləndə şöbənin məsul şəxsinə bildiriş gedir. Blok həddi isə boşdur — yəni təsdiq heç vaxt dayandırılmır. Doldursanız, həddi aşan sorğunu yalnız administrator yazılı əsaslandırma ilə keçirə bilər.',
+      do: async (p, l, h) => { await h.scrollTo('h3:text-is("Büdcə hədləri")'); await h.holdUntil(0.35); await h.moveTo('.card:has(h3:text-is("Büdcə hədləri")) input'); await h.holdUntil(0.65); await h.moveTo('.card:has(h3:text-is("Büdcə hədləri")) select'); await h.holdUntil(0.95); } },
+    { az: 'Cədvəldə isə hər büdcə ayrıca sətirdir. Saat düyməsi dəyişikliklər tarixçəsini açır: ilkin plan, sonrakı düzəlişlər, kim və nə üçün etdi. Bu, maliyyəçinin ən çox soruşduğu şeydir.',
+      do: async (p, l, h) => { await h.scrollTo('button[data-tip]:has-text("🕘")'); await h.holdUntil(0.3); await h.click('button[data-tip]:has-text("🕘")'); await h.holdUntil(0.75); await h.wheel(150); await h.holdUntil(0.95); } },
+    { az: 'Ən aşağıda filtrlər və ixrac var: dövr növü, il və şöbə üzrə süzgəc, sonra isə CSV düyməsi. İxrac ekranda gördüyünüz seçimi olduğu kimi fayla yazır — plan, öhdəlik, faktiki və qalıq sütunları ilə birlikdə.',
+      do: async (p, l, h) => { await h.scrollTo('button:has-text("CSV")'); await h.holdUntil(0.35); await h.moveTo(p.locator('select').last()); await h.holdUntil(0.7); await h.moveTo('button:has-text("CSV")'); await h.holdUntil(0.95); } },
   ]},
   'buyer-analytics': { role: 'buyer', path: '/buyer/analytics', scenes: [
     { ru: 'Аналитика расходов. Сверху итоги: объём закупок, экономия на тендерах, оплаченные и ожидающие счета.',
@@ -648,7 +662,11 @@ async function login(ctx, email) {
     for (const key of todo) {
       for (let i = 0; i < SECTIONS[key].scenes.length; i++) {
         const f = join(tmp, `${key}-${lang}-${i}.mp3`);
-        await tts(SECTIONS[key].scenes[i][lang], lang, f);
+        // Scenarios are written in Azerbaijani (the only language the app ships). Falling
+        // back keeps `LANGS=ru` runs from dying on an undefined narration instead of
+        // silently producing a video with a missing scene.
+        const narration = SECTIONS[key].scenes[i][lang] ?? SECTIONS[key].scenes[i].az;
+        await tts(narration, lang, f);
         SECTIONS[key].scenes[i].audio = f;
         SECTIONS[key].scenes[i].sec = dur(f);
       }
