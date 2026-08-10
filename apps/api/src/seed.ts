@@ -116,10 +116,10 @@ async function main(): Promise<void> {
   ) => {
     const id = (
       await db.query(
-        `INSERT INTO budgets(buyer_org_id, name, category, department_id, period_year, period_type,
+        `INSERT INTO budgets(buyer_org_id, name, category, department_id, period_type,
            period_start, period_end, amount_minor, currency)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'AZN') RETURNING id`,
-        [acme, name, category, departmentId, Number(start.slice(0, 4)), type, start, end, amountMinor],
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'AZN') RETURNING id`,
+        [acme, name, category, departmentId, type, start, end, amountMinor],
       )
     ).rows[0].id as string;
     // the ledger starts with the opening plan, same as it would through the API

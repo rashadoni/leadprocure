@@ -259,7 +259,7 @@ export class BudgetsService {
   ) {
     const rows = await this.rc.manager.query(
       `WITH ${this.MATCHED_CTE}
-       SELECT b.id, b.name, b.category, b.department_id, b.period_year, b.period_type,
+       SELECT b.id, b.name, b.category, b.department_id, b.period_type,
               b.period_start, b.period_end, b.amount_minor, b.currency, b.created_at,
               d.code AS department_code, d.name AS department_name,
               COALESCE(c.committed, 0) AS committed_minor,
@@ -538,7 +538,8 @@ export class BudgetsService {
     const start = iso(new Date(r.period_start));
     const end = iso(new Date(r.period_end));
     return {
-      id: r.id, name: r.name, category: r.category, periodYear: r.period_year,
+      // derived from the range, not stored — one source of truth for the period
+      id: r.id, name: r.name, category: r.category, periodYear: Number(start.slice(0, 4)),
       departmentId: r.department_id ?? null,
       departmentCode: r.department_code ?? null,
       departmentName: r.department_name ?? null,
@@ -573,12 +574,12 @@ export class BudgetsService {
     try {
       row = (
         await this.rc.manager.query(
-          `INSERT INTO budgets(buyer_org_id, name, category, department_id, period_year, period_type,
+          `INSERT INTO budgets(buyer_org_id, name, category, department_id, period_type,
              period_start, period_end, amount_minor, currency)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
           [
             auth.org_id, dto.name, dto.category?.trim() || '*', dto.departmentId ?? null,
-            period.year, period.type, period.start, period.end, dto.amountMinor, BUDGET_CURRENCY,
+            period.type, period.start, period.end, dto.amountMinor, BUDGET_CURRENCY,
           ],
         )
       )[0];
@@ -606,11 +607,11 @@ export class BudgetsService {
     let res: Array<{ id: string }>;
     try {
       res = await this.rc.manager.query(
-        `UPDATE budgets SET name=$2, category=$3, department_id=$4, period_year=$5, period_type=$6,
-           period_start=$7, period_end=$8, amount_minor=$9, currency=$10, updated_at=now()
+        `UPDATE budgets SET name=$2, category=$3, department_id=$4, period_type=$5,
+           period_start=$6, period_end=$7, amount_minor=$8, currency=$9, updated_at=now()
          WHERE id=$1 RETURNING id`,
         [
-          id, dto.name, dto.category?.trim() || '*', dto.departmentId ?? null, period.year,
+          id, dto.name, dto.category?.trim() || '*', dto.departmentId ?? null,
           period.type, period.start, period.end, dto.amountMinor, BUDGET_CURRENCY,
         ],
       );
@@ -722,7 +723,7 @@ export class BudgetsService {
   private async getOne(id: string) {
     const rows = await this.rc.manager.query(
       `WITH ${this.MATCHED_CTE}
-       SELECT b.id, b.name, b.category, b.department_id, b.period_year, b.period_type,
+       SELECT b.id, b.name, b.category, b.department_id, b.period_type,
               b.period_start, b.period_end, b.amount_minor, b.currency, b.created_at,
               d.code AS department_code, d.name AS department_name,
               COALESCE(c.committed, 0) AS committed_minor,
@@ -763,7 +764,7 @@ export class BudgetsService {
     // the array shape is kept: callers (and the UI) already treat it as a list.
     const rows = await this.rc.manager.query(
       `WITH ${this.MATCHED_CTE}
-       SELECT b.id, b.name, b.category, b.period_year, b.period_type, b.period_start,
+       SELECT b.id, b.name, b.category, b.period_type, b.period_start,
               b.amount_minor, b.currency, d.code AS department_code,
               COALESCE(c.committed, 0) AS committed_minor,
               COALESCE(c.actual, 0) AS actual_minor
@@ -778,7 +779,8 @@ export class BudgetsService {
       .map((r: any) => ({ ...r, used: Number(r.committed_minor) + Number(r.actual_minor) }))
       .filter((r: any) => r.used > Number(r.amount_minor))
       .map((r: any) => ({
-        budgetId: r.id, name: r.name, category: r.category, periodYear: r.period_year,
+        budgetId: r.id, name: r.name, category: r.category,
+        periodYear: Number(iso(new Date(r.period_start)).slice(0, 4)),
         departmentCode: r.department_code ?? null,
         periodType: r.period_type,
         periodLabel: budgetPeriodLabel(r.period_type, iso(new Date(r.period_start))),
