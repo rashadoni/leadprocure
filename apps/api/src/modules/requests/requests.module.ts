@@ -42,6 +42,11 @@ class UpsertRequestDto {
 class RejectRequestDto {
   @IsOptional() @IsString() reason?: string;
 }
+// Cancelling releases budget, so the reason is mandatory — the audit trail must say why
+// the money went back.
+class CancelRequestDto {
+  @IsString() @MinLength(3) reason!: string;
+}
 // Policy entries are buyer-configured maps; guard the envelope shape (array), leave the
 // per-entry fields to the service which persists them as-is.
 class ReplacePoliciesDto {
@@ -273,6 +278,32 @@ export class RequestsService {
     return this.get(id);
   }
 
+  // Cancel an APPROVED request that will never be ordered. Without this the budget
+  // commitment it holds is permanent: the money stays reserved against a purchase that
+  // nobody is going to make. Refused once real orders exist — cancel those first, so the
+  // spend history and the budget never disagree.
+  async cancel(id: string, auth: AccessTokenPayload, reason: string) {
+    const m = this.rc.manager;
+    await this.requireStatus(id, ['APPROVED']);
+    const live = await m.query(
+      `SELECT po_no FROM purchase_orders WHERE request_id=$1 AND status NOT IN ('CANCELLED','REJECTED')`,
+      [id],
+    );
+    if (live.length) {
+      throw new BadRequestException(
+        `Cannot cancel: order(s) ${live.map((p: any) => p.po_no).join(', ')} already exist — cancel them first`,
+      );
+    }
+    await m.query(
+      `UPDATE procurement_requests
+       SET status='CANCELLED', cancelled_at=now(), cancel_reason=$2, updated_at=now()
+       WHERE id=$1`,
+      [id, reason],
+    );
+    await this.audit.record('REQUEST_CANCELLED', 'procurement_request', id, { reason, by: auth.sub });
+    return this.get(id);
+  }
+
   async getPolicies() {
     return this.rc.manager.query(
       `SELECT id, category, min_amount_minor, max_amount_minor, method
@@ -411,6 +442,11 @@ export class RequestsController {
   @Post(':id/reject') @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   reject(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload, @Body() body: RejectRequestDto) {
     return this.requests.reject(id, auth, body?.reason);
+  }
+
+  @Post(':id/cancel') @Roles('BUYER_ADMIN')
+  cancel(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload, @Body() body: CancelRequestDto) {
+    return this.requests.cancel(id, auth, body.reason);
   }
 }
 

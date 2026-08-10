@@ -57,9 +57,10 @@ export class ContractsService {
     const poNo = `PO-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
     const po = (
       await m.query(
-        `INSERT INTO purchase_orders(contract_id, buyer_org_id, supplier_org_id, po_no, status, total_minor, currency, created_by)
-         VALUES (NULL,$1,$2,$3,'DRAFT',$4,$5,$6) RETURNING id`,
-        [auth.org_id, supplierOrgId, poNo, total, req.currency, auth.sub],
+        `INSERT INTO purchase_orders(contract_id, buyer_org_id, supplier_org_id, po_no, status, total_minor,
+           currency, created_by, request_id, department_id)
+         VALUES (NULL,$1,$2,$3,'DRAFT',$4,$5,$6,$7,$8) RETURNING id`,
+        [auth.org_id, supplierOrgId, poNo, total, req.currency, auth.sub, requestId, req.department_id],
       )
     )[0];
     for (const it of items) {
@@ -192,12 +193,28 @@ export class ContractsService {
 
     const n = await m.query(`SELECT next_document_no($1,'PO') AS n`, [auth.org_id]);
     const poNo = `PO-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
+    // Carry the originating request (award → event → request) onto the PO so budgets can
+    // swap this call-off's actual in for the request's commitment.
+    const origin = (
+      await m.query(
+        `SELECT se.request_id, pr.department_id
+         FROM contracts c
+         JOIN awards a ON a.id = c.award_id
+         JOIN sourcing_events se ON se.id = a.event_id
+         LEFT JOIN procurement_requests pr ON pr.id = se.request_id
+         WHERE c.id = $1`,
+        [contractId],
+      )
+    )[0];
     const po = (
       await m.query(
         `INSERT INTO purchase_orders(contract_id, buyer_org_id, supplier_org_id, po_no, status,
-           total_minor, currency, created_by)
-         VALUES ($1,$2,$3,$4,'DRAFT',$5,$6,$7) RETURNING id`,
-        [contractId, c.buyer_org_id, c.supplier_org_id, poNo, total, c.currency, auth.sub],
+           total_minor, currency, created_by, request_id, department_id)
+         VALUES ($1,$2,$3,$4,'DRAFT',$5,$6,$7,$8,$9) RETURNING id`,
+        [
+          contractId, c.buyer_org_id, c.supplier_org_id, poNo, total, c.currency, auth.sub,
+          origin?.request_id ?? null, origin?.department_id ?? null,
+        ],
       )
     )[0];
     for (const it of items) {

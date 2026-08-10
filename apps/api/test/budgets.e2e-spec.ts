@@ -18,6 +18,7 @@ describe('budgets & commitment control (API e2e)', () => {
   const http = () => request(app.getHttpServer());
   const bearer = (t: string) => ['Authorization', `Bearer ${t}`] as [string, string];
   let buyerA: string, buyerB: string, approverA: string;
+  let orderedRequestId: string; // the request that gets a real PO, reused by the cancel test
 
   const reg = async (name: string, email: string) => {
     const r = await http().post('/auth/register/buyer').send({ legalName: name, email, password: 'password123', fullName: name }).expect(201);
@@ -276,6 +277,65 @@ describe('budgets & commitment control (API e2e)', () => {
     expect(scoped.every((b: any) => b.departmentId === eng.id)).toBe(true);
     // and the unbudgeted report is not theirs to read
     await http().get('/budgets/unbudgeted').set(...bearer(userTok)).expect(403);
+  });
+
+  // ---------- plan / commitment / actual ----------
+
+  it('a purchase order replaces its request’s estimate — the spend is never counted twice', async () => {
+    // supplier the buyer may order from directly
+    const supReg = (await http().post('/auth/register/supplier')
+      .send({ legalName: `Bgt Sup ${tag}`, email: `bs-${tag}@t.test`, password: 'password123', fullName: 'Sup' })
+      .expect(201)).body;
+    const supOrgId = supReg.org.id as string;
+    await http().post(`/suppliers/${supOrgId}/invite`).set(...bearer(buyerA)).expect(201);
+    const rel = (await http().get('/suppliers').set(...bearer(buyerA)).expect(200)).body
+      .find((r: any) => r.supplier_org_id === supOrgId);
+    await http().post(`/suppliers/relationships/${rel.id}/status`).set(...bearer(buyerA))
+      .send({ status: 'APPROVED' }).expect(201);
+
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Actual ${tag}`, category: 'ACT', periodYear: YEAR, amountMinor: 1_000_000 }).expect(201);
+    const req = await approveRequest(buyerA, 'ACT', 100_000);
+    orderedRequestId = req.id;
+
+    let b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.name === `Actual ${tag}`);
+    expect(b.committedMinor).toBe(100_000);
+    expect(b.actualMinor).toBe(0);
+    expect(b.usedMinor).toBe(100_000);
+
+    // the order comes in at the estimate: commitment converts to actual, total unchanged
+    const po = await http().post(`/orders/direct/from-request/${req.id}`).set(...bearer(buyerA))
+      .send({ supplierOrgId: supOrgId }).expect(201);
+    b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.name === `Actual ${tag}`);
+    expect(b.committedMinor).toBe(0);
+    expect(b.actualMinor).toBe(100_000);
+    expect(b.usedMinor).toBe(100_000);
+
+    // and when the order lands ABOVE the estimate, the budget follows the real money
+    await db.query(`UPDATE purchase_orders SET total_minor = 130000 WHERE id = $1`, [po.body.id]);
+    b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.name === `Actual ${tag}`);
+    expect(b.actualMinor).toBe(130_000);
+    expect(b.usedMinor).toBe(130_000);
+    expect(b.remainingMinor).toBe(b.amountMinor - 130_000);
+  });
+
+  it('cancelling an abandoned approved request releases its commitment', async () => {
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Release ${tag}`, category: 'RELEASE', periodYear: YEAR, amountMinor: 500_000 }).expect(201);
+    const req = await approveRequest(buyerA, 'RELEASE', 200_000);
+    let b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.name === `Release ${tag}`);
+    expect(b.usedMinor).toBe(200_000);
+
+    await http().post(`/requests/${req.id}/cancel`).set(...bearer(buyerA))
+      .send({ reason: 'no longer needed' }).expect(201);
+    b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.name === `Release ${tag}`);
+    expect(b.usedMinor).toBe(0);
+    expect(b.remainingMinor).toBe(b.amountMinor);
+  });
+
+  it('a request with a live order cannot be cancelled behind the order’s back', async () => {
+    await http().post(`/requests/${orderedRequestId}/cancel`).set(...bearer(buyerA))
+      .send({ reason: 'trying to release money that is already spent' }).expect(400);
   });
 
   it('filters the list by period type and year', async () => {

@@ -33,6 +33,7 @@ export default function Requests() {
   useEffect(() => { api.get('/categories').then((r) => setCats(r.data.map((c: any) => c.code))).catch(() => {}); }, []);
   useEffect(() => { api.get('/departments').then((r) => setDeps(r.data)).catch(() => {}); }, []);
   const canApprove = ['BUYER_ADMIN', 'BUYER_APPROVER'].includes(session?.org.role ?? '');
+  const isAdmin = session?.org.role === 'BUYER_ADMIN';
 
   const load = () => api.get('/requests', { params: { ...(q ? { q } : {}), ...(depFilter ? { departmentId: depFilter } : {}), page, pageSize: PAGE_SIZE } })
     .then((r) => { setRows(r.data.items); setTotal(r.data.total); });
@@ -73,6 +74,14 @@ export default function Requests() {
 
   const act = async (id: string, action: string) => {
     try { await api.post(`/requests/${id}/${action}`); load(); }
+    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  };
+
+  // Cancelling releases the budget commitment, so the reason is required and audited.
+  const cancelRequest = async (id: string) => {
+    const reason = prompt(t('cancel_reason_prompt'));
+    if (!reason || reason.trim().length < 3) return;
+    try { await api.post(`/requests/${id}/cancel`, { reason: reason.trim() }); load(); }
     catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
@@ -200,6 +209,12 @@ export default function Requests() {
                       <button className="btn small ghost" data-tip={t('tip_reject')} onClick={() => act(r.id, 'reject')}>{t('reject')}</button>
                     </>
                   )}
+                  {/* an abandoned approval keeps holding budget until it is cancelled */}
+                  {r.status === 'APPROVED' && isAdmin && (
+                    <button className="btn small ghost" data-tip={t('tip_cancel_request')} onClick={() => cancelRequest(r.id)}>
+                      {t('cancel')}
+                    </button>
+                  )}{' '}
                   {r.status === 'APPROVED' && r.method_resolved !== 'DIRECT' && canApprove && (
                     <>
                       <button className="btn small" data-tip={t('tip_rfq')} onClick={() => makeRfq(r.id)}>RFQ 🔒</button>{' '}

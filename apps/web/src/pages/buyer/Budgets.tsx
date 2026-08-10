@@ -18,6 +18,8 @@ interface Budget {
   currency: string;
   amountMinor: number;
   committedMinor: number;
+  actualMinor: number;
+  usedMinor: number;
   remainingMinor: number;
   utilizationPct: number;
 }
@@ -62,13 +64,16 @@ export default function Budgets() {
   // Per-department rollup: what finance actually asked to see.
   const byDepartment = rows.reduce((acc: Record<string, any>, b) => {
     const key = b.departmentCode ?? '—';
-    const cur = acc[key] ?? { code: key, amount: 0, committed: 0, currency: b.currency };
+    const cur = acc[key] ?? { code: key, amount: 0, committed: 0, actual: 0, currency: b.currency };
     cur.amount += b.amountMinor;
     cur.committed += b.committedMinor;
+    cur.actual += b.actualMinor;
     acc[key] = cur;
     return acc;
   }, {});
-  const depSummary = Object.values(byDepartment) as Array<{ code: string; amount: number; committed: number; currency: string }>;
+  const depSummary = Object.values(byDepartment) as Array<{
+    code: string; amount: number; committed: number; actual: number; currency: string;
+  }>;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -168,19 +173,21 @@ export default function Budgets() {
           <h3>{t('bud_by_department')}</h3>
           <table>
             <thead><tr>
-              <th>{t('department')}</th><th>{t('amount')}</th><th>{t('committed')}</th>
+              <th>{t('department')}</th><th>{t('amount')}</th><th>{t('committed')}</th><th>{t('actual')}</th>
               <th>{t('remaining')}</th><th style={{ width: 180 }}>{t('utilization')}</th>
             </tr></thead>
             <tbody>
               {depSummary.map((d) => {
-                const pct = d.amount > 0 ? Math.round((d.committed / d.amount) * 1000) / 10 : 0;
-                const over = d.committed > d.amount;
+                const used = d.committed + d.actual;
+                const pct = d.amount > 0 ? Math.round((used / d.amount) * 1000) / 10 : 0;
+                const over = used > d.amount;
                 return (
                   <tr key={d.code}>
                     <td><b>{d.code === '—' ? t('bud_org_wide') : d.code}</b></td>
                     <td>{fmtMoney(d.amount, d.currency)}</td>
                     <td>{fmtMoney(d.committed, d.currency)}</td>
-                    <td className={over ? 'error' : ''}>{fmtMoney(d.amount - d.committed, d.currency)}</td>
+                    <td>{fmtMoney(d.actual, d.currency)}</td>
+                    <td className={over ? 'error' : ''}>{fmtMoney(d.amount - used, d.currency)}</td>
                     <td>
                       <div className="budget-bar">
                         <div className={`budget-fill ${over ? 'over' : ''}`} style={{ width: `${Math.min(100, pct)}%` }} />
@@ -213,7 +220,7 @@ export default function Budgets() {
         <table>
           <thead><tr>
             <th>{t('name')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('period')}</th>
-            <th>{t('amount')}</th><th>{t('committed')}</th><th>{t('remaining')}</th>
+            <th>{t('amount')}</th><th>{t('committed')}</th><th>{t('actual')}</th><th>{t('remaining')}</th>
             <th style={{ width: 180 }}>{t('utilization')}</th>{isAdmin && <th>{t('actions')}</th>}
           </tr></thead>
           <tbody>
@@ -226,7 +233,8 @@ export default function Budgets() {
                   <td data-tip={b.departmentName || undefined}>{b.departmentCode ?? t('bud_org_wide')}</td>
                   <td data-tip={`${b.periodStart} → ${b.periodEnd}`}>{b.periodLabel}</td>
                   <td>{fmtMoney(b.amountMinor, b.currency)}</td>
-                  <td>{fmtMoney(b.committedMinor, b.currency)}</td>
+                  <td data-tip={t('committed_hint')}>{fmtMoney(b.committedMinor, b.currency)}</td>
+                  <td data-tip={t('actual_hint')}>{fmtMoney(b.actualMinor, b.currency)}</td>
                   <td className={over ? 'error' : ''}>{fmtMoney(b.remainingMinor, b.currency)}</td>
                   <td>
                     <div className="budget-bar">
@@ -243,7 +251,7 @@ export default function Budgets() {
                 </tr>
               );
             })}
-            {rows.length === 0 && <tr><td colSpan={isAdmin ? 9 : 8} className="hint">—</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={isAdmin ? 10 : 9} className="hint">—</td></tr>}
           </tbody>
         </table>
       </div>

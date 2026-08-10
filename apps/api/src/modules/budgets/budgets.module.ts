@@ -110,10 +110,16 @@ export class BudgetsService {
   //
   // Dated by APPROVAL, not creation: a request raised in December and approved in January
   // is January's commitment. `period_end + 1` keeps the last day of the range inclusive.
+  // Live POs supersede the estimate they came from: once a request turns into an order,
+  // the real order value is the number that counts, and the estimate must stop counting
+  // too (otherwise the same spend lands in the budget twice). CANCELLED/REJECTED orders
+  // are not live, so they release the actual and the estimate takes over again.
   private readonly MATCHED_CTE = `
     matched AS (
       SELECT pr.id, pr.request_no, pr.title, pr.category, pr.department_id, pr.currency,
-             pr.estimated_total_minor, pr.approved_at, m.budget_id
+             pr.estimated_total_minor, pr.approved_at, m.budget_id,
+             COALESCE(po.actual_minor, 0)::bigint AS actual_minor,
+             (po.actual_minor IS NOT NULL) AS has_order
       FROM procurement_requests pr
       LEFT JOIN LATERAL (
         SELECT b.id AS budget_id
@@ -127,12 +133,21 @@ export class BudgetsService {
                  b.period_start DESC, b.id
         LIMIT 1
       ) m ON true
+      LEFT JOIN LATERAL (
+        SELECT sum(o.total_minor)::bigint AS actual_minor
+        FROM purchase_orders o
+        WHERE o.request_id = pr.id AND o.status NOT IN ('CANCELLED','REJECTED')
+        HAVING count(*) > 0
+      ) po ON true
       WHERE pr.status = 'APPROVED' AND pr.approved_at IS NOT NULL
     )`;
 
+  // Plan / Commitment / Actual, with commitment and actual mutually exclusive per request.
   private readonly COMMITTED_JOIN = `
     LEFT JOIN (
-      SELECT budget_id, sum(estimated_total_minor)::bigint AS committed
+      SELECT budget_id,
+             sum(CASE WHEN has_order THEN 0 ELSE estimated_total_minor END)::bigint AS committed,
+             sum(actual_minor)::bigint AS actual
       FROM matched WHERE budget_id IS NOT NULL GROUP BY budget_id
     ) c ON c.budget_id = b.id`;
 
@@ -150,7 +165,8 @@ export class BudgetsService {
        SELECT b.id, b.name, b.category, b.department_id, b.period_year, b.period_type,
               b.period_start, b.period_end, b.amount_minor, b.currency, b.created_at,
               d.code AS department_code, d.name AS department_name,
-              COALESCE(c.committed, 0) AS committed_minor
+              COALESCE(c.committed, 0) AS committed_minor,
+              COALESCE(c.actual, 0) AS actual_minor
        FROM budgets b
        LEFT JOIN departments d ON d.id = b.department_id
        ${this.COMMITTED_JOIN}
@@ -207,6 +223,10 @@ export class BudgetsService {
   private shape(r: any) {
     const amount = Number(r.amount_minor);
     const committed = Number(r.committed_minor);
+    const actual = Number(r.actual_minor ?? 0);
+    // Utilization is what the budget is actually carrying: orders placed plus estimates
+    // not yet ordered.
+    const used = committed + actual;
     const start = iso(new Date(r.period_start));
     const end = iso(new Date(r.period_end));
     return {
@@ -216,9 +236,10 @@ export class BudgetsService {
       departmentName: r.department_name ?? null,
       periodType: r.period_type, periodStart: start, periodEnd: end,
       periodLabel: budgetPeriodLabel(r.period_type, start),
-      currency: r.currency, amountMinor: amount, committedMinor: committed,
-      remainingMinor: amount - committed,
-      utilizationPct: amount > 0 ? Math.round((committed / amount) * 1000) / 10 : 0,
+      currency: r.currency, amountMinor: amount,
+      committedMinor: committed, actualMinor: actual, usedMinor: used,
+      remainingMinor: amount - used,
+      utilizationPct: amount > 0 ? Math.round((used / amount) * 1000) / 10 : 0,
       createdAt: r.created_at,
     };
   }
@@ -309,7 +330,8 @@ export class BudgetsService {
       `WITH ${this.MATCHED_CTE}
        SELECT b.id, b.name, b.category, b.period_year, b.period_type, b.period_start,
               b.amount_minor, b.currency, d.code AS department_code,
-              COALESCE(c.committed, 0) AS committed_minor
+              COALESCE(c.committed, 0) AS committed_minor,
+              COALESCE(c.actual, 0) AS actual_minor
        FROM matched mine
        JOIN budgets b ON b.id = mine.budget_id
        LEFT JOIN departments d ON d.id = b.department_id
@@ -318,15 +340,16 @@ export class BudgetsService {
       [req.id],
     );
     return rows
-      .filter((r: any) => Number(r.committed_minor) > Number(r.amount_minor))
+      .map((r: any) => ({ ...r, used: Number(r.committed_minor) + Number(r.actual_minor) }))
+      .filter((r: any) => r.used > Number(r.amount_minor))
       .map((r: any) => ({
         budgetId: r.id, name: r.name, category: r.category, periodYear: r.period_year,
         departmentCode: r.department_code ?? null,
         periodType: r.period_type,
         periodLabel: budgetPeriodLabel(r.period_type, iso(new Date(r.period_start))),
         currency: r.currency, amountMinor: Number(r.amount_minor),
-        committedMinor: Number(r.committed_minor),
-        overByMinor: Number(r.committed_minor) - Number(r.amount_minor),
+        committedMinor: r.used,
+        overByMinor: r.used - Number(r.amount_minor),
       }));
   }
 }

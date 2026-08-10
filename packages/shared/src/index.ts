@@ -94,7 +94,9 @@ export const SUPPLIER_RELATIONSHIP_STATUSES = ['INVITED', 'APPROVED', 'BLOCKED']
 export type SupplierRelationshipStatus = (typeof SUPPLIER_RELATIONSHIP_STATUSES)[number];
 
 // ---------------- Procurement requests ----------------
-export const REQUEST_STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'] as const;
+// CANCELLED is terminal for an APPROVED request that will never be ordered — it releases
+// the budget commitment the approval was holding.
+export const REQUEST_STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED', 'CANCELLED'] as const;
 export type RequestStatus = (typeof REQUEST_STATUSES)[number];
 
 export const PROCUREMENT_METHODS = ['DIRECT', 'RFQ', 'OPEN_TENDER'] as const;
@@ -231,6 +233,7 @@ export const AUDIT_ACTIONS = [
   'DEPARTMENT_UPDATED',
   'DEPARTMENT_DELETED',
   'MEMBER_DEPARTMENT_SET',
+  'REQUEST_CANCELLED',
 ] as const;
 
 // ---------------- Invoices (P2P) ----------------
