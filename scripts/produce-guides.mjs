@@ -100,6 +100,16 @@ async function moveToLoc(page, loc, hold = 650) {
   return true;
 }
 const L = (page, sel) => (typeof sel === 'string' ? page.locator(sel).first() : sel);
+// Pick a <select> option by the START of its label. Options are often "CODE · Full name",
+// and selectOption({label}) needs an EXACT match — a near-miss silently waits out the whole
+// default timeout, which lands in the recording as a dead pause the voice track can't fill.
+async function selectByPrefix(page, sel, prefix) {
+  const opt = page.locator(`${sel} option`).filter({ hasText: prefix }).first();
+  if (!(await opt.count())) return false;
+  const value = await opt.getAttribute('value');
+  await page.locator(sel).selectOption(value).catch(() => {});
+  return true;
+}
 async function moveTo(page, sel, hold) { return moveToLoc(page, L(page, sel), hold); }
 async function fillAt(page, sel, text, delay = 65) {
   const loc = L(page, sel);
@@ -285,55 +295,28 @@ const SECTIONS = {
       do: async (p, l, h) => { await h.scrollTo('a[href="/buyer/budgets"]'); await h.holdUntil(0.4); await h.moveTo('a[href="/buyer/budgets"]'); await h.holdUntil(0.75); await h.click('a[href="/buyer/budgets"]'); await h.holdUntil(0.95); } },
   ]},
   'buyer-requests': { role: 'buyer', path: '/buyer/requests', scenes: [
-    { ru: 'Раздел «Заявки» — отсюда начинается любая закупка. Заявка фиксирует внутреннюю потребность компании: что нужно, в каком количестве и по какой ориентировочной цене. Давайте создадим новую заявку вместе, шаг за шагом.',
-      az: 'Sifarişlər bölməsi — istənilən satınalma buradan başlayır. Sifariş şirkətin daxili tələbatını qeyd edir: nə lazımdır, hansı miqdarda və təxminən hansı qiymətə. Gəlin birlikdə, addım-addım yeni sifariş yaradaq.',
-      en: 'The Requests section — every purchase begins here. A request captures an internal need: what is needed, in what quantity, and at roughly what price. Let’s create a new one together, step by step.',
-      do: async (p, l, h) => { await h.moveTo(p.locator('form > .row').nth(0).locator('input').nth(0)); await h.holdUntil(0.55); await h.moveTo('table'); await h.holdUntil(0.92); } },
-    { ru: 'Сначала — название и категория. Категория здесь ключевая: именно по ней срабатывает политика метода закупки, ведётся контроль бюджета и строится аналитика по направлениям. Наводим курсор на поле и заполняем.',
-      az: 'Əvvəlcə ad və kateqoriya. Kateqoriya burada açardır: məhz ona görə satınalma metodu siyasəti işə düşür, büdcə nəzarəti aparılır və istiqamətlər üzrə analitika qurulur. Kursoru sahəyə gətirib doldururuq.',
-      en: 'First, the title and category. The category is pivotal: it drives the procurement-method policy, budget control, and per-category analytics. We move the cursor to the field and fill it in.',
-      do: async (p, lang, h) => {
-        await h.fill(p.locator('form > .row').nth(0).locator('input').nth(0), FILL[lang].reqTitle);
-        await h.holdUntil(0.55);
-        await h.fill('input[list="req-categories"]', 'IT');
-        await h.holdUntil(0.92);
-      } },
-    { ru: 'Теперь позиции. По каждой указываем наименование, количество и цену за единицу. Итоговую сумму считает сервер — по количеству и цене каждой позиции, поэтому она всегда точная и защищена от подмены. Строк можно добавить сколько угодно кнопкой «плюс позиция».',
-      az: 'İndi mövqelər. Hər biri üçün ad, miqdar və vahid qiyməti göstəririk. Yekun məbləği server hesablayır — hər mövqenin sayı və qiymətinə görə, ona görə həmişə dəqiqdir və dəyişdirilmədən qorunur. «Mövqe əlavə et» düyməsi ilə istənilən qədər sətir əlavə etmək olar.',
-      en: 'Now the line items. For each we enter a name, a quantity and a unit price. The total is computed by the server — from each line’s quantity and price — so it is always accurate and protected from tampering. You can add as many rows as needed with the plus-item button.',
-      do: async (p, lang, h) => {
-        const row = p.locator('form > .row').nth(1);
-        await h.fill(row.locator('input').nth(0), FILL[lang].reqItem);
-        await h.holdUntil(0.35);
-        await h.fill(row.locator('input').nth(1), '10');
-        await h.holdUntil(0.5);
-        await h.fill(row.locator('input').nth(2), '1500');
-        await h.holdUntil(0.72);
-        await h.hover('button.ghost.small', 900);
-        await h.holdUntil(0.92);
-      } },
-    { ru: 'Нажимаем «Создать» — и заявка появляется в реестре ниже, со статусом «черновик». Дальше её отправляют на утверждение; причём утвердить собственную заявку нельзя — это разделение полномочий, второй пары глаз.',
-      az: 'Yarat düyməsini basırıq — və sifariş aşağıdakı reyestrdə «qaralama» statusu ilə görünür. Sonra o, təsdiqə göndərilir; özü də öz sifarişini təsdiqləmək olmaz — bu, səlahiyyətlərin bölünməsidir, ikinci cüt gözdür.',
-      en: 'We click Create — and the request appears in the register below as a draft. Then it’s sent for approval; note you cannot approve your own request — that’s segregation of duties, a second pair of eyes.',
-      do: async (p, l, h) => { await h.click('form button.btn:not(.ghost):not([type=button])', 1100); await h.holdUntil(0.45); await h.scrollTo('table'); await h.holdUntil(0.92); } },
-    { ru: 'У утверждённой заявки открывается выбор процедуры закупки. Наведём курсор на кнопки — и подсказки объяснят каждую: RFQ — закрытый тендер с запечатанными ценами; RFP — с техническим предложением; RFI — сбор информации без цен; а молния — реверс-аукцион, где поставщики снижают цену в реальном времени. Мелкие суммы политика отправляет напрямую в заказ, без тендера.',
-      az: 'Təsdiqlənmiş sifarişdə satınalma proseduru seçimi açılır. Kursoru düymələrin üzərinə gətirək — ipuçları hər birini izah edəcək: RFQ — möhürlü qiymətlərlə qapalı tender; RFP — texniki təkliflə; RFI — qiymətsiz məlumat toplama; şimşək isə revers-auksiondur, təchizatçılar qiyməti real vaxtda aşağı salır. Kiçik məbləğləri siyasət tendersiz birbaşa sifarişə göndərir.',
-      en: 'An approved request opens the choice of procurement procedure. We hover the buttons and the tooltips explain each: RFQ — a sealed tender with encrypted prices; RFP — with a technical proposal; RFI — information gathering without prices; and the lightning — a reverse auction where suppliers drive the price down in real time. Small amounts go straight to a direct order, no tender.',
-      do: async (p, l, h) => {
-        await h.hover('button:has-text("RFQ")', 1400); await h.holdUntil(0.4);
-        await h.hover('button:has-text("RFP")', 1400); await h.holdUntil(0.62);
-        await h.hover('button:has-text("RFI")', 1400); await h.holdUntil(0.92);
-      } },
-    { ru: 'Кто решает, будет тендер или прямой заказ? Не автор заявки — колонку «метод» заполняет система в момент утверждения, по политике организации: до какой суммы прямой заказ, с какой — тендер. Настроить шкалу администратор может по ссылке с весами прямо отсюда — так исключаются закупки в обход конкуренции.',
-      az: 'Tender, yoxsa birbaşa sifariş olacağını kim həll edir? Sifarişin müəllifi yox — «metod» sütununu sistem təsdiq anında doldurur, təşkilatın siyasətinə görə: hansı məbləğə qədər birbaşa sifariş, hansından tender. Şkalanı administrator elə buradakı tərəzili keçidlə tənzimləyə bilər — beləcə rəqabətdən yan keçən satınalmalar istisna olunur.',
-      en: 'Who decides between a tender and a direct order? Not the requester — the method column is filled by the system at approval time, from the organisation’s policy: up to which amount a direct order, from which a tender. The admin tunes the scale via the scales link right here — which rules out purchases that dodge competition.',
-      do: async (p, l, h) => {
-        await h.holdUntil(0.25);
-        await h.hover('a:has-text("⚖️")', 1800);
-        await h.holdUntil(0.6);
-        await h.scrollTo('table');
-        await h.holdUntil(0.92);
-      } },
+    { az: 'Sifarişlər bölməsi — hər satınalma buradan başlayır. Sifariş daxili tələbatdır: kimsə nəyəsə ehtiyac duyur, onu rəsmiləşdirir, təsdiqdən keçirir. Yalnız bundan sonra pul hərəkət edir.',
+      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.45); await h.moveTo('form'); await h.holdUntil(0.9); } },
+    { az: 'Yeni sifariş formasından başlayaq. Başlıq — nəyin və nə üçün alındığını bir cümlə ilə izah edir. Təsdiqləyən adam ilk növbədə məhz bunu oxuyur.',
+      do: async (p, l, h) => { await h.fill('[data-testid=req-title]', 'Anbar üçün rəflər'); await h.holdUntil(0.9); } },
+    { az: 'Kateqoriya — nə alırıq. O, iki şeyə təsir edir: hansı büdcədən pul gedəcək və satınalma metodu nə olacaq. Siyahı parametrlərdəki vahid kataloqdan gəlir, ona görə «IT» və «it» ayrılmır.',
+      do: async (p, l, h) => { await h.fill('[data-testid=req-category]', 'OFFICE'); await h.holdUntil(0.9); } },
+    { az: 'Şöbə — kim xərcləyir. Boş buraxsanız, sistem sizin öz şöbənizi qoyur. Bu sahə büdcənin şöbələr üzrə bölgüsünün əsasıdır: sifariş məhz buradan öz məsrəf mərkəzinə düşür.',
+      do: async (p, l, h) => { await h.moveTo('[data-testid=req-department]'); await h.holdUntil(0.4); await selectByPrefix(p, '[data-testid=req-department]', 'OPS'); await h.holdUntil(0.92); } },
+    { az: 'İndi mövqelər. Ad, say və vahid qiymətin smetası. Diqqət: siz ümumi məbləği yazmırsınız — server onu sətirlərdən özü hesablayır, ona görə səhv və ya uydurma cəm mümkün deyil.',
+      do: async (p, l, h) => { await h.fill('[data-testid=item-name-0]', 'Metal rəf'); await h.holdUntil(0.4); await h.fill('[data-testid=item-qty-0]', '6'); await h.holdUntil(0.65); await h.fill('[data-testid=item-price-0]', '180'); await h.holdUntil(0.93); } },
+    { az: 'Bir neçə mövqe lazımdırsa, sadəcə sətir əlavə edirsiniz. Sifariş qaralama olaraq yaradılır — istənilən vaxt düzəliş etmək olar. Biz indi yaratmırıq, forma yalnız nümayiş üçündür.',
+      do: async (p, l, h) => { await h.moveTo('form button.ghost'); await h.holdUntil(0.5); await h.moveTo('form button.btn:not(.ghost)'); await h.holdUntil(0.92); } },
+    { az: 'Aşağıda sifarişlərin reyestri. Sütunlarda nömrə, başlıq, kateqoriya və şöbə var — şöbə sütunu sayəsində dərhal görünür ki, hansı xərci hansı bölmə istəyib.',
+      do: async (p, l, h) => { await h.scrollTo('table'); await h.holdUntil(0.4); await h.moveTo(p.locator('table tbody tr').nth(0)); await h.holdUntil(0.9); } },
+    { az: 'Statuslar belə oxunur: qaralama — hələ redaktə olunur, göndərilib — təsdiq gözləyir, təsdiqlənib — satınalmanı başlatmaq olar. Rədd edilmiş sifariş isə tarixçədə qalır, silinmir.',
+      do: async (p, l, h) => { const r = p.locator('table tbody tr'); await h.moveTo(r.nth(0).locator('.badge')); await h.holdUntil(0.4); await h.moveTo(r.nth(1).locator('.badge')); await h.holdUntil(0.7); await h.moveTo(r.nth(2).locator('.badge')); await h.holdUntil(0.93); } },
+    { az: 'Təsdiq düyməsi iki mərhələlidir. Birinci klik sifarişin içini açır — mövqelər, məbləğ və ən əsası büdcəyə təsiri: hansı büdcədən nə qədər gedəcək və faiz neçəyə çatacaq. Yəni qərar məlumatsız verilmir.',
+      do: async (p, l, h) => { await h.scrollTo('table'); await h.holdUntil(0.35); await h.moveTo(p.locator('tbody .btn').first()); await h.holdUntil(0.92); } },
+    { az: 'Təsdiqlənmiş sifarişdən sonra prosedur seçilir: qapalı tender, texniki təkliflə tender, məlumat sorğusu və ya revers-auksion. Kiçik məbləğləri siyasət avtomatik birbaşa sifarişə göndərir — metodu istifadəçi seçmir, qaydalar seçir.',
+      do: async (p, l, h) => { await h.wheel(220); await h.holdUntil(0.4); await h.moveTo('.hint'); await h.holdUntil(0.92); } },
+    { az: 'Və sonuncu: təsdiqlənmiş, amma artıq lazım olmayan sifarişi ləğv etmək olar. Bu vacibdir, çünki ləğv büdcədəki öhdəliyi azad edir — pul boş yerə bloklanmış qalmır.',
+      do: async (p, l, h) => { await h.moveTo(p.locator('tbody .btn').first()); await h.holdUntil(0.5); await h.wheel(180); await h.holdUntil(0.92); } },
   ]},
   'buyer-events': { role: 'buyer', path: '/buyer/events', scenes: [
     { ru: 'Раздел «Тендеры». Все процедуры со статусами — наведите на статус, и он объяснит себя — и количество поданных ставок по каждой.',
