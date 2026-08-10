@@ -83,6 +83,18 @@ export interface BudgetPeriod {
 export const BUDGET_CURRENCY = 'AZN';
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
+const DAY_MS = 86_400_000;
+
+// Share of a period already gone, clamped to 0–100: a period still ahead reads 0, a closed
+// one reads 100, so a finished budget never looks "ahead of pace".
+function elapsedShare(from: string, to: string, today: string): number {
+  const start = Date.parse(`${from}T00:00:00Z`);
+  const end = Date.parse(`${to}T00:00:00Z`) + DAY_MS; // end date is inclusive
+  const now = Date.parse(`${today}T00:00:00Z`) + DAY_MS;
+  if (!(end > start)) return 100;
+  const pct = ((now - start) / (end - start)) * 100;
+  return Math.round(Math.min(100, Math.max(0, pct)) * 10) / 10;
+}
 
 // Sentinel scope for a BUYER_USER with no home department: matches no budget, so they see
 // an empty list instead of the whole organization's plan.
@@ -446,7 +458,12 @@ export class BudgetsService {
   //
   // Paid is reported BESIDE the others, never added into them: an invoice is settlement of
   // an order already counted as actual, so summing them would double the spend.
-  async rollup(filter: { year?: number; periodType?: string; scopeDepartmentId?: string | null } = {}) {
+  async rollup(
+    filter: {
+      year?: number; periodType?: string; from?: string; to?: string;
+      scopeDepartmentId?: string | null;
+    } = {},
+  ) {
     const budgets = await this.list(filter);
     const byDep = new Map<string, any>();
     for (const b of budgets) {
@@ -478,15 +495,25 @@ export class BudgetsService {
       if (cur && row.currency === cur.currency) cur.paidMinor += Number(row.paid);
     }
 
+    const today = iso(new Date());
     return [...byDep.values()]
-      .map((d) => ({
-        ...d,
-        usedMinor: d.committedMinor + d.actualMinor,
-        remainingMinor: d.amountMinor - (d.committedMinor + d.actualMinor),
-        utilizationPct: d.amountMinor > 0
-          ? Math.round(((d.committedMinor + d.actualMinor) / d.amountMinor) * 1000) / 10
-          : 0,
-      }))
+      .map((d) => {
+        const used = d.committedMinor + d.actualMinor;
+        const utilizationPct = d.amountMinor > 0 ? Math.round((used / d.amountMinor) * 1000) / 10 : 0;
+        // Pace: how much of the period has gone versus how much of the plan. "80% spent in
+        // month five" is the thing finance wants to catch, and a bare utilization figure
+        // never says it — 80% is fine in November and alarming in May.
+        const elapsedPct = elapsedShare(d.periodFrom, d.periodTo, today);
+        return {
+          ...d,
+          usedMinor: used,
+          remainingMinor: d.amountMinor - used,
+          utilizationPct,
+          elapsedPct,
+          // positive = burning faster than the calendar
+          paceDeltaPct: Math.round((utilizationPct - elapsedPct) * 10) / 10,
+        };
+      })
       .sort((a, b) => (a.departmentCode ?? '').localeCompare(b.departmentCode ?? ''));
   }
 
@@ -819,10 +846,18 @@ export class BudgetsController {
     @CurrentUser() auth: AccessTokenPayload,
     @Query('year') year?: string,
     @Query('periodType') periodType?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    // `current=1` is the common case: only the periods that contain today, which is what
+    // pace is meaningful for.
+    @Query('current') current?: string,
   ) {
+    const today = new Date().toISOString().slice(0, 10);
     return this.budgets.rollup({
       year: year ? Number(year) : undefined,
       periodType: periodType || undefined,
+      from: current ? today : from || undefined,
+      to: current ? today : to || undefined,
       scopeDepartmentId: await this.budgets.scopeFor(auth),
     });
   }

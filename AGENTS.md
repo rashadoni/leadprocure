@@ -193,7 +193,17 @@ The budget module finance actually uses. Read this before changing anything unde
   department, plus PAID taken from `invoices.department_id` (denormalized at submission, so
   it survives a PO being re-scoped). **Paid is reported beside the others, never summed into
   them** — an invoice settles an order already counted as actual, so adding it would double
-  the spend.
+  the spend. Each row also carries `elapsedPct` and `paceDeltaPct` (utilization minus
+  elapsed): 80% spent is unremarkable in November and alarming in May, and a bare
+  utilization number cannot tell them apart. `?current=1` narrows to periods containing
+  today, which is the only window pace means anything in.
+- **Analytics** (`/buyer/analytics`) splits spend by department off
+  `purchase_orders.department_id`, NOT by walking PO→contract→event→request the way the
+  category split has to. That chain breaks on direct purchases and catalog call-offs — the
+  very spend a department head asks about — which is why the column is denormalized. The
+  budget-pace card calls `/budgets/rollup` separately rather than reaching into
+  BudgetsService from the dashboard: budgets sit behind `@RequiresFeature('controls.budgets')`
+  and going through the controller keeps that licence gate honest.
 - **Threshold warnings are addressed** to `departments.owner_user_id` via
   `notify.notifyUser()`, falling back to the whole org only when nobody is named. A budget
   alarm mailed to 40 people is one nobody acts on.
