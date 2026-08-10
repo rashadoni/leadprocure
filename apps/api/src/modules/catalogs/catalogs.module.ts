@@ -112,7 +112,12 @@ export class CatalogsService {
   }
 
   // Instant re-order from an active catalog — becomes a PO (no tender), MOQ enforced.
-  async order(catalogId: string, lines: Array<{ catalogItemId: string; qty: number }>, auth: AccessTokenPayload) {
+  async order(
+    catalogId: string,
+    lines: Array<{ catalogItemId: string; qty: number }>,
+    auth: AccessTokenPayload,
+    departmentId?: string,
+  ) {
     const m = this.rc.manager;
     const cat = await this.requireCatalog(catalogId, auth);
     if (cat.status !== 'ACTIVE') throw new BadRequestException('Catalog must be ACTIVE');
@@ -132,13 +137,30 @@ export class CatalogsService {
       poLines.push({ ci, qty: Number(l.qty), lineTotal });
     }
 
+    // Which cost centre this call-off is charged to: an explicit pick, else the buyer's
+    // home department. Without one the spend lands in the "outside every budget" report.
+    let dep: string | null = departmentId ?? null;
+    if (dep) {
+      const found = await m.query(`SELECT id, is_active FROM departments WHERE id = $1`, [dep]);
+      if (!found.length) throw new BadRequestException('Unknown department');
+      if (!found[0].is_active) throw new BadRequestException('Department is inactive');
+    } else {
+      dep = (
+        await m.query(
+          `SELECT department_id FROM memberships WHERE user_id = $1 AND org_id = $2 AND department_id IS NOT NULL LIMIT 1`,
+          [auth.sub, auth.org_id],
+        )
+      )[0]?.department_id ?? null;
+    }
+
     const n = await m.query(`SELECT next_document_no($1,'PO') AS n`, [auth.org_id]);
     const poNo = `PO-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
     const po = (
       await m.query(
-        `INSERT INTO purchase_orders(contract_id, buyer_org_id, supplier_org_id, po_no, status, total_minor, currency, created_by)
-         VALUES ($1,$2,$3,$4,'DRAFT',$5,$6,$7) RETURNING id`,
-        [cat.contract_id, auth.org_id, cat.supplier_org_id, poNo, total, cat.currency, auth.sub],
+        `INSERT INTO purchase_orders(contract_id, buyer_org_id, supplier_org_id, po_no, status, total_minor,
+           currency, created_by, department_id)
+         VALUES ($1,$2,$3,$4,'DRAFT',$5,$6,$7,$8) RETURNING id`,
+        [cat.contract_id, auth.org_id, cat.supplier_org_id, poNo, total, cat.currency, auth.sub, dep],
       )
     )[0];
     let line = 1;
@@ -182,6 +204,9 @@ class CatalogOrderItemDto {
 }
 class CatalogOrderDto {
   @IsArray() @ValidateNested({ each: true }) @Type(() => CatalogOrderItemDto) items!: CatalogOrderItemDto[];
+  // A catalog call-off skips the request stage, so it is the only chance to say whose
+  // budget it comes out of. Omitted → the ordering user's home department.
+  @IsOptional() @IsUUID() departmentId?: string;
 }
 
 @Controller('catalogs')
@@ -226,7 +251,7 @@ export class CatalogsController {
   @Post(':id/order')
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
   order(@Param('id') id: string, @Body() body: CatalogOrderDto, @CurrentUser() auth: AccessTokenPayload) {
-    return this.catalogs.order(id, body.items, auth);
+    return this.catalogs.order(id, body.items, auth, body.departmentId);
   }
 }
 

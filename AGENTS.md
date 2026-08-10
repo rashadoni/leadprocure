@@ -100,9 +100,8 @@ All functional roadmap blocks are built and green (**143 e2e, 17 suites**):
   (rebuilt `invoice_set_status(uuid, invoice_status, text)`); VÖEN validated (10 digits).
   Tests: `integrity.e2e-spec.ts`. Test helper `addApprover()` gives specs a second approver.
 - **Budgets & commitment control** (0018, feature `controls.budgets`): private buyer table,
-  encumbrance model — APPROVED requests commit against a matching budget (category + year +
-  currency); utilization derived, not stored. Soft/non-blocking: request approval attaches
-  `budgetWarnings` but never blocks. UI `/buyer/budgets`.
+  encumbrance model; utilization derived, not stored. **Superseded in scope by the
+  budget-by-department work below — read that before touching anything budget-related.**
 - **Spend analytics** (`GET /dashboard/spend-analytics`, buyer roles): spend = ACCEPTED POs;
   zero-filled 12-month series (generate_series), category via PO→contract→event→request
   (direct POs = uncategorized), top-5 suppliers, per-event tender savings, invoice
@@ -136,8 +135,74 @@ All functional roadmap blocks are built and green (**143 e2e, 17 suites**):
   queue on the request context flushed by TransactionInterceptor ONLY after commit
   (rolled-back actions never send mail). NotifyEmailer mails the recipient org's ACTIVE
   users (cap 50) on its own DataSource connection; body fields come from a WHITELIST
-  (po_no/invoice_no/status/title/no) so sealed amounts can't leak into outbound mail.
-  Console provider when SMTP_HOST is empty; real SMTP via env in prod.
+  (po_no/invoice_no/status/title/no/budget/utilization) so sealed amounts can't leak into
+  outbound mail. Console provider when SMTP_HOST is empty; real SMTP via env in prod.
+
+## 4e. Budget by department (migs 0028–0033) — DONE
+
+The budget module finance actually uses. Read this before changing anything under
+`modules/budgets`, `modules/departments`, or the approval path in `modules/requests`.
+
+- **Departments** (0028) = the "who spends" dimension next to the category's "what is
+  bought". Curated per buyer (RLS by `buyer_org_id`, like `procurement_categories`), with
+  an optional `parent_id` tree and an `owner_user_id`. `procurement_requests.department_id`
+  and `memberships.department_id` (the author's home department, the default on new
+  requests). **Every FK into `departments` is ON DELETE SET NULL, never RESTRICT** — orgs
+  cascade-delete both departments and requests, and a RESTRICT races that cascade and blocks
+  org deletion (which every e2e `afterAll` does). "In use" is a service-level 409; retiring
+  (`is_active=false`) is the supported way out, and an inactive department is refused on new
+  requests.
+- **Periods** (0029): a budget owns an inclusive date RANGE (`period_start`/`period_end`)
+  plus `period_type` (YEAR/QUARTER/MONTH). `resolveBudgetPeriod()` in `budgets.module.ts` is
+  the ONE place that turns "2026 / Q3" into a range — go through it, never build dates
+  inline. `period_year` is kept and back-filled only so the migration could ship ahead of
+  the code; dropping it is a later migration.
+- **`procurement_requests.approved_at` is the date budgets slice by**, not `created_at`.
+  A request raised on 28 Dec and approved on 5 Jan belongs to January. Historic rows are
+  back-filled from `updated_at` (approximate — the instant was never stored).
+- **One budget per request** (0030) — the core rule. `MATCHED_CTE` picks, for every APPROVED
+  request, the single most specific budget: `department+category` → `department` → `category`
+  → org-wide (`department_id IS NULL`, `category='*'`). Utilization is a group-by over that
+  choice. **Do not go back to "each budget sums its own matches"** — that double-counted
+  every spend an org-wide and a department budget both covered. A gist `EXCLUDE` constraint
+  (`budgets_no_overlap`, needs `btree_gist`) stops two budgets from covering the same
+  (department, category, currency, period); the collision surfaces as a 409 via
+  `friendlyConflict()` (23505 = name clash, 23P01 = scope overlap).
+  `GET /budgets/unbudgeted` = approved spend that matched nothing.
+- **Plan / Commitment / Actual** (0031): `purchase_orders.request_id` links an order to its
+  origin (denormalized at creation — the request → event → contract → PO chain BREAKS on
+  direct purchases and catalog call-offs, so never derive it at read time). A live PO
+  (status not CANCELLED/REJECTED) supersedes the estimate it came from, so commitment and
+  actual are mutually exclusive per request. `request_status` has CANCELLED +
+  `POST /requests/:id/cancel` (admin, reason mandatory, audited) — the only way to release a
+  reserve; refused while live orders exist.
+- **Thresholds** (0032, `budget_policies`): `warn_pct` (default 80) notifies via
+  `app_notify`; `block_pct` is NULL by default = nothing blocks. When armed,
+  `enforceOnApproval()` **throws inside the approval transaction**, so the approval rolls
+  back and the request stays SUBMITTED (there is a test for exactly this). A BUYER_ADMIN may
+  override with a written reason (audited `BUDGET_BLOCK_OVERRIDDEN`); a blocked attempt is
+  NOT audited, because its writes roll back with it. `GET /budgets/impact/:requestId` gives
+  the projection before the approve click.
+- **Revisions** (0033): `budget_revisions` is an append-only ledger (opening plan + every
+  amount change with delta, reason, author). The live amount stays on `budgets.amount_minor`
+  — the ledger explains it, it is not the source of truth. Renaming writes no revision.
+  Rollover of an unspent remainder = a revision of the TARGET pointing back at the source.
+- **Visibility**: a plain BUYER_USER sees only their home department's budgets; with none
+  set, an empty list (never the whole org's plan). See `scopeFor()`.
+- **Catalog call-offs** are POs with no request behind them. They carry their own
+  `department_id` (explicit pick, else the buyer's home department) and are matched by the
+  second arm of the CTE, `matched_orders`. They can only be claimed by a **category-agnostic**
+  budget (`category = '*'`): a call-off has no procurement category, and an "IT" budget must
+  not silently absorb spend nobody classified. Always actual, never commitment. With no
+  department they show up in `/budgets/unbudgeted` as `kind: 'ORDER'`.
+- **Known gap (deliberate)**: there is no FX — a budget only ever matches its own currency,
+  and the UI says so instead of silently reading 0%. That and every other judgement call is
+  recorded in `docs/budget-by-department-decisions.md`.
+
+**Gotcha — a migration that adds a constraint over pre-existing data must fail loudly.**
+0030 pre-checks for overlapping budgets and throws with the offenders named: nothing can
+guess which of two same-scope budgets was meant to survive, and a silent skip would leave
+the double-counting bug the constraint exists to prevent.
 
 **Gotcha learned:** TypeORM `UPDATE … RETURNING` yields `[rows, count]` — never read a
 column off it; SELECT the value first (bit us in verification `decide`). Also: stop the

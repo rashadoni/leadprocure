@@ -395,9 +395,10 @@ export default function Budgets() {
             </tr></thead>
             <tbody>
               {unbudgeted.map((u) => (
-                <tr key={u.requestId}>
-                  <td>{u.requestNo}</td>
-                  <td>{u.title}</td>
+                <tr key={u.id ?? u.requestId}>
+                  <td>{u.docNo ?? u.requestNo}</td>
+                  {/* an ORDER row is a catalog call-off: no request, no title, no category */}
+                  <td>{u.title ?? (u.kind === 'ORDER' ? t('bud_calloff') : '—')}</td>
                   <td>{u.category ?? '—'}</td>
                   <td>{u.departmentCode ?? '—'}</td>
                   <td className="hint">{fmtDate(u.approvedAt)}</td>

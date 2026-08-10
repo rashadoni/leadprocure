@@ -181,15 +181,42 @@ export class BudgetsService {
         HAVING count(*) > 0
       ) po ON true
       WHERE pr.status = 'APPROVED' AND pr.approved_at IS NOT NULL
+    ),
+    -- Orders that never had a request: catalog call-offs. Real money, and before this it
+    -- was invisible to every budget. With no request there is no category either, so only
+    -- a category-agnostic budget ('*') may claim it — an "IT" budget must not silently
+    -- absorb spend nobody classified. Dated by issue, falling back to creation.
+    matched_orders AS (
+      SELECT o.id, o.po_no, o.total_minor, o.currency, o.department_id,
+             COALESCE(o.issued_at, o.created_at) AS spent_at, mb.budget_id
+      FROM purchase_orders o
+      LEFT JOIN LATERAL (
+        SELECT b.id AS budget_id
+        FROM budgets b
+        WHERE b.currency = o.currency
+          AND b.category = '*'
+          AND COALESCE(o.issued_at, o.created_at) >= b.period_start::timestamptz
+          AND COALESCE(o.issued_at, o.created_at) < (b.period_end + 1)::timestamptz
+          AND (b.department_id IS NULL OR b.department_id = o.department_id)
+        ORDER BY (b.department_id IS NOT NULL) DESC, b.period_start DESC, b.id
+        LIMIT 1
+      ) mb ON true
+      WHERE o.request_id IS NULL AND o.status NOT IN ('CANCELLED','REJECTED')
     )`;
 
-  // Plan / Commitment / Actual, with commitment and actual mutually exclusive per request.
+  // Plan / Commitment / Actual. Commitment and actual are mutually exclusive per request;
+  // request-less orders are pure actual.
   private readonly COMMITTED_JOIN = `
     LEFT JOIN (
-      SELECT budget_id,
-             sum(CASE WHEN has_order THEN 0 ELSE estimated_total_minor END)::bigint AS committed,
-             sum(actual_minor)::bigint AS actual
-      FROM matched WHERE budget_id IS NOT NULL GROUP BY budget_id
+      SELECT budget_id, sum(committed)::bigint AS committed, sum(actual)::bigint AS actual
+      FROM (
+        SELECT budget_id,
+               CASE WHEN has_order THEN 0 ELSE estimated_total_minor END AS committed,
+               actual_minor AS actual
+        FROM matched WHERE budget_id IS NOT NULL
+        UNION ALL
+        SELECT budget_id, 0, total_minor FROM matched_orders WHERE budget_id IS NOT NULL
+      ) x GROUP BY budget_id
     ) c ON c.budget_id = b.id`;
 
   // Filters: a plain year (every budget whose range starts in it) or an explicit
@@ -231,22 +258,35 @@ export class BudgetsService {
   async unbudgeted(filter: { from?: string; to?: string } = {}) {
     const rows = await this.rc.manager.query(
       `WITH ${this.MATCHED_CTE}
-       SELECT m.id, m.request_no, m.title, m.category, m.currency, m.estimated_total_minor,
-              m.approved_at, d.code AS department_code
+       SELECT 'REQUEST' AS kind, m.id, m.request_no AS doc_no, m.title, m.category, m.currency,
+              m.estimated_total_minor AS amount_minor, m.approved_at AS spent_at,
+              d.code AS department_code
        FROM matched m
        LEFT JOIN departments d ON d.id = m.department_id
        WHERE m.budget_id IS NULL
          AND ($1::date IS NULL OR m.approved_at >= $1::timestamptz)
          AND ($2::date IS NULL OR m.approved_at < ($2::date + 1)::timestamptz)
-       ORDER BY m.approved_at DESC`,
+       UNION ALL
+       SELECT 'ORDER', o.id, o.po_no, NULL, NULL, o.currency, o.total_minor, o.spent_at,
+              d.code
+       FROM matched_orders o
+       LEFT JOIN departments d ON d.id = o.department_id
+       WHERE o.budget_id IS NULL
+         AND ($1::date IS NULL OR o.spent_at >= $1::timestamptz)
+         AND ($2::date IS NULL OR o.spent_at < ($2::date + 1)::timestamptz)
+       ORDER BY spent_at DESC`,
       [filter.from ?? null, filter.to ?? null],
     );
     return rows.map((r: any) => ({
-      requestId: r.id, requestNo: r.request_no, title: r.title,
+      kind: r.kind,
+      // requestId is kept for the REQUEST rows so existing callers keep working
+      requestId: r.kind === 'REQUEST' ? r.id : null,
+      id: r.id, docNo: r.doc_no, requestNo: r.doc_no,
+      title: r.title,
       category: r.category === '*' ? null : r.category,
       departmentCode: r.department_code ?? null,
-      currency: r.currency, amountMinor: Number(r.estimated_total_minor),
-      approvedAt: r.approved_at,
+      currency: r.currency, amountMinor: Number(r.amount_minor),
+      approvedAt: r.spent_at,
     }));
   }
 

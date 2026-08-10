@@ -39,6 +39,31 @@ describe('budgets & commitment control (API e2e)', () => {
     return done.body;
   };
 
+  // A catalog call-off: a PO with no request behind it. Lazily builds one ACTIVE catalog
+  // (supplier + one item) and re-orders from it.
+  let catalogId: string, catalogItemId: string;
+  const orderFromCatalog = async (departmentId: string | undefined, qty: number, unitPriceMinor: number) => {
+    if (!catalogId) {
+      const sup = (await http().post('/auth/register/supplier')
+        .send({ legalName: `Bgt Cat Sup ${tag}`, email: `bcs-${tag}@t.test`, password: 'password123', fullName: 'Cat Sup' })
+        .expect(201)).body;
+      const cat = await http().post('/catalogs').set(...bearer(buyerA))
+        .send({ supplierOrgId: sup.org.id, title: `Cat ${tag}` }).expect(201);
+      catalogId = cat.body.id;
+      // addItem returns the whole catalog, so the item id comes off its items array
+      const withItem = await http().post(`/catalogs/${catalogId}/items`).set(...bearer(buyerA))
+        .send({ name: 'Paper', unitPriceMinor: 1 }).expect(201);
+      catalogItemId = withItem.body.items[0].id;
+      await http().post(`/catalogs/${catalogId}/activate`).set(...bearer(buyerA)).expect(201);
+    }
+    const res = await http().post(`/catalogs/${catalogId}/order`).set(...bearer(buyerA))
+      .send({ items: [{ catalogItemId, qty }], ...(departmentId ? { departmentId } : {}) })
+      .expect(201);
+    // the catalog item is priced at 1 minor unit, so the order total is set explicitly here
+    await db.query(`UPDATE purchase_orders SET total_minor = $2 WHERE id = $1`, [res.body.id, qty * unitPriceMinor]);
+    return res.body.id as string;
+  };
+
   beforeAll(async () => {
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = mod.createNestApplication();
@@ -522,6 +547,45 @@ describe('budgets & commitment control (API e2e)', () => {
     // the curated code itself is fine
     await http().post('/budgets').set(...bearer(buyerA))
       .send({ name: `Curated ${tag}`, category: `CUR-${tag}`, periodYear: YEAR, amountMinor: 1000 }).expect(201);
+  });
+
+  // ---------- catalog call-offs: spend with no request behind it ----------
+
+  it('a catalog order charges its department’s budget even with no request', async () => {
+    const dep = (await http().post('/departments').set(...bearer(buyerA)).send({ code: `CAT-${tag}` }).expect(201)).body;
+    // category-agnostic budget: a call-off carries no category, so only '*' may claim it
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Catalog dep ${tag}`, departmentId: dep.id, periodYear: YEAR, amountMinor: 400_000 }).expect(201);
+
+    const poId = await orderFromCatalog(dep.id, 3, 25_000); // 3 × 250.00
+    expect(poId).toBeTruthy();
+
+    const b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.name === `Catalog dep ${tag}`);
+    expect(b.actualMinor).toBe(75_000);
+    expect(b.committedMinor).toBe(0);   // no request behind it, so nothing was ever committed
+    expect(b.usedMinor).toBe(75_000);
+  });
+
+  it('a category budget never absorbs an unclassified catalog order', async () => {
+    const dep = (await http().get('/departments').set(...bearer(buyerA))).body.find((d: any) => d.code === `CAT-${tag}`);
+    // this buyer has a curated category directory by now, so the code must be in it
+    await http().post('/categories').set(...bearer(buyerA)).send({ code: 'STATIONERY' }).expect(201);
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Catalog cat ${tag}`, category: 'STATIONERY', departmentId: dep.id, periodYear: YEAR, amountMinor: 900_000 })
+      .expect(201);
+    await orderFromCatalog(dep.id, 1, 10_000);
+    const list = (await http().get('/budgets').set(...bearer(buyerA))).body;
+    expect(list.find((x: any) => x.name === `Catalog cat ${tag}`).usedMinor).toBe(0);
+    expect(list.find((x: any) => x.name === `Catalog dep ${tag}`).usedMinor).toBe(85_000);
+  });
+
+  it('a catalog order with no department at all lands in the unbudgeted report', async () => {
+    const poId = await orderFromCatalog(undefined, 2, 5_000);
+    const report = (await http().get('/budgets/unbudgeted').set(...bearer(buyerA)).expect(200)).body;
+    const row = report.find((x: any) => x.id === poId);
+    expect(row).toBeTruthy();
+    expect(row.kind).toBe('ORDER');
+    expect(row.amountMinor).toBe(10_000);
   });
 
   it('filters the list by period type and year', async () => {
