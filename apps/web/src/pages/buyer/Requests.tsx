@@ -144,11 +144,14 @@ export default function Requests() {
       <div className="card">
         <form onSubmit={create}>
           <div className="row">
+            {/* data-testid on the form fields: the UI smoke used to address them by
+                position (`form > input`, `.row > div:nth-child(2)`), which silently stopped
+                matching as soon as the row gained a field. */}
             <div style={{ flex: 2 }}><label>{t('title')}</label>
-              <input value={title} onChange={(e) => setTitle(e.target.value)} required /></div>
+              <input data-testid="req-title" value={title} onChange={(e) => setTitle(e.target.value)} required /></div>
             <div style={{ flex: 1 }}><label>{t('category')}</label>
               {/* category drives the method policy, budgets and per-category analytics */}
-              <input value={category} onChange={(e) => setCategory(e.target.value)}
+              <input data-testid="req-category" value={category} onChange={(e) => setCategory(e.target.value)}
                 placeholder="IT, construction…" list="req-categories" />
               <datalist id="req-categories">
                 {/* curated categories (Settings) first, plus any already used on requests */}
@@ -158,7 +161,7 @@ export default function Requests() {
               </datalist></div>
             <div style={{ flex: 1 }}><label>{t('department')}</label>
               {/* the department owns the budget this spend is charged to */}
-              <select value={department} onChange={(e) => setDepartment(e.target.value)}>
+              <select data-testid="req-department" value={department} onChange={(e) => setDepartment(e.target.value)}>
                 <option value="">{t('dep_default')}</option>
                 {deps.filter((d) => d.is_active).map((d) => (
                   <option key={d.id} value={d.id}>{d.code}{d.name ? ` · ${d.name}` : ''}</option>
@@ -169,11 +172,11 @@ export default function Requests() {
           {items.map((it, idx) => (
             <div className="row" key={idx}>
               <div><label>{t('name')}</label>
-                <input value={it.name} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))} /></div>
+                <input data-testid={`item-name-${idx}`} value={it.name} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))} /></div>
               <div><label>{t('qty')}</label>
-                <input type="number" min={1} value={it.qty} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, qty: Number(e.target.value) } : x)))} /></div>
+                <input data-testid={`item-qty-${idx}`} type="number" min={1} value={it.qty} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, qty: Number(e.target.value) } : x)))} /></div>
               <div><label>{t('unit_price')} (AZN)</label>
-                <input type="number" step="0.01" min={0} value={it.price} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, price: e.target.value } : x)))} /></div>
+                <input data-testid={`item-price-${idx}`} type="number" step="0.01" min={0} value={it.price} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, price: e.target.value } : x)))} /></div>
             </div>
           ))}
           <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>

@@ -205,6 +205,23 @@ The budget module finance actually uses. Read this before changing anything unde
   is converted at a guessed rate, and nothing disappears. Every judgement call is recorded
   in `docs/budget-by-department-decisions.md`.
 
+**Gotcha — the UI smoke logs in ONCE per panel, and must stay that way.** `/auth/login` is
+throttled to 10/min (brute-force + argon2-DoS guard), so a `beforeEach` login spends one per
+test: at five tests the suite sat one test away from tripping its own security control, and
+two consecutive runs tripped it for certain (the failures look like a login timeout, not a
+429). Each describe now logs in in `beforeAll` and shares one page in serial mode — sharing
+inside ONE context is safe; it is reusing a `storageState` across CONTEXTS that replays a
+rotated refresh token and trips the breach detection. Run it with the API and web dev servers
+up: `pnpm --filter api start:dev`, `pnpm --filter web dev`, then `pnpm --filter web test:ui`
+(browsers first: `npx playwright install chromium`).
+
+**Gotcha — never address form fields by position in the UI smoke.** The old selectors
+(`form > input`, `.row > div:nth-child(2) input`) silently stopped matching the moment the
+request form grew a field, and a selector that stops matching fails as a timeout, which
+reads like a broken app. Form fields carry `data-testid` (`req-title`, `req-category`,
+`req-department`, `item-name-N`, …) — use those. Status badges are localized, so assert on
+the status CLASS (`.badge` → `/DRAFT/`), never on the text.
+
 **Gotcha — a migration that adds a constraint over pre-existing data must fail loudly.**
 0030 pre-checks for overlapping budgets and throws with the offenders named: nothing can
 guess which of two same-scope budgets was meant to survive, and a silent skip would leave
