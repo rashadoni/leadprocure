@@ -234,9 +234,12 @@ export class RequestsService {
     );
     const total = Number(totalRows[0].total);
     const method = await this.resolveMethod(req.category, total);
+    // approved_at is the date the spend is charged on — budgets slice by it, so it must be
+    // the approval instant, not the (possibly much earlier) creation date.
     await m.query(
       `UPDATE procurement_requests
-       SET status='APPROVED', approved_by=$2, estimated_total_minor=$3, method_resolved=$4, updated_at=now()
+       SET status='APPROVED', approved_by=$2, approved_at=now(), estimated_total_minor=$3,
+           method_resolved=$4, updated_at=now()
        WHERE id=$1`,
       [id, auth.sub, total, method],
     );

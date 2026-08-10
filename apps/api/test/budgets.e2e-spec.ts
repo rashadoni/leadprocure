@@ -40,7 +40,9 @@ describe('budgets & commitment control (API e2e)', () => {
     app.use(cookieParser());
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
-    db = new Client({ connectionString: process.env.DATABASE_URL });
+    // owner connection: the cross-year test re-dates a request, which RLS would silently
+    // drop on the app_user role (no request context → default deny).
+    db = new Client({ connectionString: process.env.DATABASE_OWNER_URL ?? process.env.DATABASE_URL });
     await db.connect();
     buyerA = await reg(`Bgt A ${tag}`, `ba-${tag}@t.test`);
     approverA = await addApprover(app, buyerA, tag);
@@ -109,9 +111,83 @@ describe('budgets & commitment control (API e2e)', () => {
       .send({ name: `Bad ${tag}`, periodYear: YEAR, amountMinor: -5 }).expect(400);
   });
 
-  it('a duplicate (name, year) budget is a clean 409, not a 500', async () => {
+  it('a duplicate (name, period) budget is a clean 409, not a 500', async () => {
     const body = { name: `Dup ${tag}`, category: 'IT', periodYear: YEAR, amountMinor: 100_000 };
     await http().post('/budgets').set(...bearer(buyerA)).send(body).expect(201);
     await http().post('/budgets').set(...bearer(buyerA)).send(body).expect(409);
+  });
+
+  // ---------- periods: year / quarter / month ----------
+
+  it('the same name in different quarters is two budgets, not a collision', async () => {
+    const q1 = await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Q ${tag}`, category: 'QTR', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: 1, amountMinor: 100_000 }).expect(201);
+    const q2 = await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Q ${tag}`, category: 'QTR', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: 2, amountMinor: 100_000 }).expect(201);
+    expect(q1.body.periodLabel).toBe(`${YEAR} Q1`);
+    expect(q1.body.periodStart).toBe(`${YEAR}-01-01`);
+    expect(q1.body.periodEnd).toBe(`${YEAR}-03-31`);
+    expect(q2.body.periodStart).toBe(`${YEAR}-04-01`);
+    expect(q2.body.periodEnd).toBe(`${YEAR}-06-30`);
+  });
+
+  it('a quarterly budget only counts approvals inside its own quarter', async () => {
+    // approve now, then check the quarter that contains today vs. a different one
+    const nowQ = Math.floor(new Date().getUTCMonth() / 3) + 1;
+    const otherQ = nowQ === 4 ? 1 : nowQ + 1;
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Qnow ${tag}`, category: 'QNOW', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: nowQ, amountMinor: 900_000 }).expect(201);
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Qother ${tag}`, category: 'QNOW', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: otherQ, amountMinor: 900_000 }).expect(201);
+    await approveRequest(buyerA, 'QNOW', 300_000);
+    const list = (await http().get('/budgets').set(...bearer(buyerA)).expect(200)).body;
+    expect(list.find((b: any) => b.name === `Qnow ${tag}`).committedMinor).toBe(300_000);
+    expect(list.find((b: any) => b.name === `Qother ${tag}`).committedMinor).toBe(0);
+  });
+
+  it('a monthly budget counts only its own month', async () => {
+    const month = new Date().getUTCMonth() + 1;
+    const other = month === 12 ? 1 : month + 1;
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Mnow ${tag}`, category: 'MNTH', periodType: 'MONTH', periodYear: YEAR, periodMonth: month, amountMinor: 900_000 }).expect(201);
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Moth ${tag}`, category: 'MNTH', periodType: 'MONTH', periodYear: YEAR, periodMonth: other, amountMinor: 900_000 }).expect(201);
+    await approveRequest(buyerA, 'MNTH', 120_000);
+    const list = (await http().get('/budgets').set(...bearer(buyerA)).expect(200)).body;
+    expect(list.find((b: any) => b.name === `Mnow ${tag}`).committedMinor).toBe(120_000);
+    expect(list.find((b: any) => b.name === `Moth ${tag}`).committedMinor).toBe(0);
+  });
+
+  it('QUARTER without a quarter number is a 400, not a silent annual budget', async () => {
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `NoQ ${tag}`, periodType: 'QUARTER', periodYear: YEAR, amountMinor: 1000 }).expect(400);
+  });
+
+  // The regression this whole change exists for: commitment is dated by APPROVAL, so a
+  // request raised on 28 Dec and approved on 5 Jan belongs to January — not to last year.
+  it('a December request approved in January commits to January, not to last year', async () => {
+    const dec = `${YEAR - 1}-12-28T10:00:00Z`;
+    const jan = `${YEAR}-01-05T10:00:00Z`;
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `DecY ${tag}`, category: 'XOVER', periodType: 'MONTH', periodYear: YEAR - 1, periodMonth: 12, amountMinor: 900_000 }).expect(201);
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `JanY ${tag}`, category: 'XOVER', periodType: 'MONTH', periodYear: YEAR, periodMonth: 1, amountMinor: 900_000 }).expect(201);
+
+    const done = await approveRequest(buyerA, 'XOVER', 70_000);
+    // Re-date the request the way the calendar would have: created in December, approved
+    // in January. (The API always stamps now(); only history can straddle a year.)
+    await db.query(`UPDATE procurement_requests SET created_at=$2, approved_at=$3 WHERE id=$1`, [done.id, dec, jan]);
+
+    const list = (await http().get('/budgets').set(...bearer(buyerA)).expect(200)).body;
+    expect(list.find((b: any) => b.name === `JanY ${tag}`).committedMinor).toBe(70_000);
+    expect(list.find((b: any) => b.name === `DecY ${tag}`).committedMinor).toBe(0);
+  });
+
+  it('filters the list by period type and year', async () => {
+    const quarters = (await http().get(`/budgets?periodType=QUARTER&year=${YEAR}`).set(...bearer(buyerA)).expect(200)).body;
+    expect(quarters.length).toBeGreaterThan(0);
+    expect(quarters.every((b: any) => b.periodType === 'QUARTER' && b.periodYear === YEAR)).toBe(true);
+    const lastYear = (await http().get(`/budgets?year=${YEAR - 1}`).set(...bearer(buyerA)).expect(200)).body;
+    expect(lastYear.every((b: any) => b.periodYear === YEAR - 1)).toBe(true);
   });
 });

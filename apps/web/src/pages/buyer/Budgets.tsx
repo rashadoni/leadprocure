@@ -8,6 +8,10 @@ interface Budget {
   name: string;
   category: string;
   periodYear: number;
+  periodType: 'YEAR' | 'QUARTER' | 'MONTH';
+  periodStart: string;
+  periodEnd: string;
+  periodLabel: string;
   currency: string;
   amountMinor: number;
   committedMinor: number;
@@ -16,7 +20,12 @@ interface Budget {
 }
 
 const THIS_YEAR = new Date().getFullYear();
-const empty = { name: '', category: '', periodYear: THIS_YEAR, amount: '', currency: 'AZN' };
+const THIS_QUARTER = Math.floor(new Date().getMonth() / 3) + 1;
+const THIS_MONTH = new Date().getMonth() + 1;
+const empty = {
+  name: '', category: '', periodType: 'YEAR' as Budget['periodType'], periodYear: THIS_YEAR,
+  periodQuarter: THIS_QUARTER, periodMonth: THIS_MONTH, amount: '', currency: 'AZN',
+};
 
 export default function Budgets() {
   const { t } = useI18n();
@@ -27,8 +36,15 @@ export default function Budgets() {
   const [editId, setEditId] = useState<string | null>(null);
   const [err, setErr] = useState('');
 
-  const load = () => api.get('/budgets').then((r) => setRows(r.data));
-  useEffect(() => { load(); }, []);
+  // Period filter over the list: type + year, both optional.
+  const [filter, setFilter] = useState({ periodType: '', year: '' });
+  const load = () => api.get('/budgets', {
+    params: {
+      ...(filter.periodType ? { periodType: filter.periodType } : {}),
+      ...(filter.year ? { year: filter.year } : {}),
+    },
+  }).then((r) => setRows(r.data));
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [filter.periodType, filter.year]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -36,7 +52,10 @@ export default function Budgets() {
     const body = {
       name: form.name,
       category: form.category.trim() || '*',
+      periodType: form.periodType,
       periodYear: Number(form.periodYear),
+      ...(form.periodType === 'QUARTER' ? { periodQuarter: Number(form.periodQuarter) } : {}),
+      ...(form.periodType === 'MONTH' ? { periodMonth: Number(form.periodMonth) } : {}),
       amountMinor: Math.round(Number(form.amount) * 100),
       currency: form.currency || 'AZN',
     };
@@ -50,8 +69,18 @@ export default function Budgets() {
   };
 
   const edit = (b: Budget) => {
+    const month = Number(b.periodStart.slice(5, 7));
     setEditId(b.id);
-    setForm({ name: b.name, category: b.category === '*' ? '' : b.category, periodYear: b.periodYear, amount: String(b.amountMinor / 100), currency: b.currency });
+    setForm({
+      name: b.name,
+      category: b.category === '*' ? '' : b.category,
+      periodType: b.periodType,
+      periodYear: Number(b.periodStart.slice(0, 4)),
+      periodQuarter: Math.floor((month - 1) / 3) + 1,
+      periodMonth: month,
+      amount: String(b.amountMinor / 100),
+      currency: b.currency,
+    });
   };
   const remove = async (id: string) => {
     if (!confirm('Delete budget?')) return;
@@ -68,8 +97,28 @@ export default function Budgets() {
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
             <div><label>{t('category')} </label>
               <input placeholder="*" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></div>
+            <div><label>{t('period')}</label>
+              <select value={form.periodType} onChange={(e) => setForm({ ...form, periodType: e.target.value as Budget['periodType'] })}>
+                <option value="YEAR">{t('period_year')}</option>
+                <option value="QUARTER">{t('period_quarter')}</option>
+                <option value="MONTH">{t('period_month')}</option>
+              </select></div>
             <div><label>{t('year')}</label>
               <input type="number" value={form.periodYear} onChange={(e) => setForm({ ...form, periodYear: Number(e.target.value) })} required /></div>
+            {form.periodType === 'QUARTER' && (
+              <div><label>{t('period_quarter')}</label>
+                <select value={form.periodQuarter} onChange={(e) => setForm({ ...form, periodQuarter: Number(e.target.value) })}>
+                  {[1, 2, 3, 4].map((qq) => <option key={qq} value={qq}>Q{qq}</option>)}
+                </select></div>
+            )}
+            {form.periodType === 'MONTH' && (
+              <div><label>{t('period_month')}</label>
+                <select value={form.periodMonth} onChange={(e) => setForm({ ...form, periodMonth: Number(e.target.value) })}>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((mm) => (
+                    <option key={mm} value={mm}>{String(mm).padStart(2, '0')}</option>
+                  ))}
+                </select></div>
+            )}
             <div><label>{t('amount')} (AZN)</label>
               <input type="number" step="0.01" min={0} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required /></div>
             <div>
@@ -81,9 +130,19 @@ export default function Budgets() {
         </div>
       )}
       <div className="card">
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+          <select value={filter.periodType} onChange={(e) => setFilter({ ...filter, periodType: e.target.value })} style={{ maxWidth: 200 }}>
+            <option value="">{t('period_all')}</option>
+            <option value="YEAR">{t('period_year')}</option>
+            <option value="QUARTER">{t('period_quarter')}</option>
+            <option value="MONTH">{t('period_month')}</option>
+          </select>
+          <input type="number" placeholder={t('year')} value={filter.year}
+            onChange={(e) => setFilter({ ...filter, year: e.target.value })} style={{ maxWidth: 140 }} />
+        </div>
         <table>
           <thead><tr>
-            <th>{t('name')}</th><th>{t('category')}</th><th>{t('year')}</th>
+            <th>{t('name')}</th><th>{t('category')}</th><th>{t('period')}</th>
             <th>{t('amount')}</th><th>{t('committed')}</th><th>{t('remaining')}</th>
             <th style={{ width: 180 }}>{t('utilization')}</th>{isAdmin && <th>{t('actions')}</th>}
           </tr></thead>
@@ -94,7 +153,7 @@ export default function Budgets() {
                 <tr key={b.id}>
                   <td>{b.name}</td>
                   <td>{b.category === '*' ? '—' : b.category}</td>
-                  <td>{b.periodYear}</td>
+                  <td data-tip={`${b.periodStart} → ${b.periodEnd}`}>{b.periodLabel}</td>
                   <td>{fmtMoney(b.amountMinor, b.currency)}</td>
                   <td>{fmtMoney(b.committedMinor, b.currency)}</td>
                   <td className={over ? 'error' : ''}>{fmtMoney(b.remainingMinor, b.currency)}</td>
