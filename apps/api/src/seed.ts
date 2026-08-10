@@ -83,11 +83,70 @@ async function main(): Promise<void> {
      ON CONFLICT (base, quote, as_of) DO NOTHING`,
   );
 
+  // --- departments + budgets ---
+  // Without these the budget module opens empty on a demo stand, which is exactly the
+  // screen finance is here to look at. IT owns its budget through the approver; the plain
+  // buyer user sits in OPS, so their requests default to it (and they only see OPS budgets).
+  const dept = async (code: string, name: string, ownerUserId: string | null) =>
+    (
+      await db.query(
+        `INSERT INTO departments(buyer_org_id, code, name, owner_user_id) VALUES ($1,$2,$3,$4) RETURNING id`,
+        [acme, code, name, ownerUserId],
+      )
+    ).rows[0].id as string;
+  const it = await dept('IT', 'İnformasiya texnologiyaları', approver);
+  const ops = await dept('OPS', 'Əməliyyat', admin);
+  await db.query(`UPDATE memberships SET department_id = $2 WHERE user_id = $1 AND org_id = $3`, [buyerUser, ops, acme]);
+  await db.query(`UPDATE memberships SET department_id = $2 WHERE user_id = $1 AND org_id = $3`, [approver, it, acme]);
+
+  await db.query(
+    `INSERT INTO procurement_categories(buyer_org_id, code, name)
+     VALUES ($1,'IT','Avadanlıq və proqram təminatı'), ($1,'OFFICE','Ofis təchizatı')`,
+    [acme],
+  );
+
+  const year = new Date().getFullYear();
+  const quarter = Math.floor(new Date().getMonth() / 3) + 1;
+  const qStart = new Date(Date.UTC(year, (quarter - 1) * 3, 1));
+  const qEnd = new Date(Date.UTC(year, quarter * 3, 0));
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const budget = async (
+    name: string, departmentId: string | null, category: string,
+    type: string, start: string, end: string, amountMinor: number,
+  ) => {
+    const id = (
+      await db.query(
+        `INSERT INTO budgets(buyer_org_id, name, category, department_id, period_type,
+           period_start, period_end, amount_minor, currency)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'AZN') RETURNING id`,
+        [acme, name, category, departmentId, type, start, end, amountMinor],
+      )
+    ).rows[0].id as string;
+    // the ledger starts with the opening plan, same as it would through the API
+    await db.query(
+      `INSERT INTO budget_revisions(buyer_org_id, budget_id, amount_after_minor, reason, created_by)
+       VALUES ($1,$2,$3,'Initial plan',$4)`,
+      [acme, id, amountMinor, admin],
+    );
+    return id;
+  };
+  // No two budgets may cover the same (department, category, period) — the scopes below are
+  // deliberately disjoint: an org-wide ceiling, IT for the year, OPS for this quarter.
+  await budget('Ümumi büdcə', null, '*', 'YEAR', `${year}-01-01`, `${year}-12-31`, 50_000_00);
+  await budget('IT büdcəsi', it, 'IT', 'YEAR', `${year}-01-01`, `${year}-12-31`, 20_000_00);
+  await budget('OPS rüblük', ops, 'OFFICE', 'QUARTER', iso(qStart), iso(qEnd), 6_000_00);
+  await db.query(
+    `INSERT INTO budget_policies(buyer_org_id, warn_pct, block_pct) VALUES ($1, 80, NULL)`,
+    [acme],
+  );
+
   console.log('Seeded successfully.\n');
   console.log('Buyer org  : Acme MMC');
   console.log('  admin@acme.test / ' + password + '  (BUYER_ADMIN)');
   console.log('  approver@acme.test / ' + password + '  (BUYER_APPROVER)');
   console.log('  user@acme.test / ' + password + '  (BUYER_USER)');
+  console.log('Departments: IT (owner: approver), OPS (owner: admin) — user@acme.test sits in OPS');
+  console.log(`Budgets    : org-wide ${year} · IT ${year} · OPS ${year} Q${quarter}; warn at 80%, block off`);
   console.log('Suppliers  :');
   console.log('  seller@supply-one.test / ' + password + '  (Supply One MMC — pre-approved by Acme)');
   console.log('  seller@baku-metal.test / ' + password + '  (Baku Metal ASC)');

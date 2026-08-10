@@ -21,10 +21,21 @@ async function assertRenders(page: Page, path: string, headingHint: RegExp): Pro
   await expect(page.locator('text=Unexpected Application Error')).toHaveCount(0);
 }
 
+// ONE login per panel, not one per test. /auth/login is throttled to 10/min as a
+// brute-force guard, so a per-test login put the suite one test away from tripping its own
+// security control — and two consecutive runs tripped it for sure. Tests share a page
+// inside a single browser context (safe: reusing a storageState across CONTEXTS is what
+// replays a rotated refresh token and trips the breach detection).
 test.describe('buyer panel', () => {
-  test.beforeEach(async ({ page }) => login(page, 'admin@acme.test'));
+  test.describe.configure({ mode: 'serial' });
+  let page: Page;
+  test.beforeAll(async ({ browser }) => {
+    page = await browser.newPage();
+    await login(page, 'admin@acme.test');
+  });
+  test.afterAll(async () => page.close());
 
-  test('all buyer sections render', async ({ page }) => {
+  test('all buyer sections render', async () => {
     await assertRenders(page, '/buyer/dashboard', /Рабочий стол|Dashboard|İdarə paneli/);
     await assertRenders(page, '/buyer/requests', /Заявки|Requests|Sifariş/);
     await assertRenders(page, '/buyer/events', /Тендеры|Tenders|Tender/);
@@ -39,28 +50,53 @@ test.describe('buyer panel', () => {
     await assertRenders(page, '/buyer/settings', /Настройки|Settings|Parametr/);
   });
 
-  test('dashboard shows real KPI money', async ({ page }) => {
+  test('dashboard shows real KPI money', async () => {
     await page.goto('/buyer/dashboard');
     await expect(page.locator('text=AZN').first()).toBeVisible({ timeout: 10_000 });
   });
 
-  test('creating a draft request works through the UI', async ({ page }) => {
+  // Fields are addressed by data-testid, not by position: the old `form > input` /
+  // `.row > div:nth-child(n)` selectors matched nothing once the form grew a field, and a
+  // selector that silently stops matching is worse than no test.
+  test('creating a draft request works through the UI, including its department', async () => {
+    // Fixed code, created once: a per-run code would pile up departments in the dev stand.
+    const code = 'PW-SMOKE';
+    await page.goto('/buyer/settings');
+    const dep = page.locator(`td:text-is("${code}")`);
+    if (!(await dep.count())) {
+      const depForm = page.locator('.card', { hasText: /Отделы|Departments|Şöbələr/ }).locator('form');
+      await depForm.locator('input').first().fill(code);
+      await depForm.locator('button.btn').click();
+    }
+    await expect(dep).toBeVisible({ timeout: 10_000 });
+
     await page.goto('/buyer/requests');
     const title = `PW smoke ${Date.now()}`;
-    await page.fill('form > input', title);
-    await page.fill('.row > div:nth-child(1) input', 'Playwright item');
-    await page.fill('.row > div:nth-child(2) input', '2');
-    await page.fill('.row > div:nth-child(3) input', '10');
+    await page.fill('[data-testid=req-title]', title);
+    await page.selectOption('[data-testid=req-department]', { label: code });
+    await page.fill('[data-testid=item-name-0]', 'Playwright item');
+    await page.fill('[data-testid=item-qty-0]', '2');
+    await page.fill('[data-testid=item-price-0]', '10');
     await page.click('form button.btn:not(.ghost):not([type=button])');
-    await expect(page.locator(`tr:has-text("${title}")`)).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator(`tr:has-text("${title}")`).locator('.badge')).toContainText('DRAFT');
+
+    const row = page.locator(`tr:has-text("${title}")`);
+    await expect(row).toBeVisible({ timeout: 10_000 });
+    // the badge TEXT is localized ("Черновик"), so assert on the status class instead
+    await expect(row.locator('.badge')).toHaveClass(/DRAFT/);
+    await expect(row).toContainText(code); // the department round-tripped through the API
   });
 });
 
 test.describe('supplier panel', () => {
-  test.beforeEach(async ({ page }) => login(page, 'seller@supply-one.test'));
+  test.describe.configure({ mode: 'serial' });
+  let page: Page;
+  test.beforeAll(async ({ browser }) => {
+    page = await browser.newPage();
+    await login(page, 'seller@supply-one.test');
+  });
+  test.afterAll(async () => page.close());
 
-  test('all supplier sections render', async ({ page }) => {
+  test('all supplier sections render', async () => {
     await assertRenders(page, '/supplier/dashboard', /Рабочий стол|Dashboard|İdarə paneli/);
     await assertRenders(page, '/supplier/market', /Открытые тендеры|Open tenders|Açıq tender/);
     await assertRenders(page, '/supplier/orders', /Заказы в работе|Orders in progress|İşdə olan/);
@@ -70,7 +106,7 @@ test.describe('supplier panel', () => {
     await assertRenders(page, '/supplier/verification', /Верификация|Verification|Yoxlama/);
   });
 
-  test('role guard: supplier cannot open buyer pages', async ({ page }) => {
+  test('role guard: supplier cannot open buyer pages', async () => {
     await page.goto('/buyer/dashboard');
     // Protected redirects a supplier away from buyer routes
     await page.waitForURL((url) => !url.pathname.startsWith('/buyer'), { timeout: 10_000 });

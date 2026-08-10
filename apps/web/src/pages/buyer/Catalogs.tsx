@@ -13,9 +13,14 @@ export default function Catalogs() {
   const [rows, setRows] = useState<any[]>([]);
   const [open, setOpen] = useState<Record<string, any>>({});
   const [qty, setQty] = useState<Record<string, string>>({});
+  // A call-off has no request behind it, so this select is the only place it can be told
+  // whose budget it comes out of. Empty = the ordering user's home department.
+  const [deps, setDeps] = useState<any[]>([]);
+  const [orderDep, setOrderDep] = useState('');
 
   const load = () => api.get('/catalogs').then((r) => setRows(r.data));
   useEffect(() => { load(); }, []);
+  useEffect(() => { if (isBuyer) api.get('/departments').then((r) => setDeps(r.data)).catch(() => {}); }, [isBuyer]);
 
   const run = async (fn: () => Promise<unknown>) => {
     try { await fn(); load(); } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
@@ -29,7 +34,7 @@ export default function Catalogs() {
     const lines = items.filter((i) => Number(qty[i.id]) > 0).map((i) => ({ catalogItemId: i.id, qty: Number(qty[i.id]) }));
     if (!lines.length) { alert('Enter quantities'); return; }
     try {
-      await api.post(`/catalogs/${catalogId}/order`, { items: lines });
+      await api.post(`/catalogs/${catalogId}/order`, { items: lines, ...(orderDep ? { departmentId: orderDep } : {}) });
       setQty({});
       nav('/buyer/contracts');
     } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
@@ -79,7 +84,18 @@ export default function Catalogs() {
             </tbody>
           </table>
           {isBuyer && cat.status === 'ACTIVE' && (
-            <button className="btn" style={{ marginTop: 10 }} data-tip={t('tip_quick_order')} onClick={() => order(cat.id, cat.items)}>📦 {t('quick_order')}</button>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginTop: 10 }}>
+              <div>
+                <label>{t('department')}</label>
+                <select value={orderDep} onChange={(e) => setOrderDep(e.target.value)} style={{ maxWidth: 220 }}>
+                  <option value="">{t('dep_default')}</option>
+                  {deps.filter((d) => d.is_active).map((d) => (
+                    <option key={d.id} value={d.id}>{d.code}</option>
+                  ))}
+                </select>
+              </div>
+              <button className="btn" data-tip={t('tip_quick_order')} onClick={() => order(cat.id, cat.items)}>📦 {t('quick_order')}</button>
+            </div>
           )}
         </div>
       ))}

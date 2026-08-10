@@ -90,7 +90,7 @@ export class DashboardService {
   async spendAnalytics() {
     const m = this.rc.manager;
 
-    const [monthly, byCategory, topSuppliers, savingsRows, invoiceRows] = await Promise.all([
+    const [monthly, byCategory, topSuppliers, byDepartment, savingsRows, invoiceRows] = await Promise.all([
       m.query(`
         SELECT to_char(gs.m, 'YYYY-MM') AS month, COALESCE(sum(p.total_minor), 0)::bigint AS total
         FROM generate_series(date_trunc('month', now()) - interval '11 months',
@@ -112,6 +112,17 @@ export class DashboardService {
         FROM purchase_orders p JOIN organizations o ON o.id = p.supplier_org_id
         WHERE p.status = 'ACCEPTED'
         GROUP BY o.id, o.legal_name ORDER BY 2 DESC LIMIT 5`),
+      // Spend by cost centre. Reads the PO's OWN department_id rather than walking
+      // PO→contract→event→request like the category split above: that chain breaks on
+      // direct purchases and catalog call-offs, which is precisely the spend a department
+      // head asks about. Orders predating departments group under '—'.
+      m.query(`
+        SELECT COALESCE(d.code, '—') AS department,
+               sum(p.total_minor)::bigint AS total, count(*)::int AS po_count
+        FROM purchase_orders p
+        LEFT JOIN departments d ON d.id = p.department_id
+        WHERE p.status = 'ACCEPTED'
+        GROUP BY 1 ORDER BY 2 DESC`),
       m.query(`
         WITH awarded AS (
           SELECT e.id, pr.estimated_total_minor AS est, sum(b.total_minor)::bigint AS awd
@@ -137,6 +148,7 @@ export class DashboardService {
     return {
       monthly: monthly.map((r: any) => ({ month: r.month, totalMinor: Number(r.total) })),
       byCategory: byCategory.map((r: any) => ({ category: r.category, totalMinor: Number(r.total), poCount: r.po_count })),
+      byDepartment: byDepartment.map((r: any) => ({ department: r.department, totalMinor: Number(r.total), poCount: r.po_count })),
       topSuppliers: topSuppliers.map((r: any) => ({ name: r.name, totalMinor: Number(r.total), poCount: r.po_count })),
       savings: {
         estimatedMinor: Number(s.estimated), awardedMinor: Number(s.awarded),

@@ -25,7 +25,9 @@ describe('spend analytics (API e2e)', () => {
     app.use(cookieParser());
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
-    db = new Client({ connectionString: process.env.DATABASE_URL });
+    // owner connection: the department-split test re-tags a PO, which RLS would silently
+    // drop on the app_user role (no request context → default deny).
+    db = new Client({ connectionString: process.env.DATABASE_OWNER_URL ?? process.env.DATABASE_URL });
     await db.connect();
     const reg = async (path: string, name: string, email: string) => {
       const r = await http().post(path).send({ legalName: name, email, password: 'password123', fullName: name }).expect(201);
@@ -95,6 +97,55 @@ describe('spend analytics (API e2e)', () => {
     expect(res.body.byCategory).toHaveLength(1);
     expect(res.body.byCategory[0].category).toBe('—');
     expect(res.body.byCategory[0].totalMinor).toBe(300_000);
+  });
+
+  // A direct PO has no contract → no event → no request, so the category split can only
+  // call it "—". The department split reads the PO's own column and still knows whose
+  // spend it is — that is the whole point of denormalizing it.
+  it('spend by department keys off the order itself, not the request chain', async () => {
+    const res = await http().get('/dashboard/spend-analytics').set(...bearer(buyer)).expect(200);
+    expect(res.body.byDepartment).toHaveLength(1);
+    expect(res.body.byDepartment[0].totalMinor).toBe(300_000);
+
+    const dep = (await http().post('/departments').set(...bearer(buyer))
+      .send({ code: `ANA-${tag}` }).expect(201)).body;
+    await db.query(
+      `UPDATE purchase_orders SET department_id = $1
+       WHERE buyer_org_id = (SELECT buyer_org_id FROM departments WHERE id = $1)`,
+      [dep.id],
+    );
+    const after = await http().get('/dashboard/spend-analytics').set(...bearer(buyer)).expect(200);
+    expect(after.body.byDepartment[0].department).toBe(`ANA-${tag}`);
+    expect(after.body.byDepartment[0].totalMinor).toBe(300_000);
+    // the category split is unchanged: it never had a chain to walk
+    expect(after.body.byCategory[0].category).toBe('—');
+  });
+
+  it('budget pace compares the share spent with the share of the period gone', async () => {
+    const year = new Date().getUTCFullYear();
+    const dep = (await http().get('/departments').set(...bearer(buyer))).body.find((d: any) => d.code === `ANA-${tag}`);
+    await http().post('/budgets').set(...bearer(buyer))
+      .send({ name: `Pace ${tag}`, departmentId: dep.id, periodYear: year, amountMinor: 1_000_000 }).expect(201);
+
+    const rows = (await http().get('/budgets/rollup?current=1').set(...bearer(buyer)).expect(200)).body;
+    const row = rows.find((r: any) => r.departmentCode === `ANA-${tag}`);
+    expect(row).toBeTruthy();
+    // the annual period contains today, so elapsed is strictly between the ends
+    expect(row.elapsedPct).toBeGreaterThan(0);
+    expect(row.elapsedPct).toBeLessThanOrEqual(100);
+    expect(row.paceDeltaPct).toBe(Math.round((row.utilizationPct - row.elapsedPct) * 10) / 10);
+  });
+
+  it('a period that has not started yet reads 0% elapsed, never negative', async () => {
+    const nextYear = new Date().getUTCFullYear() + 1;
+    const dep = (await http().get('/departments').set(...bearer(buyer))).body.find((d: any) => d.code === `ANA-${tag}`);
+    await http().post('/budgets').set(...bearer(buyer))
+      .send({ name: `Future ${tag}`, departmentId: dep.id, periodYear: nextYear, amountMinor: 500_000 }).expect(201);
+
+    const rows = (await http().get(`/budgets/rollup?year=${nextYear}`).set(...bearer(buyer)).expect(200)).body;
+    const row = rows.find((r: any) => r.departmentCode === `ANA-${tag}`);
+    expect(row.elapsedPct).toBe(0);
+    expect(row.paceDeltaPct).toBe(0); // nothing spent, nothing elapsed
   });
 
   it('invoice block reports zero when nothing is invoiced', async () => {
