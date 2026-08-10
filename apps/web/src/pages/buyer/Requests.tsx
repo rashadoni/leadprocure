@@ -88,14 +88,32 @@ export default function Requests() {
   // Forced look-before-approve: the first click reveals the line items, the second
   // actually approves — nobody waves 36 000 ₼ through without seeing what's in it.
   const [preview, setPreview] = useState<Record<string, any>>({});
+  const [impact, setImpact] = useState<Record<string, any>>({});
   const approveGuard = async (id: string) => {
     if (!preview[id]) {
       const { data } = await api.get(`/requests/${id}`);
       setPreview((p) => ({ ...p, [id]: data }));
+      // what this approval does to the budget — shown before the second click, not after
+      api.get(`/budgets/impact/${id}`)
+        .then((r) => setImpact((m) => ({ ...m, [id]: r.data ?? null })))
+        .catch(() => {});
       return;
     }
-    await act(id, 'approve');
+    try {
+      await api.post(`/requests/${id}/approve`);
+    } catch (e: any) {
+      // 403 = a budget block threshold; an admin may push through with a written reason
+      const msg = e.response?.data?.message?.toString() ?? 'Error';
+      if (e.response?.status === 403 && isAdmin && impact[id]?.wouldBlock) {
+        const reason = prompt(`${msg}\n\n${t('bud_override_prompt')}`);
+        if (!reason || reason.trim().length < 3) return;
+        try { await api.post(`/requests/${id}/approve`, { budgetOverrideReason: reason.trim() }); }
+        catch (e2: any) { alert(e2.response?.data?.message?.toString() ?? 'Error'); return; }
+      } else { alert(msg); return; }
+    }
+    load();
     setPreview((p) => { const q = { ...p }; delete q[id]; return q; });
+    setImpact((m) => { const q = { ...m }; delete q[id]; return q; });
   };
 
   const makeRfq = async (id: string, type: 'RFQ' | 'RFP' | 'RFI' = 'RFQ') => {
@@ -258,6 +276,20 @@ export default function Requests() {
                         ))}
                       </tbody>
                     </table>
+                    {/* the money question, answered before the approve click, not after */}
+                    {impact[r.id] === null && <div className="hint">{t('bud_impact_none')}</div>}
+                    {impact[r.id] && (
+                      <div style={{ marginBottom: 6 }}>
+                        <b>{t('bud_impact')}:</b>{' '}
+                        {impact[r.id].departmentCode ? `${impact[r.id].departmentCode} · ` : ''}
+                        {impact[r.id].budgetName} ({impact[r.id].periodLabel}) —{' '}
+                        {fmtMoney(impact[r.id].projectedUsedMinor, impact[r.id].currency)} /{' '}
+                        {fmtMoney(impact[r.id].amountMinor, impact[r.id].currency)}{' '}
+                        <span className={impact[r.id].wouldWarn ? 'error' : ''}>
+                          ({impact[r.id].projectedPct}%)
+                        </span>
+                      </div>
+                    )}
                     <span className="hint">{t('tip_approve')}</span>
                   </td>
                 </tr>

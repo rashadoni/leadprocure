@@ -234,6 +234,8 @@ export const AUDIT_ACTIONS = [
   'DEPARTMENT_DELETED',
   'MEMBER_DEPARTMENT_SET',
   'REQUEST_CANCELLED',
+  'BUDGET_POLICY_UPDATED',
+  'BUDGET_BLOCK_OVERRIDDEN',
 ] as const;
 
 // ---------------- Invoices (P2P) ----------------

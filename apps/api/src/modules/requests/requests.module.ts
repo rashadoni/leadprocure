@@ -47,6 +47,11 @@ class RejectRequestDto {
 class CancelRequestDto {
   @IsString() @MinLength(3) reason!: string;
 }
+// Only meaningful when a block threshold is armed: the written justification for pushing
+// an approval through it anyway.
+class ApproveRequestDto {
+  @IsOptional() @IsString() @MinLength(3) budgetOverrideReason?: string;
+}
 // Policy entries are buyer-configured maps; guard the envelope shape (array), leave the
 // per-entry fields to the service which persists them as-is.
 class ReplacePoliciesDto {
@@ -193,7 +198,7 @@ export class RequestsService {
 
   // Approval recomputes the total server-side from items (client totals are never
   // trusted) and resolves the procurement method from the buyer's value-band policy.
-  async approve(id: string, auth: AccessTokenPayload) {
+  async approve(id: string, auth: AccessTokenPayload, budgetOverrideReason?: string) {
     const m = this.rc.manager;
     await m.query(`SELECT id FROM procurement_requests WHERE id=$1 FOR UPDATE`, [id]);
     const req = await this.requireStatus(id, ['SUBMITTED']);
@@ -249,9 +254,11 @@ export class RequestsService {
       [id, auth.sub, total, method],
     );
     await this.audit.record('REQUEST_APPROVED', 'procurement_request', id, { total, method });
+    // Budget control. With no block threshold configured (the default) this only attaches
+    // warnings, exactly as before. With one armed, it THROWS — and because the whole
+    // request runs in one transaction, the approval above is rolled back with it.
+    const budgetWarnings = await this.budgets.enforceOnApproval(id, auth, budgetOverrideReason);
     const approved = await this.get(id);
-    // Soft, non-blocking budget control: flag any budget this approval tips over.
-    const budgetWarnings = await this.budgets.warningsForRequest(approved);
     return { ...approved, budgetWarnings };
   }
 
@@ -435,8 +442,12 @@ export class RequestsController {
   submit(@Param('id') id: string) { return this.requests.submit(id); }
 
   @Post(':id/approve') @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
-  approve(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
-    return this.requests.approve(id, auth);
+  approve(
+    @Param('id') id: string,
+    @CurrentUser() auth: AccessTokenPayload,
+    @Body() body?: ApproveRequestDto,
+  ) {
+    return this.requests.approve(id, auth, body?.budgetOverrideReason);
   }
 
   @Post(':id/reject') @Roles('BUYER_ADMIN', 'BUYER_APPROVER')

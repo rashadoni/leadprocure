@@ -338,6 +338,100 @@ describe('budgets & commitment control (API e2e)', () => {
       .send({ reason: 'trying to release money that is already spent' }).expect(400);
   });
 
+  // ---------- thresholds: warn, block, override ----------
+
+  it('exposes the budget impact of a request BEFORE it is approved', async () => {
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Impact ${tag}`, category: 'IMPACT', periodYear: YEAR, amountMinor: 100_000 }).expect(201);
+    const req = await http().post('/requests').set(...bearer(buyerA))
+      .send({ title: `Impact ${tag}`, category: 'IMPACT', items: [{ name: 'x', qty: 1, estUnitPriceMinor: 92_000 }] })
+      .expect(201);
+    await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyerA)).expect(201);
+
+    const impact = (await http().get(`/budgets/impact/${req.body.id}`).set(...bearer(approverA)).expect(200)).body;
+    expect(impact.budgetName).toBe(`Impact ${tag}`);
+    expect(impact.currentUsedMinor).toBe(0);
+    expect(impact.projectedUsedMinor).toBe(92_000);
+    expect(impact.projectedPct).toBe(92);
+    expect(impact.wouldWarn).toBe(true);   // default warn threshold is 80%
+    expect(impact.wouldBlock).toBe(false); // and nothing blocks by default
+  });
+
+  it('the default policy warns at 80% and blocks nothing', async () => {
+    const p = (await http().get('/budgets/policy').set(...bearer(buyerA)).expect(200)).body;
+    expect(p).toEqual({ warnPct: 80, blockPct: null, allowOverride: true });
+  });
+
+  it('rejects a policy that would block before it warns', async () => {
+    await http().put('/budgets/policy').set(...bearer(buyerA)).send({ warnPct: 90, blockPct: 80 }).expect(400);
+  });
+
+  it('an armed block refuses the approval — and the request stays SUBMITTED', async () => {
+    await http().put('/budgets/policy').set(...bearer(buyerA)).send({ warnPct: 80, blockPct: 100 }).expect(200);
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Blocked ${tag}`, category: 'BLOCKED', periodYear: YEAR, amountMinor: 50_000 }).expect(201);
+
+    const req = await http().post('/requests').set(...bearer(buyerA))
+      .send({ title: `Blocked ${tag}`, category: 'BLOCKED', items: [{ name: 'x', qty: 1, estUnitPriceMinor: 120_000 }] })
+      .expect(201);
+    await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyerA)).expect(201);
+    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approverA)).expect(403);
+
+    // the whole approval was rolled back, not half-applied
+    const after = (await http().get(`/requests/${req.body.id}`).set(...bearer(buyerA)).expect(200)).body;
+    expect(after.status).toBe('SUBMITTED');
+    expect(after.approved_at).toBeNull();
+    const b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.name === `Blocked ${tag}`);
+    expect(b.usedMinor).toBe(0);
+  });
+
+  it('an admin can override the block with a written reason; an approver cannot', async () => {
+    // created by the approver so the admin is free to approve it (segregation of duties)
+    const req = await http().post('/requests').set(...bearer(approverA))
+      .send({ title: `Override ${tag}`, category: 'BLOCKED', items: [{ name: 'x', qty: 1, estUnitPriceMinor: 70_000 }] })
+      .expect(201);
+    await http().post(`/requests/${req.body.id}/submit`).set(...bearer(approverA)).expect(201);
+
+    // an approver's override attempt is refused: overriding is an admin act
+    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approverA))
+      .send({ budgetOverrideReason: 'urgent' }).expect(403);
+
+    const done = await http().post(`/requests/${req.body.id}/approve`).set(...bearer(buyerA))
+      .send({ budgetOverrideReason: 'urgent safety purchase, CFO agreed' }).expect(201);
+    expect(done.body.status).toBe('APPROVED');
+    const overrides = await db.query(
+      `SELECT payload FROM audit_events WHERE action='BUDGET_BLOCK_OVERRIDDEN' AND payload->>'request_id' = $1`,
+      [req.body.id],
+    );
+    expect(overrides.rows).toHaveLength(1);
+    expect(overrides.rows[0].payload.reason).toContain('CFO');
+  });
+
+  it('with overrides disabled, even an admin is refused', async () => {
+    await http().put('/budgets/policy').set(...bearer(buyerA))
+      .send({ warnPct: 80, blockPct: 100, allowOverride: false }).expect(200);
+    const req = await http().post('/requests').set(...bearer(approverA))
+      .send({ title: `NoOverride ${tag}`, category: 'BLOCKED', items: [{ name: 'x', qty: 1, estUnitPriceMinor: 60_000 }] })
+      .expect(201);
+    await http().post(`/requests/${req.body.id}/submit`).set(...bearer(approverA)).expect(201);
+    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(buyerA))
+      .send({ budgetOverrideReason: 'please' }).expect(403);
+
+    // back to the default so the remaining specs see unblocked behaviour
+    await http().put('/budgets/policy').set(...bearer(buyerA))
+      .send({ warnPct: 80, blockPct: null, allowOverride: true }).expect(200);
+  });
+
+  it('crossing the warn threshold notifies the buyer org', async () => {
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Warned ${tag}`, category: 'WARNED', periodYear: YEAR, amountMinor: 100_000 }).expect(201);
+    await approveRequest(buyerA, 'WARNED', 85_000);
+    const notes = (await http().get('/notifications').set(...bearer(buyerA)).expect(200)).body;
+    const note = notes.find((n: any) => n.type === 'BUDGET_THRESHOLD_CROSSED' && n.payload.budget === `Warned ${tag}`);
+    expect(note).toBeTruthy();
+    expect(note.payload.utilization).toBe('85%');
+  });
+
   it('filters the list by period type and year', async () => {
     const quarters = (await http().get(`/budgets?periodType=QUARTER&year=${YEAR}`).set(...bearer(buyerA)).expect(200)).body;
     expect(quarters.length).toBeGreaterThan(0);

@@ -18,10 +18,11 @@ const MAIL_SUBJECTS: Record<string, string> = {
   EVENT_PUBLISHED: 'Опубликован тендер · Tender dərc olunub',
   VERIFICATION_OPENED: 'Открыта верификация · Yoxlama açılıb',
   VERIFICATION_DECIDED: 'Решение по верификации · Yoxlama qərarı',
+  BUDGET_THRESHOLD_CROSSED: 'Бюджет на пороге · Büdcə həddə çatdı',
 };
 // Only these payload fields may appear in an email body — a whitelist, so sealed or
 // internal values can never leak into outbound mail by accident.
-const MAIL_SAFE_KEYS = ['po_no', 'invoice_no', 'status', 'title', 'no'] as const;
+const MAIL_SAFE_KEYS = ['po_no', 'invoice_no', 'status', 'title', 'no', 'budget', 'utilization'] as const;
 
 // Async email fan-out to the ACTIVE users of the recipient org. Runs post-commit on its
 // own connection (DataSource, no request tx). Every failure is swallowed + logged: email

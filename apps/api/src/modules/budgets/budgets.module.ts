@@ -1,12 +1,15 @@
 import {
-  BadRequestException, Body, ConflictException, Controller, Delete, Get, Injectable, Module,
-  NotFoundException, Param, Post, Put, Query,
+  BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get,
+  Injectable, Module, NotFoundException, Param, Post, Put, Query,
 } from '@nestjs/common';
-import { IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min, MinLength } from 'class-validator';
+import {
+  IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min, MinLength,
+} from 'class-validator';
 import type { AccessTokenPayload } from '@leadprocure/shared';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
+import { NotifyModule, NotifyService } from '../../common/notify/notify.module';
 
 export const BUDGET_PERIOD_TYPES = ['YEAR', 'QUARTER', 'MONTH'] as const;
 export type BudgetPeriodType = (typeof BUDGET_PERIOD_TYPES)[number];
@@ -25,6 +28,36 @@ class UpsertBudgetDto {
   @IsOptional() @IsDateString() periodStart?: string;
   @IsInt() @Min(0) amountMinor!: number;
   @IsOptional() @IsString() @Length(3, 3) currency?: string;
+}
+
+class BudgetPolicyDto {
+  @IsOptional() @IsInt() @Min(1) @Max(1000) warnPct?: number;
+  // null clears the block (the default state) — pass a number to arm it.
+  @IsOptional() @IsInt() @Min(1) @Max(1000) blockPct?: number | null;
+  @IsOptional() @IsBoolean() allowOverride?: boolean;
+}
+
+export interface BudgetPolicy {
+  warnPct: number;
+  blockPct: number | null;
+  allowOverride: boolean;
+}
+
+export interface BudgetImpact {
+  budgetId: string;
+  budgetName: string;
+  departmentCode: string | null;
+  periodLabel: string;
+  currency: string;
+  amountMinor: number;
+  currentUsedMinor: number;
+  requestMinor: number;
+  projectedUsedMinor: number;
+  projectedPct: number;
+  warnPct: number;
+  blockPct: number | null;
+  wouldWarn: boolean;
+  wouldBlock: boolean;
 }
 
 export interface BudgetPeriod {
@@ -101,6 +134,7 @@ export class BudgetsService {
   constructor(
     private readonly rc: RequestContextService,
     private readonly audit: AuditService,
+    private readonly notify: NotifyService,
   ) {}
 
   // Every APPROVED request is charged to EXACTLY ONE budget — the most specific one that
@@ -207,6 +241,130 @@ export class BudgetsService {
       currency: r.currency, amountMinor: Number(r.estimated_total_minor),
       approvedAt: r.approved_at,
     }));
+  }
+
+  // ---------- thresholds ----------
+
+  async getPolicy(): Promise<BudgetPolicy> {
+    const row = (
+      await this.rc.manager.query(`SELECT warn_pct, block_pct, allow_override FROM budget_policies LIMIT 1`)
+    )[0];
+    // Defaults, not an error: an org that never configured thresholds still warns at 80%
+    // and blocks nothing.
+    return {
+      warnPct: row ? Number(row.warn_pct) : 80,
+      blockPct: row?.block_pct == null ? null : Number(row.block_pct),
+      allowOverride: row ? row.allow_override : true,
+    };
+  }
+
+  async setPolicy(dto: BudgetPolicyDto, auth: AccessTokenPayload): Promise<BudgetPolicy> {
+    if (dto.blockPct != null && dto.warnPct != null && dto.blockPct < dto.warnPct) {
+      throw new BadRequestException('blockPct must be at least warnPct — blocking before warning makes no sense');
+    }
+    await this.rc.manager.query(
+      `INSERT INTO budget_policies(buyer_org_id, warn_pct, block_pct, allow_override)
+       VALUES ($1, COALESCE($2, 80), $3, COALESCE($4, true))
+       ON CONFLICT (buyer_org_id) DO UPDATE
+         SET warn_pct = COALESCE($2, budget_policies.warn_pct),
+             block_pct = $3,
+             allow_override = COALESCE($4, budget_policies.allow_override),
+             updated_at = now()`,
+      [auth.org_id, dto.warnPct ?? null, dto.blockPct ?? null, dto.allowOverride ?? null],
+    );
+    await this.audit.record('BUDGET_POLICY_UPDATED', 'budget_policy', auth.org_id, {
+      warnPct: dto.warnPct ?? null, blockPct: dto.blockPct ?? null, allowOverride: dto.allowOverride ?? null,
+    });
+    return this.getPolicy();
+  }
+
+  // What approving this request WOULD do to its budget. Answers the question the old
+  // control could not: "this request eats 92% of IT / Q3" — before anyone clicks approve.
+  // Matching mirrors the committed engine, but dates the request at now(), since a
+  // not-yet-approved request has no approved_at.
+  async impactFor(requestId: string): Promise<BudgetImpact | null> {
+    const m = this.rc.manager;
+    const req = (
+      await m.query(
+        `SELECT id, category, department_id, currency, estimated_total_minor, status FROM procurement_requests WHERE id = $1`,
+        [requestId],
+      )
+    )[0];
+    if (!req) throw new NotFoundException('Request not found');
+
+    const budget = (
+      await m.query(
+        `SELECT b.id FROM budgets b
+         WHERE b.currency = $1
+           AND now() >= b.period_start::timestamptz
+           AND now() < (b.period_end + 1)::timestamptz
+           AND (b.department_id IS NULL OR b.department_id = $2)
+           AND (b.category = '*' OR b.category = $3)
+         ORDER BY (b.department_id IS NOT NULL) DESC, (b.category <> '*') DESC, b.period_start DESC, b.id
+         LIMIT 1`,
+        [req.currency, req.department_id, req.category],
+      )
+    )[0];
+    if (!budget) return null; // no budget covers this spend — the unbudgeted report's job
+
+    const current = (await this.list()).find((b: any) => b.id === budget.id);
+    if (!current) return null;
+    const policy = await this.getPolicy();
+    const amount = Number(req.estimated_total_minor);
+    // An already-APPROVED request is inside usedMinor; don't count it twice.
+    const projected = current.usedMinor + (req.status === 'APPROVED' ? 0 : amount);
+    const pct = current.amountMinor > 0 ? Math.round((projected / current.amountMinor) * 1000) / 10 : 0;
+    return {
+      budgetId: current.id, budgetName: current.name,
+      departmentCode: current.departmentCode, periodLabel: current.periodLabel,
+      currency: current.currency, amountMinor: current.amountMinor,
+      currentUsedMinor: current.usedMinor, requestMinor: amount,
+      projectedUsedMinor: projected, projectedPct: pct,
+      warnPct: policy.warnPct, blockPct: policy.blockPct,
+      wouldWarn: pct >= policy.warnPct,
+      wouldBlock: policy.blockPct != null && pct > policy.blockPct,
+    };
+  }
+
+  // Called from approve() INSIDE its transaction: throwing here rolls the approval back,
+  // which is exactly what a hard block must do. Returns the warnings to attach otherwise.
+  async enforceOnApproval(
+    requestId: string,
+    auth: AccessTokenPayload,
+    overrideReason?: string,
+  ): Promise<BudgetWarning[]> {
+    const policy = await this.getPolicy();
+    const impact = await this.impactFor(requestId);
+    if (impact && impact.wouldBlock) {
+      if (!overrideReason) {
+        throw new ForbiddenException(
+          `Budget "${impact.budgetName}"${impact.departmentCode ? ` (${impact.departmentCode})` : ''} ` +
+          `would reach ${impact.projectedPct}% of ${impact.periodLabel}, over the ${impact.blockPct}% block threshold. ` +
+          (policy.allowOverride ? 'An admin may approve with a written override reason.' : 'Overrides are disabled for this organization.'),
+        );
+      }
+      if (!policy.allowOverride) {
+        throw new ForbiddenException('Budget overrides are disabled for this organization');
+      }
+      if (auth.role !== 'BUYER_ADMIN') {
+        throw new ForbiddenException('Only a BUYER_ADMIN may override a budget block');
+      }
+      await this.audit.record('BUDGET_BLOCK_OVERRIDDEN', 'budget', impact.budgetId, {
+        request_id: requestId, projected_pct: impact.projectedPct, block_pct: impact.blockPct,
+        reason: overrideReason,
+      });
+    }
+    // Crossing the warn line is worth telling the budget owner about, whether or not the
+    // budget is actually over.
+    if (impact && impact.wouldWarn) {
+      await this.notify.notifyOwnOrg('BUDGET_THRESHOLD_CROSSED', {
+        title: `${impact.budgetName}${impact.departmentCode ? ` · ${impact.departmentCode}` : ''} (${impact.periodLabel})`,
+        budget: impact.budgetName,
+        utilization: `${impact.projectedPct}%`,
+        status: impact.wouldBlock ? 'OVER_BLOCK_THRESHOLD' : 'OVER_WARN_THRESHOLD',
+      });
+    }
+    return this.warningsForRequest({ id: requestId, approved_at: new Date() });
   }
 
   // A plain BUYER_USER sees only their own cost centre; approvers and admins see all.
@@ -386,6 +544,25 @@ export class BudgetsController {
     return this.budgets.unbudgeted({ from: from || undefined, to: to || undefined });
   }
 
+  @Get('policy')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  policy() {
+    return this.budgets.getPolicy();
+  }
+
+  @Put('policy')
+  @Roles('BUYER_ADMIN')
+  setPolicy(@Body() dto: BudgetPolicyDto, @CurrentUser() auth: AccessTokenPayload) {
+    return this.budgets.setPolicy(dto, auth);
+  }
+
+  // What approving this request would do to its budget — for the approve dialog.
+  @Get('impact/:requestId')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  impact(@Param('requestId') requestId: string) {
+    return this.budgets.impactFor(requestId);
+  }
+
   @Post()
   @Roles('BUYER_ADMIN')
   create(@Body() dto: UpsertBudgetDto, @CurrentUser() auth: AccessTokenPayload) {
@@ -406,6 +583,7 @@ export class BudgetsController {
 }
 
 @Module({
+  imports: [NotifyModule],
   controllers: [BudgetsController],
   providers: [BudgetsService],
   exports: [BudgetsService],
