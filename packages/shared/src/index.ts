@@ -236,6 +236,7 @@ export const AUDIT_ACTIONS = [
   'REQUEST_CANCELLED',
   'BUDGET_POLICY_UPDATED',
   'BUDGET_BLOCK_OVERRIDDEN',
+  'BUDGET_ROLLED_OVER',
 ] as const;
 
 // ---------------- Invoices (P2P) ----------------

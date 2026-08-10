@@ -28,6 +28,12 @@ class UpsertBudgetDto {
   @IsOptional() @IsDateString() periodStart?: string;
   @IsInt() @Min(0) amountMinor!: number;
   @IsOptional() @IsString() @Length(3, 3) currency?: string;
+  // Why the amount is what it is — kept in the revision ledger, not just the audit log.
+  @IsOptional() @IsString() reason?: string;
+}
+
+class RolloverDto {
+  @IsUUID() sourceBudgetId!: string;
 }
 
 class BudgetPolicyDto {
@@ -420,14 +426,23 @@ export class BudgetsService {
     } catch (e: any) {
       throw this.friendlyConflict(e, dto, period);
     }
+    await this.rc.manager.query(
+      `INSERT INTO budget_revisions(buyer_org_id, budget_id, amount_before_minor, amount_after_minor, reason, created_by)
+       VALUES ($1,$2,NULL,$3,$4,$5)`,
+      [auth.org_id, row.id, dto.amountMinor, dto.reason?.trim() || 'Initial plan', auth.sub],
+    );
     await this.audit.record('BUDGET_CREATED', 'budget', row.id, {
       name: dto.name, periodType: period.type, periodStart: period.start,
     });
     return this.getOne(row.id);
   }
 
-  async update(id: string, dto: UpsertBudgetDto) {
+  async update(id: string, dto: UpsertBudgetDto, auth: AccessTokenPayload) {
     const period = resolveBudgetPeriod(dto);
+    // The amount is money, not a field: changing it writes a revision so "the plan was
+    // 500k until March" stays answerable.
+    const before = (await this.rc.manager.query(`SELECT amount_minor FROM budgets WHERE id=$1`, [id]))[0];
+    if (!before) throw new NotFoundException('Budget not found');
     let res: Array<{ id: string }>;
     try {
       res = await this.rc.manager.query(
@@ -443,8 +458,79 @@ export class BudgetsService {
       throw this.friendlyConflict(e, dto, period);
     }
     if (!res[0]) throw new NotFoundException('Budget not found');
-    await this.audit.record('BUDGET_UPDATED', 'budget', id, { name: dto.name });
+    if (Number(before.amount_minor) !== dto.amountMinor) {
+      await this.rc.manager.query(
+        `INSERT INTO budget_revisions(buyer_org_id, budget_id, amount_before_minor, amount_after_minor, reason, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [auth.org_id, id, Number(before.amount_minor), dto.amountMinor, dto.reason?.trim() || null, auth.sub],
+      );
+    }
+    await this.audit.record('BUDGET_UPDATED', 'budget', id, {
+      name: dto.name,
+      amount_before: Number(before.amount_minor),
+      amount_after: dto.amountMinor,
+      reason: dto.reason?.trim() || null,
+    });
     return this.getOne(id);
+  }
+
+  async revisions(budgetId: string) {
+    const rows = await this.rc.manager.query(
+      `SELECT r.id, r.amount_before_minor, r.amount_after_minor, r.reason, r.created_at,
+              r.rollover_from_budget_id,
+              (SELECT u.full_name FROM organization_users u WHERE u.id = r.created_by) AS created_by_name,
+              (SELECT b2.name FROM budgets b2 WHERE b2.id = r.rollover_from_budget_id) AS rollover_from_name
+       FROM budget_revisions r
+       WHERE r.budget_id = $1
+       ORDER BY r.created_at, r.id`,
+      [budgetId],
+    );
+    return rows.map((r: any) => ({
+      id: r.id,
+      amountBeforeMinor: r.amount_before_minor == null ? null : Number(r.amount_before_minor),
+      amountAfterMinor: Number(r.amount_after_minor),
+      deltaMinor: r.amount_before_minor == null ? null : Number(r.amount_after_minor) - Number(r.amount_before_minor),
+      reason: r.reason, createdAt: r.created_at, createdByName: r.created_by_name,
+      rolloverFromBudgetId: r.rollover_from_budget_id, rolloverFromName: r.rollover_from_name,
+    }));
+  }
+
+  // Carry an unspent remainder forward. Modelled as a revision of the TARGET budget with a
+  // pointer back to the source, so the money's provenance stays visible instead of the
+  // target's plan quietly growing.
+  async rollover(sourceId: string, targetId: string, auth: AccessTokenPayload) {
+    if (sourceId === targetId) throw new BadRequestException('Source and target must be different budgets');
+    const all = await this.list();
+    const source = all.find((b: any) => b.id === sourceId);
+    const target = all.find((b: any) => b.id === targetId);
+    if (!source || !target) throw new NotFoundException('Budget not found');
+    if (source.currency !== target.currency) {
+      throw new BadRequestException('Rollover between different currencies is not supported');
+    }
+    if (source.remainingMinor <= 0) {
+      throw new BadRequestException(`"${source.name}" has nothing left to carry forward`);
+    }
+    const already = await this.rc.manager.query(
+      `SELECT 1 FROM budget_revisions WHERE budget_id=$1 AND rollover_from_budget_id=$2 LIMIT 1`,
+      [targetId, sourceId],
+    );
+    if (already.length) throw new ConflictException('This remainder has already been carried forward');
+
+    const amount = target.amountMinor + source.remainingMinor;
+    await this.rc.manager.query(`UPDATE budgets SET amount_minor=$2, updated_at=now() WHERE id=$1`, [targetId, amount]);
+    await this.rc.manager.query(
+      `INSERT INTO budget_revisions(buyer_org_id, budget_id, amount_before_minor, amount_after_minor, reason,
+         rollover_from_budget_id, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [
+        auth.org_id, targetId, target.amountMinor, amount,
+        `Rollover from "${source.name}" (${source.periodLabel})`, sourceId, auth.sub,
+      ],
+    );
+    await this.audit.record('BUDGET_ROLLED_OVER', 'budget', targetId, {
+      from: sourceId, amount_minor: source.remainingMinor,
+    });
+    return this.getOne(targetId);
   }
 
   async remove(id: string) {
@@ -571,8 +657,21 @@ export class BudgetsController {
 
   @Put(':id')
   @Roles('BUYER_ADMIN')
-  update(@Param('id') id: string, @Body() dto: UpsertBudgetDto) {
-    return this.budgets.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpsertBudgetDto, @CurrentUser() auth: AccessTokenPayload) {
+    return this.budgets.update(id, dto, auth);
+  }
+
+  @Get(':id/revisions')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  revisions(@Param('id') id: string) {
+    return this.budgets.revisions(id);
+  }
+
+  // Carry this budget's unspent remainder into another period's budget.
+  @Post(':id/rollover')
+  @Roles('BUYER_ADMIN')
+  rollover(@Param('id') id: string, @Body() dto: RolloverDto, @CurrentUser() auth: AccessTokenPayload) {
+    return this.budgets.rollover(dto.sourceBudgetId, id, auth);
   }
 
   @Delete(':id')

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, Fragment, useEffect, useState } from 'react';
 import { api, fmtDate, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
@@ -30,7 +30,7 @@ const THIS_MONTH = new Date().getMonth() + 1;
 const empty = {
   name: '', category: '', departmentId: '', periodType: 'YEAR' as Budget['periodType'],
   periodYear: THIS_YEAR, periodQuarter: THIS_QUARTER, periodMonth: THIS_MONTH,
-  amount: '', currency: 'AZN',
+  amount: '', currency: 'AZN', reason: '',
 };
 
 export default function Budgets() {
@@ -97,6 +97,7 @@ export default function Budgets() {
       ...(form.periodType === 'MONTH' ? { periodMonth: Number(form.periodMonth) } : {}),
       amountMinor: Math.round(Number(form.amount) * 100),
       currency: form.currency || 'AZN',
+      ...(form.reason.trim() ? { reason: form.reason.trim() } : {}),
     };
     try {
       if (editId) await api.put(`/budgets/${editId}`, body);
@@ -120,11 +121,34 @@ export default function Budgets() {
       departmentId: b.departmentId ?? '',
       amount: String(b.amountMinor / 100),
       currency: b.currency,
+      reason: '', // each change explains itself; never carry the previous reason over
     });
   };
   const remove = async (id: string) => {
-    if (!confirm('Delete budget?')) return;
-    await api.delete(`/budgets/${id}`); load();
+    if (!confirm(t('bud_delete_confirm'))) return;
+    try { await api.delete(`/budgets/${id}`); load(); }
+    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  };
+
+  // Revision history, opened inline under the budget row.
+  const [history, setHistory] = useState<Record<string, any[]>>({});
+  const toggleHistory = async (id: string) => {
+    if (history[id]) { setHistory((h) => { const n = { ...h }; delete n[id]; return n; }); return; }
+    const { data } = await api.get(`/budgets/${id}/revisions`);
+    setHistory((h) => ({ ...h, [id]: data }));
+  };
+
+  // Rollover: carry another period's unspent remainder into this budget.
+  const rollover = async (targetId: string) => {
+    const candidates = rows.filter((b) => b.id !== targetId && b.remainingMinor > 0);
+    if (!candidates.length) { alert(t('bud_rollover_none')); return; }
+    const pick = prompt(
+      `${t('bud_rollover_prompt')}\n\n${candidates.map((b, i) => `${i + 1}. ${b.name} (${b.periodLabel}) — ${fmtMoney(b.remainingMinor, b.currency)}`).join('\n')}`,
+    );
+    const idx = Number(pick) - 1;
+    if (!(idx >= 0 && idx < candidates.length)) return;
+    try { await api.post(`/budgets/${targetId}/rollover`, { sourceBudgetId: candidates[idx].id }); load(); }
+    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
   return (
@@ -169,6 +193,10 @@ export default function Budgets() {
             )}
             <div><label>{t('amount')} (AZN)</label>
               <input type="number" step="0.01" min={0} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required /></div>
+            <div><label>{t('reason')}</label>
+              {/* goes into the revision ledger, so a changed plan can always be explained */}
+              <input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                placeholder={editId ? t('bud_reason_ph_edit') : t('bud_reason_ph_new')} /></div>
             <div>
               <button className="btn">{editId ? t('save') : t('create')}</button>
               {editId && <button type="button" className="btn ghost" onClick={() => { setEditId(null); setForm({ ...empty }); }} style={{ marginLeft: 6 }}>✕</button>}
@@ -261,7 +289,8 @@ export default function Budgets() {
             {rows.map((b) => {
               const over = b.remainingMinor < 0;
               return (
-                <tr key={b.id}>
+                <Fragment key={b.id}>
+                <tr>
                   <td>{b.name}</td>
                   <td>{b.category === '*' ? '—' : b.category}</td>
                   <td data-tip={b.departmentName || undefined}>{b.departmentCode ?? t('bud_org_wide')}</td>
@@ -279,10 +308,39 @@ export default function Budgets() {
                   {isAdmin && (
                     <td>
                       <button className="btn small ghost" data-tip={t('tip_edit')} onClick={() => edit(b)}>✎</button>{' '}
+                      <button className="btn small ghost" data-tip={t('bud_history')} onClick={() => toggleHistory(b.id)}>🕘</button>{' '}
+                      <button className="btn small ghost" data-tip={t('bud_rollover')} onClick={() => rollover(b.id)}>↪</button>{' '}
                       <button className="btn small ghost" data-tip={t('tip_delete')} onClick={() => remove(b.id)}>🗑</button>
                     </td>
                   )}
                 </tr>
+                {history[b.id] && (
+                  <tr>
+                    <td colSpan={isAdmin ? 10 : 9} style={{ background: 'rgba(79,140,255,0.05)' }}>
+                      <b>{t('bud_history')}</b>
+                      <table style={{ margin: '6px 0' }}>
+                        <thead><tr>
+                          <th>{t('date')}</th><th>{t('amount')}</th><th>{t('bud_delta')}</th>
+                          <th>{t('reason')}</th><th>{t('requester')}</th>
+                        </tr></thead>
+                        <tbody>
+                          {history[b.id].map((r: any) => (
+                            <tr key={r.id}>
+                              <td className="hint">{fmtDate(r.createdAt)}</td>
+                              <td>{fmtMoney(r.amountAfterMinor, b.currency)}</td>
+                              <td className={r.deltaMinor != null && r.deltaMinor < 0 ? 'error' : ''}>
+                                {r.deltaMinor == null ? '—' : `${r.deltaMinor > 0 ? '+' : ''}${fmtMoney(r.deltaMinor, b.currency)}`}
+                              </td>
+                              <td>{r.reason ?? '—'}</td>
+                              <td className="hint">{r.createdByName ?? '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
             {rows.length === 0 && <tr><td colSpan={isAdmin ? 10 : 9} className="hint">—</td></tr>}

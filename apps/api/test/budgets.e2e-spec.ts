@@ -432,6 +432,75 @@ describe('budgets & commitment control (API e2e)', () => {
     expect(note.payload.utilization).toBe('85%');
   });
 
+  // ---------- revisions & rollover ----------
+
+  it('records the opening plan and every later change as a revision', async () => {
+    const b = (await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Rev ${tag}`, category: 'REV', periodYear: YEAR, amountMinor: 500_000, reason: 'annual plan' })
+      .expect(201)).body;
+
+    let history = (await http().get(`/budgets/${b.id}/revisions`).set(...bearer(buyerA)).expect(200)).body;
+    expect(history).toHaveLength(1);
+    expect(history[0].amountBeforeMinor).toBeNull();
+    expect(history[0].amountAfterMinor).toBe(500_000);
+    expect(history[0].reason).toBe('annual plan');
+
+    await http().put(`/budgets/${b.id}`).set(...bearer(buyerA))
+      .send({ name: `Rev ${tag}`, category: 'REV', periodYear: YEAR, amountMinor: 900_000, reason: 'Q2 uplift' })
+      .expect(200);
+
+    history = (await http().get(`/budgets/${b.id}/revisions`).set(...bearer(buyerA)).expect(200)).body;
+    expect(history).toHaveLength(2);
+    expect(history[1].amountBeforeMinor).toBe(500_000);
+    expect(history[1].amountAfterMinor).toBe(900_000);
+    expect(history[1].deltaMinor).toBe(400_000);
+    expect(history[1].reason).toBe('Q2 uplift');
+    expect(history[1].createdByName).toBeTruthy();
+  });
+
+  it('renaming a budget without touching the amount adds no revision', async () => {
+    const b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.name === `Rev ${tag}`);
+    await http().put(`/budgets/${b.id}`).set(...bearer(buyerA))
+      .send({ name: `Rev renamed ${tag}`, category: 'REV', periodYear: YEAR, amountMinor: 900_000 }).expect(200);
+    const history = (await http().get(`/budgets/${b.id}/revisions`).set(...bearer(buyerA)).expect(200)).body;
+    expect(history).toHaveLength(2);
+  });
+
+  it('carries an unspent remainder into the next period as a traceable revision', async () => {
+    const q1 = (await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Roll Q1 ${tag}`, category: 'ROLL', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: 1, amountMinor: 300_000 })
+      .expect(201)).body;
+    const q2 = (await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Roll Q2 ${tag}`, category: 'ROLL', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: 2, amountMinor: 200_000 })
+      .expect(201)).body;
+
+    const after = (await http().post(`/budgets/${q2.id}/rollover`).set(...bearer(buyerA))
+      .send({ sourceBudgetId: q1.id }).expect(201)).body;
+    expect(after.amountMinor).toBe(500_000); // 200k plan + 300k unspent
+
+    const history = (await http().get(`/budgets/${q2.id}/revisions`).set(...bearer(buyerA)).expect(200)).body;
+    expect(history).toHaveLength(2);
+    expect(history[1].rolloverFromBudgetId).toBe(q1.id);
+    expect(history[1].rolloverFromName).toBe(`Roll Q1 ${tag}`);
+
+    // and the same remainder cannot be carried twice
+    await http().post(`/budgets/${q2.id}/rollover`).set(...bearer(buyerA))
+      .send({ sourceBudgetId: q1.id }).expect(409);
+  });
+
+  it('refuses to carry forward from a budget with nothing left', async () => {
+    const spent = (await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Spent ${tag}`, category: 'SPENT', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: 1, amountMinor: 10_000 })
+      .expect(201)).body;
+    const target = (await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Spent target ${tag}`, category: 'SPENT', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: 2, amountMinor: 10_000 })
+      .expect(201)).body;
+    // consume the source entirely
+    await db.query(`UPDATE budgets SET amount_minor = 0 WHERE id = $1`, [spent.id]);
+    await http().post(`/budgets/${target.id}/rollover`).set(...bearer(buyerA))
+      .send({ sourceBudgetId: spent.id }).expect(400);
+  });
+
   it('filters the list by period type and year', async () => {
     const quarters = (await http().get(`/budgets?periodType=QUARTER&year=${YEAR}`).set(...bearer(buyerA)).expect(200)).body;
     expect(quarters.length).toBeGreaterThan(0);
