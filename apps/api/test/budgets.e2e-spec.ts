@@ -501,6 +501,29 @@ describe('budgets & commitment control (API e2e)', () => {
       .send({ sourceBudgetId: spent.id }).expect(400);
   });
 
+  // ---------- export & guardrails ----------
+
+  it('exports the filtered budgets as CSV with plan / committed / actual', async () => {
+    const res = await http().get(`/budgets/export?year=${YEAR}`).set(...bearer(buyerA)).expect(200);
+    expect(res.headers['content-type']).toContain('text/csv');
+    expect(res.headers['content-disposition']).toContain('budgets.csv');
+    const [header, ...lines] = res.text.split('\r\n');
+    expect(header).toContain('Обязательства');
+    expect(header).toContain('Факт');
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines[0].split(';')).toHaveLength(13);
+  });
+
+  it('a budget in a category the buyer never curated is refused', async () => {
+    // buyer A has a category directory by now only if one was created — make it explicit
+    await http().post('/categories').set(...bearer(buyerA)).send({ code: `CUR-${tag}` }).expect(201);
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Typo ${tag}`, category: `cur-${tag}`, periodYear: YEAR, amountMinor: 1000 }).expect(400);
+    // the curated code itself is fine
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Curated ${tag}`, category: `CUR-${tag}`, periodYear: YEAR, amountMinor: 1000 }).expect(201);
+  });
+
   it('filters the list by period type and year', async () => {
     const quarters = (await http().get(`/budgets?periodType=QUARTER&year=${YEAR}`).set(...bearer(buyerA)).expect(200)).body;
     expect(quarters.length).toBeGreaterThan(0);

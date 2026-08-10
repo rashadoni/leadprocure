@@ -157,18 +157,27 @@ export const GUIDES: Record<string, SectionGuide> = {
       selector: 'form',
       title: { ru: 'Бюджет', az: 'Büdcə', en: 'Budget' },
       text: {
-        ru: 'Лимит на категорию и год. «*» — на все категории.',
-        az: 'Kateqoriya və il üzrə limit. «*» — bütün kateqoriyalara.',
-        en: 'A limit per category and year. “*” covers all categories.',
+        ru: 'Лимит на отдел, категорию и период — год, квартал или месяц. Пустой отдел = на всю организацию, пустая категория = на все категории.',
+        az: 'Şöbə, kateqoriya və dövr üzrə limit — il, rüb və ya ay. Boş şöbə = bütün təşkilat, boş kateqoriya = bütün kateqoriyalar.',
+        en: 'A limit per department, category and period — year, quarter or month. Empty department = the whole organization, empty category = all categories.',
       },
     },
     {
       selector: '.budget-bar',
       title: { ru: 'Использование', az: 'İstifadə', en: 'Utilization' },
       text: {
-        ru: 'Утверждённые заявки «съедают» бюджет. Красная полоса — превышение: утверждение не блокируется, но предупреждает.',
-        az: 'Təsdiqlənmiş sifarişlər büdcəni «yeyir». Qırmızı zolaq — aşım: təsdiq bloklanmır, amma xəbərdarlıq edir.',
-        en: 'Approved requests draw the budget down. A red bar means overrun: approval is not blocked, but it warns.',
+        ru: 'Обязательства — одобренные заявки без заказа; факт — размещённые заказы. Заявка считается ровно в одном бюджете: самый конкретный (отдел+категория) побеждает общий.',
+        az: 'Öhdəlik — sifarişi olmayan təsdiqlənmiş sorğular; faktiki — verilmiş sifarişlər. Sorğu yalnız bir büdcəyə yazılır: ən dəqiqi (şöbə+kateqoriya) ümumini üstələyir.',
+        en: 'Committed = approved requests with no order yet; actual = orders placed. A request charges exactly one budget: the most specific (department + category) beats the org-wide one.',
+      },
+    },
+    {
+      selector: '.card:nth-of-type(1)',
+      title: { ru: 'Пороги', az: 'Hədlər', en: 'Thresholds' },
+      text: {
+        ru: 'Порог предупреждения шлёт уведомление. Порог блокировки пуст — одобрение никогда не останавливается; заполните его, чтобы перерасход требовал письменного обоснования админа.',
+        az: 'Xəbərdarlıq həddi bildiriş göndərir. Blok həddi boşdur — təsdiq dayandırılmır; doldursanız, aşım admin izahı tələb edəcək.',
+        en: 'The warn threshold sends a notification. The block threshold is empty, so approvals are never stopped; fill it in and an overspend needs a written admin override.',
       },
     },
   ]),

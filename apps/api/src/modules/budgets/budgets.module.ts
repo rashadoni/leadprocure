@@ -1,7 +1,8 @@
 import {
   BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get,
-  Injectable, Module, NotFoundException, Param, Post, Put, Query,
+  Injectable, Module, NotFoundException, Param, Post, Put, Query, Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min, MinLength,
 } from 'class-validator';
@@ -408,8 +409,23 @@ export class BudgetsService {
     };
   }
 
+  // A budget on category "it" never matches requests filed under "IT", and the mismatch is
+  // silent — the budget just sits at 0%. Once the buyer curates a category list, hold
+  // budgets to it. Orgs with an empty directory keep the old free-text behaviour.
+  private async assertKnownCategory(category: string): Promise<void> {
+    if (category === '*') return;
+    const known = await this.rc.manager.query(`SELECT code FROM procurement_categories`);
+    if (!known.length) return;
+    if (!known.some((c: { code: string }) => c.code === category)) {
+      throw new BadRequestException(
+        `Unknown category "${category}". Use one of: ${known.map((c: any) => c.code).join(', ')} (or leave it empty for all categories)`,
+      );
+    }
+  }
+
   async create(dto: UpsertBudgetDto, auth: AccessTokenPayload) {
     const period = resolveBudgetPeriod(dto);
+    await this.assertKnownCategory(dto.category?.trim() || '*');
     let row: { id: string };
     try {
       row = (
@@ -439,6 +455,7 @@ export class BudgetsService {
 
   async update(id: string, dto: UpsertBudgetDto, auth: AccessTokenPayload) {
     const period = resolveBudgetPeriod(dto);
+    await this.assertKnownCategory(dto.category?.trim() || '*');
     // The amount is money, not a field: changing it writes a revision so "the plan was
     // 500k until March" stays answerable.
     const before = (await this.rc.manager.query(`SELECT amount_minor FROM budgets WHERE id=$1`, [id]))[0];
@@ -558,10 +575,41 @@ export class BudgetsService {
     return e;
   }
 
+  // Fetch one budget by id — not by listing them all and filtering in JS.
   private async getOne(id: string) {
-    const found = (await this.list()).find((b: { id: string }) => b.id === id);
-    if (!found) throw new NotFoundException('Budget not found');
-    return found;
+    const rows = await this.rc.manager.query(
+      `WITH ${this.MATCHED_CTE}
+       SELECT b.id, b.name, b.category, b.department_id, b.period_year, b.period_type,
+              b.period_start, b.period_end, b.amount_minor, b.currency, b.created_at,
+              d.code AS department_code, d.name AS department_name,
+              COALESCE(c.committed, 0) AS committed_minor,
+              COALESCE(c.actual, 0) AS actual_minor
+       FROM budgets b
+       LEFT JOIN departments d ON d.id = b.department_id
+       ${this.COMMITTED_JOIN}
+       WHERE b.id = $1`,
+      [id],
+    );
+    if (!rows[0]) throw new NotFoundException('Budget not found');
+    return this.shape(rows[0]);
+  }
+
+  // Everything the current filter shows, as CSV — the first thing finance asks for.
+  async exportCsv(filter: Parameters<BudgetsService['list']>[0] = {}): Promise<string> {
+    const rows = await this.list(filter);
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const money = (m: number) => (m / 100).toFixed(2);
+    const header = [
+      'Бюджет', 'Отдел', 'Категория', 'Период', 'С', 'По', 'План',
+      'Обязательства', 'Факт', 'Использовано', 'Остаток', '%', 'Валюта',
+    ];
+    const lines = rows.map((b: any) => [
+      b.name, b.departmentCode ?? '', b.category === '*' ? '' : b.category,
+      b.periodLabel, b.periodStart, b.periodEnd,
+      money(b.amountMinor), money(b.committedMinor), money(b.actualMinor),
+      money(b.usedMinor), money(b.remainingMinor), b.utilizationPct, b.currency,
+    ].map(esc).join(';'));
+    return '﻿' + [header.map(esc).join(';'), ...lines].join('\r\n'); // BOM so Excel reads UTF-8
   }
 
   // Non-blocking: returns budgets that this (already-APPROVED) request has tipped over.
@@ -628,6 +676,24 @@ export class BudgetsController {
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   unbudgeted(@Query('from') from?: string, @Query('to') to?: string) {
     return this.budgets.unbudgeted({ from: from || undefined, to: to || undefined });
+  }
+
+  @Get('export')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  async exportCsv(
+    @Res() res: Response,
+    @Query('year') year?: string,
+    @Query('periodType') periodType?: string,
+    @Query('departmentId') departmentId?: string,
+  ) {
+    const csv = await this.budgets.exportCsv({
+      year: year ? Number(year) : undefined,
+      periodType: periodType || undefined,
+      departmentId: departmentId || undefined,
+    });
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="budgets.csv"');
+    res.send(csv);
   }
 
   @Get('policy')

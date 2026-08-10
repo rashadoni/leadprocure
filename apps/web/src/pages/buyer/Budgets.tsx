@@ -24,6 +24,15 @@ interface Budget {
   utilizationPct: number;
 }
 
+// Parse the amount from its DIGITS, not through a float: Number('12.10') * 100 is
+// 1209.9999… and Math.round hides it only most of the time. Budgets are money.
+function toMinor(input: string): number {
+  const [whole = '0', frac = ''] = input.trim().replace(',', '.').split('.');
+  const cents = (frac + '00').slice(0, 2);
+  const sign = whole.startsWith('-') ? -1 : 1;
+  return sign * (Math.abs(Number(whole || 0)) * 100 + Number(cents));
+}
+
 const THIS_YEAR = new Date().getFullYear();
 const THIS_QUARTER = Math.floor(new Date().getMonth() / 3) + 1;
 const THIS_MONTH = new Date().getMonth() + 1;
@@ -95,8 +104,8 @@ export default function Budgets() {
       periodYear: Number(form.periodYear),
       ...(form.periodType === 'QUARTER' ? { periodQuarter: Number(form.periodQuarter) } : {}),
       ...(form.periodType === 'MONTH' ? { periodMonth: Number(form.periodMonth) } : {}),
-      amountMinor: Math.round(Number(form.amount) * 100),
-      currency: form.currency || 'AZN',
+      amountMinor: toMinor(form.amount),
+      currency: (form.currency || 'AZN').toUpperCase(),
       ...(form.reason.trim() ? { reason: form.reason.trim() } : {}),
     };
     try {
@@ -128,6 +137,24 @@ export default function Budgets() {
     if (!confirm(t('bud_delete_confirm'))) return;
     try { await api.delete(`/budgets/${id}`); load(); }
     catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  };
+
+  // Auth-guarded CSV download (a plain <a> would hit the API without the bearer token).
+  const exportCsv = async () => {
+    try {
+      const { data } = await api.get('/budgets/export', {
+        params: {
+          ...(filter.periodType ? { periodType: filter.periodType } : {}),
+          ...(filter.year ? { year: filter.year } : {}),
+          ...(filter.departmentId ? { departmentId: filter.departmentId } : {}),
+        },
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(data as Blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'budgets.csv'; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
   // Revision history, opened inline under the budget row.
@@ -191,8 +218,12 @@ export default function Budgets() {
                   ))}
                 </select></div>
             )}
-            <div><label>{t('amount')} (AZN)</label>
+            <div><label>{t('amount')}</label>
               <input type="number" step="0.01" min={0} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required /></div>
+            <div><label>{t('currency')}</label>
+              {/* a budget matches spend in its own currency only — there is no FX conversion */}
+              <input value={form.currency} maxLength={3} style={{ width: 80, textTransform: 'uppercase' }}
+                onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })} /></div>
             <div><label>{t('reason')}</label>
               {/* goes into the revision ledger, so a changed plan can always be explained */}
               <input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })}
@@ -278,7 +309,12 @@ export default function Budgets() {
             <option value="">{t('dep_all')}</option>
             {deps.map((d) => <option key={d.id} value={d.id}>{d.code}</option>)}
           </select>
+          <button className="btn ghost small" onClick={exportCsv}>⤓ CSV</button>
         </div>
+        {/* budgets never see spend in another currency — say so instead of quietly reading 0% */}
+        {new Set(rows.map((b) => b.currency)).size > 1 && (
+          <div className="hint" style={{ marginBottom: 8 }}>{t('bud_fx_hint')}</div>
+        )}
         <table>
           <thead><tr>
             <th>{t('name')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('period')}</th>
