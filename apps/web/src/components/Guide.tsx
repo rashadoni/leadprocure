@@ -37,7 +37,7 @@ const dismissedSet = (): Set<string> => {
 
 export default function Guide() {
   const { pathname } = useLocation();
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const guide = resolveGuide(pathname);
   const [open, setOpen] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(dismissedSet);
@@ -55,11 +55,10 @@ export default function Guide() {
 
   if (!guide || dismissed.has(guide.key)) return null;
 
-  // per-language asset, with a graceful fallback to the Azerbaijani recording if a
-  // language's video/poster isn't present yet
-  const videoUrl = `/guides/${guide.key}.${lang}.webm`;
-  const fallbackUrl = `/guides/${guide.key}.az.webm`;
-  const posterUrl = `/guides/${guide.key}.${lang}.png`;
+  // Recordings are Azerbaijani only — see guides.ts. Asking for the interface language
+  // would 404 on every non-az UI and fall back a moment later, so ask for az directly.
+  const videoUrl = `/guides/${guide.key}.az.webm`;
+  const posterUrl = `/guides/${guide.key}.az.png`;
   const titleKey = resolveTitleKey(pathname);
   const title = titleKey ? t(titleKey) : '';
 
@@ -73,7 +72,7 @@ export default function Guide() {
     <>
       <div className="help-card" data-help-video-widget>
         <button className="help-thumb" onClick={() => setOpen(true)} aria-label={t('guide_open')}>
-          <img src={posterUrl} alt="" onError={(e) => { (e.target as HTMLImageElement).src = `/guides/${guide.key}.az.png`; }} />
+          <img src={posterUrl} alt="" />
           <span className="help-play">▶</span>
         </button>
         <div className="help-text">
@@ -90,11 +89,7 @@ export default function Guide() {
       {open && (
         <div className="help-modal" onClick={() => setOpen(false)}>
           <div className="help-modal-inner" onClick={(e) => e.stopPropagation()}>
-            <video key={videoUrl} src={videoUrl} poster={posterUrl} controls autoPlay
-              onError={(e) => {
-                const v = e.target as HTMLVideoElement;
-                if (!v.src.endsWith(`${guide.key}.az.webm`)) v.src = fallbackUrl;
-              }} />
+            <video key={videoUrl} src={videoUrl} poster={posterUrl} controls autoPlay />
             <button className="btn ghost small help-collapse" onClick={() => setOpen(false)}>
               ⤡ {t('guide_collapse')}
             </button>

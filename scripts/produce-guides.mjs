@@ -28,7 +28,10 @@ mkdirSync(OUT, { recursive: true });
 
 const rawArgs = process.argv.slice(2);
 const BASE = rawArgs[0]?.startsWith('http') ? rawArgs.shift() : 'http://localhost:8080';
-const LANGS = (rawArgs[0] && /^(az|ru|en)(,(az|ru|en))*$/.test(rawArgs[0])) ? rawArgs.shift().split(',') : ['az', 'ru', 'en'];
+// Azerbaijani by default: the app ships one recording per section (see apps/web/src/guides.ts).
+// Other languages still record on request — pass them as the first argument — but nothing
+// in the UI reads them, so producing all three only burns TTS quota.
+const LANGS = (rawArgs[0] && /^(az|ru|en)(,(az|ru|en))*$/.test(rawArgs[0])) ? rawArgs.shift().split(',') : ['az'];
 const ONLY = rawArgs;
 
 if (existsSync(join(ROOT, '.env'))) {
