@@ -4,7 +4,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import {
-  IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min, MinLength,
+  IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min, MinLength,
 } from 'class-validator';
 import type { AccessTokenPayload } from '@leadprocure/shared';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
@@ -28,7 +28,10 @@ class UpsertBudgetDto {
   // comes from periodType.
   @IsOptional() @IsDateString() periodStart?: string;
   @IsInt() @Min(0) amountMinor!: number;
-  @IsOptional() @IsString() @Length(3, 3) currency?: string;
+  // AZN only. Kept accepted-but-constrained rather than removed, so an older client that
+  // still sends "AZN" keeps working while anything else fails loudly instead of creating a
+  // budget that could never match a thing.
+  @IsOptional() @IsIn(['AZN'], { message: 'currency: budgets are kept in AZN only' }) currency?: 'AZN';
   // Why the amount is what it is — kept in the revision ledger, not just the audit log.
   @IsOptional() @IsString() reason?: string;
 }
@@ -73,6 +76,11 @@ export interface BudgetPeriod {
   end: string;   // YYYY-MM-DD, inclusive
   year: number;
 }
+
+// Budgets are kept in AZN only — see migration 0034. Requests are AZN by construction, so
+// every commitment already is; foreign-currency ORDERS (a contract inherits its tender's
+// evaluation currency) are reported separately instead of being converted at a guessed rate.
+export const BUDGET_CURRENCY = 'AZN';
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -178,18 +186,26 @@ export class BudgetsService {
         SELECT sum(o.total_minor)::bigint AS actual_minor
         FROM purchase_orders o
         WHERE o.request_id = pr.id AND o.status NOT IN ('CANCELLED','REJECTED')
+          -- SAME currency only. A contract inherits its tender's evaluation currency, so an
+          -- order can be foreign while the request is AZN; adding its minor units here would
+          -- silently mix currencies at face value. A foreign order leaves the AZN estimate
+          -- standing as the commitment and is reported separately (matched_orders below).
+          AND o.currency = pr.currency
         HAVING count(*) > 0
       ) po ON true
       WHERE pr.status = 'APPROVED' AND pr.approved_at IS NOT NULL
     ),
-    -- Orders that never had a request: catalog call-offs. Real money, and before this it
-    -- was invisible to every budget. With no request there is no category either, so only
-    -- a category-agnostic budget ('*') may claim it — an "IT" budget must not silently
-    -- absorb spend nobody classified. Dated by issue, falling back to creation.
+    -- Every live order NOT already counted as its request's actual: catalog call-offs (no
+    -- request at all) and foreign-currency orders. With no request there is no category
+    -- either, so only a category-agnostic budget ('*') may claim one — an "IT" budget must
+    -- not silently absorb spend nobody classified. Budgets are AZN-only, so a foreign order
+    -- matches nothing and lands in the unbudgeted report with its currency shown, rather
+    -- than disappearing. Dated by issue, falling back to creation.
     matched_orders AS (
       SELECT o.id, o.po_no, o.total_minor, o.currency, o.department_id,
              COALESCE(o.issued_at, o.created_at) AS spent_at, mb.budget_id
       FROM purchase_orders o
+      LEFT JOIN procurement_requests r ON r.id = o.request_id
       LEFT JOIN LATERAL (
         SELECT b.id AS budget_id
         FROM budgets b
@@ -201,7 +217,8 @@ export class BudgetsService {
         ORDER BY (b.department_id IS NOT NULL) DESC, b.period_start DESC, b.id
         LIMIT 1
       ) mb ON true
-      WHERE o.request_id IS NULL AND o.status NOT IN ('CANCELLED','REJECTED')
+      WHERE o.status NOT IN ('CANCELLED','REJECTED')
+        AND (o.request_id IS NULL OR o.currency <> r.currency)
     )`;
 
   // Plan / Commitment / Actual. Commitment and actual are mutually exclusive per request;
@@ -475,7 +492,7 @@ export class BudgetsService {
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
           [
             auth.org_id, dto.name, dto.category?.trim() || '*', dto.departmentId ?? null,
-            period.year, period.type, period.start, period.end, dto.amountMinor, dto.currency ?? 'AZN',
+            period.year, period.type, period.start, period.end, dto.amountMinor, BUDGET_CURRENCY,
           ],
         )
       )[0];
@@ -508,7 +525,7 @@ export class BudgetsService {
          WHERE id=$1 RETURNING id`,
         [
           id, dto.name, dto.category?.trim() || '*', dto.departmentId ?? null, period.year,
-          period.type, period.start, period.end, dto.amountMinor, dto.currency ?? 'AZN',
+          period.type, period.start, period.end, dto.amountMinor, BUDGET_CURRENCY,
         ],
       );
     } catch (e: any) {

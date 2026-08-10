@@ -195,9 +195,15 @@ The budget module finance actually uses. Read this before changing anything unde
   budget (`category = '*'`): a call-off has no procurement category, and an "IT" budget must
   not silently absorb spend nobody classified. Always actual, never commitment. With no
   department they show up in `/budgets/unbudgeted` as `kind: 'ORDER'`.
-- **Known gap (deliberate)**: there is no FX — a budget only ever matches its own currency,
-  and the UI says so instead of silently reading 0%. That and every other judgement call is
-  recorded in `docs/budget-by-department-decisions.md`.
+- **AZN only** (0034, `budgets_azn_only` CHECK): multi-currency budgeting with no FX policy
+  was a trap — a foreign budget matched nothing and sat at 0% forever, reading as
+  "underspending" instead of "broken". Requests carry no currency in the API, so every
+  commitment is AZN by construction. **Orders can still be foreign** (a contract inherits its
+  tender's `evaluation_currency`), and the engine handles that explicitly: a foreign order
+  does NOT supersede its request's AZN estimate (mixing minor units at face value would
+  misstate the budget), and it appears in `/budgets/unbudgeted` with its currency. Nothing
+  is converted at a guessed rate, and nothing disappears. Every judgement call is recorded
+  in `docs/budget-by-department-decisions.md`.
 
 **Gotcha — a migration that adds a constraint over pre-existing data must fail loudly.**
 0030 pre-checks for overlapping budgets and throws with the offenders named: nothing can

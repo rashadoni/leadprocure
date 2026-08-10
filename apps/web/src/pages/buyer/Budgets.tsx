@@ -39,7 +39,7 @@ const THIS_MONTH = new Date().getMonth() + 1;
 const empty = {
   name: '', category: '', departmentId: '', periodType: 'YEAR' as Budget['periodType'],
   periodYear: THIS_YEAR, periodQuarter: THIS_QUARTER, periodMonth: THIS_MONTH,
-  amount: '', currency: 'AZN', reason: '',
+  amount: '', reason: '',
 };
 
 export default function Budgets() {
@@ -105,7 +105,7 @@ export default function Budgets() {
       ...(form.periodType === 'QUARTER' ? { periodQuarter: Number(form.periodQuarter) } : {}),
       ...(form.periodType === 'MONTH' ? { periodMonth: Number(form.periodMonth) } : {}),
       amountMinor: toMinor(form.amount),
-      currency: (form.currency || 'AZN').toUpperCase(),
+      currency: 'AZN',
       ...(form.reason.trim() ? { reason: form.reason.trim() } : {}),
     };
     try {
@@ -129,7 +129,6 @@ export default function Budgets() {
       periodMonth: month,
       departmentId: b.departmentId ?? '',
       amount: String(b.amountMinor / 100),
-      currency: b.currency,
       reason: '', // each change explains itself; never carry the previous reason over
     });
   };
@@ -218,12 +217,10 @@ export default function Budgets() {
                   ))}
                 </select></div>
             )}
-            <div><label>{t('amount')}</label>
+            {/* budgets are AZN-only: foreign-currency orders are reported separately, never
+                converted at a guessed rate */}
+            <div><label>{t('amount')} (AZN)</label>
               <input type="number" step="0.01" min={0} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required /></div>
-            <div><label>{t('currency')}</label>
-              {/* a budget matches spend in its own currency only — there is no FX conversion */}
-              <input value={form.currency} maxLength={3} style={{ width: 80, textTransform: 'uppercase' }}
-                onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })} /></div>
             <div><label>{t('reason')}</label>
               {/* goes into the revision ledger, so a changed plan can always be explained */}
               <input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })}
@@ -311,10 +308,6 @@ export default function Budgets() {
           </select>
           <button className="btn ghost small" onClick={exportCsv}>⤓ CSV</button>
         </div>
-        {/* budgets never see spend in another currency — say so instead of quietly reading 0% */}
-        {new Set(rows.map((b) => b.currency)).size > 1 && (
-          <div className="hint" style={{ marginBottom: 8 }}>{t('bud_fx_hint')}</div>
-        )}
         <table>
           <thead><tr>
             <th>{t('name')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('period')}</th>
@@ -391,7 +384,7 @@ export default function Budgets() {
           <table>
             <thead><tr>
               <th>#</th><th>{t('title')}</th><th>{t('category')}</th><th>{t('department')}</th>
-              <th>{t('date')}</th><th>{t('amount')}</th>
+              <th>{t('date')}</th><th>{t('amount')}</th><th>{t('currency')}</th>
             </tr></thead>
             <tbody>
               {unbudgeted.map((u) => (
@@ -403,6 +396,8 @@ export default function Budgets() {
                   <td>{u.departmentCode ?? '—'}</td>
                   <td className="hint">{fmtDate(u.approvedAt)}</td>
                   <td>{fmtMoney(u.amountMinor, u.currency)}</td>
+                  {/* a non-AZN order can never hit an AZN budget — that is why it is here */}
+                  <td className={u.currency !== 'AZN' ? 'error' : 'hint'}>{u.currency}</td>
                 </tr>
               ))}
             </tbody>

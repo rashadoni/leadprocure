@@ -121,13 +121,13 @@ describe('budgets & commitment control (API e2e)', () => {
     expect(r.budgetWarnings).toEqual([]);
   });
 
-  it('a different currency does not match (no FX)', async () => {
+  it('refuses a non-AZN budget outright — budgets are AZN-only', async () => {
     await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Usd ${tag}`, category: 'IT', periodYear: YEAR, amountMinor: 1, currency: 'USD' }).expect(201);
-    // the IT request above is in AZN, so the USD budget stays at zero committed
-    const list = await http().get('/budgets').set(...bearer(buyerA)).expect(200);
-    const usd = list.body.find((x: any) => x.name === `Usd ${tag}`);
-    expect(usd.committedMinor).toBe(0);
+      .send({ name: `Usd ${tag}`, category: 'IT', periodYear: YEAR, amountMinor: 1, currency: 'USD' }).expect(400);
+    // an explicit AZN is still accepted, so older clients keep working
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Azn ${tag}`, category: `AZNCAT-${tag}`, periodYear: YEAR, amountMinor: 1000, currency: 'AZN' })
+      .expect(201);
   });
 
   it("buyer B cannot see buyer A's budgets (RLS isolation)", async () => {
@@ -577,6 +577,36 @@ describe('budgets & commitment control (API e2e)', () => {
     const list = (await http().get('/budgets').set(...bearer(buyerA))).body;
     expect(list.find((x: any) => x.name === `Catalog cat ${tag}`).usedMinor).toBe(0);
     expect(list.find((x: any) => x.name === `Catalog dep ${tag}`).usedMinor).toBe(85_000);
+  });
+
+  // Requests are AZN by construction, but a contract inherits its tender's evaluation
+  // currency, so an ORDER can be foreign. It must never be added to an AZN budget at face
+  // value, and it must not vanish either.
+  it('a foreign-currency order neither pollutes the AZN budget nor disappears', async () => {
+    await http().post('/categories').set(...bearer(buyerA)).send({ code: 'FXCAT' }).expect(201);
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Fx ${tag}`, category: 'FXCAT', periodYear: YEAR, amountMinor: 1_000_000 }).expect(201);
+    const req = await approveRequest(buyerA, 'FXCAT', 200_000);
+
+    let b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.name === `Fx ${tag}`);
+    expect(b.committedMinor).toBe(200_000);
+
+    // an order placed in USD against that AZN request
+    const poId = await orderFromCatalog(undefined, 1, 999);
+    await db.query(
+      `UPDATE purchase_orders SET request_id = $2, currency = 'USD', total_minor = 500000 WHERE id = $1`,
+      [poId, req.id],
+    );
+
+    b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.name === `Fx ${tag}`);
+    expect(b.actualMinor).toBe(0);          // the USD total is NOT mixed into an AZN budget
+    expect(b.committedMinor).toBe(200_000); // and the AZN estimate stays as the commitment
+
+    const report = (await http().get('/budgets/unbudgeted').set(...bearer(buyerA)).expect(200)).body;
+    const row = report.find((x: any) => x.id === poId);
+    expect(row).toBeTruthy();               // visible, not silently dropped
+    expect(row.currency).toBe('USD');
+    expect(row.amountMinor).toBe(500_000);
   });
 
   it('a catalog order with no department at all lands in the unbudgeted report', async () => {

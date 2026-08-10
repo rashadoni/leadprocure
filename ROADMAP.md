@@ -159,6 +159,14 @@ e2e (happy + hostile isolation) → keep the full suite green → commit → pus
   - **Revisions** (0033): append-only ledger of the opening plan and every amount change with
     delta, reason and author; rollover of an unspent remainder is modelled as a revision of
     the target budget pointing back at the source. CSV export of the filtered view.
+  - **AZN only** (0034): a budget in another currency matched nothing and sat at 0% forever,
+    which reads as underspending rather than as a broken budget. Requests are AZN by
+    construction; foreign ORDERS (a contract inherits its tender's evaluation currency) no
+    longer have their minor units added to an AZN budget at face value — they leave the AZN
+    estimate standing and surface in the unbudgeted report with their currency.
+  - **Catalog call-offs** carry their own department, so orders placed without a request are
+    charged to a budget too — but only to a category-agnostic one, since nobody classified
+    them.
 - **Spend analytics** (`/buyer/analytics`): 12-month spend chart (ACCEPTED POs), spend by
   category, top-5 suppliers, tender savings (estimate vs awarded, per event), invoices
   paid/outstanding — all RLS-scoped, no chart library.
