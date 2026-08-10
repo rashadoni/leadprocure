@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { api, fmtMoney } from '../../api/client';
+import { api, fmtDate, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 
@@ -8,6 +8,9 @@ interface Budget {
   name: string;
   category: string;
   periodYear: number;
+  departmentId: string | null;
+  departmentCode: string | null;
+  departmentName: string | null;
   periodType: 'YEAR' | 'QUARTER' | 'MONTH';
   periodStart: string;
   periodEnd: string;
@@ -23,8 +26,9 @@ const THIS_YEAR = new Date().getFullYear();
 const THIS_QUARTER = Math.floor(new Date().getMonth() / 3) + 1;
 const THIS_MONTH = new Date().getMonth() + 1;
 const empty = {
-  name: '', category: '', periodType: 'YEAR' as Budget['periodType'], periodYear: THIS_YEAR,
-  periodQuarter: THIS_QUARTER, periodMonth: THIS_MONTH, amount: '', currency: 'AZN',
+  name: '', category: '', departmentId: '', periodType: 'YEAR' as Budget['periodType'],
+  periodYear: THIS_YEAR, periodQuarter: THIS_QUARTER, periodMonth: THIS_MONTH,
+  amount: '', currency: 'AZN',
 };
 
 export default function Budgets() {
@@ -36,15 +40,35 @@ export default function Budgets() {
   const [editId, setEditId] = useState<string | null>(null);
   const [err, setErr] = useState('');
 
-  // Period filter over the list: type + year, both optional.
-  const [filter, setFilter] = useState({ periodType: '', year: '' });
-  const load = () => api.get('/budgets', {
-    params: {
-      ...(filter.periodType ? { periodType: filter.periodType } : {}),
-      ...(filter.year ? { year: filter.year } : {}),
-    },
-  }).then((r) => setRows(r.data));
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [filter.periodType, filter.year]);
+  const [deps, setDeps] = useState<any[]>([]);
+  const [unbudgeted, setUnbudgeted] = useState<any[]>([]);
+  useEffect(() => { api.get('/departments').then((r) => setDeps(r.data)).catch(() => {}); }, []);
+
+  // Period + department filter over the list, all optional.
+  const [filter, setFilter] = useState({ periodType: '', year: '', departmentId: '' });
+  const load = () => {
+    api.get('/budgets', {
+      params: {
+        ...(filter.periodType ? { periodType: filter.periodType } : {}),
+        ...(filter.year ? { year: filter.year } : {}),
+        ...(filter.departmentId ? { departmentId: filter.departmentId } : {}),
+      },
+    }).then((r) => setRows(r.data));
+    // approved spend no budget covers — invisible in a per-budget table, so it gets its own panel
+    api.get('/budgets/unbudgeted').then((r) => setUnbudgeted(r.data)).catch(() => setUnbudgeted([]));
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [filter.periodType, filter.year, filter.departmentId]);
+
+  // Per-department rollup: what finance actually asked to see.
+  const byDepartment = rows.reduce((acc: Record<string, any>, b) => {
+    const key = b.departmentCode ?? '—';
+    const cur = acc[key] ?? { code: key, amount: 0, committed: 0, currency: b.currency };
+    cur.amount += b.amountMinor;
+    cur.committed += b.committedMinor;
+    acc[key] = cur;
+    return acc;
+  }, {});
+  const depSummary = Object.values(byDepartment) as Array<{ code: string; amount: number; committed: number; currency: string }>;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -52,6 +76,7 @@ export default function Budgets() {
     const body = {
       name: form.name,
       category: form.category.trim() || '*',
+      ...(form.departmentId ? { departmentId: form.departmentId } : {}),
       periodType: form.periodType,
       periodYear: Number(form.periodYear),
       ...(form.periodType === 'QUARTER' ? { periodQuarter: Number(form.periodQuarter) } : {}),
@@ -78,6 +103,7 @@ export default function Budgets() {
       periodYear: Number(b.periodStart.slice(0, 4)),
       periodQuarter: Math.floor((month - 1) / 3) + 1,
       periodMonth: month,
+      departmentId: b.departmentId ?? '',
       amount: String(b.amountMinor / 100),
       currency: b.currency,
     });
@@ -97,6 +123,14 @@ export default function Budgets() {
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
             <div><label>{t('category')} </label>
               <input placeholder="*" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></div>
+            <div><label>{t('department')}</label>
+              {/* empty = org-wide ceiling; a department budget always wins over it */}
+              <select value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })}>
+                <option value="">{t('bud_org_wide')}</option>
+                {deps.filter((d) => d.is_active || d.id === form.departmentId).map((d) => (
+                  <option key={d.id} value={d.id}>{d.code}</option>
+                ))}
+              </select></div>
             <div><label>{t('period')}</label>
               <select value={form.periodType} onChange={(e) => setForm({ ...form, periodType: e.target.value as Budget['periodType'] })}>
                 <option value="YEAR">{t('period_year')}</option>
@@ -129,6 +163,38 @@ export default function Budgets() {
           {err && <div className="error">{err}</div>}
         </div>
       )}
+      {depSummary.length > 0 && (
+        <div className="card">
+          <h3>{t('bud_by_department')}</h3>
+          <table>
+            <thead><tr>
+              <th>{t('department')}</th><th>{t('amount')}</th><th>{t('committed')}</th>
+              <th>{t('remaining')}</th><th style={{ width: 180 }}>{t('utilization')}</th>
+            </tr></thead>
+            <tbody>
+              {depSummary.map((d) => {
+                const pct = d.amount > 0 ? Math.round((d.committed / d.amount) * 1000) / 10 : 0;
+                const over = d.committed > d.amount;
+                return (
+                  <tr key={d.code}>
+                    <td><b>{d.code === '—' ? t('bud_org_wide') : d.code}</b></td>
+                    <td>{fmtMoney(d.amount, d.currency)}</td>
+                    <td>{fmtMoney(d.committed, d.currency)}</td>
+                    <td className={over ? 'error' : ''}>{fmtMoney(d.amount - d.committed, d.currency)}</td>
+                    <td>
+                      <div className="budget-bar">
+                        <div className={`budget-fill ${over ? 'over' : ''}`} style={{ width: `${Math.min(100, pct)}%` }} />
+                      </div>
+                      <span className="hint">{pct}%{over ? ` · ${t('budget_over')}` : ''}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <div className="card">
         <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
           <select value={filter.periodType} onChange={(e) => setFilter({ ...filter, periodType: e.target.value })} style={{ maxWidth: 200 }}>
@@ -139,10 +205,14 @@ export default function Budgets() {
           </select>
           <input type="number" placeholder={t('year')} value={filter.year}
             onChange={(e) => setFilter({ ...filter, year: e.target.value })} style={{ maxWidth: 140 }} />
+          <select value={filter.departmentId} onChange={(e) => setFilter({ ...filter, departmentId: e.target.value })} style={{ maxWidth: 220 }}>
+            <option value="">{t('dep_all')}</option>
+            {deps.map((d) => <option key={d.id} value={d.id}>{d.code}</option>)}
+          </select>
         </div>
         <table>
           <thead><tr>
-            <th>{t('name')}</th><th>{t('category')}</th><th>{t('period')}</th>
+            <th>{t('name')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('period')}</th>
             <th>{t('amount')}</th><th>{t('committed')}</th><th>{t('remaining')}</th>
             <th style={{ width: 180 }}>{t('utilization')}</th>{isAdmin && <th>{t('actions')}</th>}
           </tr></thead>
@@ -153,6 +223,7 @@ export default function Budgets() {
                 <tr key={b.id}>
                   <td>{b.name}</td>
                   <td>{b.category === '*' ? '—' : b.category}</td>
+                  <td data-tip={b.departmentName || undefined}>{b.departmentCode ?? t('bud_org_wide')}</td>
                   <td data-tip={`${b.periodStart} → ${b.periodEnd}`}>{b.periodLabel}</td>
                   <td>{fmtMoney(b.amountMinor, b.currency)}</td>
                   <td>{fmtMoney(b.committedMinor, b.currency)}</td>
@@ -172,10 +243,35 @@ export default function Budgets() {
                 </tr>
               );
             })}
-            {rows.length === 0 && <tr><td colSpan={isAdmin ? 8 : 7} className="hint">—</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={isAdmin ? 9 : 8} className="hint">—</td></tr>}
           </tbody>
         </table>
       </div>
+
+      {unbudgeted.length > 0 && (
+        <div className="card">
+          <h3>⚠ {t('bud_unbudgeted')}</h3>
+          <div className="hint" style={{ marginBottom: 10 }}>{t('bud_unbudgeted_hint')}</div>
+          <table>
+            <thead><tr>
+              <th>#</th><th>{t('title')}</th><th>{t('category')}</th><th>{t('department')}</th>
+              <th>{t('date')}</th><th>{t('amount')}</th>
+            </tr></thead>
+            <tbody>
+              {unbudgeted.map((u) => (
+                <tr key={u.requestId}>
+                  <td>{u.requestNo}</td>
+                  <td>{u.title}</td>
+                  <td>{u.category ?? '—'}</td>
+                  <td>{u.departmentCode ?? '—'}</td>
+                  <td className="hint">{fmtDate(u.approvedAt)}</td>
+                  <td>{fmtMoney(u.amountMinor, u.currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </>
   );
 }

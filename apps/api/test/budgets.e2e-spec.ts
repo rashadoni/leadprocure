@@ -25,9 +25,13 @@ describe('budgets & commitment control (API e2e)', () => {
   };
 
   // create → submit → approve a request in a category with a known line total.
-  const approveRequest = async (token: string, category: string, unitPriceMinor: number) => {
+  const approveRequest = async (token: string, category: string, unitPriceMinor: number, departmentId?: string) => {
     const req = await http().post('/requests').set(...bearer(token))
-      .send({ title: `Req ${tag} ${randomUUID().slice(0, 4)}`, category, items: [{ name: 'x', qty: 1, estUnitPriceMinor: unitPriceMinor }] })
+      .send({
+        title: `Req ${tag} ${randomUUID().slice(0, 4)}`, category,
+        ...(departmentId ? { departmentId } : {}),
+        items: [{ name: 'x', qty: 1, estUnitPriceMinor: unitPriceMinor }],
+      })
       .expect(201);
     await http().post(`/requests/${req.body.id}/submit`).set(...bearer(token)).expect(201);
     const done = await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approverA)).expect(201);
@@ -112,7 +116,9 @@ describe('budgets & commitment control (API e2e)', () => {
   });
 
   it('a duplicate (name, period) budget is a clean 409, not a 500', async () => {
-    const body = { name: `Dup ${tag}`, category: 'IT', periodYear: YEAR, amountMinor: 100_000 };
+    // its own category: category 'IT' is already covered by the budget above, and a second
+    // budget on a covered scope is now refused by the overlap rule (different failure).
+    const body = { name: `Dup ${tag}`, category: `DUPCAT-${tag}`, periodYear: YEAR, amountMinor: 100_000 };
     await http().post('/budgets').set(...bearer(buyerA)).send(body).expect(201);
     await http().post('/budgets').set(...bearer(buyerA)).send(body).expect(409);
   });
@@ -181,6 +187,95 @@ describe('budgets & commitment control (API e2e)', () => {
     const list = (await http().get('/budgets').set(...bearer(buyerA)).expect(200)).body;
     expect(list.find((b: any) => b.name === `JanY ${tag}`).committedMinor).toBe(70_000);
     expect(list.find((b: any) => b.name === `DecY ${tag}`).committedMinor).toBe(0);
+  });
+
+  // ---------- per-department budgets: exactly one budget per request ----------
+
+  it('an org-wide and a department budget on the same spend do NOT double-count', async () => {
+    const dep = (await http().post('/departments').set(...bearer(buyerA)).send({ code: `ENG-${tag}` }).expect(201)).body;
+    // org-wide ceiling for the category…
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `All ${tag}`, category: 'DUP', periodYear: YEAR, amountMinor: 1_000_000 }).expect(201);
+    // …plus a tighter one for the department: the most specific wins, the other stays at 0.
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Eng ${tag}`, category: 'DUP', departmentId: dep.id, periodYear: YEAR, amountMinor: 400_000 }).expect(201);
+
+    await approveRequest(buyerA, 'DUP', 150_000, dep.id);
+    const list = (await http().get('/budgets').set(...bearer(buyerA)).expect(200)).body;
+    expect(list.find((b: any) => b.name === `Eng ${tag}`).committedMinor).toBe(150_000);
+    expect(list.find((b: any) => b.name === `All ${tag}`).committedMinor).toBe(0);
+  });
+
+  it('a request with no department falls through to the org-wide budget', async () => {
+    await approveRequest(buyerA, 'DUP', 60_000);
+    const list = (await http().get('/budgets').set(...bearer(buyerA)).expect(200)).body;
+    expect(list.find((b: any) => b.name === `All ${tag}`).committedMinor).toBe(60_000);
+    expect(list.find((b: any) => b.name === `Eng ${tag}`).committedMinor).toBe(150_000);
+  });
+
+  it('department + category beats department-only', async () => {
+    const dep = (await http().post('/departments').set(...bearer(buyerA)).send({ code: `OPS-${tag}` }).expect(201)).body;
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Ops any ${tag}`, departmentId: dep.id, periodYear: YEAR, amountMinor: 800_000 }).expect(201);
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Ops fuel ${tag}`, category: 'FUEL', departmentId: dep.id, periodYear: YEAR, amountMinor: 200_000 }).expect(201);
+
+    await approveRequest(buyerA, 'FUEL', 90_000, dep.id);
+    const list = (await http().get('/budgets').set(...bearer(buyerA)).expect(200)).body;
+    expect(list.find((b: any) => b.name === `Ops fuel ${tag}`).committedMinor).toBe(90_000);
+    expect(list.find((b: any) => b.name === `Ops any ${tag}`).committedMinor).toBe(0);
+  });
+
+  it('a second budget on an already-covered scope is a 409, not silent ambiguity', async () => {
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `All twin ${tag}`, category: 'DUP', periodYear: YEAR, amountMinor: 5_000 }).expect(409);
+  });
+
+  it('lists and filters budgets by department', async () => {
+    const deps = (await http().get('/departments').set(...bearer(buyerA))).body;
+    const eng = deps.find((d: any) => d.code === `ENG-${tag}`);
+    const only = (await http().get(`/budgets?departmentId=${eng.id}`).set(...bearer(buyerA)).expect(200)).body;
+    expect(only.length).toBeGreaterThan(0);
+    expect(only.every((b: any) => b.departmentId === eng.id)).toBe(true);
+    expect(only[0].departmentCode).toBe(`ENG-${tag}`);
+  });
+
+  it('over-budget warning names the department that blew its budget', async () => {
+    const dep = (await http().post('/departments').set(...bearer(buyerA)).send({ code: `MKT-${tag}` }).expect(201)).body;
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Mkt ${tag}`, category: 'ADS', departmentId: dep.id, periodYear: YEAR, amountMinor: 30_000 }).expect(201);
+    const r = await approveRequest(buyerA, 'ADS', 100_000, dep.id);
+    expect(r.status).toBe('APPROVED');
+    expect(r.budgetWarnings).toHaveLength(1);
+    expect(r.budgetWarnings[0].departmentCode).toBe(`MKT-${tag}`);
+    expect(r.budgetWarnings[0].overByMinor).toBe(70_000);
+  });
+
+  it('approved spend that matches no budget shows up in the unbudgeted report', async () => {
+    const r = await approveRequest(buyerA, `NOBUDGET-${tag}`, 45_000);
+    const report = (await http().get('/budgets/unbudgeted').set(...bearer(buyerA)).expect(200)).body;
+    const row = report.find((x: any) => x.requestId === r.id);
+    expect(row).toBeTruthy();
+    expect(row.amountMinor).toBe(45_000);
+  });
+
+  it('a BUYER_USER sees only their own department’s budgets', async () => {
+    const deps = (await http().get('/departments').set(...bearer(buyerA))).body;
+    const eng = deps.find((d: any) => d.code === `ENG-${tag}`);
+    await http().post('/settings/users').set(...bearer(buyerA))
+      .send({ email: `bu-${tag}@t.test`, fullName: 'Budget User', password: 'password123', role: 'BUYER_USER' }).expect(201);
+    const userId = (await http().get('/settings/users').set(...bearer(buyerA))).body.find((u: any) => u.email === `bu-${tag}@t.test`).id;
+    const userTok = (await http().post('/auth/login').send({ email: `bu-${tag}@t.test`, password: 'password123' }).expect(201)).body.accessToken;
+
+    // no home department yet → nothing to see, not the whole org's plan
+    expect((await http().get('/budgets').set(...bearer(userTok)).expect(200)).body).toHaveLength(0);
+
+    await http().post(`/settings/users/${userId}/department`).set(...bearer(buyerA)).send({ departmentId: eng.id }).expect(201);
+    const scoped = (await http().get('/budgets').set(...bearer(userTok)).expect(200)).body;
+    expect(scoped.length).toBeGreaterThan(0);
+    expect(scoped.every((b: any) => b.departmentId === eng.id)).toBe(true);
+    // and the unbudgeted report is not theirs to read
+    await http().get('/budgets/unbudgeted').set(...bearer(userTok)).expect(403);
   });
 
   it('filters the list by period type and year', async () => {
