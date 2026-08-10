@@ -36,13 +36,23 @@ export class NotifyEmailer {
     private readonly cfg: AppConfig,
   ) {}
 
-  async fanOut(orgId: string, type: string, payload: Record<string, unknown>): Promise<void> {
+  // `userId` narrows the fan-out to one person. Some notices have a named owner (the
+  // department answerable for a budget), and mailing the whole org instead turns a
+  // targeted signal into noise everybody learns to ignore.
+  async fanOut(
+    orgId: string,
+    type: string,
+    payload: Record<string, unknown>,
+    userId?: string | null,
+  ): Promise<void> {
     try {
       const users: Array<{ email: string; full_name: string }> = await this.ds.query(
         `SELECT u.email, u.full_name FROM organization_users u
          JOIN memberships m ON m.user_id = u.id
-         WHERE m.org_id = $1 AND u.status = 'ACTIVE' ORDER BY u.created_at LIMIT 50`,
-        [orgId],
+         WHERE m.org_id = $1 AND u.status = 'ACTIVE'
+           AND ($2::uuid IS NULL OR u.id = $2)
+         ORDER BY u.created_at LIMIT 50`,
+        [orgId, userId ?? null],
       );
       if (!users.length) return;
       const subject = `Leadprocure — ${MAIL_SUBJECTS[type] ?? type}`;
@@ -80,13 +90,34 @@ export class NotifyService {
   // Email fan-out is queued for AFTER the transaction commits, so rolled-back actions
   // never send mail.
   async notifyOrg(orgId: string, type: string, payload: Record<string, unknown>): Promise<void> {
+    return this.deliver(orgId, null, type, payload);
+  }
+
+  // Same seam, addressed to ONE recipient: the in-app row carries recipient_user_id and
+  // only that person is mailed. Pass a null userId to fall back to the whole org.
+  async notifyUser(
+    orgId: string,
+    userId: string | null,
+    type: string,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    return this.deliver(orgId, userId, type, payload);
+  }
+
+  private async deliver(
+    orgId: string,
+    userId: string | null,
+    type: string,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
     try {
-      await this.rc.manager.query(`SELECT app_notify($1, NULL, $2, $3::jsonb)`, [
+      await this.rc.manager.query(`SELECT app_notify($1, $2, $3, $4::jsonb)`, [
         orgId,
+        userId,
         type,
         JSON.stringify(payload),
       ]);
-      this.rc.onCommit(() => this.emailer.fanOut(orgId, type, payload));
+      this.rc.onCommit(() => this.emailer.fanOut(orgId, type, payload, userId));
     } catch {
       /* best-effort */
     }

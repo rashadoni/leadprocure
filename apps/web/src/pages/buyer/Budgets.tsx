@@ -74,24 +74,20 @@ export default function Budgets() {
         ...(filter.departmentId ? { departmentId: filter.departmentId } : {}),
       },
     }).then((r) => setRows(r.data));
+    api.get('/budgets/rollup', {
+      params: {
+        ...(filter.periodType ? { periodType: filter.periodType } : {}),
+        ...(filter.year ? { year: filter.year } : {}),
+      },
+    }).then((r) => setDepSummary(r.data)).catch(() => setDepSummary([]));
     // approved spend no budget covers — invisible in a per-budget table, so it gets its own panel
     api.get('/budgets/unbudgeted').then((r) => setUnbudgeted(r.data)).catch(() => setUnbudgeted([]));
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [filter.periodType, filter.year, filter.departmentId]);
 
-  // Per-department rollup: what finance actually asked to see.
-  const byDepartment = rows.reduce((acc: Record<string, any>, b) => {
-    const key = b.departmentCode ?? '—';
-    const cur = acc[key] ?? { code: key, amount: 0, committed: 0, actual: 0, currency: b.currency };
-    cur.amount += b.amountMinor;
-    cur.committed += b.committedMinor;
-    cur.actual += b.actualMinor;
-    acc[key] = cur;
-    return acc;
-  }, {});
-  const depSummary = Object.values(byDepartment) as Array<{
-    code: string; amount: number; committed: number; actual: number; currency: string;
-  }>;
+  // Per-department rollup: what finance actually opens the page for. Server-side, because
+  // "paid" comes from settled invoices — the client only has the budget rows.
+  const [depSummary, setDepSummary] = useState<any[]>([]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -264,25 +260,25 @@ export default function Budgets() {
           <table>
             <thead><tr>
               <th>{t('department')}</th><th>{t('amount')}</th><th>{t('committed')}</th><th>{t('actual')}</th>
-              <th>{t('remaining')}</th><th style={{ width: 180 }}>{t('utilization')}</th>
+              <th>{t('paid')}</th><th>{t('remaining')}</th><th style={{ width: 180 }}>{t('utilization')}</th>
             </tr></thead>
             <tbody>
               {depSummary.map((d) => {
-                const used = d.committed + d.actual;
-                const pct = d.amount > 0 ? Math.round((used / d.amount) * 1000) / 10 : 0;
-                const over = used > d.amount;
+                const over = d.remainingMinor < 0;
                 return (
-                  <tr key={d.code}>
-                    <td><b>{d.code === '—' ? t('bud_org_wide') : d.code}</b></td>
-                    <td>{fmtMoney(d.amount, d.currency)}</td>
-                    <td>{fmtMoney(d.committed, d.currency)}</td>
-                    <td>{fmtMoney(d.actual, d.currency)}</td>
-                    <td className={over ? 'error' : ''}>{fmtMoney(d.amount - used, d.currency)}</td>
+                  <tr key={d.departmentId ?? 'org'}>
+                    <td><b>{d.departmentCode ?? t('bud_org_wide')}</b></td>
+                    <td>{fmtMoney(d.amountMinor, d.currency)}</td>
+                    <td>{fmtMoney(d.committedMinor, d.currency)}</td>
+                    <td>{fmtMoney(d.actualMinor, d.currency)}</td>
+                    {/* settlement of orders already counted as actual — shown beside, never summed in */}
+                    <td className="hint" data-tip={t('paid_hint')}>{fmtMoney(d.paidMinor, d.currency)}</td>
+                    <td className={over ? 'error' : ''}>{fmtMoney(d.remainingMinor, d.currency)}</td>
                     <td>
                       <div className="budget-bar">
-                        <div className={`budget-fill ${over ? 'over' : ''}`} style={{ width: `${Math.min(100, pct)}%` }} />
+                        <div className={`budget-fill ${over ? 'over' : ''}`} style={{ width: `${Math.min(100, d.utilizationPct)}%` }} />
                       </div>
-                      <span className="hint">{pct}%{over ? ` · ${t('budget_over')}` : ''}</span>
+                      <span className="hint">{d.utilizationPct}%{over ? ` · ${t('budget_over')}` : ''}</span>
                     </td>
                   </tr>
                 );

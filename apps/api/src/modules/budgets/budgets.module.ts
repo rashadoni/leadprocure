@@ -421,7 +421,16 @@ export class BudgetsService {
     // Crossing the warn line is worth telling the budget owner about, whether or not the
     // budget is actually over.
     if (impact && impact.wouldWarn) {
-      await this.notify.notifyOwnOrg('BUDGET_THRESHOLD_CROSSED', {
+      // Addressed to whoever answers for that department's budget; only if nobody is named
+      // does this fall back to mailing the whole org. A budget alarm sent to 40 people is
+      // one nobody acts on.
+      const owner = (
+        await this.rc.manager.query(
+          `SELECT d.owner_user_id FROM budgets b JOIN departments d ON d.id = b.department_id WHERE b.id = $1`,
+          [impact.budgetId],
+        )
+      )[0]?.owner_user_id ?? null;
+      await this.notify.notifyUser(auth.org_id, owner, 'BUDGET_THRESHOLD_CROSSED', {
         title: `${impact.budgetName}${impact.departmentCode ? ` · ${impact.departmentCode}` : ''} (${impact.periodLabel})`,
         budget: impact.budgetName,
         utilization: `${impact.projectedPct}%`,
@@ -429,6 +438,56 @@ export class BudgetsService {
       });
     }
     return this.warningsForRequest({ id: requestId, approved_at: new Date() });
+  }
+
+  // Per-department rollup: what finance opens the page for. Plan / commitment / actual come
+  // from the budgets themselves; PAID is cash that actually left, taken from the invoice's
+  // own department_id (denormalized at submission, so this survives a PO being re-scoped).
+  //
+  // Paid is reported BESIDE the others, never added into them: an invoice is settlement of
+  // an order already counted as actual, so summing them would double the spend.
+  async rollup(filter: { year?: number; periodType?: string; scopeDepartmentId?: string | null } = {}) {
+    const budgets = await this.list(filter);
+    const byDep = new Map<string, any>();
+    for (const b of budgets) {
+      const key = b.departmentId ?? '';
+      const cur = byDep.get(key) ?? {
+        departmentId: b.departmentId, departmentCode: b.departmentCode,
+        currency: b.currency, amountMinor: 0, committedMinor: 0, actualMinor: 0, paidMinor: 0,
+        periodFrom: b.periodStart, periodTo: b.periodEnd,
+      };
+      cur.amountMinor += b.amountMinor;
+      cur.committedMinor += b.committedMinor;
+      cur.actualMinor += b.actualMinor;
+      // widest window the department's budgets cover — the span PAID is measured over
+      if (b.periodStart < cur.periodFrom) cur.periodFrom = b.periodStart;
+      if (b.periodEnd > cur.periodTo) cur.periodTo = b.periodEnd;
+      byDep.set(key, cur);
+    }
+    if (!byDep.size) return [];
+
+    const paid = await this.rc.manager.query(
+      `SELECT i.department_id, i.currency, sum(i.gross_minor)::bigint AS paid
+       FROM invoices i
+       WHERE i.status = 'PAID'
+       GROUP BY i.department_id, i.currency`,
+    );
+    for (const row of paid) {
+      const cur = byDep.get(row.department_id ?? '');
+      // only AZN settles against an AZN budget; foreign invoices are reported elsewhere
+      if (cur && row.currency === cur.currency) cur.paidMinor += Number(row.paid);
+    }
+
+    return [...byDep.values()]
+      .map((d) => ({
+        ...d,
+        usedMinor: d.committedMinor + d.actualMinor,
+        remainingMinor: d.amountMinor - (d.committedMinor + d.actualMinor),
+        utilizationPct: d.amountMinor > 0
+          ? Math.round(((d.committedMinor + d.actualMinor) / d.amountMinor) * 1000) / 10
+          : 0,
+      }))
+      .sort((a, b) => (a.departmentCode ?? '').localeCompare(b.departmentCode ?? ''));
   }
 
   // A plain BUYER_USER sees only their own cost centre; approvers and admins see all.
@@ -751,6 +810,21 @@ export class BudgetsController {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="budgets.csv"');
     res.send(csv);
+  }
+
+  // Plan / commitment / actual / paid per department — the finance headline.
+  @Get('rollup')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  async rollup(
+    @CurrentUser() auth: AccessTokenPayload,
+    @Query('year') year?: string,
+    @Query('periodType') periodType?: string,
+  ) {
+    return this.budgets.rollup({
+      year: year ? Number(year) : undefined,
+      periodType: periodType || undefined,
+      scopeDepartmentId: await this.budgets.scopeFor(auth),
+    });
   }
 
   @Get('policy')

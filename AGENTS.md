@@ -189,6 +189,17 @@ The budget module finance actually uses. Read this before changing anything unde
   Rollover of an unspent remainder = a revision of the TARGET pointing back at the source.
 - **Visibility**: a plain BUYER_USER sees only their home department's budgets; with none
   set, an empty list (never the whole org's plan). See `scopeFor()`.
+- **`GET /budgets/rollup`** is the finance headline: plan / commitment / actual per
+  department, plus PAID taken from `invoices.department_id` (denormalized at submission, so
+  it survives a PO being re-scoped). **Paid is reported beside the others, never summed into
+  them** — an invoice settles an order already counted as actual, so adding it would double
+  the spend.
+- **Threshold warnings are addressed** to `departments.owner_user_id` via
+  `notify.notifyUser()`, falling back to the whole org only when nobody is named. A budget
+  alarm mailed to 40 people is one nobody acts on.
+- The dev seed creates IT/OPS departments (with owners), a home department for
+  `user@acme.test`, and three deliberately non-overlapping budgets — otherwise the module
+  opens empty on a demo stand, which is the one screen finance came to see.
 - **Catalog call-offs** are POs with no request behind them. They carry their own
   `department_id` (explicit pick, else the buyer's home department) and are matched by the
   second arm of the CTE, `matched_orders`. They can only be claimed by a **category-agnostic**

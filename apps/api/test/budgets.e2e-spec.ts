@@ -457,6 +457,70 @@ describe('budgets & commitment control (API e2e)', () => {
     expect(note.payload.utilization).toBe('85%');
   });
 
+  it('the warning is addressed to the department owner when one is named', async () => {
+    const ownerId = (await http().get('/settings/users').set(...bearer(buyerA)))
+      .body.find((u: any) => u.email === `apprv-${tag}@t.test`).id;
+    const dep = (await http().post('/departments').set(...bearer(buyerA))
+      .send({ code: `OWN-${tag}`, ownerUserId: ownerId }).expect(201)).body;
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Owned ${tag}`, category: 'OWNED', departmentId: dep.id, periodYear: YEAR, amountMinor: 100_000 })
+      .expect(201);
+
+    await approveRequest(buyerA, 'OWNED', 90_000, dep.id);
+    const row = await db.query(
+      `SELECT recipient_user_id FROM notifications
+       WHERE type='BUDGET_THRESHOLD_CROSSED' AND payload->>'budget' = $1`,
+      [`Owned ${tag}`],
+    );
+    expect(row.rows).toHaveLength(1);
+    expect(row.rows[0].recipient_user_id).toBe(ownerId); // not a blast to the whole org
+  });
+
+  // ---------- department rollup: the finance headline ----------
+
+  it('rolls plan / committed / actual up per department, with paid reported beside them', async () => {
+    const rollup = (await http().get('/budgets/rollup').set(...bearer(buyerA)).expect(200)).body;
+    expect(rollup.length).toBeGreaterThan(0);
+
+    const orgWide = rollup.find((r: any) => r.departmentId === null);
+    expect(orgWide).toBeTruthy();
+    // sums match the per-budget rows the table shows
+    const budgets = (await http().get('/budgets').set(...bearer(buyerA))).body;
+    const expected = budgets
+      .filter((b: any) => b.departmentId === null)
+      .reduce((s: number, b: any) => s + b.committedMinor + b.actualMinor, 0);
+    expect(orgWide.usedMinor).toBe(expected);
+    // paid is its own number, never folded into used
+    expect(orgWide).toHaveProperty('paidMinor');
+    expect(orgWide.usedMinor).toBe(orgWide.committedMinor + orgWide.actualMinor);
+  });
+
+  it('a settled invoice shows up as paid under its department, without inflating actual', async () => {
+    const dep = (await http().get('/departments').set(...bearer(buyerA))).body.find((d: any) => d.code === `ENG-${tag}`);
+    const before = (await http().get('/budgets/rollup').set(...bearer(buyerA)).expect(200)).body
+      .find((r: any) => r.departmentId === dep.id);
+
+    // an invoice already settled against that cost centre
+    // a PO of THIS buyer — an invoice against another org's order is invisible under RLS
+    const po = (await db.query(
+      `SELECT id, buyer_org_id, supplier_org_id FROM purchase_orders
+       WHERE buyer_org_id = (SELECT buyer_org_id FROM departments WHERE id = $1) LIMIT 1`,
+      [dep.id],
+    )).rows[0];
+    await db.query(
+      `INSERT INTO invoices(buyer_org_id, supplier_org_id, po_id, invoice_no, currency, net_minor, vat_minor,
+         gross_minor, status, department_id)
+       VALUES ($1,$2,$3,$4,'AZN',40000,0,40000,'PAID',$5)`,
+      [po.buyer_org_id, po.supplier_org_id, po.id, `INV-PAID-${tag}`, dep.id],
+    );
+
+    const after = (await http().get('/budgets/rollup').set(...bearer(buyerA)).expect(200)).body
+      .find((r: any) => r.departmentId === dep.id);
+    expect(after.paidMinor).toBe(before.paidMinor + 40_000);
+    expect(after.actualMinor).toBe(before.actualMinor); // settlement is not extra spend
+    expect(after.usedMinor).toBe(before.usedMinor);
+  });
+
   // ---------- revisions & rollover ----------
 
   it('records the opening plan and every later change as a revision', async () => {
