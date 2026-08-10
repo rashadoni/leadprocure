@@ -7,6 +7,30 @@ export type L10n = Record<GuideLang, string>;
 export interface TourStep { selector: string; title: L10n; text: L10n }
 export interface SectionGuide { key: string; tour?: TourStep[] }
 
+// Route → the i18n key the sidebar already uses for that section, so the help card is
+// headed by the section's own name in the active language without a second set of strings.
+export const SECTION_TITLE_KEY: Record<string, string> = {
+  '/buyer/dashboard': 'dashboard',
+  '/buyer/requests': 'requests',
+  '/buyer/events': 'events',
+  '/buyer/events/': 'events',
+  '/buyer/contracts': 'contracts',
+  '/buyer/invoices': 'invoices',
+  '/buyer/catalogs': 'catalogs',
+  '/buyer/budgets': 'budgets',
+  '/buyer/analytics': 'analytics',
+  '/buyer/logistics': 'logistics',
+  '/buyer/suppliers': 'suppliers',
+  '/buyer/verification': 'verification',
+  '/buyer/settings': 'settings',
+  '/supplier/dashboard': 'dashboard',
+  '/supplier/market': 'market',
+  '/supplier/events/': 'events',
+  '/supplier/orders': 'my_orders',
+  '/supplier/invoices': 'invoices',
+  '/supplier/verification': 'verification',
+};
+
 // Videos are per-language: /guides/<key>.<lang>.webm (+ .png poster). The widget builds
 // the URL from the active UI language; see components/Guide.tsx.
 const g = (key: string, tour?: TourStep[]): SectionGuide => ({ key, tour });

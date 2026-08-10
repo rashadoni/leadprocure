@@ -125,21 +125,36 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 .chart-bar { width: 100%; min-height: 2px; background: linear-gradient(180deg, var(--accent2), var(--accent)); border-radius: 4px 4px 0 0; }
 .chart-label { color: var(--muted); font-size: 10px; margin-top: 4px; }
 
-/* ---- section guide (video thumb + spotlight tour) ---- */
-.guide-widget { position: fixed; right: 18px; bottom: 18px; z-index: 60; width: 180px;
-  background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px;
-  box-shadow: var(--shadow-lg); }
-.guide-close { position: absolute; top: -8px; right: -8px; width: 22px; height: 22px; border-radius: 50%;
-  border: 1px solid var(--border); background: var(--panel); color: var(--muted); cursor: pointer; font-size: 11px; box-shadow: var(--shadow-sm); }
-.guide-thumb { position: relative; cursor: pointer; border-radius: 8px; overflow: hidden; }
-.guide-thumb img { display: block; width: 100%; aspect-ratio: 16/9; object-fit: cover; }
-.guide-play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  font-size: 26px; color: #fff; background: rgba(15, 23, 42, .35); transition: background .15s; }
-.guide-thumb:hover .guide-play { background: rgba(15, 23, 42, .15); }
-.guide-label { color: var(--muted); font-size: 11px; margin: 6px 0; text-align: center; }
-.guide-modal { position: fixed; inset: 0; z-index: 70; background: rgba(15, 23, 42, .6);
+/* ---- section help video: a card IN THE FLOW above the section, never an overlay ---- */
+.help-card { display: flex; align-items: center; gap: 18px; margin-bottom: 16px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px 18px;
+  box-shadow: var(--shadow-sm); }
+.help-thumb { position: relative; flex: 0 0 auto; width: 260px; aspect-ratio: 16/9; padding: 0;
+  border: 1px solid var(--border); border-radius: 12px; overflow: hidden; cursor: pointer; background: none; }
+.help-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.help-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 48px; height: 48px; border-radius: 50%; background: rgba(255, 255, 255, .82); color: #0f172a;
+  display: flex; align-items: center; justify-content: center; font-size: 17px; padding-left: 3px;
+  box-shadow: var(--shadow-sm); transition: transform .15s; }
+.help-thumb:hover .help-play { transform: translate(-50%, -50%) scale(1.08); }
+.help-text { flex: 1 1 auto; min-width: 0; }
+.help-kicker { color: var(--accent); font-size: 13px; font-weight: 700; letter-spacing: .01em; }
+.help-title { font-size: 22px; font-weight: 800; margin: 4px 0 6px; }
+.help-sub { color: var(--muted); font-size: 15px; }
+.help-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
+.help-open { border-radius: 999px; padding: 11px 20px; }
+.help-x { width: 34px; height: 34px; border: 0; background: none; color: var(--muted);
+  font-size: 17px; cursor: pointer; border-radius: 50%; }
+.help-x:hover { background: var(--bg); color: var(--text); }
+.help-modal { position: fixed; inset: 0; z-index: 70; background: rgba(15, 23, 42, .6);
   display: flex; align-items: center; justify-content: center; }
-.guide-modal video { max-width: 86vw; max-height: 84vh; border-radius: 10px; border: 1px solid var(--border); }
+.help-modal-inner { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.help-modal video { max-width: 86vw; max-height: 80vh; border-radius: 12px; border: 1px solid var(--border); }
+@media (max-width: 900px) {
+  .help-card { flex-wrap: wrap; }
+  .help-thumb { width: 180px; }
+  .help-actions { margin-left: auto; }
+}
 .tour-layer { position: fixed; inset: 0; z-index: 70; }
 .tour-spot { position: fixed; border-radius: 10px; border: 2px solid var(--accent);
   box-shadow: 0 0 0 9999px rgba(15, 23, 42, .5); pointer-events: none; transition: all .25s; }

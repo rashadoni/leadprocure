@@ -46,7 +46,17 @@ const ENGINE = {
   en: process.env.TTS_EN ?? 'azure',
 };
 const KEY = process.env.AZURE_SPEECH_KEY, REGION = process.env.AZURE_SPEECH_REGION;
-const GEMINI_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_KEYS = (() => {
+  const keys = [];
+  for (const suffix of ['', '2', '3', '4', '5', '6', '7', '8', '9']) {
+    const v = process.env[`GEMINI_API_KEY${suffix}`];
+    if (v) for (const k of String(v).split(',').map((x) => x.trim()).filter(Boolean)) if (!keys.includes(k)) keys.push(k);
+  }
+  return keys;
+})();
+let gKeyIdx = 0;
+const gExhausted = new Set();
+const GEMINI_KEY = GEMINI_KEYS[0];
 const AZURE_VOICE = { ru: 'ru-RU-DmitryNeural', az: 'az-AZ-BanuNeural', en: 'en-US-JennyNeural' };
 const XLANG = { ru: 'ru-RU', az: 'az-AZ', en: 'en-US' };
 const GEMINI_VOICE = { az: 'Kore', ru: 'Kore', en: 'Kore' };
@@ -188,15 +198,22 @@ async function geminiTts(text, lang, out) {
   for (let attempt = 1; attempt <= 10; attempt++) {
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_KEYS[gKeyIdx]}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(60000) },
       );
       // 429 = per-minute rate/quota cap on the TTS preview model. The window rolls every
       // ~60s, so wait it out (short backoff throws away the whole run) rather than fail.
       if (res.status === 429) {
+        const bodyText = await res.text().catch(() => '');
+        if (/PerDay/i.test(bodyText)) {
+          gExhausted.add(gKeyIdx);
+          const next = GEMINI_KEYS.findIndex((_, i) => !gExhausted.has(i));
+          if (next === -1) throw new Error('Gemini: all keys hit their DAILY quota');
+          console.log(`  · Gemini key #${gKeyIdx + 1} daily cap — switching to key #${next + 1}`);
+          gKeyIdx = next; continue;
+        }
         const wait = Math.min(62000, 18000 * attempt);
         console.log(`  · Gemini 429 (rate limit) — waiting ${Math.round(wait / 1000)}s, retry ${attempt}/10`);
-        await res.text().catch(() => {});
         await P(wait);
         continue;
       }
@@ -645,9 +662,16 @@ async function login(ctx, email) {
       });
       ctx.setDefaultTimeout(20000);
       await ctx.addInitScript((l) => localStorage.setItem('lp_lang', l), lang);
-      // Hide the floating guide widget (video thumb + tour button) so recordings are a
-      // clean full screen — uses the app's own dismiss flag, so it never even renders.
-      await ctx.addInitScript(() => { try { sessionStorage.setItem('guide_hidden', '1'); } catch { /* noop */ } });
+      // Hide the section help card so a guide never films itself. Keyed off the card's own
+      // marker attribute rather than a storage flag: CSS can't be defeated by a change in
+      // how the app remembers dismissals (it moved from sessionStorage to a localStorage
+      // per-section list once, and the recorder silently started filming the card).
+      await ctx.addInitScript(() => {
+        const css = '[data-help-video-widget]{display:none !important}';
+        const apply = () => { const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s); };
+        if (document.head) apply();
+        else document.addEventListener('DOMContentLoaded', apply);
+      });
       await login(ctx, role === 'buyer' ? 'admin@acme.test' : 'seller@supply-one.test');
       contexts[role] = ctx;
     }
