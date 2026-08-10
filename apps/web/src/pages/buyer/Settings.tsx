@@ -13,6 +13,8 @@ export default function Settings() {
   const [approvals, setApprovals] = useState<any[]>([]);
   const [cats, setCats] = useState<any[]>([]);
   const [newCat, setNewCat] = useState({ code: '', name: '' });
+  const [deps, setDeps] = useState<any[]>([]);
+  const [newDep, setNewDep] = useState({ code: '', name: '', parentId: '' });
   const [nu, setNu] = useState({ email: '', fullName: '', password: '', role: 'BUYER_USER' });
   const isAdmin = session?.org.role === 'BUYER_ADMIN';
 
@@ -28,6 +30,7 @@ export default function Settings() {
     api.get('/requests/method-policies').then((r) => setPolicies(r.data));
     api.get('/requests/approval-policies').then((r) => setApprovals(r.data));
     api.get('/categories').then((r) => setCats(r.data)).catch(() => {});
+    api.get('/departments').then((r) => setDeps(r.data)).catch(() => {});
   };
   useEffect(load, []);
 
@@ -83,7 +86,7 @@ export default function Settings() {
       <div className="card">
         <h3>{t('users')}</h3>
         <table>
-          <thead><tr><th>{t('email')}</th><th>{t('name')}</th><th>{t('role')}</th></tr></thead>
+          <thead><tr><th>{t('email')}</th><th>{t('name')}</th><th>{t('role')}</th><th>{t('department')}</th></tr></thead>
           <tbody>
             {users.map((u) => (
               <tr key={u.id}>
@@ -97,6 +100,20 @@ export default function Settings() {
                     </select>
                   ) : (
                     <span className="badge INVITED">{roleLabel(u.role)}</span>
+                  )}
+                </td>
+                <td>
+                  {/* home department = the default on this user's requests */}
+                  {isAdmin ? (
+                    <select value={u.department_id ?? ''}
+                      onChange={(e) => run(() => api.post(`/settings/users/${u.id}/department`, { departmentId: e.target.value || null }))}>
+                      <option value="">—</option>
+                      {deps.filter((d) => d.is_active || d.id === u.department_id).map((d) => (
+                        <option key={d.id} value={d.id}>{d.code}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="hint">{u.department_code ?? '—'}</span>
                   )}
                 </td>
               </tr>
@@ -138,6 +155,61 @@ export default function Settings() {
             onSubmit={(e) => { e.preventDefault(); if (newCat.code.trim()) run(() => api.post('/categories', newCat)).then(() => setNewCat({ code: '', name: '' })); }}>
             <div><label>{t('cat_code')}</label><input value={newCat.code} onChange={(e) => setNewCat({ ...newCat, code: e.target.value })} placeholder="IT" /></div>
             <div><label>{t('name')}</label><input value={newCat.name} onChange={(e) => setNewCat({ ...newCat, name: e.target.value })} /></div>
+            <button className="btn">+</button>
+          </form>
+        )}
+      </div>
+
+      <div className="card">
+        <h3>{t('dep_hdr')}</h3>
+        <div className="hint" style={{ marginBottom: 10 }}>{t('dep_hint')}</div>
+        <table>
+          <thead><tr>
+            <th>{t('dep_code')}</th><th>{t('name')}</th><th>{t('dep_parent')}</th>
+            <th>{t('dep_usage')}</th><th>{t('status')}</th>{isAdmin && <th>{t('actions')}</th>}
+          </tr></thead>
+          <tbody>
+            {deps.length === 0 && <tr><td colSpan={isAdmin ? 6 : 5} className="hint">—</td></tr>}
+            {deps.map((d) => (
+              <tr key={d.id}>
+                <td>{d.code}</td>
+                <td>{d.name || '—'}</td>
+                <td className="hint">{d.parent_code ?? '—'}</td>
+                <td className="hint">{d.usage_count}</td>
+                <td>{d.is_active ? <span className="badge APPROVED">{t('dep_active')}</span> : <span className="badge INVITED">{t('dep_inactive')}</span>}</td>
+                {isAdmin && (
+                  <td>
+                    {/* retiring beats deleting: a department carrying spend must keep its history */}
+                    <button className="btn small ghost" data-tip={d.is_active ? t('dep_deactivate') : t('dep_activate')}
+                      onClick={() => run(() => api.put(`/departments/${d.id}`, { code: d.code, name: d.name ?? undefined, parentId: d.parent_id ?? undefined, isActive: !d.is_active }))}>
+                      {d.is_active ? '⏸' : '▶'}
+                    </button>{' '}
+                    <button className="btn small ghost" data-tip={t('tip_delete')} disabled={d.usage_count > 0}
+                      onClick={() => run(() => api.delete(`/departments/${d.id}`))}>🗑</button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {isAdmin && (
+          <form className="row" style={{ maxWidth: 760, marginTop: 12 }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!newDep.code.trim()) return;
+              run(() => api.post('/departments', {
+                code: newDep.code.trim(),
+                ...(newDep.name.trim() ? { name: newDep.name.trim() } : {}),
+                ...(newDep.parentId ? { parentId: newDep.parentId } : {}),
+              })).then(() => setNewDep({ code: '', name: '', parentId: '' }));
+            }}>
+            <div><label>{t('dep_code')}</label><input value={newDep.code} onChange={(e) => setNewDep({ ...newDep, code: e.target.value })} placeholder="IT" /></div>
+            <div><label>{t('name')}</label><input value={newDep.name} onChange={(e) => setNewDep({ ...newDep, name: e.target.value })} /></div>
+            <div><label>{t('dep_parent')}</label>
+              <select value={newDep.parentId} onChange={(e) => setNewDep({ ...newDep, parentId: e.target.value })}>
+                <option value="">—</option>
+                {deps.map((d) => <option key={d.id} value={d.id}>{d.code}</option>)}
+              </select></div>
             <button className="btn">+</button>
           </form>
         )}

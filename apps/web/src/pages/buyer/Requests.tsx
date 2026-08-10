@@ -25,12 +25,18 @@ export default function Requests() {
   const [directFor, setDirectFor] = useState<string | null>(null);
   const [approvedSuppliers, setApprovedSuppliers] = useState<any[]>([]);
   const [cats, setCats] = useState<string[]>([]);
+  // Departments (cost centres) — which budget this spend lands on. Only active ones can
+  // be picked for new requests; retired ones stay on their historic requests.
+  const [deps, setDeps] = useState<any[]>([]);
+  const [department, setDepartment] = useState('');
+  const [depFilter, setDepFilter] = useState('');
   useEffect(() => { api.get('/categories').then((r) => setCats(r.data.map((c: any) => c.code))).catch(() => {}); }, []);
+  useEffect(() => { api.get('/departments').then((r) => setDeps(r.data)).catch(() => {}); }, []);
   const canApprove = ['BUYER_ADMIN', 'BUYER_APPROVER'].includes(session?.org.role ?? '');
 
-  const load = () => api.get('/requests', { params: { ...(q ? { q } : {}), page, pageSize: PAGE_SIZE } })
+  const load = () => api.get('/requests', { params: { ...(q ? { q } : {}), ...(depFilter ? { departmentId: depFilter } : {}), page, pageSize: PAGE_SIZE } })
     .then((r) => { setRows(r.data.items); setTotal(r.data.total); });
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, page]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, page, depFilter]);
 
   const openDirect = async (id: string) => {
     const r = await api.get('/suppliers');
@@ -52,12 +58,14 @@ export default function Requests() {
       await api.post('/requests', {
         title,
         ...(category.trim() ? { category: category.trim() } : {}),
+        ...(department ? { departmentId: department } : {}),
         items: items
           .filter((i) => i.name)
           .map((i) => ({ name: i.name, qty: Number(i.qty), estUnitPriceMinor: Math.round(Number(i.price) * 100) })),
       });
       setTitle('');
       setCategory('');
+      setDepartment('');
       setItems([{ name: '', qty: 1, price: '' }]);
       load();
     } catch (e: any) { setErr(e.response?.data?.message?.toString() ?? 'Error'); }
@@ -121,6 +129,14 @@ export default function Requests() {
                   <option key={c} value={c} />
                 ))}
               </datalist></div>
+            <div style={{ flex: 1 }}><label>{t('department')}</label>
+              {/* the department owns the budget this spend is charged to */}
+              <select value={department} onChange={(e) => setDepartment(e.target.value)}>
+                <option value="">{t('dep_default')}</option>
+                {deps.filter((d) => d.is_active).map((d) => (
+                  <option key={d.id} value={d.id}>{d.code}{d.name ? ` · ${d.name}` : ''}</option>
+                ))}
+              </select></div>
           </div>
           <h3>{t('items')}</h3>
           {items.map((it, idx) => (
@@ -141,7 +157,13 @@ export default function Requests() {
         </form>
       </div>
       <div className="card">
-        <input placeholder={`🔎 ${t('title')}…`} value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} style={{ maxWidth: 320, marginBottom: 6 }} />
+        <div style={{ display: 'flex', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+          <input placeholder={`🔎 ${t('title')}…`} value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} style={{ maxWidth: 320 }} />
+          <select value={depFilter} onChange={(e) => { setDepFilter(e.target.value); setPage(1); }} style={{ maxWidth: 220 }}>
+            <option value="">{t('dep_all')}</option>
+            {deps.map((d) => <option key={d.id} value={d.id}>{d.code}</option>)}
+          </select>
+        </div>
         <div className="hint" style={{ marginBottom: 10 }}>
           {t('legend_procedures')}
           {['BUYER_ADMIN', 'BUYER_APPROVER'].includes(session?.org.role ?? '') && (
@@ -149,7 +171,7 @@ export default function Requests() {
           )}
         </div>
         <table>
-          <thead><tr><th>#</th><th>{t('title')}</th><th>{t('category')}</th><th>{t('date')}</th><th>{t('requester')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('method')}</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>#</th><th>{t('title')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('date')}</th><th>{t('requester')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('method')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <Fragment key={r.id}>
@@ -157,6 +179,7 @@ export default function Requests() {
                 <td>{r.request_no}</td>
                 <td>{r.title}</td>
                 <td>{r.category && r.category !== '*' ? r.category : '—'}</td>
+                <td>{r.department_code ?? '—'}</td>
                 <td className="hint">{fmtDate(r.created_at)}</td>
                 <td className="hint">{r.created_by_name ?? '—'}</td>
                 <td>{fmtMoney(r.estimated_total_minor, r.currency)}</td>
@@ -205,7 +228,7 @@ export default function Requests() {
               </tr>
               {preview[r.id] && (
                 <tr>
-                  <td colSpan={9} style={{ background: 'rgba(79,140,255,0.05)' }}>
+                  <td colSpan={10} style={{ background: 'rgba(79,140,255,0.05)' }}>
                     <b>{t('items')}</b>
                     <table style={{ margin: '6px 0' }}>
                       <thead><tr><th>{t('name')}</th><th>{t('qty')}</th><th>{t('unit_price')}</th><th>{t('total')}</th></tr></thead>

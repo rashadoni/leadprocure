@@ -227,6 +227,10 @@ export const AUDIT_ACTIONS = [
   'CHANNEL_SAVED',
   'CHANNEL_REMOVED',
   'CHANNEL_TEST_SENT',
+  'DEPARTMENT_CREATED',
+  'DEPARTMENT_UPDATED',
+  'DEPARTMENT_DELETED',
+  'MEMBER_DEPARTMENT_SET',
 ] as const;
 
 // ---------------- Invoices (P2P) ----------------

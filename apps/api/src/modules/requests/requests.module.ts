@@ -12,7 +12,7 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
-import { IsArray, IsIn, IsInt, IsOptional, IsString, Min, MinLength, ValidateNested } from 'class-validator';
+import { IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Min, MinLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import type { ProcurementMethod } from '@leadprocure/shared';
 import { CurrentUser, Roles } from '../../common/auth/decorators';
@@ -33,6 +33,9 @@ class ItemDto {
 class UpsertRequestDto {
   @IsString() @MinLength(3) title!: string;
   @IsOptional() @IsString() category?: string;
+  // Which department's budget this spend belongs to. Omitted → the author's home
+  // department (memberships.department_id); still NULL → reports as "unassigned".
+  @IsOptional() @IsUUID() departmentId?: string;
   @IsOptional() @IsIn(['INCLUSIVE', 'EXCLUSIVE']) vatMode?: 'INCLUSIVE' | 'EXCLUSIVE';
   @IsArray() @ValidateNested({ each: true }) @Type(() => ItemDto) items!: ItemDto[];
 }
@@ -53,10 +56,11 @@ export class RequestsService {
     private readonly budgets: BudgetsService,
   ) {}
 
-  async list(q?: string, paging: Paging = parsePaging()) {
+  async list(q?: string, paging: Paging = parsePaging(), departmentId?: string) {
     const rows = await this.rc.manager.query(
       `SELECT pr.id, pr.request_no, pr.title, pr.status, pr.estimated_total_minor, pr.currency, pr.category,
-              pr.method_resolved, pr.created_at,
+              pr.method_resolved, pr.created_at, pr.department_id,
+              (SELECT d.code FROM departments d WHERE d.id = pr.department_id) AS department_code,
               (SELECT u.full_name FROM organization_users u WHERE u.id = pr.created_by) AS created_by_name,
               count(*) OVER()::int AS total_count,
               (SELECT count(*)::int FROM approval_steps s WHERE s.request_id = pr.id) AS steps_total,
@@ -65,8 +69,9 @@ export class RequestsService {
                ORDER BY s.step_no LIMIT 1) AS current_role
        FROM procurement_requests pr
        WHERE ($1::text IS NULL OR pr.title ILIKE '%' || $1 || '%' OR pr.request_no ILIKE '%' || $1 || '%')
+         AND ($4::uuid IS NULL OR pr.department_id = $4)
        ORDER BY pr.created_at DESC LIMIT $2 OFFSET $3`,
-      [q ?? null, paging.limit, paging.offset],
+      [q ?? null, paging.limit, paging.offset, departmentId ?? null],
     );
     return pageFrom(rows, paging);
   }
@@ -83,7 +88,16 @@ export class RequestsService {
       `SELECT step_no, approver_role, status, acted_at FROM approval_steps WHERE request_id = $1 ORDER BY step_no`,
       [id],
     );
-    return { ...rows[0], items, approvals };
+    const dep = rows[0].department_id
+      ? (await m.query(`SELECT code, name FROM departments WHERE id = $1`, [rows[0].department_id]))[0]
+      : null;
+    return {
+      ...rows[0],
+      department_code: dep?.code ?? null,
+      department_name: dep?.name ?? null,
+      items,
+      approvals,
+    };
   }
 
   async getApprovalPolicies() {
@@ -112,12 +126,13 @@ export class RequestsService {
     const seq = await m.query(`SELECT next_document_no($1,'REQ') AS n`, [auth.org_id]);
     const requestNo = `REQ-${new Date().getFullYear()}-${String(Number(seq[0].n)).padStart(4, '0')}`;
     const total = this.computeTotal(dto.items);
+    const departmentId = await this.resolveDepartment(dto.departmentId, auth);
     const req = (
       await m.query(
-        `INSERT INTO procurement_requests(owner_org_id, request_no, title, category, vat_mode,
+        `INSERT INTO procurement_requests(owner_org_id, request_no, title, category, department_id, vat_mode,
            estimated_total_minor, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-        [auth.org_id, requestNo, dto.title, dto.category ?? '*', dto.vatMode ?? 'EXCLUSIVE', total, auth.sub],
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+        [auth.org_id, requestNo, dto.title, dto.category ?? '*', departmentId, dto.vatMode ?? 'EXCLUSIVE', total, auth.sub],
       )
     )[0];
     await this.insertItems(req.id, auth.org_id, dto.items);
@@ -130,9 +145,14 @@ export class RequestsService {
     const total = this.computeTotal(dto.items);
     await m.query(
       `UPDATE procurement_requests
-       SET title=$2, category=$3, vat_mode=$4, estimated_total_minor=$5, version=version+1, updated_at=now()
+       SET title=$2, category=$3, department_id=$4, vat_mode=$5, estimated_total_minor=$6,
+           version=version+1, updated_at=now()
        WHERE id=$1`,
-      [id, dto.title, dto.category ?? req.category, dto.vatMode ?? req.vat_mode, total],
+      [
+        id, dto.title, dto.category ?? req.category,
+        dto.departmentId ?? req.department_id,
+        dto.vatMode ?? req.vat_mode, total,
+      ],
     );
     await m.query(`DELETE FROM request_items WHERE request_id = $1`, [id]);
     await this.insertItems(id, auth.org_id, dto.items);
@@ -286,6 +306,24 @@ export class RequestsService {
     return rows.length ? rows[0].method : 'OPEN_TENDER';
   }
 
+  // An explicit department must exist for THIS buyer (RLS makes another org's department
+  // invisible, so a missing row is either a typo or a cross-org probe — both are 400).
+  // With none given, fall back to the author's home department; NULL stays NULL.
+  private async resolveDepartment(departmentId: string | undefined, auth: AccessTokenPayload): Promise<string | null> {
+    const m = this.rc.manager;
+    if (departmentId) {
+      const found = await m.query(`SELECT id, is_active FROM departments WHERE id = $1`, [departmentId]);
+      if (!found.length) throw new BadRequestException('Unknown department');
+      if (!found[0].is_active) throw new BadRequestException('Department is inactive');
+      return departmentId;
+    }
+    const home = await m.query(
+      `SELECT department_id FROM memberships WHERE user_id = $1 AND org_id = $2 AND department_id IS NOT NULL LIMIT 1`,
+      [auth.sub, auth.org_id],
+    );
+    return home[0]?.department_id ?? null;
+  }
+
   private computeTotal(items: ItemDto[]): number {
     if (!items.length) throw new BadRequestException('At least one item is required');
     return items.reduce((sum, it) => sum + it.qty * it.estUnitPriceMinor, 0);
@@ -321,8 +359,13 @@ export class RequestsController {
   constructor(private readonly requests: RequestsService) {}
 
   @Get() @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
-  list(@Query('q') q?: string, @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
-    return this.requests.list(q, parsePaging(page, pageSize));
+  list(
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('departmentId') departmentId?: string,
+  ) {
+    return this.requests.list(q, parsePaging(page, pageSize), departmentId || undefined);
   }
 
   @Get('method-policies') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
