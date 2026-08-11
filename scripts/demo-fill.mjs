@@ -37,7 +37,7 @@ const TXT = {
     houseReq: 'Хозтовары для офиса', houseItem: 'Бумага А4, пачка',
     amendReason: 'Увеличиваем объём: открылся второй офис',
     budgetAll: 'Общий бюджет', budgetIT: 'IT-бюджет',
-    catNames: { IT: 'ИТ и техника', OFFICE: 'Офис и хозтовары', CONSTRUCTION: 'Строительство и ремонт', FUEL: 'Топливо', LOGISTICS: 'Логистика и склад' },
+    catNames: { IT: 'ИТ и техника', OFFICE: 'Офис и хозтовары', CONSTRUCTION: 'Строительство и ремонт', FUEL: 'Топливо', LOGISTICS: 'Логистика и склад' , TRAINING: 'Обучение' },
     catTitle: 'Офисные расходники — Supply One', catItem1: 'Бумага А4 80г', catItem2: 'Тонер HP 26A', uomReam: 'пачка', uomPcs: 'шт',
     qnaQ: 'Допускается ли поставка кресел партиями по 10 штук?', qnaA: 'Да, партиями допускается, полный объём — до конца месяца.',
     depCenter: 'Головной офис', depIt: 'Информационные технологии', depOps: 'Операции',
@@ -49,6 +49,8 @@ const TXT = {
     liveRfqReq: 'Ноутбуки и мониторы для отдела продаж', liveRfqEv: 'Тендер: ноутбуки и мониторы',
     liveRfqItem1: 'Ноутбук 14", 16 ГБ', liveRfqItem2: 'Монитор 27"',
     liveAucReq: 'Офисная бумага, годовой объём', liveAucEv: 'Аукцион: офисная бумага', liveAucItem: 'Бумага А4, пачка',
+    budgetItDept: 'Бюджет отдела IT', budgetOpsQ: 'Операции — квартал', budgetOffice: 'Офисное снабжение',
+    budgetTraining: 'Обучение',
     justification: 'Лучшее соотношение цена/срок по взвешенной оценке',
   },
   az: {
@@ -62,7 +64,7 @@ const TXT = {
     houseReq: 'Ofis üçün təsərrüfat malları', houseItem: 'A4 kağız, top',
     amendReason: 'Həcmi artırırıq: ikinci ofis açıldı',
     budgetAll: 'Ümumi büdcə', budgetIT: 'IT büdcəsi',
-    catNames: { IT: 'İT və texnika', OFFICE: 'Ofis və təsərrüfat', CONSTRUCTION: 'Tikinti və təmir', FUEL: 'Yanacaq', LOGISTICS: 'Logistika və anbar' },
+    catNames: { IT: 'İT və texnika', OFFICE: 'Ofis və təsərrüfat', CONSTRUCTION: 'Tikinti və təmir', FUEL: 'Yanacaq', LOGISTICS: 'Logistika və anbar' , TRAINING: 'Təlim' },
     catTitle: 'Ofis sərfiyyatı — Supply One', catItem1: 'A4 kağız 80q', catItem2: 'Toner HP 26A', uomReam: 'top', uomPcs: 'ədəd',
     qnaQ: 'Kresloları 10 ədədlik partiyalarla çatdırmaq olarmı?', qnaA: 'Bəli, partiyalarla olar, tam həcm — ay sonuna qədər.',
     depCenter: 'Baş ofis', depIt: 'İnformasiya texnologiyaları', depOps: 'Əməliyyat',
@@ -74,6 +76,8 @@ const TXT = {
     liveRfqReq: 'Satış şöbəsi üçün noutbuk və monitorlar', liveRfqEv: 'Tender: noutbuk və monitorlar',
     liveRfqItem1: 'Noutbuk 14 düym, 16 GB', liveRfqItem2: 'Monitor 27 düym',
     liveAucReq: 'Ofis kağızı, illik həcm', liveAucEv: 'Auksion: ofis kağızı', liveAucItem: 'A4 kağız, top',
+    budgetItDept: 'IT şöbəsi', budgetOpsQ: 'OPS rüblük', budgetOffice: 'Ofis təchizatı',
+    budgetTraining: 'Tədris',
     justification: 'Çəkili qiymətləndirmə üzrə ən yaxşı qiymət/müddət nisbəti',
   },
   en: {
@@ -87,7 +91,7 @@ const TXT = {
     houseReq: 'Office household supplies', houseItem: 'A4 paper, ream',
     amendReason: 'Increasing volume: a second office opened',
     budgetAll: 'Overall budget', budgetIT: 'IT budget',
-    catNames: { IT: 'IT & hardware', OFFICE: 'Office & supplies', CONSTRUCTION: 'Construction & repair', FUEL: 'Fuel', LOGISTICS: 'Logistics & warehouse' },
+    catNames: { IT: 'IT & hardware', OFFICE: 'Office & supplies', CONSTRUCTION: 'Construction & repair', FUEL: 'Fuel', LOGISTICS: 'Logistics & warehouse' , TRAINING: 'Training' },
     catTitle: 'Office consumables — Supply One', catItem1: 'A4 paper 80g', catItem2: 'Toner HP 26A', uomReam: 'ream', uomPcs: 'pcs',
     qnaQ: 'May the chairs be delivered in batches of 10?', qnaA: 'Yes, batches are allowed; the full volume by month-end.',
     depCenter: 'Head office', depIt: 'Information technology', depOps: 'Operations',
@@ -99,6 +103,8 @@ const TXT = {
     liveRfqReq: 'Laptops and monitors for the sales team', liveRfqEv: 'Tender: laptops and monitors',
     liveRfqItem1: 'Laptop 14", 16 GB', liveRfqItem2: 'Monitor 27"',
     liveAucReq: 'Office paper, annual volume', liveAucEv: 'Auction: office paper', liveAucItem: 'A4 paper, ream',
+    budgetItDept: 'IT department budget', budgetOpsQ: 'Operations — quarter', budgetOffice: 'Office supplies',
+    budgetTraining: 'Training',
     justification: 'Best price / lead-time ratio by the weighted score',
   },
 };
@@ -517,10 +523,31 @@ const log = (s) => console.log(s);
   await storyJ();
 
   // ---------- Бюджеты ----------
+  // DEMO_ONLY=BUD переигрывает только этот блок.
+  // Бюджет здесь — документ, а не строка: черновик → на утверждение → утверждён. Считает
+  // расход только утверждённый, поэтому сид обязан довести его до конца, иначе раздел
+  // выглядит живым, а цифры в нём нулевые. Утверждает другой человек: своё не подписывают.
   const year = new Date().getFullYear();
-  await postIdempotent('/budgets', buyer, { name: `${T.budgetAll} ${year}`, category: '*', periodYear: year, amountMinor: 20_000_000 });
-  await postIdempotent('/budgets', buyer, { name: `${T.budgetIT} ${year}`, category: 'IT', periodYear: year, amountMinor: 8_000_000 });
-  log('✓ бюджеты созданы (использование посчитается из утверждённых заявок)');
+  const quarter = Math.floor(new Date().getMonth() / 3) + 1;
+  const budgets = [
+    { name: `${T.budgetAll} ${year}`, category: '*', amountMinor: 20_000_000, approve: true },
+    { name: `${T.budgetIT} ${year}`, category: 'IT', amountMinor: 8_000_000, approve: true },
+    { name: `${T.budgetItDept} ${year}`, category: 'IT', departmentId: depIds.IT, amountMinor: 6_000_000, approve: true },
+    { name: T.budgetOpsQ, category: '*', departmentId: depIds.OPS, periodType: 'QUARTER', periodQuarter: quarter, amountMinor: 1_500_000, approve: true },
+    // Две штуки остаются черновиками — чтобы на экране был виден и сам жизненный цикл.
+    { name: `${T.budgetOffice} ${year}`, category: 'OFFICE', departmentId: depIds.OPS, amountMinor: 950_000, approve: false },
+    { name: `${T.budgetTraining} ${year}`, category: 'TRAINING', amountMinor: 420_000, approve: false },
+  ];
+  for (const b of budgets) {
+    const { approve, ...dto } = b;
+    const made = await postIdempotent('/budgets', buyer, { periodYear: year, ...dto });
+    if (made && approve) {
+      await post(`/budgets/${made.id}/submit`, buyer);
+      await post(`/budgets/${made.id}/approve`, approver);
+    }
+  }
+  log(`✓ бюджеты: ${budgets.filter((b) => b.approve).length} утверждённых (из них по отделам — 2) и 2 черновика`);
+  if (process.env.DEMO_ONLY === 'BUD') { log('\nDone (только бюджеты).'); return; }
 
   // ---------- Каталог + мгновенный заказ ----------
   const cat = await post('/catalogs', buyer, { supplierOrgId: org1, title: T.catTitle });
