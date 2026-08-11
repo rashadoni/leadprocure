@@ -36,7 +36,10 @@ const ONLY = rawArgs;
 
 if (existsSync(join(ROOT, '.env'))) {
   for (const line of readFileSync(join(ROOT, '.env'), 'utf8').split('\n')) {
-    const m = line.match(/^(AZURE_[A-Z_]+|GEMINI_API_KEY)=(.*)$/);
+    // GEMINI_API_KEY2..9 are honoured below, but this loader only matched the unnumbered
+    // name — so a spare key parked in .env was invisible and the run died on quota with a
+    // working key sitting right there.
+    const m = line.match(/^(AZURE_[A-Z_]+|GEMINI_API_KEY[0-9]*)=(.*)$/);
     if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim().replace(/^["']|["']$/g, '');
   }
 }
