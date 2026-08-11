@@ -46,6 +46,9 @@ const TXT = {
     invPayReq: 'Стеллажи для склада', invPayItem: 'Стеллаж металлический',
     shipCustoms: 'Ожидает таможенного оформления', shipException: 'Повреждение упаковки, составлен акт',
     verOk: 'ИНН и банковские реквизиты сверены, лицензия действует до конца года.',
+    liveRfqReq: 'Ноутбуки и мониторы для отдела продаж', liveRfqEv: 'Тендер: ноутбуки и мониторы',
+    liveRfqItem1: 'Ноутбук 14", 16 ГБ', liveRfqItem2: 'Монитор 27"',
+    liveAucReq: 'Офисная бумага, годовой объём', liveAucEv: 'Аукцион: офисная бумага', liveAucItem: 'Бумага А4, пачка',
     justification: 'Лучшее соотношение цена/срок по взвешенной оценке',
   },
   az: {
@@ -68,6 +71,9 @@ const TXT = {
     invPayReq: 'Anbar üçün rəf sistemi', invPayItem: 'Metal rəf',
     shipCustoms: 'Gömrük rəsmiləşdirilməsi gözlənilir', shipException: 'Qablaşdırma zədəsi, akt tərtib edildi',
     verOk: 'VÖEN və bank rekvizitləri yoxlanıldı, lisenziya ilin sonuna qədər etibarlıdır.',
+    liveRfqReq: 'Satış şöbəsi üçün noutbuk və monitorlar', liveRfqEv: 'Tender: noutbuk və monitorlar',
+    liveRfqItem1: 'Noutbuk 14 düym, 16 GB', liveRfqItem2: 'Monitor 27 düym',
+    liveAucReq: 'Ofis kağızı, illik həcm', liveAucEv: 'Auksion: ofis kağızı', liveAucItem: 'A4 kağız, top',
     justification: 'Çəkili qiymətləndirmə üzrə ən yaxşı qiymət/müddət nisbəti',
   },
   en: {
@@ -90,6 +96,9 @@ const TXT = {
     invPayReq: 'Warehouse racking', invPayItem: 'Steel rack',
     shipCustoms: 'Waiting for customs clearance', shipException: 'Packaging damaged, a report was filed',
     verOk: 'Tax ID and bank details checked; the licence is valid to the year end.',
+    liveRfqReq: 'Laptops and monitors for the sales team', liveRfqEv: 'Tender: laptops and monitors',
+    liveRfqItem1: 'Laptop 14", 16 GB', liveRfqItem2: 'Monitor 27"',
+    liveAucReq: 'Office paper, annual volume', liveAucEv: 'Auction: office paper', liveAucItem: 'A4 paper, ream',
     justification: 'Best price / lead-time ratio by the weighted score',
   },
 };
@@ -337,6 +346,50 @@ const log = (s) => console.log(s);
   };
   if (process.env.DEMO_ONLY === 'I') { await storyI(); log('\nDone (только верификация).'); return; }
 
+  // ---------- J. Живые процедуры: тендер и аукцион с будущим дедлайном ----------
+  // Стенд живёт неделями, а сроки в историях B и D истекают — и раздел поставщика
+  // остаётся без единой открытой процедуры. Здесь всегда есть та, на которую можно
+  // подать ставку прямо сейчас.
+  const storyJ = async () => {
+    const evPage = await get('/events', buyer);
+    const events = Array.isArray(evPage) ? evPage : evPage.items ?? [];
+    const liveOf = (title) => events.find((e) => e.title === title && e.status === 'OPEN');
+
+    if (!liveOf(T.liveRfqEv)) {
+      const req = await mkApprovedRequest(T.liveRfqReq, 'IT', [
+        { name: T.liveRfqItem1, qty: 12, estUnitPriceMinor: 180_000 },
+        { name: T.liveRfqItem2, qty: 12, estUnitPriceMinor: 42_000 },
+      ], depIds.IT);
+      const ev = await mkEvent(req, T.liveRfqEv, 'RFQ', new Date(Date.now() + 8 * DAY).toISOString());
+      // Одна ставка от второго поставщика: в списке видно, что участие уже есть,
+      // но суммы до вскрытия закрыты — именно это и показывает гайд.
+      const items = (await get(`/events/${ev}`, sup2)).items;
+      await post(`/events/${ev}/bid`, sup2, {
+        items: items.map((i, n) => ({ eventItemId: i.id, unitPriceMinor: n === 0 ? 174_000 : 39_500 })),
+      });
+    }
+
+    if (!liveOf(T.liveAucEv)) {
+      const reqA = await mkApprovedRequest(T.liveAucReq, 'OFFICE', [
+        { name: T.liveAucItem, qty: 4000, estUnitPriceMinor: 620 },
+      ], depIds.OPS);
+      const ev = await post(`/events/reverse/from-request/${reqA}`, buyer, {
+        title: T.liveAucEv,
+        closeAt: new Date(Date.now() + 4 * DAY).toISOString(),
+        visibility: 'INVITED',
+        startPriceMinor: 2_480_000,
+        minDecrementMinor: 20_000,
+      });
+      for (const org of [org1, org2]) await post(`/events/${ev.id}/invite`, buyer, { supplierOrgId: org });
+      await post(`/events/${ev.id}/publish`, buyer);
+      // Конкурент уже сбил цену — иначе панели аукциона нечего показывать.
+      const items = (await get(`/events/${ev.id}`, sup2)).items;
+      await post(`/events/${ev.id}/auction/bids`, sup2, { items: [{ eventItemId: items[0].id, unitPriceMinor: 598 }] });
+    }
+    log('✓ J: открыты живые тендер и аукцион, у конкурента уже есть ставка');
+  };
+  if (process.env.DEMO_ONLY === 'J') { await storyJ(); log('\nDone (только живые процедуры).'); return; }
+
   // ---------- A. Полный цикл до оплаты ----------
   const reqA = await mkApprovedRequest(T.srvReq, 'IT', [
     { name: T.srvItem1, qty: 4, estUnitPriceMinor: 1_200_000 },
@@ -461,6 +514,7 @@ const log = (s) => console.log(s);
   await storyG();
   await storyH();
   await storyI();
+  await storyJ();
 
   // ---------- Бюджеты ----------
   const year = new Date().getFullYear();

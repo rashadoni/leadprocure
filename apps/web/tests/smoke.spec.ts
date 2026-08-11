@@ -58,7 +58,13 @@ test.describe('buyer panel', () => {
   // Fields are addressed by data-testid, not by position: the old `form > input` /
   // `.row > div:nth-child(n)` selectors matched nothing once the form grew a field, and a
   // selector that silently stops matching is worse than no test.
+  // This is the only test that writes. Against a deployed stand that means leaving a
+  // department and a draft request behind in someone's demo data, so it runs only on a
+  // local stack unless the caller opts in with SMOKE_ALLOW_WRITES=1.
   test('creating a draft request works through the UI, including its department', async () => {
+    const remote = !!process.env.BASE_URL && !/localhost|127\.0\.0\.1/.test(process.env.BASE_URL);
+    test.skip(remote && !process.env.SMOKE_ALLOW_WRITES,
+      'writes disabled against a remote stand — set SMOKE_ALLOW_WRITES=1 to allow');
     // Fixed code, created once: a per-run code would pile up departments in the dev stand.
     const code = 'PW-SMOKE';
     await page.goto('/buyer/settings');

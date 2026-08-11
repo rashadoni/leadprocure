@@ -12,7 +12,10 @@ const ctx = await b.newContext({ viewport: { width: 1280, height: 720 } });
 await ctx.addInitScript(() => localStorage.setItem('lp_lang', 'az'));
 const p = await ctx.newPage();
 await p.goto(`${BASE}/login`);
-await p.fill('input[type=email]', 'admin@acme.test');
+// Supplier sections need the supplier account: PROBE_USER=sup (or a full e-mail).
+const USER = process.env.PROBE_USER === 'sup' ? 'seller@supply-one.test'
+  : process.env.PROBE_USER || 'admin@acme.test';
+await p.fill('input[type=email]', USER);
 await p.fill('input[type=password]', 'Passw0rd!');
 await p.click('form button.btn:not(.ghost):not([type=button])');
 await p.waitForURL(/\/(buyer|supplier)\//, { timeout: 20000 });
