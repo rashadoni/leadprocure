@@ -165,6 +165,15 @@ export default function Budgets() {
     act(id, action, { reason: reason.trim() });
   };
 
+  // Drill-down: the documents behind a number, opened inline under the budget row. A
+  // controller's first question about any total is "made of what?".
+  const [docs, setDocs] = useState<Record<string, any[]>>({});
+  const toggleDocs = async (id: string, kind?: 'committed' | 'actual') => {
+    if (docs[id]) { setDocs((d) => { const n = { ...d }; delete n[id]; return n; }); return; }
+    const { data } = await api.get(`/budgets/${id}/documents`, { params: kind ? { kind } : {} });
+    setDocs((d) => ({ ...d, [id]: data }));
+  };
+
   // Revision history, opened inline under the budget row.
   const [history, setHistory] = useState<Record<string, any[]>>({});
   const toggleHistory = async (id: string) => {
@@ -273,7 +282,7 @@ export default function Budgets() {
           <table>
             <thead><tr>
               <th>{t('department')}</th><th>{t('amount')}</th><th>{t('committed')}</th><th>{t('actual')}</th>
-              <th>{t('paid')}</th><th>{t('remaining')}</th><th style={{ width: 180 }}>{t('utilization')}</th>
+              <th>{t('paid')}</th><th>{t('remaining')}</th><th>{t('forecast')}</th><th style={{ width: 180 }}>{t('utilization')}</th>
             </tr></thead>
             <tbody>
               {depSummary.map((d) => {
@@ -287,6 +296,11 @@ export default function Budgets() {
                     {/* settlement of orders already counted as actual — shown beside, never summed in */}
                     <td className="hint" data-tip={t('paid_hint')}>{fmtMoney(d.paidMinor, d.currency)}</td>
                     <td className={over ? 'error' : ''}>{fmtMoney(d.remainingMinor, d.currency)}</td>
+                    {/* where the period lands at the current rate — the question that follows "how much is left" */}
+                    <td className={d.forecastOverMinor > 0 ? 'error' : 'hint'} data-tip={t('forecast_hint')}>
+                      {fmtMoney(d.forecastMinor, d.currency)}
+                      {d.forecastOverMinor > 0 && <span> · +{fmtMoney(d.forecastOverMinor, d.currency)}</span>}
+                    </td>
                     <td>
                       <div className="budget-bar">
                         <div className={`budget-fill ${over ? 'over' : ''}`} style={{ width: `${Math.min(100, d.utilizationPct)}%` }} />
@@ -335,8 +349,12 @@ export default function Budgets() {
                   <td data-tip={b.departmentName || undefined}>{b.departmentCode ?? t('bud_org_wide')}</td>
                   <td data-tip={`${b.periodStart} → ${b.periodEnd}`}>{b.periodLabel}</td>
                   <td>{fmtMoney(b.amountMinor, b.currency)}</td>
-                  <td data-tip={t('committed_hint')}>{fmtMoney(b.committedMinor, b.currency)}</td>
-                  <td data-tip={t('actual_hint')}>{fmtMoney(b.actualMinor, b.currency)}</td>
+                  <td data-tip={t('drill_hint')}>
+                    <button className="linklike" onClick={() => toggleDocs(b.id, 'committed')}>{fmtMoney(b.committedMinor, b.currency)}</button>
+                  </td>
+                  <td data-tip={t('drill_hint')}>
+                    <button className="linklike" onClick={() => toggleDocs(b.id, 'actual')}>{fmtMoney(b.actualMinor, b.currency)}</button>
+                  </td>
                   <td className={over ? 'error' : ''}>{fmtMoney(b.remainingMinor, b.currency)}</td>
                   <td>
                     <div className="budget-bar">
@@ -376,6 +394,34 @@ export default function Budgets() {
                     </td>
                   )}
                 </tr>
+                {docs[b.id] && (
+                  <tr>
+                    <td colSpan={isAdmin ? 11 : 10} style={{ background: 'rgba(4,120,87,0.04)' }}>
+                      <b>{t('drill_title')}</b>
+                      {docs[b.id].length === 0 && <div className="hint">—</div>}
+                      {docs[b.id].length > 0 && (
+                        <table style={{ margin: '6px 0' }}>
+                          <thead><tr>
+                            <th>#</th><th>{t('title')}</th><th>{t('category')}</th><th>{t('department')}</th>
+                            <th>{t('date')}</th><th>{t('amount')}</th>
+                          </tr></thead>
+                          <tbody>
+                            {docs[b.id].map((d: any) => (
+                              <tr key={`${d.kind}-${d.id}`}>
+                                <td>{d.docNo}</td>
+                                <td>{d.title ?? t('bud_calloff')}</td>
+                                <td>{d.category ?? '—'}</td>
+                                <td>{d.departmentCode ?? '—'}</td>
+                                <td className="hint">{fmtDate(d.datedAt)}</td>
+                                <td>{fmtMoney(d.amountMinor, b.currency)}<span className="hint"> · {t(`drill_${d.bucket}`)}</span></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </td>
+                  </tr>
+                )}
                 {history[b.id] && (
                   <tr>
                     <td colSpan={isAdmin ? 11 : 10} style={{ background: 'rgba(79,140,255,0.05)' }}>

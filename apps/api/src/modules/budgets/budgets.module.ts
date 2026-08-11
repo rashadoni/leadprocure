@@ -513,6 +513,12 @@ export class BudgetsService {
         // month five" is the thing finance wants to catch, and a bare utilization figure
         // never says it — 80% is fine in November and alarming in May.
         const elapsedPct = elapsedShare(d.periodFrom, d.periodTo, today);
+        // Where this ends up if nothing changes. Pace answers "are we ahead?"; the forecast
+        // answers the question that actually follows — "and what does that mean in money by
+        // the end of the period?". Straight run-rate: spend so far, extrapolated over the
+        // share of the period still to run. Meaningless before the period starts, so it
+        // falls back to the plan rather than dividing by zero.
+        const forecastMinor = elapsedPct > 0 ? Math.round((used / elapsedPct) * 100) : d.amountMinor;
         return {
           ...d,
           usedMinor: used,
@@ -521,6 +527,9 @@ export class BudgetsService {
           elapsedPct,
           // positive = burning faster than the calendar
           paceDeltaPct: Math.round((utilizationPct - elapsedPct) * 10) / 10,
+          forecastMinor,
+          forecastPct: d.amountMinor > 0 ? Math.round((forecastMinor / d.amountMinor) * 1000) / 10 : 0,
+          forecastOverMinor: Math.max(0, forecastMinor - d.amountMinor),
         };
       })
       .sort((a, b) => (a.departmentCode ?? '').localeCompare(b.departmentCode ?? ''));
@@ -773,6 +782,47 @@ export class BudgetsService {
       throw new ConflictException(`Budget is ${b.status}; expected ${allowed.join(' or ')}`);
     }
     return b;
+  }
+
+  // ---------- drill-down ----------
+  //
+  // The single biggest gap a controller hits: a budget shows "148 030 committed" and there
+  // is no way to ask WHICH documents make that up. Every number on the page now opens into
+  // the papers behind it, using the same matching rule the totals were built from — so the
+  // list can never disagree with the figure it explains.
+  async documents(budgetId: string, kind: 'committed' | 'actual' | 'all' = 'all') {
+    const rows = await this.rc.manager.query(
+      `WITH ${this.MATCHED_CTE}
+       SELECT 'REQUEST' AS kind, m.id, m.request_no AS doc_no, m.title, m.category,
+              m.estimated_total_minor AS amount_minor, m.approved_at AS dated_at,
+              m.has_order, m.actual_minor, d.code AS department_code, NULL::text AS status
+       FROM matched m
+       LEFT JOIN departments d ON d.id = m.department_id
+       WHERE m.budget_id = $1
+       UNION ALL
+       SELECT 'ORDER', o.id, o.po_no, NULL, NULL, o.total_minor, o.spent_at,
+              true, o.total_minor, d.code, NULL
+       FROM matched_orders o
+       LEFT JOIN departments d ON d.id = o.department_id
+       WHERE o.budget_id = $1
+       ORDER BY dated_at DESC`,
+      [budgetId],
+    );
+    return rows
+      .map((r: any) => ({
+        kind: r.kind,
+        id: r.id,
+        docNo: r.doc_no,
+        title: r.title,
+        category: r.category === '*' ? null : r.category,
+        departmentCode: r.department_code ?? null,
+        datedAt: r.dated_at,
+        // A request that already turned into an order contributes its ORDER value; the
+        // estimate stops counting, exactly as the totals do it.
+        bucket: r.kind === 'ORDER' || r.has_order ? 'actual' : 'committed',
+        amountMinor: r.kind === 'ORDER' || r.has_order ? Number(r.actual_minor) : Number(r.amount_minor),
+      }))
+      .filter((r: any) => kind === 'all' || r.bucket === kind);
   }
 
   async submit(id: string, auth: AccessTokenPayload) {
@@ -1068,6 +1118,13 @@ export class BudgetsController {
   @Roles('BUYER_ADMIN', 'BUYER_FINANCE', 'BUYER_USER')
   update(@Param('id') id: string, @Body() dto: UpsertBudgetDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.budgets.update(id, dto, auth);
+  }
+
+  // What makes up this budget's numbers — ?kind=committed|actual narrows it.
+  @Get(':id/documents')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_FINANCE', 'BUYER_USER')
+  documents(@Param('id') id: string, @Query('kind') kind?: 'committed' | 'actual') {
+    return this.budgets.documents(id, kind ?? 'all');
   }
 
   @Get(':id/revisions')

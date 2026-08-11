@@ -159,6 +159,36 @@ describe('budgets & commitment control (API e2e)', () => {
     await http().post('/budgets').set(...bearer(buyerA)).send(body).expect(409);
   });
 
+  // ---------- drill-down and forecast ----------
+
+  it('every number opens into the documents behind it', async () => {
+    const dep = (await http().post('/departments').set(...bearer(buyerA)).send({ code: `DRILL-${tag}` }).expect(201)).body;
+    const b = (await mkBudget({ name: `Drill ${tag}`, category: 'DRILL', departmentId: dep.id, periodYear: YEAR, amountMinor: 500_000 })).body;
+    await approveRequest(buyerA, 'DRILL', 120_000, dep.id);
+    await approveRequest(buyerA, 'DRILL', 30_000, dep.id);
+
+    const docs = (await http().get(`/budgets/${b.id}/documents`).set(...bearer(buyerA)).expect(200)).body;
+    expect(docs).toHaveLength(2);
+    expect(docs.every((d: any) => d.kind === 'REQUEST' && d.bucket === 'committed')).toBe(true);
+
+    // the list adds up to the figure it explains — that is the whole point
+    const total = docs.reduce((sum: number, d: any) => sum + d.amountMinor, 0);
+    const live = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.id === b.id);
+    expect(total).toBe(live.committedMinor);
+
+    const onlyActual = (await http().get(`/budgets/${b.id}/documents?kind=actual`).set(...bearer(buyerA)).expect(200)).body;
+    expect(onlyActual).toHaveLength(0);
+  });
+
+  it('the rollup forecasts where the period ends up at the current rate', async () => {
+    const rows = (await http().get('/budgets/rollup?current=1').set(...bearer(buyerA)).expect(200)).body;
+    const row = rows.find((r: any) => r.usedMinor > 0);
+    expect(row).toBeTruthy();
+    // run-rate: spend so far extrapolated over the whole period
+    expect(row.forecastMinor).toBe(Math.round((row.usedMinor / row.elapsedPct) * 100));
+    expect(row.forecastOverMinor).toBe(Math.max(0, row.forecastMinor - row.amountMinor));
+  });
+
   // ---------- who may touch the money ----------
 
   it('a finance controller owns the budget side without running procurement', async () => {
