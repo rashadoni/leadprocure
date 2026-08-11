@@ -51,6 +51,7 @@ const TXT = {
     liveAucReq: 'Офисная бумага, годовой объём', liveAucEv: 'Аукцион: офисная бумага', liveAucItem: 'Бумага А4, пачка',
     budgetItDept: 'Бюджет отдела IT', budgetOpsQ: 'Операции — квартал', budgetOffice: 'Офисное снабжение',
     budgetTraining: 'Обучение',
+    catRows: [['Ручка шариковая, синяя', 'шт', 120, 50], ['Папка-регистратор 75 мм', 'шт', 480, 10], ['Степлер №24', 'шт', 850, 5], ['Скрепки 28 мм, 100 шт', 'уп', 95, 20], ['Маркер для доски', 'шт', 210, 10], ['Блок для записей 90×90', 'шт', 340, 10], ['Клейкая лента 48 мм', 'шт', 190, 12], ['Файл-вкладыш А4, 100 шт', 'уп', 720, 5]],
     justification: 'Лучшее соотношение цена/срок по взвешенной оценке',
   },
   az: {
@@ -78,6 +79,7 @@ const TXT = {
     liveAucReq: 'Ofis kağızı, illik həcm', liveAucEv: 'Auksion: ofis kağızı', liveAucItem: 'A4 kağız, top',
     budgetItDept: 'IT şöbəsi', budgetOpsQ: 'OPS rüblük', budgetOffice: 'Ofis təchizatı',
     budgetTraining: 'Tədris',
+    catRows: [['Diyircəkli qələm, mavi', 'ədəd', 120, 50], ['Registrator qovluğu 75 mm', 'ədəd', 480, 10], ['Stepler №24', 'ədəd', 850, 5], ['Sancaq 28 mm, 100 ədəd', 'paket', 95, 20], ['Lövhə üçün marker', 'ədəd', 210, 10], ['Qeyd bloku 90×90', 'ədəd', 340, 10], ['Yapışqan lent 48 mm', 'ədəd', 190, 12], ['A4 fayl, 100 ədəd', 'paket', 720, 5]],
     justification: 'Çəkili qiymətləndirmə üzrə ən yaxşı qiymət/müddət nisbəti',
   },
   en: {
@@ -105,6 +107,7 @@ const TXT = {
     liveAucReq: 'Office paper, annual volume', liveAucEv: 'Auction: office paper', liveAucItem: 'A4 paper, ream',
     budgetItDept: 'IT department budget', budgetOpsQ: 'Operations — quarter', budgetOffice: 'Office supplies',
     budgetTraining: 'Training',
+    catRows: [['Ballpoint pen, blue', 'pcs', 120, 50], ['Lever arch file 75 mm', 'pcs', 480, 10], ['Stapler no. 24', 'pcs', 850, 5], ['Paper clips 28 mm, 100', 'pack', 95, 20], ['Whiteboard marker', 'pcs', 210, 10], ['Sticky notes 90×90', 'pcs', 340, 10], ['Packing tape 48 mm', 'pcs', 190, 12], ['A4 punched pockets, 100', 'pack', 720, 5]],
     justification: 'Best price / lead-time ratio by the weighted score',
   },
 };
@@ -553,6 +556,11 @@ const log = (s) => console.log(s);
   const cat = await post('/catalogs', buyer, { supplierOrgId: org1, title: T.catTitle });
   await post(`/catalogs/${cat.id}/items`, buyer, { name: T.catItem1, uom: T.uomReam, unitPriceMinor: 650, moq: 10 });
   await post(`/catalogs/${cat.id}/items`, buyer, { name: T.catItem2, uom: T.uomPcs, unitPriceMinor: 9_500, moq: 1 });
+  // A price list of two lines is not a price list: the page has nothing to scroll and reads
+  // as an empty section. Ten lines is the smallest set that looks like a real catalogue.
+  for (const [name, uom, unitPriceMinor, moq] of T.catRows) {
+    await post(`/catalogs/${cat.id}/items`, buyer, { name, uom, unitPriceMinor, moq });
+  }
   await post(`/catalogs/${cat.id}/activate`, buyer);
   const catDet = await get(`/catalogs/${cat.id}`, buyer);
   await post(`/catalogs/${cat.id}/order`, buyer, { items: [{ catalogItemId: catDet.items[0].id, qty: 20 }] });
