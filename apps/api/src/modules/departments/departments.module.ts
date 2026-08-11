@@ -9,7 +9,11 @@ import { AuditService } from '../../common/audit/audit.service';
 
 class UpsertDepartmentDto {
   // A short, stable code (letters/digits/-/_) — this is what requests and budgets point at.
-  @IsString() @Matches(/^[\w-]{1,40}$/, { message: 'code: 1–40 chars, letters/digits/-/_' })
+  // \w is ASCII-only, so "MƏRKƏZ" and "TƏCHİZAT" were rejected — unusable codes in the one
+  // language this product ships in. Unicode letters and digits are allowed; spaces and
+  // punctuation still are not, because the code is a short stable key, not a title.
+  @IsString()
+  @Matches(/^[\p{L}\p{N}_-]{1,40}$/u, { message: 'code: 1–40 chars, letters/digits/-/_' })
   code!: string;
   @IsOptional() @IsString() name?: string;
   @IsOptional() @IsUUID() parentId?: string | null;

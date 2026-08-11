@@ -43,12 +43,20 @@ describe('departments (API e2e)', () => {
     await app.close();
   });
 
+  // The product ships in Azerbaijani; a code validator that only accepts ASCII makes the
+  // natural codes unusable.
+  it('accepts Azerbaijani letters in a code, still rejects spaces and punctuation', async () => {
+    await http().post('/departments').set(...bearer(buyerA)).send({ code: `MƏRKƏZ-${tag}`, name: 'Baş ofis' }).expect(201);
+    await http().post('/departments').set(...bearer(buyerA)).send({ code: `TƏCHİZAT-${tag}` }).expect(201);
+    await http().post('/departments').set(...bearer(buyerA)).send({ code: 'iki söz' }).expect(400);
+  });
+
   it('creates, lists and rejects a malformed code', async () => {
     await http().post('/departments').set(...bearer(buyerA)).send({ code: 'IT', name: 'IT department' }).expect(201);
     await http().post('/departments').set(...bearer(buyerA)).send({ code: 'HR' }).expect(201);
     await http().post('/departments').set(...bearer(buyerA)).send({ code: 'bad code!' }).expect(400);
     const list = await http().get('/departments').set(...bearer(buyerA)).expect(200);
-    expect(list.body.map((d: any) => d.code).sort()).toEqual(['HR', 'IT']);
+    expect(list.body.map((d: any) => d.code)).toEqual(expect.arrayContaining(['HR', 'IT']));
   });
 
   it('a duplicate code is a clean 409, not a 500', async () => {
