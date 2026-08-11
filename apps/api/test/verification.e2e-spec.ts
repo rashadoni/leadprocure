@@ -57,6 +57,9 @@ describe('supplier verification (KYC)', () => {
   it('buyer sees the case + doc; foreign buyer does not', async () => {
     const asBuyer = await http().get(`/verification/cases/${caseId}`).set(...bearer(buyer)).expect(200);
     expect(asBuyer.body.documents).toHaveLength(1);
+    // The card is headed by whose dossier this is — the drill-down used to drop both names.
+    expect(asBuyer.body.supplier_name).toBeTruthy();
+    expect(asBuyer.body.buyer_name).toBeTruthy();
     await http().get(`/verification/cases/${caseId}`).set(...bearer(buyer2)).expect(404);
     const list2 = await http().get('/verification/cases').set(...bearer(buyer2)).expect(200);
     expect(list2.body.map((c: any) => c.id)).not.toContain(caseId);

@@ -15,6 +15,7 @@
 //   story-A deadline via `docker exec psql`; if unavailable, story A stays OPEN.
 
 import { execSync } from 'child_process';
+import { createHash } from 'crypto';
 
 const API = process.argv[2] ?? 'http://localhost:3000';
 const PG = process.env.DEMO_PG_CONTAINER ?? 'leadprocure-prod-postgres-1';
@@ -44,6 +45,7 @@ const TXT = {
     invBadReq: 'Резервные диски для серверов', invBadItem: 'Диск SSD 480 ГБ',
     invPayReq: 'Стеллажи для склада', invPayItem: 'Стеллаж металлический',
     shipCustoms: 'Ожидает таможенного оформления', shipException: 'Повреждение упаковки, составлен акт',
+    verOk: 'ИНН и банковские реквизиты сверены, лицензия действует до конца года.',
     justification: 'Лучшее соотношение цена/срок по взвешенной оценке',
   },
   az: {
@@ -65,6 +67,7 @@ const TXT = {
     invBadReq: 'Serverlər üçün ehtiyat disklər', invBadItem: 'SSD disk 480 GB',
     invPayReq: 'Anbar üçün rəf sistemi', invPayItem: 'Metal rəf',
     shipCustoms: 'Gömrük rəsmiləşdirilməsi gözlənilir', shipException: 'Qablaşdırma zədəsi, akt tərtib edildi',
+    verOk: 'VÖEN və bank rekvizitləri yoxlanıldı, lisenziya ilin sonuna qədər etibarlıdır.',
     justification: 'Çəkili qiymətləndirmə üzrə ən yaxşı qiymət/müddət nisbəti',
   },
   en: {
@@ -86,6 +89,7 @@ const TXT = {
     invBadReq: 'Spare disks for the servers', invBadItem: 'SSD disk 480 GB',
     invPayReq: 'Warehouse racking', invPayItem: 'Steel rack',
     shipCustoms: 'Waiting for customs clearance', shipException: 'Packaging damaged, a report was filed',
+    verOk: 'Tax ID and bank details checked; the licence is valid to the year end.',
     justification: 'Best price / lead-time ratio by the weighted score',
   },
 };
@@ -288,6 +292,51 @@ const log = (s) => console.log(s);
   };
   if (process.env.DEMO_ONLY === 'H') { await storyH(); log('\nDone (только доставки).'); return; }
 
+  // ---------- I. Верификация: досье поставщика с настоящими документами ----------
+  // Документы кладутся в хранилище через presign + PUT, как это делает браузер, — иначе
+  // на экране остаётся пустой кейс, и раздел нечего показывать.
+  const storyI = async () => {
+    const pdf = (title) => Buffer.from(
+      `%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n` +
+      `3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 120]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n` +
+      `4 0 obj<</Length 60>>stream\nBT /F1 14 Tf 20 60 Td (${title}) Tj ET\nendstream endobj\n` +
+      `5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n`,
+    );
+    const upload = async (caseId, token, docType, filename) => {
+      const body = pdf(`${docType} — demo document`);
+      const { uploadUrl, storageKey } = await post('/verification/presign', token, { filename, mime: 'application/pdf' });
+      const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'content-type': 'application/pdf' }, body });
+      if (!put.ok) throw new Error(`upload ${filename} → ${put.status}`);
+      await post(`/verification/cases/${caseId}/documents`, token, {
+        docType, storageKey, filename, sha256: createHash('sha256').update(body).digest('hex'),
+      });
+    };
+    const caseFor = async (orgId) => {
+      const open = (await get('/verification/cases', buyer)).find((c) => c.supplier_org_id === orgId);
+      return open ?? await post('/verification/cases', buyer, { supplierOrgId: orgId });
+    };
+
+    // Baku Metal: досье собрано, решение за закупщиком.
+    const c2 = await caseFor(org2);
+    if (!c2.doc_count) {
+      for (const [type, file] of [['VOEN', 'voen-baku-metal.pdf'], ['LICENSE', 'lisenziya.pdf'], ['BANK', 'bank-rekvizitleri.pdf']]) {
+        await upload(c2.id, sup2, type, file);
+      }
+    }
+    // Supply One: досье проверено и принято — с письменным заключением.
+    const c1 = await caseFor(org1);
+    if (!c1.doc_count) {
+      for (const [type, file] of [['VOEN', 'voen-supply-one.pdf'], ['INSURANCE', 'sigorta.pdf']]) {
+        await upload(c1.id, sup1, type, file);
+      }
+    }
+    // Решение переписывается всегда: при пересеве на другом языке заключение должно
+    // говорить на языке стенда, а не остаться от прошлого прогона.
+    await post(`/verification/cases/${c1.id}/decide`, buyer, { status: 'APPROVED', notes: T.verOk });
+    log('✓ I: верификация — досье Baku Metal ждёт решения, Supply One проверен и принят');
+  };
+  if (process.env.DEMO_ONLY === 'I') { await storyI(); log('\nDone (только верификация).'); return; }
+
   // ---------- A. Полный цикл до оплаты ----------
   const reqA = await mkApprovedRequest(T.srvReq, 'IT', [
     { name: T.srvItem1, qty: 4, estUnitPriceMinor: 1_200_000 },
@@ -411,6 +460,7 @@ const log = (s) => console.log(s);
 
   await storyG();
   await storyH();
+  await storyI();
 
   // ---------- Бюджеты ----------
   const year = new Date().getFullYear();

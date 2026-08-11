@@ -53,8 +53,19 @@ export class VerificationService {
     );
   }
 
+  // The party names come along: the drill-down card is headed by whose dossier this is,
+  // and without the join it rendered a status badge over an empty title.
   async getCase(id: string) {
-    const c = (await this.rc.manager.query(`SELECT * FROM supplier_verification_cases WHERE id = $1`, [id]))[0];
+    const c = (
+      await this.rc.manager.query(
+        `SELECT c.*, ob.legal_name AS buyer_name, os.legal_name AS supplier_name
+         FROM supplier_verification_cases c
+         JOIN organizations ob ON ob.id = c.buyer_org_id
+         JOIN organizations os ON os.id = c.supplier_org_id
+         WHERE c.id = $1`,
+        [id],
+      )
+    )[0];
     if (!c) throw new NotFoundException('Case not found');
     const documents = await this.rc.manager.query(
       `SELECT id, doc_type, filename, sha256, status, created_at FROM supplier_verification_documents WHERE case_id = $1 ORDER BY created_at`,

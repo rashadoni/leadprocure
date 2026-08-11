@@ -76,7 +76,14 @@ export default function Verification() {
           {c.documents.map((d: any) => (
             <div key={d.id} style={{ fontSize: 13, padding: '3px 0' }}>
               <span className="badge INVITED">{d.doc_type}</span>{' '}
-              <a href="#" onClick={(e) => { e.preventDefault(); download(d.id); }}>{d.filename}</a>
+              <a href="#" onClick={(e) => { e.preventDefault(); download(d.id); }}>{d.filename}</a>{' '}
+              {/* The stored fingerprint, shown: an auditor asks "is this the file that was
+                  uploaded?", and the answer has to be visible, not merely kept in a column. */}
+              {d.sha256 && (
+                <span className="hint" data-tip={t('tip_doc_hash')} style={{ fontFamily: 'monospace' }}>
+                  🔒 {String(d.sha256).slice(0, 12)}
+                </span>
+              )}
             </div>
           ))}
           {!isBuyer && (

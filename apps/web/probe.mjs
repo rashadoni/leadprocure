@@ -19,7 +19,22 @@ await p.waitForURL(/\/(buyer|supplier)\//, { timeout: 20000 });
 await p.goto(`${BASE}${PATH}`);
 await p.waitForTimeout(1800);
 
-for (const sel of SELECTORS) {
+// A selector prefixed with "!" is clicked instead of reported — several sections only
+// reveal what a scene points at after a row is expanded, and a probe that cannot open
+// them proves nothing.
+for (const raw of SELECTORS) {
+  if (raw.startsWith('!')) {
+    const sel = raw.slice(1);
+    try {
+      await p.locator(sel).first().click({ timeout: 5000 });
+      await p.waitForTimeout(1200);
+      console.log(`⇢  клик  ${sel}`);
+    } catch (e) {
+      console.log(`✗  клик не прошёл  ${sel}  (${String(e.message).split('\n')[0].slice(0, 60)})`);
+    }
+    continue;
+  }
+  const sel = raw;
   const loc = p.locator(sel);
   const n = await loc.count();
   let vis = false;

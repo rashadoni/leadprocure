@@ -138,16 +138,20 @@ async function fillAt(page, sel, text, delay = 65) {
   await loc.pressSequentially(text, { delay });
   await P(300);
 }
+// Both bound their Playwright call: the default is 30s, and a swallowed timeout burns the
+// whole scene as dead air. moveToLoc has already put the cursor there, so a hover that
+// cannot pass the actionability check (typically the previous tooltip covering the target)
+// still looks right on screen — it just must not cost half a minute.
 async function hoverTip(page, sel, hold = 1500) {
   const loc = L(page, sel);
   if (!(await moveToLoc(page, loc))) return;
-  await loc.hover().catch(() => {});
+  await loc.hover({ timeout: 2500 }).catch(() => {});
   await P(hold); // let the CSS tooltip fade in and be readable
 }
 async function clickAt(page, sel, waitMs = 900) {
   const loc = L(page, sel);
   if (!(await moveToLoc(page, loc))) return;
-  await loc.click().catch(() => {});
+  await loc.click({ timeout: 5000 }).catch(() => {});
   await P(waitMs);
 }
 
@@ -533,18 +537,26 @@ const SECTIONS = {
     { az: 'Beləliklə reyestr sadə sualı həll edir: kim sizin pulunuza yaxın buraxılır. Hər ad orada təsadüfən deyil, qərarla görünür — və bu qərar həmişə izlənilir.',
       do: async (p, l, h) => { await h.moveTo(p.locator('tbody tr').first()); await h.holdUntil(0.35); await h.hover(p.locator('button[data-tip]').first(), 800); await h.holdUntil(0.7); await h.moveTo('h1'); await h.holdUntil(0.9); await h.moveTo('table'); } },
   ]},
+  // Verification: a supplier dossier. Two cases on the stand — one waiting for a decision
+  // with three documents, one already approved with a written conclusion.
   'buyer-verification': { role: 'buyer', path: '/buyer/verification', scenes: [
-    { ru: 'Верификация — проверка поставщика перед допуском к закупкам. Вы открываете кейс, поставщик загружает документы: налоговый номер, лицензии, реквизиты.',
-      az: 'Yoxlama — təchizatçının satınalmaya buraxılışdan əvvəl yoxlanması. Siz iş açırsınız, təchizatçı sənədləri yükləyir: vergi nömrəsi, lisenziyalar, rekvizitlər.',
-      en: 'Verification — checking a supplier before admitting them to sourcing. You open a case, the supplier uploads documents: tax number, licences, bank details.' },
-    { ru: 'Вы проверяете каждый документ и выносите решение. Одобрение автоматически повышает статус поставщика в реестре.',
-      az: 'Siz hər sənədi yoxlayıb qərar verirsiniz. Təsdiq təchizatçının reyestrdəki statusunu avtomatik yüksəldir.',
-      en: 'You review each document and make a decision. Approval automatically raises the supplier’s status in the registry.',
-      do: (p) => slowScroll(p, 3) },
+    { az: 'Yoxlama bölməsi. Bu, təchizatçının sənəd dosyesidir. Siz iş açırsınız, təchizatçı sənədləri özü yükləyir, siz isə baxıb qərar verirsiniz. Yəni «bu şirkət kimdir» sualının cavabı söz yox, sənəd olur.',
+      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.4); await h.moveTo('table'); await h.holdUntil(0.95); } },
+    { az: 'Siyahıda üç sütun var: təchizatçı, işin statusu və yüklənmiş sənədlərin sayı. Say sıfırdırsa, hələ gözləmək lazımdır — qərar verməyə əsas yoxdur.',
+      do: async (p, l, h) => { const r = p.locator('table tbody tr'); await h.moveTo(r.nth(0).locator('td').nth(1)); await h.holdUntil(0.35); await h.moveTo(r.nth(1).locator('td').nth(1)); await h.holdUntil(0.6); await h.moveTo(r.nth(1).locator('td').nth(2)); await h.holdUntil(0.95); } },
+    { az: 'Qərar gözləyən işi açaq. Adına klikləyirik və altda dosye açılır: hər sənədin növü və faylın adı görünür.',
+      do: async (p, l, h) => { await h.click('table tbody tr:has-text("Baku Metal") a'); await h.holdUntil(0.5); await h.scrollTo('.card:has(h3:has-text("Baku Metal"))'); await h.moveTo('.card:has(h3:has-text("Baku Metal")) .badge'); await h.holdUntil(0.95); } },
+    { az: 'Sənəd növləri təsadüfi deyil: vergi nömrəsi, fəaliyyət lisenziyası, bank rekvizitləri və sığorta. Faylın adına klikləyəndə sənəd açılır — yəni qərar sənədin özünə baxaraq verilir.',
+      do: async (p, l, h) => { const c = p.locator('.card:has(h3:has-text("Baku Metal"))'); await h.moveTo(c.locator('a').nth(0)); await h.holdUntil(0.3); await h.moveTo('table'); await h.holdUntil(0.5); await h.moveTo(c.locator('a').nth(1)); await h.holdUntil(0.72); await h.moveTo(c.locator('a').nth(2)); await h.holdUntil(0.95); } },
+    { az: 'Hər faylın yanında kilid işarəsi və qısa kod var. Bu, faylın məzmununun barmaq izidir. Sənədi sonradan dəyişsələr, iz uyğun gəlməyəcək — yəni dosyeni səssizcə əvəzləmək mümkün deyil.',
+      do: async (p, l, h) => { const c = p.locator('.card:has(h3:has-text("Baku Metal"))'); await h.moveTo('table'); await h.holdUntil(0.2); await h.hover(c.locator('[data-tip]').first(), 900); await h.holdUntil(0.6); await h.hover(c.locator('[data-tip]').nth(1), 800); await h.holdUntil(0.95); } },
+    { az: 'Qərar düymələri aşağıdadır: təsdiq və imtina. Qərar dəyişilməz jurnala yazılır — kim, nə vaxt və hansı sənədlərə əsasən. Ona görə də bu bölmə audit zamanı ən çox soruşulan yerdir.',
+      do: async (p, l, h) => { const c = p.locator('.card:has(h3:has-text("Baku Metal"))'); await h.moveTo(c.locator('button.btn').first()); await h.holdUntil(0.35); await h.hover(c.locator('button.btn').first(), 900); await h.holdUntil(0.7); await h.hover(c.locator('button.btn').nth(1), 800); await h.holdUntil(0.95); } },
+    { az: 'İndi artıq təsdiqlənmiş işə baxaq. Burada qərar düymələri yoxdur — iş bağlanıb, statusu isə siyahıda dərhal görünür.',
+      do: async (p, l, h) => { await h.click('table tbody tr:has-text("Baku Metal") a'); await h.holdUntil(0.2); await h.click('table tbody tr:has-text("Supply One") a'); await h.holdUntil(0.5); await h.scrollTo('.card:has(h3:has-text("Supply One"))'); await h.moveTo('.card:has(h3:has-text("Supply One")) h3'); await h.holdUntil(0.72); await h.moveTo('.card:has(h3:has-text("Supply One")) .badge'); await h.holdUntil(0.95); } },
+    { az: 'Ən vacibi isə budur: yoxlama reyestrə bağlıdır. Yalnız təsdiqlənmiş təchizatçı birbaşa sifariş və kataloq ala bilər. Yəni bu bölmə sadəcə arxiv deyil — real girişi açan qapıdır.',
+      do: async (p, l, h) => { await h.moveTo('.card:has(h3:has-text("Supply One")) a'); await h.holdUntil(0.3); await h.moveTo(p.locator('table tbody tr').first().locator('.badge')); await h.holdUntil(0.55); await h.moveTo('a[href="/buyer/suppliers"]'); await h.holdUntil(0.78); await h.moveTo(p.locator('table tbody tr').nth(1).locator('.badge')); await h.holdUntil(0.95); } },
   ]},
-  // Settings: the rules the rest of the system obeys. Every card here changes how other
-  // sections behave, so the narration names the consequence, not the field. Scenes follow
-  // the page top-to-bottom — the first cut jumped between cards and read as restless.
   'buyer-settings': { role: 'buyer', path: '/buyer/settings', scenes: [
     { az: 'Parametrlər bölməsi. Burada məlumat yox, qaydalar yaşayır: kim nə edə bilər, hansı məbləğdən tender başlayır, büdcə həddi keçiləndə nə olur və sifarişi kim imzalayır. Hər kart digər bölmələrin davranışını dəyişir.',
       do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.4); await h.moveTo(p.locator('.card').nth(0)); await h.holdUntil(0.95); } },
@@ -749,6 +761,11 @@ async function login(ctx, email) {
           catch (e) { console.log(`  (${key}/${lang}: ${e.message.split('\n')[0]})`); }
           // hold the scene until its narration (plus a small tail) has fully played out
           const remain = startMs + scene.sec * 1000 + 700 - (Date.now() - t0);
+          // A scene whose actions outlast their narration leaves dead air. Say so here,
+          // by scene number — otherwise it is only found afterwards, as silence in ffmpeg.
+          if (remain < -1500) {
+            console.log(`  ⏱ ${key}/${lang} сцена ${offsets.length}: действия дольше озвучки на ${Math.round(-remain / 1000)}с`);
+          }
           if (remain > 0) await P(remain);
         }
         await P(1200);
