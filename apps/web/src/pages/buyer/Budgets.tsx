@@ -269,7 +269,11 @@ export default function Budgets() {
                 const over = d.remainingMinor < 0;
                 return (
                   <tr key={d.departmentId ?? 'org'}>
-                    <td><b>{d.departmentCode ?? t('bud_org_wide')}</b></td>
+                    <td style={{ paddingLeft: 10 + (d.depth ?? 0) * 18 }}>
+                      <b>{d.departmentCode ?? t('bud_org_wide')}</b>
+                      {/* a parent's figures include its units — say so, or the totals look wrong */}
+                      {d.includesChildren && <span className="hint" data-tip={t('bud_rollup_tip')}> ⤵</span>}
+                    </td>
                     <td>{fmtMoney(d.amountMinor, d.currency)}</td>
                     <td>{fmtMoney(d.committedMinor, d.currency)}</td>
                     <td>{fmtMoney(d.actualMinor, d.currency)}</td>
@@ -310,6 +314,25 @@ export default function Budgets() {
             {deps.map((d) => <option key={d.id} value={d.id}>{d.code}</option>)}
           </select>
           <button className="btn ghost small" onClick={exportCsv}>⤓ CSV</button>
+          {isAdmin && (
+            <>
+              {/* Bulk entry: thirty department budgets through a one-row form is what pushes
+                  finance back into a spreadsheet. Everything lands as a draft. */}
+              <button className="btn ghost small" data-tip={t('bud_import_tip')}
+                onClick={() => document.getElementById('bud-import')?.click()}>⤒ {t('bud_import')}</button>
+              <input id="bud-import" type="file" accept=".csv,text/csv" style={{ display: 'none' }}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!file) return;
+                  try {
+                    const res = await api.post('/budgets/import', { csv: await file.text() });
+                    alert(`${t('bud_imported')}: ${res.data.imported}`);
+                    load();
+                  } catch (err: any) { alert(err.response?.data?.message?.toString() ?? 'Error'); }
+                }} />
+            </>
+          )}
         </div>
         <table>
           <thead><tr>

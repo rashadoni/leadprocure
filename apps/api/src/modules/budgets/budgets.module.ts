@@ -45,6 +45,10 @@ class ReasonDto {
   @IsString() @MinLength(3) reason!: string;
 }
 
+class ImportCsvDto {
+  @IsString() @MinLength(5) csv!: string;
+}
+
 class RolloverDto {
   @IsUUID() sourceBudgetId!: string;
 }
@@ -272,6 +276,7 @@ export class BudgetsService {
       `WITH ${this.MATCHED_CTE}
        SELECT b.id, b.name, b.category, b.department_id, b.period_type, b.status,
               b.submitted_at, b.approved_at, b.closed_at,
+              b.closed_committed_minor, b.closed_actual_minor,
               b.period_start, b.period_end, b.amount_minor, b.currency, b.created_at,
               d.code AS department_code, d.name AS department_name,
               COALESCE(c.committed, 0) AS committed_minor,
@@ -477,21 +482,48 @@ export class BudgetsService {
     } = {},
   ) {
     const budgets = await this.list(filter);
+    // Departments form a tree, and a parent that ignores its children is not a rollup. Fold
+    // every child's figures into its parent as well as reporting the child itself, so a
+    // division shows what the division spends — its own budgets plus its units'.
+    const tree: Array<{ id: string; parent_id: string | null; code: string }> =
+      await this.rc.manager.query(`SELECT id, parent_id, code FROM departments`);
+    const parentOf = new Map(tree.map((d) => [d.id, d.parent_id]));
+    const codeOf = new Map(tree.map((d) => [d.id, d.code]));
+    // every ancestor of a department, nearest first; cycles are impossible (a department
+    // cannot be its own parent) but the seen-set keeps a corrupted row from looping forever
+    const ancestors = (id: string | null): string[] => {
+      const out: string[] = [];
+      const seen = new Set<string>();
+      let cur = id ? parentOf.get(id) ?? null : null;
+      while (cur && !seen.has(cur)) { seen.add(cur); out.push(cur); cur = parentOf.get(cur) ?? null; }
+      return out;
+    };
+
     const byDep = new Map<string, any>();
-    for (const b of budgets) {
-      const key = b.departmentId ?? '';
+    const add = (key: string, b: any, rolledUp: boolean) => {
       const cur = byDep.get(key) ?? {
-        departmentId: b.departmentId, departmentCode: b.departmentCode,
+        departmentId: key || null,
+        departmentCode: key ? codeOf.get(key) ?? null : null,
+        // depth drives the indent in the UI; a rolled-up parent is marked so the reader
+        // knows its figures include the units beneath it
+        depth: ancestors(key || null).length,
+        includesChildren: false,
         currency: b.currency, amountMinor: 0, committedMinor: 0, actualMinor: 0, paidMinor: 0,
         periodFrom: b.periodStart, periodTo: b.periodEnd,
       };
       cur.amountMinor += b.amountMinor;
       cur.committedMinor += b.committedMinor;
       cur.actualMinor += b.actualMinor;
+      if (rolledUp) cur.includesChildren = true;
       // widest window the department's budgets cover — the span PAID is measured over
       if (b.periodStart < cur.periodFrom) cur.periodFrom = b.periodStart;
       if (b.periodEnd > cur.periodTo) cur.periodTo = b.periodEnd;
       byDep.set(key, cur);
+    };
+
+    for (const b of budgets) {
+      add(b.departmentId ?? '', b, false);
+      for (const anc of ancestors(b.departmentId)) add(anc, b, true);
     }
     if (!byDep.size) return [];
 
@@ -502,9 +534,12 @@ export class BudgetsService {
        GROUP BY i.department_id, i.currency`,
     );
     for (const row of paid) {
-      const cur = byDep.get(row.department_id ?? '');
-      // only AZN settles against an AZN budget; foreign invoices are reported elsewhere
-      if (cur && row.currency === cur.currency) cur.paidMinor += Number(row.paid);
+      // an invoice counts for its own department AND for everyone above it, like the plan
+      for (const key of [row.department_id ?? '', ...ancestors(row.department_id ?? null)]) {
+        const cur = byDep.get(key);
+        // only AZN settles against an AZN budget; foreign invoices are reported elsewhere
+        if (cur && row.currency === cur.currency) cur.paidMinor += Number(row.paid);
+      }
     }
 
     const today = iso(new Date());
@@ -535,7 +570,7 @@ export class BudgetsService {
           forecastOverMinor: Math.max(0, forecastMinor - d.amountMinor),
         };
       })
-      .sort((a, b) => (a.departmentCode ?? '').localeCompare(b.departmentCode ?? ''));
+      .sort((a, b) => (a.depth - b.depth) || (a.departmentCode ?? '').localeCompare(b.departmentCode ?? ''));
   }
 
   // Who sees which budgets. Admin, finance and approvers see the whole plan — that is the
@@ -576,8 +611,11 @@ export class BudgetsService {
 
   private shape(r: any) {
     const amount = Number(r.amount_minor);
-    const committed = Number(r.committed_minor);
-    const actual = Number(r.actual_minor ?? 0);
+    // A signed-off period reports what it was signed off AS. Budgets closed before the
+    // snapshot existed have none, and keep computing live rather than showing a zero.
+    const frozen = r.status === 'CLOSED' && r.closed_committed_minor != null;
+    const committed = frozen ? Number(r.closed_committed_minor) : Number(r.committed_minor);
+    const actual = frozen ? Number(r.closed_actual_minor ?? 0) : Number(r.actual_minor ?? 0);
     // Utilization is what the budget is actually carrying: orders placed plus estimates
     // not yet ordered.
     const used = committed + actual;
@@ -770,6 +808,82 @@ export class BudgetsService {
     return this.getOne(targetId);
   }
 
+  // Bulk entry. Exporting worked, importing did not — so standing up thirty department
+  // budgets meant thirty passes through a one-row form, which is the sort of chore that
+  // pushes finance back into a spreadsheet and out of the system.
+  //
+  // Everything lands as a DRAFT: an import must not be able to put money in force. Rows are
+  // validated as a set and the whole file is rejected on the first bad line, because a
+  // half-imported plan is worse than none — you cannot tell what is missing.
+  async importCsv(text: string, auth: AccessTokenPayload) {
+    const lines = text.replace(/^\ufeff/, '').split(/\r?\n/).filter((l) => l.trim());
+    if (!lines.length) throw new BadRequestException('The file is empty');
+    const sep = lines[0].includes(';') ? ';' : ',';
+    const head = lines[0].split(sep).map((h) => h.trim().toLowerCase().replace(/^"|"$/g, ''));
+    const need = ['name', 'amount'];
+    for (const col of need) {
+      if (!head.includes(col)) {
+        throw new BadRequestException(`Missing column "${col}". Expected: name, amount, department, category, periodtype, year, quarter, month, reason`);
+      }
+    }
+    const idx = (c: string) => head.indexOf(c);
+    const cell = (cols: string[], c: string) => (idx(c) >= 0 ? (cols[idx(c)] ?? '').trim().replace(/^"|"$/g, '') : '');
+
+    const deps = await this.rc.manager.query(`SELECT id, code FROM departments`);
+    const depByCode = new Map<string, string>(deps.map((d: any) => [String(d.code).toUpperCase(), d.id]));
+
+    const parsed: Array<{ dto: any; line: number }> = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(sep);
+      const line = i + 1;
+      const name = cell(cols, 'name');
+      if (!name) throw new BadRequestException(`Line ${line}: name is empty`);
+      const amount = cell(cols, 'amount').replace(/\s/g, '').replace(',', '.');
+      if (!/^\d+(\.\d{1,2})?$/.test(amount)) {
+        throw new BadRequestException(`Line ${line}: amount "${cell(cols, 'amount')}" is not a number`);
+      }
+      const depCode = cell(cols, 'department');
+      if (depCode && !depByCode.has(depCode.toUpperCase())) {
+        throw new BadRequestException(`Line ${line}: unknown department "${depCode}"`);
+      }
+      const type = (cell(cols, 'periodtype') || 'YEAR').toUpperCase();
+      if (!BUDGET_PERIOD_TYPES.includes(type as BudgetPeriodType)) {
+        throw new BadRequestException(`Line ${line}: period type "${type}" must be YEAR, QUARTER or MONTH`);
+      }
+      const year = Number(cell(cols, 'year') || new Date().getUTCFullYear());
+      if (!Number.isInteger(year) || year < 2000) throw new BadRequestException(`Line ${line}: bad year`);
+      const [whole = '0', frac = ''] = amount.split('.');
+      parsed.push({
+        line,
+        dto: {
+          name,
+          category: cell(cols, 'category') || '*',
+          departmentId: depCode ? depByCode.get(depCode.toUpperCase()) : undefined,
+          periodType: type as BudgetPeriodType,
+          periodYear: year,
+          periodQuarter: Number(cell(cols, 'quarter')) || undefined,
+          periodMonth: Number(cell(cols, 'month')) || undefined,
+          amountMinor: Number(whole) * 100 + Number((frac + '00').slice(0, 2)),
+          reason: cell(cols, 'reason') || 'Imported',
+        },
+      });
+    }
+    if (!parsed.length) throw new BadRequestException('No rows to import');
+
+    // create() already enforces scope, category and overlap rules; a failure aborts the
+    // request transaction, so a rejected file leaves nothing behind
+    const created = [];
+    for (const row of parsed) {
+      try {
+        created.push(await this.create(row.dto, auth));
+      } catch (e: any) {
+        throw new BadRequestException(`Line ${row.line}: ${e?.response?.message ?? e?.message ?? 'rejected'}`);
+      }
+    }
+    await this.audit.record('BUDGETS_IMPORTED', 'budget', auth.org_id, { count: created.length });
+    return { imported: created.length, budgets: created };
+  }
+
   // ---------- lifecycle ----------
   //
   // Mirrors the discipline a procurement request already had, on the document that commits
@@ -898,11 +1012,19 @@ export class BudgetsService {
     if (iso(new Date(b.period_end)) >= today) {
       throw new BadRequestException('The period has not ended yet — a budget can only be closed after its last day');
     }
+    // Freeze what the budget WAS at sign-off. Read the live figures first, then store them:
+    // from here on this budget reports the snapshot, so cancelling an old request or
+    // re-dating an order can no longer move a number finance has already signed.
+    const live = await this.getOne(id);
     await this.rc.manager.query(
-      `UPDATE budgets SET status='CLOSED', closed_by=$2, closed_at=now(), updated_at=now() WHERE id=$1`,
-      [id, auth.sub],
+      `UPDATE budgets SET status='CLOSED', closed_by=$2, closed_at=now(), updated_at=now(),
+         closed_committed_minor=$3, closed_actual_minor=$4
+       WHERE id=$1`,
+      [id, auth.sub, live.committedMinor, live.actualMinor],
     );
-    await this.audit.record('BUDGET_CLOSED', 'budget', id, { name: b.name });
+    await this.audit.record('BUDGET_CLOSED', 'budget', id, {
+      name: b.name, committed_minor: live.committedMinor, actual_minor: live.actualMinor,
+    });
     return this.getOne(id);
   }
 
@@ -911,7 +1033,9 @@ export class BudgetsService {
   async reopen(id: string, auth: AccessTokenPayload, reason: string) {
     const b = await this.requireStatus(id, ['CLOSED']);
     await this.rc.manager.query(
-      `UPDATE budgets SET status='APPROVED', closed_by=NULL, closed_at=NULL, updated_at=now() WHERE id=$1`,
+      `UPDATE budgets SET status='APPROVED', closed_by=NULL, closed_at=NULL, updated_at=now(),
+         closed_committed_minor=NULL, closed_actual_minor=NULL
+       WHERE id=$1`,
       [id],
     );
     await this.audit.record('BUDGET_REOPENED', 'budget', id, { name: b.name, reason, by: auth.sub });
@@ -952,6 +1076,7 @@ export class BudgetsService {
       `WITH ${this.MATCHED_CTE}
        SELECT b.id, b.name, b.category, b.department_id, b.period_type, b.status,
               b.submitted_at, b.approved_at, b.closed_at,
+              b.closed_committed_minor, b.closed_actual_minor,
               b.period_start, b.period_end, b.amount_minor, b.currency, b.created_at,
               d.code AS department_code, d.name AS department_name,
               COALESCE(c.committed, 0) AS committed_minor,
@@ -1090,6 +1215,14 @@ export class BudgetsController {
       to: current ? today : to || undefined,
       scopeDepartmentId: await this.budgets.scopeFor(auth),
     });
+  }
+
+  // Bulk-create drafts from a CSV. The body is the file's text, so curl and a file input
+  // work the same way.
+  @Post('import')
+  @Roles('BUYER_ADMIN', 'BUYER_FINANCE')
+  importCsv(@Body() body: ImportCsvDto, @CurrentUser() auth: AccessTokenPayload) {
+    return this.budgets.importCsv(body.csv, auth);
   }
 
   @Get('policy')

@@ -159,6 +159,70 @@ describe('budgets & commitment control (API e2e)', () => {
     await http().post('/budgets').set(...bearer(buyerA)).send(body).expect(409);
   });
 
+  it('closing freezes the numbers: later changes cannot move a signed-off period', async () => {
+    const past = (await mkBudget({
+      name: `Frozen period ${tag}`, category: 'FROZENP', periodType: 'MONTH', periodYear: YEAR - 1, periodMonth: 3, amountMinor: 500_000,
+    })).body;
+    const r = await approveRequest(buyerA, 'FROZENP', 120_000);
+    await db.query(`UPDATE procurement_requests SET approved_at = $2 WHERE id = $1`, [r.id, `${YEAR - 1}-03-10T10:00:00Z`]);
+
+    let b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.id === past.id);
+    expect(b.usedMinor).toBe(120_000);
+
+    await http().post(`/budgets/${past.id}/close`).set(...bearer(buyerA)).expect(201);
+
+    // the request is cancelled AFTER sign-off — live maths would drop the spend to zero
+    await http().post(`/requests/${r.id}/cancel`).set(...bearer(buyerA)).send({ reason: 'not needed after all' }).expect(201);
+
+    b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.id === past.id);
+    expect(b.status).toBe('CLOSED');
+    expect(b.usedMinor).toBe(120_000); // still what it was signed off as
+
+    // reopening makes it live again, and now the cancellation shows
+    await http().post(`/budgets/${past.id}/reopen`).set(...bearer(buyerA)).send({ reason: 'recount' }).expect(201);
+    b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.id === past.id);
+    expect(b.usedMinor).toBe(0);
+  });
+
+  // ---------- bulk entry ----------
+
+  it('imports budgets from CSV as drafts, and rejects a bad file whole', async () => {
+    const dep = (await http().post('/departments').set(...bearer(buyerA)).send({ code: `IMP-${tag}` }).expect(201)).body;
+    expect(dep.code).toBe(`IMP-${tag}`);
+
+    const good = [
+      'name;amount;department;category;periodtype;year;quarter;reason',
+      `Import A ${tag};1200.50;IMP-${tag};IMPCAT1-${tag};YEAR;${YEAR};;plan`,
+      `Import B ${tag};900;IMP-${tag};IMPCAT2-${tag};QUARTER;${YEAR};2;plan`,
+    ].join('\n');
+    const res = await http().post('/budgets/import').set(...bearer(buyerA)).send({ csv: good }).expect(201);
+    expect(res.body.imported).toBe(2);
+
+    // an import may never put money in force — everything arrives as a draft
+    const list = (await http().get('/budgets').set(...bearer(buyerA))).body;
+    const a = list.find((b: any) => b.name === `Import A ${tag}`);
+    expect(a.status).toBe('DRAFT');
+    expect(a.amountMinor).toBe(120_050); // 1200.50 parsed from digits, not through a float
+    expect(list.find((b: any) => b.name === `Import B ${tag}`).periodLabel).toBe(`${YEAR} Q2`);
+
+    // a file with one bad line imports NOTHING: a half-loaded plan hides what is missing
+    const bad = [
+      'name;amount;department;category;year',
+      `Bad one ${tag};500;IMP-${tag};BADCAT-${tag};${YEAR}`,
+      `Bad two ${tag};not-a-number;IMP-${tag};BADCAT2-${tag};${YEAR}`,
+    ].join('\n');
+    const err = await http().post('/budgets/import').set(...bearer(buyerA)).send({ csv: bad }).expect(400);
+    expect(String(err.body.message)).toContain('Line 3');
+    const after = (await http().get('/budgets').set(...bearer(buyerA))).body;
+    expect(after.find((b: any) => b.name === `Bad one ${tag}`)).toBeUndefined();
+  });
+
+  it('names an unknown department by line instead of failing obscurely', async () => {
+    const csv = ['name;amount;department', `Ghost ${tag};100;NOPE-${tag}`].join('\n');
+    const err = await http().post('/budgets/import').set(...bearer(buyerA)).send({ csv }).expect(400);
+    expect(String(err.body.message)).toContain(`NOPE-${tag}`);
+  });
+
   // ---------- drill-down and forecast ----------
 
   it('every number opens into the documents behind it', async () => {
@@ -187,6 +251,30 @@ describe('budgets & commitment control (API e2e)', () => {
     // run-rate: spend so far extrapolated over the whole period
     expect(row.forecastMinor).toBe(Math.round((row.usedMinor / row.elapsedPct) * 100));
     expect(row.forecastOverMinor).toBe(Math.max(0, row.forecastMinor - row.amountMinor));
+  });
+
+  it('a parent department rolls up what its units spend', async () => {
+    const div = (await http().post('/departments').set(...bearer(buyerA)).send({ code: `DIV-${tag}` }).expect(201)).body;
+    const unit = (await http().post('/departments').set(...bearer(buyerA))
+      .send({ code: `UNIT-${tag}`, parentId: div.id }).expect(201)).body;
+
+    await mkBudget({ name: `Div own ${tag}`, departmentId: div.id, category: `DIVC-${tag}`, periodYear: YEAR, amountMinor: 100_000 });
+    await mkBudget({ name: `Unit own ${tag}`, departmentId: unit.id, category: `UNITC-${tag}`, periodYear: YEAR, amountMinor: 40_000 });
+    await approveRequest(buyerA, `UNITC-${tag}`, 25_000, unit.id);
+
+    const rollup = (await http().get('/budgets/rollup').set(...bearer(buyerA)).expect(200)).body;
+    const parent = rollup.find((r: any) => r.departmentCode === `DIV-${tag}`);
+    const child = rollup.find((r: any) => r.departmentCode === `UNIT-${tag}`);
+
+    // the unit reports itself…
+    expect(child.amountMinor).toBe(40_000);
+    expect(child.usedMinor).toBe(25_000);
+    expect(child.includesChildren).toBe(false);
+    // …and the division reports its own plan PLUS the unit's
+    expect(parent.amountMinor).toBe(140_000);
+    expect(parent.usedMinor).toBe(25_000);
+    expect(parent.includesChildren).toBe(true);
+    expect(parent.depth).toBeLessThan(child.depth);
   });
 
   // ---------- who may touch the money ----------
