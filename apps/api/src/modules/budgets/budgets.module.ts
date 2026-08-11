@@ -36,6 +36,12 @@ class UpsertBudgetDto {
   @IsOptional() @IsString() reason?: string;
 }
 
+// Rejecting a plan and reopening a closed period both have to say why — those are the two
+// moments a controller will be asked to explain later.
+class ReasonDto {
+  @IsString() @MinLength(3) reason!: string;
+}
+
 class RolloverDto {
   @IsUUID() sourceBudgetId!: string;
 }
@@ -185,7 +191,8 @@ export class BudgetsService {
       LEFT JOIN LATERAL (
         SELECT b.id AS budget_id
         FROM budgets b
-        WHERE b.currency = pr.currency
+        WHERE b.status IN ('APPROVED','CLOSED')
+          AND b.currency = pr.currency
           AND pr.approved_at >= b.period_start::timestamptz
           AND pr.approved_at < (b.period_end + 1)::timestamptz
           AND (b.department_id IS NULL OR b.department_id = pr.department_id)
@@ -221,7 +228,8 @@ export class BudgetsService {
       LEFT JOIN LATERAL (
         SELECT b.id AS budget_id
         FROM budgets b
-        WHERE b.currency = o.currency
+        WHERE b.status IN ('APPROVED','CLOSED')
+          AND b.currency = o.currency
           AND b.category = '*'
           AND COALESCE(o.issued_at, o.created_at) >= b.period_start::timestamptz
           AND COALESCE(o.issued_at, o.created_at) < (b.period_end + 1)::timestamptz
@@ -259,7 +267,8 @@ export class BudgetsService {
   ) {
     const rows = await this.rc.manager.query(
       `WITH ${this.MATCHED_CTE}
-       SELECT b.id, b.name, b.category, b.department_id, b.period_type,
+       SELECT b.id, b.name, b.category, b.department_id, b.period_type, b.status,
+              b.submitted_at, b.approved_at, b.closed_at,
               b.period_start, b.period_end, b.amount_minor, b.currency, b.created_at,
               d.code AS department_code, d.name AS department_name,
               COALESCE(c.committed, 0) AS committed_minor,
@@ -543,6 +552,8 @@ export class BudgetsService {
       departmentId: r.department_id ?? null,
       departmentCode: r.department_code ?? null,
       departmentName: r.department_name ?? null,
+      status: r.status,
+      submittedAt: r.submitted_at ?? null, approvedAt: r.approved_at ?? null, closedAt: r.closed_at ?? null,
       periodType: r.period_type, periodStart: start, periodEnd: end,
       periodLabel: budgetPeriodLabel(r.period_type, start),
       currency: r.currency, amountMinor: amount,
@@ -575,11 +586,11 @@ export class BudgetsService {
       row = (
         await this.rc.manager.query(
           `INSERT INTO budgets(buyer_org_id, name, category, department_id, period_type,
-             period_start, period_end, amount_minor, currency)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+             period_start, period_end, amount_minor, currency, created_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
           [
             auth.org_id, dto.name, dto.category?.trim() || '*', dto.departmentId ?? null,
-            period.type, period.start, period.end, dto.amountMinor, BUDGET_CURRENCY,
+            period.type, period.start, period.end, dto.amountMinor, BUDGET_CURRENCY, auth.sub,
           ],
         )
       )[0];
@@ -602,8 +613,34 @@ export class BudgetsService {
     await this.assertKnownCategory(dto.category?.trim() || '*');
     // The amount is money, not a field: changing it writes a revision so "the plan was
     // 500k until March" stays answerable.
-    const before = (await this.rc.manager.query(`SELECT amount_minor FROM budgets WHERE id=$1`, [id]))[0];
+    const before = (await this.rc.manager.query(`SELECT amount_minor, status FROM budgets WHERE id=$1`, [id]))[0];
     if (!before) throw new NotFoundException('Budget not found');
+    // What may still change depends on where the budget is in its life. A PENDING budget is
+    // frozen while someone is reviewing it; a CLOSED period is frozen for good; an APPROVED
+    // budget keeps its identity (name, scope, period) and moves only its amount — through a
+    // revision that has to say why.
+    if (before.status === 'PENDING') {
+      throw new ConflictException('This budget is awaiting approval — recall it first to edit');
+    }
+    if (before.status === 'CLOSED') {
+      throw new ConflictException('The period is closed; a closed budget cannot be changed');
+    }
+    if (before.status === 'APPROVED') {
+      const same = (await this.rc.manager.query(
+        `SELECT 1 FROM budgets WHERE id=$1 AND name=$2 AND category=$3
+           AND department_id IS NOT DISTINCT FROM $4 AND period_start=$5 AND period_end=$6`,
+        [id, dto.name, dto.category?.trim() || '*', dto.departmentId ?? null, period.start, period.end],
+      ))[0];
+      if (!same) {
+        throw new ConflictException(
+          'An approved budget keeps its name, scope and period — only the amount may be revised. ' +
+          'Close it and create a new one if the scope really changed.',
+        );
+      }
+      if (Number(before.amount_minor) !== dto.amountMinor && !dto.reason?.trim()) {
+        throw new BadRequestException('Changing an approved amount requires a reason — it goes into the revision history');
+      }
+    }
     let res: Array<{ id: string }>;
     try {
       res = await this.rc.manager.query(
@@ -694,7 +731,117 @@ export class BudgetsService {
     return this.getOne(targetId);
   }
 
+  // ---------- lifecycle ----------
+  //
+  // Mirrors the discipline a procurement request already had, on the document that commits
+  // far more money. Every hop is audited, and approval is subject to segregation of duties:
+  // whoever submitted a plan cannot be the one who blesses it.
+
+  private async requireStatus(id: string, allowed: string[]) {
+    const b = (await this.rc.manager.query(
+      `SELECT id, name, status, submitted_by, period_end FROM budgets WHERE id=$1`, [id],
+    ))[0];
+    if (!b) throw new NotFoundException('Budget not found');
+    if (!allowed.includes(b.status)) {
+      throw new ConflictException(`Budget is ${b.status}; expected ${allowed.join(' or ')}`);
+    }
+    return b;
+  }
+
+  async submit(id: string, auth: AccessTokenPayload) {
+    await this.requireStatus(id, ['DRAFT']);
+    await this.rc.manager.query(
+      `UPDATE budgets SET status='PENDING', submitted_by=$2, submitted_at=now(), updated_at=now() WHERE id=$1`,
+      [id, auth.sub],
+    );
+    await this.audit.record('BUDGET_SUBMITTED', 'budget', id, {});
+    return this.getOne(id);
+  }
+
+  // Pull a plan back out of review — the way to edit something already sent.
+  async recall(id: string, auth: AccessTokenPayload) {
+    await this.requireStatus(id, ['PENDING']);
+    await this.rc.manager.query(
+      `UPDATE budgets SET status='DRAFT', submitted_by=NULL, submitted_at=NULL, updated_at=now() WHERE id=$1`,
+      [id],
+    );
+    await this.audit.record('BUDGET_RECALLED', 'budget', id, { by: auth.sub });
+    return this.getOne(id);
+  }
+
+  async approveBudget(id: string, auth: AccessTokenPayload) {
+    const b = await this.requireStatus(id, ['PENDING']);
+    // Four-eyes: whoever put the number forward must not be the one who blesses it. But a
+    // small buyer may have exactly one person who can approve at all, and a rule that locks
+    // the only admin out of their own budgets is a rule nobody keeps — they would go around
+    // it. So the check applies only when somebody else COULD act, and a genuine
+    // self-approval is recorded as such instead of being quietly allowed.
+    let selfApproved = false;
+    if (b.submitted_by && b.submitted_by === auth.sub) {
+      const others = await this.rc.manager.query(
+        `SELECT 1 FROM memberships WHERE org_id = $1 AND user_id <> $2
+           AND role IN ('BUYER_ADMIN','BUYER_APPROVER') LIMIT 1`,
+        [auth.org_id, auth.sub],
+      );
+      if (others.length) {
+        throw new ForbiddenException('You cannot approve a budget you submitted (segregation of duties)');
+      }
+      selfApproved = true;
+    }
+    await this.rc.manager.query(
+      `UPDATE budgets SET status='APPROVED', approved_by=$2, approved_at=now(), updated_at=now() WHERE id=$1`,
+      [id, auth.sub],
+    );
+    await this.audit.record('BUDGET_APPROVED', 'budget', id, { name: b.name, self_approved: selfApproved });
+    return this.getOne(id);
+  }
+
+  async rejectBudget(id: string, auth: AccessTokenPayload, reason: string) {
+    const b = await this.requireStatus(id, ['PENDING']);
+    if (b.submitted_by && b.submitted_by === auth.sub) {
+      throw new ForbiddenException('You cannot decide on a budget you submitted (segregation of duties)');
+    }
+    await this.rc.manager.query(
+      `UPDATE budgets SET status='DRAFT', submitted_by=NULL, submitted_at=NULL, updated_at=now() WHERE id=$1`,
+      [id],
+    );
+    await this.audit.record('BUDGET_REJECTED', 'budget', id, { reason });
+    return this.getOne(id);
+  }
+
+  // Closing signs the period off: the plan stops moving, but the budget keeps counting its
+  // spend, so historical reports stay whole. Refused before the period is over — a closed
+  // budget that can still receive commitments would be a lie.
+  async close(id: string, auth: AccessTokenPayload) {
+    const b = await this.requireStatus(id, ['APPROVED']);
+    const today = new Date().toISOString().slice(0, 10);
+    if (iso(new Date(b.period_end)) >= today) {
+      throw new BadRequestException('The period has not ended yet — a budget can only be closed after its last day');
+    }
+    await this.rc.manager.query(
+      `UPDATE budgets SET status='CLOSED', closed_by=$2, closed_at=now(), updated_at=now() WHERE id=$1`,
+      [id, auth.sub],
+    );
+    await this.audit.record('BUDGET_CLOSED', 'budget', id, { name: b.name });
+    return this.getOne(id);
+  }
+
+  // Reopening exists because closings happen by mistake; it is audited exactly like the
+  // close, so the pair is always visible together in the trail.
+  async reopen(id: string, auth: AccessTokenPayload, reason: string) {
+    const b = await this.requireStatus(id, ['CLOSED']);
+    await this.rc.manager.query(
+      `UPDATE budgets SET status='APPROVED', closed_by=NULL, closed_at=NULL, updated_at=now() WHERE id=$1`,
+      [id],
+    );
+    await this.audit.record('BUDGET_REOPENED', 'budget', id, { name: b.name, reason, by: auth.sub });
+    return this.getOne(id);
+  }
+
   async remove(id: string) {
+    // Only a draft is disposable. Anything that has been approved is part of the financial
+    // record — it gets closed, not deleted.
+    await this.requireStatus(id, ['DRAFT']);
     const res = await this.rc.manager.query(`DELETE FROM budgets WHERE id=$1 RETURNING id`, [id]);
     if (!res[0]) throw new NotFoundException('Budget not found');
     await this.audit.record('BUDGET_DELETED', 'budget', id, {});
@@ -723,7 +870,8 @@ export class BudgetsService {
   private async getOne(id: string) {
     const rows = await this.rc.manager.query(
       `WITH ${this.MATCHED_CTE}
-       SELECT b.id, b.name, b.category, b.department_id, b.period_type,
+       SELECT b.id, b.name, b.category, b.department_id, b.period_type, b.status,
+              b.submitted_at, b.approved_at, b.closed_at,
               b.period_start, b.period_end, b.amount_minor, b.currency, b.created_at,
               d.code AS department_code, d.name AS department_name,
               COALESCE(c.committed, 0) AS committed_minor,
@@ -906,6 +1054,42 @@ export class BudgetsController {
   @Roles('BUYER_ADMIN')
   rollover(@Param('id') id: string, @Body() dto: RolloverDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.budgets.rollover(dto.sourceBudgetId, id, auth);
+  }
+
+  @Post(':id/submit')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  submit(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
+    return this.budgets.submit(id, auth);
+  }
+
+  @Post(':id/recall')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  recall(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
+    return this.budgets.recall(id, auth);
+  }
+
+  @Post(':id/approve')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  approveBudget(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
+    return this.budgets.approveBudget(id, auth);
+  }
+
+  @Post(':id/reject')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  rejectBudget(@Param('id') id: string, @Body() body: ReasonDto, @CurrentUser() auth: AccessTokenPayload) {
+    return this.budgets.rejectBudget(id, auth, body.reason);
+  }
+
+  @Post(':id/close')
+  @Roles('BUYER_ADMIN')
+  close(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
+    return this.budgets.close(id, auth);
+  }
+
+  @Post(':id/reopen')
+  @Roles('BUYER_ADMIN')
+  reopen(@Param('id') id: string, @Body() body: ReasonDto, @CurrentUser() auth: AccessTokenPayload) {
+    return this.budgets.reopen(id, auth, body.reason);
   }
 
   @Delete(':id')

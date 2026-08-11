@@ -159,6 +159,13 @@ export const PO_BUYER_NEXT: Record<string, PoStatus[]> = {
   DRAFT: ['ISSUED', 'CANCELLED'], ISSUED: ['CANCELLED'], DELIVERED: ['ACCEPTED', 'REJECTED'],
 };
 
+// ---------------- Budgets ----------------
+// A budget is a document with a life of its own: drafted, submitted for approval, put in
+// force, and finally closed when the period is signed off. Only APPROVED and CLOSED
+// budgets hold money — a draft plan must never absorb real commitments.
+export const BUDGET_STATUSES = ['DRAFT', 'PENDING', 'APPROVED', 'CLOSED'] as const;
+export type BudgetStatus = (typeof BUDGET_STATUSES)[number];
+
 // ---------------- Money ----------------
 // Money is always integer minor units (e.g. qəpik for AZN) + ISO 4217 code. Never float.
 export interface Money {
@@ -237,6 +244,12 @@ export const AUDIT_ACTIONS = [
   'BUDGET_POLICY_UPDATED',
   'BUDGET_BLOCK_OVERRIDDEN',
   'BUDGET_ROLLED_OVER',
+  'BUDGET_SUBMITTED',
+  'BUDGET_RECALLED',
+  'BUDGET_APPROVED',
+  'BUDGET_REJECTED',
+  'BUDGET_CLOSED',
+  'BUDGET_REOPENED',
 ] as const;
 
 // ---------------- Invoices (P2P) ----------------

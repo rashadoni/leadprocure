@@ -5,6 +5,7 @@ import { useI18n } from '../../i18n';
 
 interface Budget {
   id: string;
+  status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'CLOSED';
   name: string;
   category: string;
   periodYear: number;
@@ -150,6 +151,18 @@ export default function Budgets() {
       a.href = url; a.download = 'budgets.csv'; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
     } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  };
+
+  // Lifecycle actions. A budget is a document: drafted, submitted, approved by someone
+  // else, and finally closed when the period is signed off.
+  const act = async (id: string, action: string, body?: Record<string, unknown>) => {
+    try { await api.post(`/budgets/${id}/${action}`, body ?? {}); load(); }
+    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  };
+  const withReason = (id: string, action: string, promptKey: string) => {
+    const reason = prompt(t(promptKey));
+    if (!reason || reason.trim().length < 3) return;
+    act(id, action, { reason: reason.trim() });
   };
 
   // Revision history, opened inline under the budget row.
@@ -306,7 +319,7 @@ export default function Budgets() {
         </div>
         <table>
           <thead><tr>
-            <th>{t('name')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('period')}</th>
+            <th>{t('name')}</th><th>{t('status')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('period')}</th>
             <th>{t('amount')}</th><th>{t('committed')}</th><th>{t('actual')}</th><th>{t('remaining')}</th>
             <th style={{ width: 180 }}>{t('utilization')}</th>{isAdmin && <th>{t('actions')}</th>}
           </tr></thead>
@@ -317,6 +330,7 @@ export default function Budgets() {
                 <Fragment key={b.id}>
                 <tr>
                   <td>{b.name}</td>
+                  <td><span className={`badge ${b.status}`} data-tip={t(`bud_st_${b.status}`)}>{t(`bud_status_${b.status}`)}</span></td>
                   <td>{b.category === '*' ? '—' : b.category}</td>
                   <td data-tip={b.departmentName || undefined}>{b.departmentCode ?? t('bud_org_wide')}</td>
                   <td data-tip={`${b.periodStart} → ${b.periodEnd}`}>{b.periodLabel}</td>
@@ -332,16 +346,39 @@ export default function Budgets() {
                   </td>
                   {isAdmin && (
                     <td>
-                      <button className="btn small ghost" data-tip={t('tip_edit')} onClick={() => edit(b)}>✎</button>{' '}
+                      {b.status === 'DRAFT' && (
+                        <>
+                          <button className="btn small ghost" data-tip={t('tip_edit')} onClick={() => edit(b)}>✎</button>{' '}
+                          <button className="btn small" data-tip={t('bud_submit_tip')} onClick={() => act(b.id, 'submit')}>{t('submit')}</button>{' '}
+                        </>
+                      )}
+                      {b.status === 'PENDING' && (
+                        <>
+                          <button className="btn small" data-tip={t('bud_approve_tip')} onClick={() => act(b.id, 'approve')}>{t('approve')}</button>{' '}
+                          <button className="btn small ghost" data-tip={t('bud_reject_tip')} onClick={() => withReason(b.id, 'reject', 'bud_reject_prompt')}>{t('reject')}</button>{' '}
+                          <button className="btn small ghost" data-tip={t('bud_recall_tip')} onClick={() => act(b.id, 'recall')}>↩</button>{' '}
+                        </>
+                      )}
+                      {b.status === 'APPROVED' && (
+                        <>
+                          <button className="btn small ghost" data-tip={t('bud_revise_tip')} onClick={() => edit(b)}>✎</button>{' '}
+                          <button className="btn small ghost" data-tip={t('bud_close_tip')} onClick={() => act(b.id, 'close')}>🔒</button>{' '}
+                        </>
+                      )}
+                      {b.status === 'CLOSED' && (
+                        <button className="btn small ghost" data-tip={t('bud_reopen_tip')} onClick={() => withReason(b.id, 'reopen', 'bud_reopen_prompt')}>🔓</button>
+                      )}{' '}
                       <button className="btn small ghost" data-tip={t('bud_history')} onClick={() => toggleHistory(b.id)}>🕘</button>{' '}
                       <button className="btn small ghost" data-tip={t('bud_rollover')} onClick={() => rollover(b.id)}>↪</button>{' '}
-                      <button className="btn small ghost" data-tip={t('tip_delete')} onClick={() => remove(b.id)}>🗑</button>
+                      {b.status === 'DRAFT' && (
+                        <button className="btn small ghost" data-tip={t('tip_delete')} onClick={() => remove(b.id)}>🗑</button>
+                      )}
                     </td>
                   )}
                 </tr>
                 {history[b.id] && (
                   <tr>
-                    <td colSpan={isAdmin ? 10 : 9} style={{ background: 'rgba(79,140,255,0.05)' }}>
+                    <td colSpan={isAdmin ? 11 : 10} style={{ background: 'rgba(79,140,255,0.05)' }}>
                       <b>{t('bud_history')}</b>
                       <table style={{ margin: '6px 0' }}>
                         <thead><tr>
@@ -368,7 +405,7 @@ export default function Budgets() {
                 </Fragment>
               );
             })}
-            {rows.length === 0 && <tr><td colSpan={isAdmin ? 10 : 9} className="hint">—</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={isAdmin ? 11 : 10} className="hint">—</td></tr>}
           </tbody>
         </table>
       </div>

@@ -155,3 +155,7 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
   .help-thumb { width: 180px; }
   .help-actions { margin-left: auto; }
 }
+
+/* budget lifecycle badges — reuse the status palette the rest of the app uses */
+.badge.PENDING { background: rgba(217, 119, 6, .12); color: #b45309; }
+.badge.CLOSED { background: rgba(100, 116, 139, .14); color: #475569; }

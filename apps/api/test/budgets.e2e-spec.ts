@@ -64,6 +64,18 @@ describe('budgets & commitment control (API e2e)', () => {
     return res.body.id as string;
   };
 
+  // Budgets are documents now: created as a DRAFT, submitted, then approved by someone
+  // else. Specs that just need a live plan go through here.
+  const mkBudget = async (body: Record<string, unknown>, token = buyerA) => {
+    const created = await http().post('/budgets').set(...bearer(token)).send(body);
+    if (created.status !== 201) return created;
+    const id = created.body.id;
+    await http().post(`/budgets/${id}/submit`).set(...bearer(token)).expect(201);
+    await http().post(`/budgets/${id}/approve`).set(...bearer(approverA)).expect(201);
+    const live = await http().get('/budgets').set(...bearer(token));
+    return { ...created, body: live.body.find((b: any) => b.id === id) ?? created.body, status: 201 };
+  };
+
   beforeAll(async () => {
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = mod.createNestApplication();
@@ -97,8 +109,7 @@ describe('budgets & commitment control (API e2e)', () => {
   });
 
   it('an approved request commits against its category budget', async () => {
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `IT ${tag}`, category: 'IT', periodYear: YEAR, amountMinor: 500_000 }).expect(201);
+    await mkBudget({ name: `IT ${tag}`, category: 'IT', periodYear: YEAR, amountMinor: 500_000 });
     await approveRequest(buyerA, 'IT', 200_000);
     const list = await http().get('/budgets').set(...bearer(buyerA)).expect(200);
     const b = list.body.find((x: any) => x.name === `IT ${tag}`);
@@ -107,8 +118,7 @@ describe('budgets & commitment control (API e2e)', () => {
   });
 
   it('an over-budget approval warns but the request is still APPROVED', async () => {
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Tiny ${tag}`, category: 'TINY', periodYear: YEAR, amountMinor: 50_000 }).expect(201);
+    await mkBudget({ name: `Tiny ${tag}`, category: 'TINY', periodYear: YEAR, amountMinor: 50_000 });
     const r = await approveRequest(buyerA, 'TINY', 120_000);
     expect(r.status).toBe('APPROVED');
     expect(r.budgetWarnings.length).toBeGreaterThan(0);
@@ -149,13 +159,106 @@ describe('budgets & commitment control (API e2e)', () => {
     await http().post('/budgets').set(...bearer(buyerA)).send(body).expect(409);
   });
 
+  // ---------- the budget as a document ----------
+
+  it('a new budget is a DRAFT and holds no money until it is approved', async () => {
+    const draft = (await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Life ${tag}`, category: 'LIFE', periodYear: YEAR, amountMinor: 300_000 }).expect(201)).body;
+    expect(draft.status).toBe('DRAFT');
+
+    // a request that would land on it commits nothing while the plan is still a draft
+    await approveRequest(buyerA, 'LIFE', 90_000);
+    let b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.id === draft.id);
+    expect(b.usedMinor).toBe(0);
+
+    await http().post(`/budgets/${draft.id}/submit`).set(...bearer(buyerA)).expect(201);
+    b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.id === draft.id);
+    expect(b.status).toBe('PENDING');
+
+    await http().post(`/budgets/${draft.id}/approve`).set(...bearer(approverA)).expect(201);
+    b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.id === draft.id);
+    expect(b.status).toBe('APPROVED');
+    expect(b.usedMinor).toBe(90_000); // the same spend now counts
+  });
+
+  it('a budget awaiting approval is frozen; recall unlocks it', async () => {
+    const d = (await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Frozen ${tag}`, category: 'FROZEN', periodYear: YEAR, amountMinor: 10_000 }).expect(201)).body;
+    await http().post(`/budgets/${d.id}/submit`).set(...bearer(buyerA)).expect(201);
+    await http().put(`/budgets/${d.id}`).set(...bearer(buyerA))
+      .send({ name: `Frozen ${tag}`, category: 'FROZEN', periodYear: YEAR, amountMinor: 20_000 }).expect(409);
+    await http().post(`/budgets/${d.id}/recall`).set(...bearer(buyerA)).expect(201);
+    await http().put(`/budgets/${d.id}`).set(...bearer(buyerA))
+      .send({ name: `Frozen ${tag}`, category: 'FROZEN', periodYear: YEAR, amountMinor: 20_000 }).expect(200);
+  });
+
+  it('the submitter cannot approve their own budget when someone else could', async () => {
+    const d = (await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `SoD ${tag}`, category: 'SOD', periodYear: YEAR, amountMinor: 10_000 }).expect(201)).body;
+    await http().post(`/budgets/${d.id}/submit`).set(...bearer(buyerA)).expect(201);
+    await http().post(`/budgets/${d.id}/approve`).set(...bearer(buyerA)).expect(403);
+    await http().post(`/budgets/${d.id}/approve`).set(...bearer(approverA)).expect(201);
+  });
+
+  it('a rejected plan goes back to DRAFT with the reason on the record', async () => {
+    const d = (await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Rej ${tag}`, category: 'REJ', periodYear: YEAR, amountMinor: 10_000 }).expect(201)).body;
+    await http().post(`/budgets/${d.id}/submit`).set(...bearer(buyerA)).expect(201);
+    const back = await http().post(`/budgets/${d.id}/reject`).set(...bearer(approverA))
+      .send({ reason: 'too high for this department' }).expect(201);
+    expect(back.body.status).toBe('DRAFT');
+    const trail = await db.query(
+      `SELECT payload FROM audit_events WHERE action='BUDGET_REJECTED' AND entity_id=$1`, [d.id],
+    );
+    expect(trail.rows[0].payload.reason).toContain('too high');
+  });
+
+  it('only a draft can be deleted — an approved budget is closed, not erased', async () => {
+    const live = (await mkBudget({ name: `Keep ${tag}`, category: 'KEEP', periodYear: YEAR, amountMinor: 10_000 })).body;
+    await http().delete(`/budgets/${live.id}`).set(...bearer(buyerA)).expect(409);
+    const draft = (await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Trash ${tag}`, category: 'TRASH', periodYear: YEAR, amountMinor: 10_000 }).expect(201)).body;
+    await http().delete(`/budgets/${draft.id}`).set(...bearer(buyerA)).expect(200);
+  });
+
+  it('a period can only be closed after its last day, and a closed budget is frozen', async () => {
+    const current = (await mkBudget({ name: `Close ${tag}`, category: 'CLOSE', periodYear: YEAR, amountMinor: 10_000 })).body;
+    await http().post(`/budgets/${current.id}/close`).set(...bearer(buyerA)).expect(400); // period still running
+
+    const past = (await mkBudget({
+      name: `Past ${tag}`, category: 'PAST', periodType: 'MONTH', periodYear: YEAR - 1, periodMonth: 1, amountMinor: 10_000,
+    })).body;
+    const closed = await http().post(`/budgets/${past.id}/close`).set(...bearer(buyerA)).expect(201);
+    expect(closed.body.status).toBe('CLOSED');
+    await http().put(`/budgets/${past.id}`).set(...bearer(buyerA))
+      .send({ name: `Past ${tag}`, category: 'PAST', periodType: 'MONTH', periodYear: YEAR - 1, periodMonth: 1, amountMinor: 20_000, reason: 'x' })
+      .expect(409);
+
+    // reopening is possible but must say why, and both hops stay in the trail
+    await http().post(`/budgets/${past.id}/reopen`).set(...bearer(buyerA)).send({ reason: 'closed by mistake' }).expect(201);
+    const trail = await db.query(
+      `SELECT action FROM audit_events WHERE entity_id=$1 AND action IN ('BUDGET_CLOSED','BUDGET_REOPENED')`, [past.id],
+    );
+    expect(trail.rows).toHaveLength(2);
+  });
+
+  it('a closed budget keeps counting its spend, so history stays whole', async () => {
+    const past = (await mkBudget({
+      name: `Hist ${tag}`, category: 'HIST', periodType: 'MONTH', periodYear: YEAR - 1, periodMonth: 2, amountMinor: 100_000,
+    })).body;
+    const r = await approveRequest(buyerA, 'HIST', 40_000);
+    await db.query(`UPDATE procurement_requests SET approved_at = $2 WHERE id = $1`, [r.id, `${YEAR - 1}-02-10T10:00:00Z`]);
+    await http().post(`/budgets/${past.id}/close`).set(...bearer(buyerA)).expect(201);
+    const b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.id === past.id);
+    expect(b.status).toBe('CLOSED');
+    expect(b.usedMinor).toBe(40_000);
+  });
+
   // ---------- periods: year / quarter / month ----------
 
   it('the same name in different quarters is two budgets, not a collision', async () => {
-    const q1 = await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Q ${tag}`, category: 'QTR', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: 1, amountMinor: 100_000 }).expect(201);
-    const q2 = await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Q ${tag}`, category: 'QTR', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: 2, amountMinor: 100_000 }).expect(201);
+    const q1 = await mkBudget({ name: `Q ${tag}`, category: 'QTR', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: 1, amountMinor: 100_000 });
+    const q2 = await mkBudget({ name: `Q ${tag}`, category: 'QTR', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: 2, amountMinor: 100_000 });
     expect(q1.body.periodLabel).toBe(`${YEAR} Q1`);
     expect(q1.body.periodStart).toBe(`${YEAR}-01-01`);
     expect(q1.body.periodEnd).toBe(`${YEAR}-03-31`);
@@ -167,10 +270,8 @@ describe('budgets & commitment control (API e2e)', () => {
     // approve now, then check the quarter that contains today vs. a different one
     const nowQ = Math.floor(new Date().getUTCMonth() / 3) + 1;
     const otherQ = nowQ === 4 ? 1 : nowQ + 1;
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Qnow ${tag}`, category: 'QNOW', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: nowQ, amountMinor: 900_000 }).expect(201);
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Qother ${tag}`, category: 'QNOW', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: otherQ, amountMinor: 900_000 }).expect(201);
+    await mkBudget({ name: `Qnow ${tag}`, category: 'QNOW', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: nowQ, amountMinor: 900_000 });
+    await mkBudget({ name: `Qother ${tag}`, category: 'QNOW', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: otherQ, amountMinor: 900_000 });
     await approveRequest(buyerA, 'QNOW', 300_000);
     const list = (await http().get('/budgets').set(...bearer(buyerA)).expect(200)).body;
     expect(list.find((b: any) => b.name === `Qnow ${tag}`).committedMinor).toBe(300_000);
@@ -180,10 +281,8 @@ describe('budgets & commitment control (API e2e)', () => {
   it('a monthly budget counts only its own month', async () => {
     const month = new Date().getUTCMonth() + 1;
     const other = month === 12 ? 1 : month + 1;
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Mnow ${tag}`, category: 'MNTH', periodType: 'MONTH', periodYear: YEAR, periodMonth: month, amountMinor: 900_000 }).expect(201);
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Moth ${tag}`, category: 'MNTH', periodType: 'MONTH', periodYear: YEAR, periodMonth: other, amountMinor: 900_000 }).expect(201);
+    await mkBudget({ name: `Mnow ${tag}`, category: 'MNTH', periodType: 'MONTH', periodYear: YEAR, periodMonth: month, amountMinor: 900_000 });
+    await mkBudget({ name: `Moth ${tag}`, category: 'MNTH', periodType: 'MONTH', periodYear: YEAR, periodMonth: other, amountMinor: 900_000 });
     await approveRequest(buyerA, 'MNTH', 120_000);
     const list = (await http().get('/budgets').set(...bearer(buyerA)).expect(200)).body;
     expect(list.find((b: any) => b.name === `Mnow ${tag}`).committedMinor).toBe(120_000);
@@ -200,10 +299,8 @@ describe('budgets & commitment control (API e2e)', () => {
   it('a December request approved in January commits to January, not to last year', async () => {
     const dec = `${YEAR - 1}-12-28T10:00:00Z`;
     const jan = `${YEAR}-01-05T10:00:00Z`;
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `DecY ${tag}`, category: 'XOVER', periodType: 'MONTH', periodYear: YEAR - 1, periodMonth: 12, amountMinor: 900_000 }).expect(201);
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `JanY ${tag}`, category: 'XOVER', periodType: 'MONTH', periodYear: YEAR, periodMonth: 1, amountMinor: 900_000 }).expect(201);
+    await mkBudget({ name: `DecY ${tag}`, category: 'XOVER', periodType: 'MONTH', periodYear: YEAR - 1, periodMonth: 12, amountMinor: 900_000 });
+    await mkBudget({ name: `JanY ${tag}`, category: 'XOVER', periodType: 'MONTH', periodYear: YEAR, periodMonth: 1, amountMinor: 900_000 });
 
     const done = await approveRequest(buyerA, 'XOVER', 70_000);
     // Re-date the request the way the calendar would have: created in December, approved
@@ -220,11 +317,9 @@ describe('budgets & commitment control (API e2e)', () => {
   it('an org-wide and a department budget on the same spend do NOT double-count', async () => {
     const dep = (await http().post('/departments').set(...bearer(buyerA)).send({ code: `ENG-${tag}` }).expect(201)).body;
     // org-wide ceiling for the category…
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `All ${tag}`, category: 'DUP', periodYear: YEAR, amountMinor: 1_000_000 }).expect(201);
+    await mkBudget({ name: `All ${tag}`, category: 'DUP', periodYear: YEAR, amountMinor: 1_000_000 });
     // …plus a tighter one for the department: the most specific wins, the other stays at 0.
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Eng ${tag}`, category: 'DUP', departmentId: dep.id, periodYear: YEAR, amountMinor: 400_000 }).expect(201);
+    await mkBudget({ name: `Eng ${tag}`, category: 'DUP', departmentId: dep.id, periodYear: YEAR, amountMinor: 400_000 });
 
     await approveRequest(buyerA, 'DUP', 150_000, dep.id);
     const list = (await http().get('/budgets').set(...bearer(buyerA)).expect(200)).body;
@@ -241,10 +336,8 @@ describe('budgets & commitment control (API e2e)', () => {
 
   it('department + category beats department-only', async () => {
     const dep = (await http().post('/departments').set(...bearer(buyerA)).send({ code: `OPS-${tag}` }).expect(201)).body;
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Ops any ${tag}`, departmentId: dep.id, periodYear: YEAR, amountMinor: 800_000 }).expect(201);
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Ops fuel ${tag}`, category: 'FUEL', departmentId: dep.id, periodYear: YEAR, amountMinor: 200_000 }).expect(201);
+    await mkBudget({ name: `Ops any ${tag}`, departmentId: dep.id, periodYear: YEAR, amountMinor: 800_000 });
+    await mkBudget({ name: `Ops fuel ${tag}`, category: 'FUEL', departmentId: dep.id, periodYear: YEAR, amountMinor: 200_000 });
 
     await approveRequest(buyerA, 'FUEL', 90_000, dep.id);
     const list = (await http().get('/budgets').set(...bearer(buyerA)).expect(200)).body;
@@ -268,8 +361,7 @@ describe('budgets & commitment control (API e2e)', () => {
 
   it('over-budget warning names the department that blew its budget', async () => {
     const dep = (await http().post('/departments').set(...bearer(buyerA)).send({ code: `MKT-${tag}` }).expect(201)).body;
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Mkt ${tag}`, category: 'ADS', departmentId: dep.id, periodYear: YEAR, amountMinor: 30_000 }).expect(201);
+    await mkBudget({ name: `Mkt ${tag}`, category: 'ADS', departmentId: dep.id, periodYear: YEAR, amountMinor: 30_000 });
     const r = await approveRequest(buyerA, 'ADS', 100_000, dep.id);
     expect(r.status).toBe('APPROVED');
     expect(r.budgetWarnings).toHaveLength(1);
@@ -318,8 +410,7 @@ describe('budgets & commitment control (API e2e)', () => {
     await http().post(`/suppliers/relationships/${rel.id}/status`).set(...bearer(buyerA))
       .send({ status: 'APPROVED' }).expect(201);
 
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Actual ${tag}`, category: 'ACT', periodYear: YEAR, amountMinor: 1_000_000 }).expect(201);
+    await mkBudget({ name: `Actual ${tag}`, category: 'ACT', periodYear: YEAR, amountMinor: 1_000_000 });
     const req = await approveRequest(buyerA, 'ACT', 100_000);
     orderedRequestId = req.id;
 
@@ -345,8 +436,7 @@ describe('budgets & commitment control (API e2e)', () => {
   });
 
   it('cancelling an abandoned approved request releases its commitment', async () => {
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Release ${tag}`, category: 'RELEASE', periodYear: YEAR, amountMinor: 500_000 }).expect(201);
+    await mkBudget({ name: `Release ${tag}`, category: 'RELEASE', periodYear: YEAR, amountMinor: 500_000 });
     const req = await approveRequest(buyerA, 'RELEASE', 200_000);
     let b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.name === `Release ${tag}`);
     expect(b.usedMinor).toBe(200_000);
@@ -366,8 +456,7 @@ describe('budgets & commitment control (API e2e)', () => {
   // ---------- thresholds: warn, block, override ----------
 
   it('exposes the budget impact of a request BEFORE it is approved', async () => {
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Impact ${tag}`, category: 'IMPACT', periodYear: YEAR, amountMinor: 100_000 }).expect(201);
+    await mkBudget({ name: `Impact ${tag}`, category: 'IMPACT', periodYear: YEAR, amountMinor: 100_000 });
     const req = await http().post('/requests').set(...bearer(buyerA))
       .send({ title: `Impact ${tag}`, category: 'IMPACT', items: [{ name: 'x', qty: 1, estUnitPriceMinor: 92_000 }] })
       .expect(201);
@@ -393,8 +482,7 @@ describe('budgets & commitment control (API e2e)', () => {
 
   it('an armed block refuses the approval — and the request stays SUBMITTED', async () => {
     await http().put('/budgets/policy').set(...bearer(buyerA)).send({ warnPct: 80, blockPct: 100 }).expect(200);
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Blocked ${tag}`, category: 'BLOCKED', periodYear: YEAR, amountMinor: 50_000 }).expect(201);
+    await mkBudget({ name: `Blocked ${tag}`, category: 'BLOCKED', periodYear: YEAR, amountMinor: 50_000 });
 
     const req = await http().post('/requests').set(...bearer(buyerA))
       .send({ title: `Blocked ${tag}`, category: 'BLOCKED', items: [{ name: 'x', qty: 1, estUnitPriceMinor: 120_000 }] })
@@ -448,8 +536,7 @@ describe('budgets & commitment control (API e2e)', () => {
   });
 
   it('crossing the warn threshold notifies the buyer org', async () => {
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Warned ${tag}`, category: 'WARNED', periodYear: YEAR, amountMinor: 100_000 }).expect(201);
+    await mkBudget({ name: `Warned ${tag}`, category: 'WARNED', periodYear: YEAR, amountMinor: 100_000 });
     await approveRequest(buyerA, 'WARNED', 85_000);
     const notes = (await http().get('/notifications').set(...bearer(buyerA)).expect(200)).body;
     const note = notes.find((n: any) => n.type === 'BUDGET_THRESHOLD_CROSSED' && n.payload.budget === `Warned ${tag}`);
@@ -462,9 +549,7 @@ describe('budgets & commitment control (API e2e)', () => {
       .body.find((u: any) => u.email === `apprv-${tag}@t.test`).id;
     const dep = (await http().post('/departments').set(...bearer(buyerA))
       .send({ code: `OWN-${tag}`, ownerUserId: ownerId }).expect(201)).body;
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Owned ${tag}`, category: 'OWNED', departmentId: dep.id, periodYear: YEAR, amountMinor: 100_000 })
-      .expect(201);
+    await mkBudget({ name: `Owned ${tag}`, category: 'OWNED', departmentId: dep.id, periodYear: YEAR, amountMinor: 100_000 });
 
     await approveRequest(buyerA, 'OWNED', 90_000, dep.id);
     const row = await db.query(
@@ -524,9 +609,7 @@ describe('budgets & commitment control (API e2e)', () => {
   // ---------- revisions & rollover ----------
 
   it('records the opening plan and every later change as a revision', async () => {
-    const b = (await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Rev ${tag}`, category: 'REV', periodYear: YEAR, amountMinor: 500_000, reason: 'annual plan' })
-      .expect(201)).body;
+    const b = (await mkBudget({ name: `Rev ${tag}`, category: 'REV', periodYear: YEAR, amountMinor: 500_000, reason: 'annual plan' })).body;
 
     let history = (await http().get(`/budgets/${b.id}/revisions`).set(...bearer(buyerA)).expect(200)).body;
     expect(history).toHaveLength(1);
@@ -547,21 +630,27 @@ describe('budgets & commitment control (API e2e)', () => {
     expect(history[1].createdByName).toBeTruthy();
   });
 
-  it('renaming a budget without touching the amount adds no revision', async () => {
+  // An approved budget keeps its identity: the name, scope and period are what was signed
+  // off, so renaming one is refused outright rather than quietly rewriting the record.
+  it('an approved budget cannot be renamed or re-scoped — only its amount moves', async () => {
     const b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.name === `Rev ${tag}`);
     await http().put(`/budgets/${b.id}`).set(...bearer(buyerA))
-      .send({ name: `Rev renamed ${tag}`, category: 'REV', periodYear: YEAR, amountMinor: 900_000 }).expect(200);
+      .send({ name: `Rev renamed ${tag}`, category: 'REV', periodYear: YEAR, amountMinor: 900_000 }).expect(409);
+    await http().put(`/budgets/${b.id}`).set(...bearer(buyerA))
+      .send({ name: `Rev ${tag}`, category: 'OTHER', periodYear: YEAR, amountMinor: 900_000 }).expect(409);
     const history = (await http().get(`/budgets/${b.id}/revisions`).set(...bearer(buyerA)).expect(200)).body;
-    expect(history).toHaveLength(2);
+    expect(history).toHaveLength(2); // nothing was written
+  });
+
+  it('changing an approved amount without a reason is refused', async () => {
+    const b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.name === `Rev ${tag}`);
+    await http().put(`/budgets/${b.id}`).set(...bearer(buyerA))
+      .send({ name: `Rev ${tag}`, category: 'REV', periodYear: YEAR, amountMinor: 950_000 }).expect(400);
   });
 
   it('carries an unspent remainder into the next period as a traceable revision', async () => {
-    const q1 = (await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Roll Q1 ${tag}`, category: 'ROLL', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: 1, amountMinor: 300_000 })
-      .expect(201)).body;
-    const q2 = (await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Roll Q2 ${tag}`, category: 'ROLL', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: 2, amountMinor: 200_000 })
-      .expect(201)).body;
+    const q1 = (await mkBudget({ name: `Roll Q1 ${tag}`, category: 'ROLL', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: 1, amountMinor: 300_000 })).body;
+    const q2 = (await mkBudget({ name: `Roll Q2 ${tag}`, category: 'ROLL', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: 2, amountMinor: 200_000 })).body;
 
     const after = (await http().post(`/budgets/${q2.id}/rollover`).set(...bearer(buyerA))
       .send({ sourceBudgetId: q1.id }).expect(201)).body;
@@ -578,12 +667,8 @@ describe('budgets & commitment control (API e2e)', () => {
   });
 
   it('refuses to carry forward from a budget with nothing left', async () => {
-    const spent = (await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Spent ${tag}`, category: 'SPENT', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: 1, amountMinor: 10_000 })
-      .expect(201)).body;
-    const target = (await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Spent target ${tag}`, category: 'SPENT', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: 2, amountMinor: 10_000 })
-      .expect(201)).body;
+    const spent = (await mkBudget({ name: `Spent ${tag}`, category: 'SPENT', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: 1, amountMinor: 10_000 })).body;
+    const target = (await mkBudget({ name: `Spent target ${tag}`, category: 'SPENT', periodType: 'QUARTER', periodYear: YEAR, periodQuarter: 2, amountMinor: 10_000 })).body;
     // consume the source entirely
     await db.query(`UPDATE budgets SET amount_minor = 0 WHERE id = $1`, [spent.id]);
     await http().post(`/budgets/${target.id}/rollover`).set(...bearer(buyerA))
@@ -609,8 +694,7 @@ describe('budgets & commitment control (API e2e)', () => {
     await http().post('/budgets').set(...bearer(buyerA))
       .send({ name: `Typo ${tag}`, category: `cur-${tag}`, periodYear: YEAR, amountMinor: 1000 }).expect(400);
     // the curated code itself is fine
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Curated ${tag}`, category: `CUR-${tag}`, periodYear: YEAR, amountMinor: 1000 }).expect(201);
+    await mkBudget({ name: `Curated ${tag}`, category: `CUR-${tag}`, periodYear: YEAR, amountMinor: 1000 });
   });
 
   // ---------- catalog call-offs: spend with no request behind it ----------
@@ -618,8 +702,7 @@ describe('budgets & commitment control (API e2e)', () => {
   it('a catalog order charges its department’s budget even with no request', async () => {
     const dep = (await http().post('/departments').set(...bearer(buyerA)).send({ code: `CAT-${tag}` }).expect(201)).body;
     // category-agnostic budget: a call-off carries no category, so only '*' may claim it
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Catalog dep ${tag}`, departmentId: dep.id, periodYear: YEAR, amountMinor: 400_000 }).expect(201);
+    await mkBudget({ name: `Catalog dep ${tag}`, departmentId: dep.id, periodYear: YEAR, amountMinor: 400_000 });
 
     const poId = await orderFromCatalog(dep.id, 3, 25_000); // 3 × 250.00
     expect(poId).toBeTruthy();
@@ -648,8 +731,7 @@ describe('budgets & commitment control (API e2e)', () => {
   // value, and it must not vanish either.
   it('a foreign-currency order neither pollutes the AZN budget nor disappears', async () => {
     await http().post('/categories').set(...bearer(buyerA)).send({ code: 'FXCAT' }).expect(201);
-    await http().post('/budgets').set(...bearer(buyerA))
-      .send({ name: `Fx ${tag}`, category: 'FXCAT', periodYear: YEAR, amountMinor: 1_000_000 }).expect(201);
+    await mkBudget({ name: `Fx ${tag}`, category: 'FXCAT', periodYear: YEAR, amountMinor: 1_000_000 });
     const req = await approveRequest(buyerA, 'FXCAT', 200_000);
 
     let b = (await http().get('/budgets').set(...bearer(buyerA))).body.find((x: any) => x.name === `Fx ${tag}`);
