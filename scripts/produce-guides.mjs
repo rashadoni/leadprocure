@@ -70,7 +70,13 @@ const dur = (f) => parseFloat(execSync(`ffprobe -v error -show_entries format=du
 async function slowScroll(page, steps = 5, dy = 130, pause = 500) {
   for (let i = 0; i < steps; i++) { await page.mouse.wheel(0, dy); await P(pause); }
 }
-const scrollTo = async (page, sel) => { const el = page.locator(sel).first(); if (await el.count()) { await el.scrollIntoViewIfNeeded(); await P(700); } };
+// Accepts a CSS string OR a Locator, like moveTo/click do. It used to take strings only,
+// and passing a locator stringified it into a bogus selector: the scroll never happened,
+// the scene held its narration over a motionless screen, and freezedetect caught it.
+const scrollTo = async (page, sel) => {
+  const el = typeof sel === 'string' ? page.locator(sel).first() : sel.first?.() ?? sel;
+  if (await el.count()) { await el.scrollIntoViewIfNeeded(); await P(700); }
+};
 const type = async (page, sel, text, delay = 85) => { const el = page.locator(sel).first(); await el.click(); await el.pressSequentially(text, { delay }); };
 
 // ---- visible cursor overlay (Playwright doesn't render the mouse into the video) ----
@@ -387,17 +393,26 @@ const SECTIONS = {
       } },
   ]},
   'buyer-contracts': { role: 'buyer', path: '/buyer/contracts', scenes: [
-    { ru: 'Контракты и заказы. Контракт создаётся из награждённого тендера одним нажатием и фиксирует цены победителя.',
-      az: 'Müqavilələr və sifarişlər. Müqavilə qalib tenderdən bir kliklə yaradılır və qalibin qiymətlərini sabitləyir.',
-      en: 'Contracts and orders. A contract is created from the awarded tender in one click and locks in the winner’s prices.' },
-    { ru: 'По контракту выпускаются заказы. Каждый идёт по конвейеру: выпущен, подтверждён, упакован, отгружен, доставлен, принят. Свои шаги двигает каждая сторона.',
-      az: 'Müqavilə üzrə sifarişlər verilir. Hər biri konveyerlə gedir: verilib, təsdiqlənib, qablaşdırılıb, göndərilib, çatdırılıb, qəbul edilib. Öz addımlarını hər tərəf atır.',
-      en: 'Orders are issued against the contract. Each moves along the pipeline: issued, confirmed, packed, shipped, delivered, accepted. Each side moves its own steps.',
-      do: (p) => scrollTo(p, '.card:nth-of-type(2)') },
-    { ru: 'Нужно изменить выпущенный заказ? Кнопка «изменить» рядом со статусом: новое количество или цена, причина — и поправка уходит поставщику. Суммы обновятся только после его согласия, а история сохранится навсегда.',
-      az: 'Verilmiş sifarişi dəyişmək lazımdır? Statusun yanındakı «Dəyiş» düyməsi: yeni miqdar və ya qiymət, səbəb — və düzəliş təchizatçıya gedir. Məbləğlər yalnız onun razılığından sonra yenilənir, tarixçə isə həmişəlik saxlanılır.',
-      en: 'Need to change an issued order? The amend button next to the status: a new quantity or price, a reason — and the amendment goes to the supplier. Amounts update only after they agree, and the history is kept forever.',
-      do: (p) => slowScroll(p, 3) },
+    { az: 'Müqavilələr bölməsi. Müqavilə tenderin nəticəsindən doğulur: qalib seçiləndən sonra sistem qalib təklifin şərtlərini müqaviləyə köçürür. Yəni buradakı rəqəmlər əl ilə yazılmır, təklifdən gəlir.',
+      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.45); await h.moveTo(p.locator('.card').nth(0).locator('table')); await h.holdUntil(0.9); } },
+    { az: 'Sütunlara baxaq: müqavilə nömrəsi, hansı tenderdən gəldiyi, təchizatçı, qüvvədə olma müddəti və ümumi məbləğ. Bu məbləğ müqavilənin tavanıdır.',
+      do: async (p, l, h) => { const r = p.locator('.card').nth(0).locator('tbody tr').first(); await h.moveTo(r.locator('td').nth(0)); await h.holdUntil(0.35); await h.moveTo(r.locator('td').nth(2)); await h.holdUntil(0.65); await h.moveTo(r.locator('td').nth(4)); await h.holdUntil(0.93); } },
+    { az: 'İstifadə olunub sütunu isə tavana nə qədər yaxınlaşdığınızı göstərir. Çərçivə müqaviləsi bir neçə sifarişə bölünə bilər, ona görə sistem cəmi izləyir və tavanı keçəndə xəbərdarlıq edir — amma bloklamır, çünki bu, qanuni haldır.',
+      do: async (p, l, h) => { const r = p.locator('.card').nth(0).locator('tbody tr').first(); await h.moveTo(r.locator('td').last()); await h.holdUntil(0.5); await h.moveTo(r.locator('.badge')); await h.holdUntil(0.93); } },
+    { az: 'Status vacibdir. Yalnız aktiv müqavilə sifariş və kataloq buraxa bilir. Qaralama müqavilə isə hələ heç nəyə icazə vermir — əvvəlcə onu aktivləşdirmək lazımdır.',
+      do: async (p, l, h) => { await h.moveTo(p.locator('.card').nth(0).locator('.badge').first()); await h.holdUntil(0.5); await h.moveTo(p.locator('button:has-text("PO")').first()); await h.holdUntil(0.93); } },
+    { az: 'Sifariş yarat düyməsi müqavilədən konkret sifariş çıxarır: mövqelər və qiymətlər müqavilədən götürülür, siz yalnız təsdiq edirsiniz. Biz indi yaratmırıq — sadəcə göstəririk.',
+      do: async (p, l, h) => { await h.moveTo(p.locator('button:has-text("PO")').first()); await h.holdUntil(0.55); await h.scrollTo(p.locator('.card').nth(1)); await h.holdUntil(0.93); } },
+    { az: 'Aşağıda sifarişlər bölməsi. Hər sifarişin öz həyat dövrü var: verilib, təchizatçı təsdiqləyib, qablaşdırılıb, göndərilib, çatdırılıb və nəhayət qəbul edilib.',
+      do: async (p, l, h) => { const rows = p.locator('.card').nth(1).locator('tbody tr'); await h.moveTo(rows.nth(0)); await h.holdUntil(0.4); await h.moveTo(rows.nth(0).locator('.badge')); await h.holdUntil(0.9); } },
+    { az: 'Statusu təchizatçı öz tərəfindən dəyişir, siz isə real vaxtda görürsünüz. Ən vacib addım sonuncudur: qəbul. Məhz qəbul edilmiş sifariş analitikada xərc kimi sayılır.',
+      do: async (p, l, h) => { const rows = p.locator('.card').nth(1).locator('tbody tr'); await h.moveTo(rows.nth(1).locator('.badge')); await h.holdUntil(0.45); await h.moveTo(rows.last().locator('.badge')); await h.holdUntil(0.92); } },
+    { az: 'Sifarişin şərtləri dəyişməlidirsə, dəyişiklik təklifi göndərilir: say və ya qiymət. Bu, birtərəfli düzəliş deyil — təchizatçı razılıq verməlidir, yalnız ondan sonra sifarişin məbləği yenidən hesablanır.',
+      do: async (p, l, h) => { await h.moveTo(p.locator('.card').nth(1).locator('button[data-tip]').first()); await h.holdUntil(0.5); await h.wheel(200); await h.holdUntil(0.92); } },
+    { az: 'Köhnə və yeni dəyər tarixçədə saxlanılır, ona görə sifariş dəyişsə də, nəyin nəyə çevrildiyi həmişə görünür. Bu, mübahisələrdə ən faydalı şeydir.',
+      do: async (p, l, h) => { await h.wheel(220); await h.holdUntil(0.5); await h.moveTo('table'); await h.holdUntil(0.92); } },
+    { az: 'Beləliklə zəncir tamamlanır: sorğu, tender, müqavilə, sifariş, qəbul və qaimə. Hər addım əvvəlkinə bağlıdır, ona görə istənilən xərci geriyə — konkret sorğuya qədər izləmək olar.',
+      do: async (p, l, h) => { await h.wheel(-350); await h.holdUntil(0.45); await h.moveTo(p.locator('.card').nth(0).locator('table')); await h.holdUntil(0.92); } },
   ]},
   'buyer-invoices': { role: 'buyer', path: '/buyer/invoices', scenes: [
     { ru: 'Счета. Поставщик выставляет счёт по заказу, и система автоматически проводит трёхстороннюю сверку: что заказано, что принято по факту и что в счёте.',
@@ -413,17 +428,27 @@ const SECTIONS = {
       do: async (p, l, h) => { await h.holdUntil(0.35); await h.wheel(160); await h.holdUntil(0.6); await h.hover('.badge[data-tip]', 1500); await h.holdUntil(0.92); } },
   ]},
   'buyer-catalogs': { role: 'buyer', path: '/buyer/catalogs', scenes: [
-    { ru: 'Каталоги — согласованные прайс-листы поставщиков, обычно созданные из выигранного тендера.',
-      az: 'Kataloqlar — təchizatçıların razılaşdırılmış qiymət siyahıları, adətən udulmuş tenderdən yaradılır.',
-      en: 'Catalogs — agreed supplier price lists, usually created from a won tender.' },
-    { ru: 'Заказ по каталожной цене создаётся мгновенно, без новой процедуры. Минимальная партия и цены контролируются автоматически.',
-      az: 'Kataloq qiyməti ilə sifariş dərhal yaradılır, yeni prosedur olmadan. Minimal partiya və qiymətlər avtomatik yoxlanılır.',
-      en: 'An order at the catalog price is created instantly, with no new procedure. The minimum order quantity and prices are enforced automatically.',
-      do: (p) => slowScroll(p, 4) },
+    { az: 'Kataloqlar bölməsi. Kataloq — təchizatçı ilə razılaşdırılmış qiymət cədvəlidir. Təkrarlanan xırda alışlar üçün hər dəfə tender keçirmək mənasızdır, ona görə qiymətlər bir dəfə razılaşdırılır və sonra sadəcə sifariş verilir.',
+      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.45); await h.moveTo('table'); await h.holdUntil(0.9); } },
+    { az: 'Cədvəldə kataloqun adı, təchizatçı, status və mövqe sayı var. Kataloq müqavilədən yaradıla bilər — onda qiymətlər qalib təklifdən avtomatik köçürülür.',
+      do: async (p, l, h) => { const r = p.locator('tbody tr').first(); await h.moveTo(r.locator('td').nth(0)); await h.holdUntil(0.4); await h.moveTo(r.locator('td').nth(1)); await h.holdUntil(0.7); await h.moveTo(r.locator('.badge')); await h.holdUntil(0.93); } },
+    { az: 'Status yalnız aktiv olanda sifariş vermək mümkündür. Qaralama kataloq hazırlıq mərhələsidir: mövqeləri əlavə edirsiniz, qiymətləri yoxlayırsınız, sonra aktivləşdirirsiniz.',
+      do: async (p, l, h) => { await h.moveTo(p.locator('.badge').first()); await h.holdUntil(0.55); await h.moveTo(p.locator('tbody tr a').first()); await h.holdUntil(0.92); } },
+    { az: 'Adına klikləyəndə kataloqun içi açılır. Gəlin baxaq.',
+      do: async (p, l, h) => { await h.click(p.locator('tbody tr a').first()); await h.holdUntil(0.9); } },
+    { az: 'Burada mövqelər var: ad, minimum sifariş həcmi və razılaşdırılmış vahid qiymət. Minimum həcm təchizatçının şərtidir — ondan az sifariş sistem qəbul etmir.',
+      do: async (p, l, h) => { await p.waitForSelector('input[type=number], table >> nth=1', { timeout: 8000 }).catch(() => {}); await h.scrollTo(p.locator('table').last()); await h.holdUntil(0.3); await h.moveTo(p.locator('table').last().locator('tbody tr').first()); await h.holdUntil(0.6); await h.moveTo(p.locator('table').last().locator('tbody tr').last()); await h.holdUntil(0.85); await h.moveTo('h1'); } },
+    { az: 'Sağda say sahəsi var. Lazım olan miqdarı yazırsınız — sistem qiyməti özü vurur. Qiyməti dəyişmək olmur, çünki o, razılaşdırılıb.',
+      do: async (p, l, h) => { const inp = p.locator('input[type=number]').first(); if (await inp.count()) { await h.fill(inp, '5'); } else { await h.moveTo(p.locator('table').last()); } await h.holdUntil(0.5); await h.moveTo(p.locator('tbody tr').first()); await h.holdUntil(0.85); await h.moveTo('h1'); } },
+    { az: 'Sifariş verməzdən əvvəl şöbəni seçirsiniz. Bu vacibdir: kataloq sifarişinin arxasında sorğu yoxdur, ona görə şöbəni yalnız burada göstərmək olar. Boş buraxsanız, sistem sizin öz şöbənizi qoyur.',
+      do: async (p, l, h) => { const sel = p.locator('select').last(); if (await sel.count()) { await h.moveTo(sel); } await h.holdUntil(0.4); await h.moveTo(p.locator('tbody tr a').first()); await h.holdUntil(0.75); if (await sel.count()) await h.moveTo(sel); await h.holdUntil(0.9); await h.moveTo('h1'); } },
+    { az: 'Sifariş düyməsi kataloqdan birbaşa sifariş yaradır — tendersiz, müqavilə danışıqlarısız. Bu, kataloqun bütün mənasıdır: iki klik və sifariş hazırdır. Biz onu indi basmırıq.',
+      do: async (p, l, h) => { const b = p.locator('button:has-text("📦")').first(); if (await b.count()) { await h.hover(b, 900); } else { await h.moveTo(p.locator('.badge').first()); } await h.holdUntil(0.55); await h.moveTo(p.locator('tbody tr').first()); await h.holdUntil(0.85); await h.moveTo('h1'); } },
+    { az: 'Belə sifariş də büdcədən keçir. Kateqoriyası olmadığına görə onu yalnız kateqoriyasız büdcə — şöbə və ya bütün təşkilat səviyyəsindəki büdcə tuta bilər. Şöbə göstərilməyibsə, xərc «büdcədən kənar» hesabatına düşür.',
+      do: async (p, l, h) => { await h.moveTo(p.locator('tbody tr a').first()); await h.holdUntil(0.35); await h.click(p.locator('tbody tr a').first()); await h.holdUntil(0.7); await h.click(p.locator('tbody tr a').first()); await h.holdUntil(0.9); await h.moveTo('h1'); } },
+    { az: 'Yekunda: kataloq təkrarlanan alışları prosedurdan azad edir, amma nəzarəti saxlayır — qiymət razılaşdırılıb, minimum həcm qorunur, xərc isə düzgün büdcəyə yazılır.',
+      do: async (p, l, h) => { await h.moveTo('table'); await h.holdUntil(0.35); await h.moveTo(p.locator('.badge').first()); await h.holdUntil(0.7); await h.moveTo('h1'); await h.holdUntil(0.9); await h.moveTo('table'); } },
   ]},
-  // Budgets: the section finance actually runs the company from. Every scene performs the
-  // thing it is talking about — the beats are fractions of the narration (holdUntil), so
-  // the cursor never runs ahead of the voice or freezes waiting for it.
   'buyer-budgets': { role: 'buyer', path: '/buyer/budgets', scenes: [
     { az: 'Büdcələr bölməsi. Burada şirkətin xərc planı yaşayır: hansı şöbənin nə qədər pulu var, nə qədəri artıq öhdəliyə gedib və nə qədəri real olaraq xərclənib. Gəlin yuxarıdan başlayaq — şöbələr üzrə yekun cədvəlindən.',
       do: async (p, l, h) => { await h.scrollTo('h3:text-is("Şöbələr üzrə yekun")'); await h.holdUntil(0.45); await h.moveTo('.card:has(h3:text-is("Şöbələr üzrə yekun")) table'); await h.holdUntil(0.9); } },
@@ -477,13 +502,26 @@ const SECTIONS = {
       do: (p) => slowScroll(p, 3) },
   ]},
   'buyer-suppliers': { role: 'buyer', path: '/buyer/suppliers', scenes: [
-    { ru: 'Реестр поставщиков. Приглашение, одобрение или блокировка — только одобренные поставщики получают прямые заказы и каталоги.',
-      az: 'Təchizatçı reyestri. Dəvət, təsdiq və ya bloklama — yalnız təsdiqlənmiş təchizatçılar birbaşa sifariş və kataloq alır.',
-      en: 'The supplier registry. Invite, approve or block — only approved suppliers get direct orders and catalogs.' },
-    { ru: 'По каждому накапливается рейтинг: своевременность поставок, качество и коммуникации. Оценки ставятся по итогам реальных заказов.',
-      az: 'Hər biri üçün reytinq toplanır: çatdırılmanın vaxtında olması, keyfiyyət və ünsiyyət. Qiymətlər real sifarişlərin nəticələrinə görə verilir.',
-      en: 'Each builds up a scorecard: on-time delivery, quality and communication. Ratings come from the outcomes of real orders.',
-      do: (p) => slowScroll(p, 4) },
+    { az: 'Təchizatçılar bölməsi. Burada iki siyahı var: sizin reyestriniz və platformadakı ümumi kataloq. Reyestr — kimlərlə işləməyə icazə verdiyinizdir.',
+      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.4); await h.moveTo(p.locator('.card').nth(0)); await h.holdUntil(0.9); } },
+    { az: 'Reyestrdə şirkət adı, VÖEN və status görünür. Status üç cür olur: dəvət olunub, təsdiqlənib və bloklanıb. Bu, sadəcə etiket deyil — sistem ona görə davranır.',
+      do: async (p, l, h) => { const r = p.locator('.card').nth(0).locator('tbody tr').first(); await h.moveTo(r.locator('td').nth(0)); await h.holdUntil(0.4); await h.moveTo(r.locator('td').nth(1)); await h.holdUntil(0.7); await h.moveTo(r.locator('.badge')); await h.holdUntil(0.93); } },
+    { az: 'Yalnız təsdiqlənmiş təchizatçı birbaşa sifariş və kataloq ala bilər. Bloklanmış təchizatçı isə tenderlərə dəvət olunmur. Yəni reyestr real girişi idarə edir.',
+      do: async (p, l, h) => { const rows = p.locator('.card').nth(0).locator('tbody tr'); await h.moveTo(rows.nth(0).locator('.badge')); await h.holdUntil(0.45); await h.moveTo(rows.nth(1)); await h.holdUntil(0.92); } },
+    { az: 'Sağdakı düymələr statusu dəyişir: bloklamaq və ya blokdan çıxarmaq. Hər dəyişiklik audit jurnalına yazılır — kim, nə vaxt və kimi bloklayıb.',
+      do: async (p, l, h) => { await h.moveTo(p.locator('button[data-tip]').first()); await h.holdUntil(0.5); await h.moveTo(p.locator('button[data-tip]').nth(1)); await h.holdUntil(0.92); } },
+    { az: 'Hər təchizatçı üzrə reytinq toplanır. Bu, subyektiv rəy deyil: qiymətlər real sifarişlərin nəticələrinə görə verilir — vaxtında çatdırıldımı, keyfiyyət necə idi, ünsiyyət necə qurulurdu.',
+      do: async (p, l, h) => { await h.hover(p.locator('button[data-tip]').last(), 900); await h.holdUntil(0.45); await h.moveTo(p.locator('tbody tr').nth(1)); await h.holdUntil(0.75); await h.hover(p.locator('button[data-tip]').first(), 700); await h.holdUntil(0.9); await h.moveTo('h1'); } },
+    { az: 'Reytinq iki yerdə işləyir. Birincisi, tender qiymətləndirilməsində: sistem etibarlılıq indeksini nəzərə alaraq tövsiyə verir. İkincisi, danışıqlarda — rəqəmlərlə arqument gətirmək asandır.',
+      do: async (p, l, h) => { await h.moveTo(p.locator('tbody tr').nth(0)); await h.holdUntil(0.35); await h.moveTo(p.locator('tbody tr').nth(1)); await h.holdUntil(0.65); await h.hover(p.locator('button[data-tip]').nth(2), 700); await h.holdUntil(0.9); await h.moveTo('table'); } },
+    { az: 'İkinci kart — platformanın ümumi kataloqu. Burada bütün qeydiyyatdan keçmiş təchizatçılar var, o cümlədən sizinlə hələ işləməyənlər.',
+      do: async (p, l, h) => { await h.scrollTo(p.locator('.card').nth(1)); await h.holdUntil(0.3); await h.moveTo(p.locator('.card').nth(1).locator('table')); await h.holdUntil(0.6); await h.wheel(140); await h.holdUntil(0.92); } },
+    { az: 'Yeni təchizatçı tapanda onu reyestrinizə dəvət edirsiniz. Dəvətdən sonra o, sizin tenderlərinizi görməyə başlayır — amma birbaşa sifariş üçün hələ təsdiq lazımdır.',
+      do: async (p, l, h) => { const b = p.locator('.card').nth(1).locator('button').first(); if (await b.count()) { await h.hover(b, 900); } else { await h.moveTo(p.locator('.card').nth(1)); } await h.holdUntil(0.5); await h.moveTo(p.locator('.card').nth(1).locator('tbody tr').first()); await h.holdUntil(0.85); await h.moveTo('h1'); } },
+    { az: 'Təsdiqdən əvvəl adətən yoxlama aparılır: vergi nömrəsi, lisenziyalar, bank rekvizitləri. Bunun üçün ayrıca bölmə var — yoxlama. Reyestr və yoxlama birlikdə işləyir.',
+      do: async (p, l, h) => { await h.wheel(-200); await h.holdUntil(0.3); await h.moveTo('a[href="/buyer/verification"]'); await h.holdUntil(0.6); await h.hover('a[href="/buyer/verification"]', 800); await h.holdUntil(0.9); await h.moveTo('h1'); } },
+    { az: 'Beləliklə reyestr sadə sualı həll edir: kim sizin pulunuza yaxın buraxılır. Hər ad orada təsadüfən deyil, qərarla görünür — və bu qərar həmişə izlənilir.',
+      do: async (p, l, h) => { await h.moveTo(p.locator('tbody tr').first()); await h.holdUntil(0.35); await h.hover(p.locator('button[data-tip]').first(), 800); await h.holdUntil(0.7); await h.moveTo('h1'); await h.holdUntil(0.9); await h.moveTo('table'); } },
   ]},
   'buyer-verification': { role: 'buyer', path: '/buyer/verification', scenes: [
     { ru: 'Верификация — проверка поставщика перед допуском к закупкам. Вы открываете кейс, поставщик загружает документы: налоговый номер, лицензии, реквизиты.',
