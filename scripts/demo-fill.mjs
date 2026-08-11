@@ -39,6 +39,10 @@ const TXT = {
     catNames: { IT: 'ИТ и техника', OFFICE: 'Офис и хозтовары', CONSTRUCTION: 'Строительство и ремонт', FUEL: 'Топливо', LOGISTICS: 'Логистика и склад' },
     catTitle: 'Офисные расходники — Supply One', catItem1: 'Бумага А4 80г', catItem2: 'Тонер HP 26A', uomReam: 'пачка', uomPcs: 'шт',
     qnaQ: 'Допускается ли поставка кресел партиями по 10 штук?', qnaA: 'Да, партиями допускается, полный объём — до конца месяца.',
+    depCenter: 'Головной офис', depIt: 'Информационные технологии', depOps: 'Операции',
+    invOkReq: 'Картриджи для офисных принтеров', invOkItem: 'Картридж лазерный', 
+    invBadReq: 'Резервные диски для серверов', invBadItem: 'Диск SSD 480 ГБ',
+    invPayReq: 'Стеллажи для склада', invPayItem: 'Стеллаж металлический',
     justification: 'Лучшее соотношение цена/срок по взвешенной оценке',
   },
   az: {
@@ -55,6 +59,10 @@ const TXT = {
     catNames: { IT: 'İT və texnika', OFFICE: 'Ofis və təsərrüfat', CONSTRUCTION: 'Tikinti və təmir', FUEL: 'Yanacaq', LOGISTICS: 'Logistika və anbar' },
     catTitle: 'Ofis sərfiyyatı — Supply One', catItem1: 'A4 kağız 80q', catItem2: 'Toner HP 26A', uomReam: 'top', uomPcs: 'ədəd',
     qnaQ: 'Kresloları 10 ədədlik partiyalarla çatdırmaq olarmı?', qnaA: 'Bəli, partiyalarla olar, tam həcm — ay sonuna qədər.',
+    depCenter: 'Baş ofis', depIt: 'İnformasiya texnologiyaları', depOps: 'Əməliyyat',
+    invOkReq: 'Ofis printerləri üçün kartriclər', invOkItem: 'Lazer kartric',
+    invBadReq: 'Serverlər üçün ehtiyat disklər', invBadItem: 'SSD disk 480 GB',
+    invPayReq: 'Anbar üçün rəf sistemi', invPayItem: 'Metal rəf',
     justification: 'Çəkili qiymətləndirmə üzrə ən yaxşı qiymət/müddət nisbəti',
   },
   en: {
@@ -71,6 +79,10 @@ const TXT = {
     catNames: { IT: 'IT & hardware', OFFICE: 'Office & supplies', CONSTRUCTION: 'Construction & repair', FUEL: 'Fuel', LOGISTICS: 'Logistics & warehouse' },
     catTitle: 'Office consumables — Supply One', catItem1: 'A4 paper 80g', catItem2: 'Toner HP 26A', uomReam: 'ream', uomPcs: 'pcs',
     qnaQ: 'May the chairs be delivered in batches of 10?', qnaA: 'Yes, batches are allowed; the full volume by month-end.',
+    depCenter: 'Head office', depIt: 'Information technology', depOps: 'Operations',
+    invOkReq: 'Toner cartridges for office printers', invOkItem: 'Laser cartridge',
+    invBadReq: 'Spare disks for the servers', invBadItem: 'SSD disk 480 GB',
+    invPayReq: 'Warehouse racking', invPayItem: 'Steel rack',
     justification: 'Best price / lead-time ratio by the weighted score',
   },
 };
@@ -181,8 +193,8 @@ const log = (s) => console.log(s);
   });
   log('✓ suppliers approved, method + single-step approval policy set');
 
-  const mkApprovedRequest = async (title, category, items) => {
-    const r = await post('/requests', buyer, { title, category, items });
+  const mkApprovedRequest = async (title, category, items, departmentId) => {
+    const r = await post('/requests', buyer, { title, category, items, departmentId });
     await post(`/requests/${r.id}/submit`, buyer);
     await post(`/requests/${r.id}/approve`, approver);
     return r.id;
@@ -193,6 +205,49 @@ const log = (s) => console.log(s);
     await post(`/events/${ev.id}/publish`, buyer);
     return ev.id;
   };
+
+  // ---------- Отделы (места возникновения затрат) ----------
+  // Дерево, а не плоский список: МЦ собирает своих детей в сводке бюджета.
+  const depIds = {};
+  for (const [code, name, parent] of [['MƏRKƏZ', T.depCenter, null], ['IT', T.depIt, 'MƏRKƏZ'], ['OPS', T.depOps, 'MƏRKƏZ']]) {
+    await postIdempotent('/departments', buyer, { code, name, parentId: parent ? depIds[parent] : null });
+    depIds[code] = (await get('/departments', buyer)).find((d) => d.code === code).id;
+  }
+  log('✓ отделы: MƏRKƏZ → IT, OPS');
+
+  // ---------- G. Счета: три исхода трёхстороннего сопоставления ----------
+  // Счёт сверяется с заказом (цена) и с приёмкой (количество). Демо показывает все три
+  // исхода сразу, иначе на экране виден только счастливый путь.
+  const storyG = async () => {
+    // Прямой заказ → выпуск → доставка → приёмка. Держим суммы ниже порога прямого
+    // заказа (500 AZN), иначе политика метода уведёт заявку в тендер.
+    const deliver = async (title, category, depCode, item, qty, priceMinor, receiveQty) => {
+      const reqId = await mkApprovedRequest(title, category, [{ name: item, qty, estUnitPriceMinor: priceMinor }], depIds[depCode]);
+      const po = await post(`/orders/direct/from-request/${reqId}`, buyer, { supplierOrgId: org1 });
+      await post(`/orders/${po.id}/status`, buyer, { status: 'ISSUED' });
+      for (const st of ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED']) await post(`/orders/${po.id}/status`, sup1, { status: st });
+      const det = await get(`/orders/${po.id}`, buyer);
+      await post(`/orders/${po.id}/receipts`, buyer, { items: [{ poItemId: det.items[0].id, qty: receiveQty }] });
+      return { poId: po.id, itemId: det.items[0].id };
+    };
+
+    // G1 — совпало, ждёт решения закупщика.
+    const g1 = await deliver(T.invOkReq, 'OFFICE', 'OPS', T.invOkItem, 6, 4_500, 6);
+    await post(`/invoices/from-po/${g1.poId}`, sup1, { items: [{ poItemId: g1.itemId, qty: 6, unitPriceMinor: 4_500 }] });
+
+    // G2 — поставщик выставил больше, чем приняли, и дороже заказа: расхождение.
+    const g2 = await deliver(T.invBadReq, 'IT', 'IT', T.invBadItem, 8, 5_500, 5);
+    await post(`/invoices/from-po/${g2.poId}`, sup1, { items: [{ poItemId: g2.itemId, qty: 8, unitPriceMinor: 6_200 }] });
+
+    // G3 — совпало и утверждено, ждёт оплаты.
+    const g3 = await deliver(T.invPayReq, 'OFFICE', 'OPS', T.invPayItem, 4, 9_000, 4);
+    const inv3 = await post(`/invoices/from-po/${g3.poId}`, sup1, { items: [{ poItemId: g3.itemId, qty: 4, unitPriceMinor: 9_000 }] });
+    await post(`/invoices/${inv3.id}/approve`, buyer);
+
+    log('✓ G: счета — совпал (ждёт решения), расхождение по цене и количеству, утверждён к оплате');
+  };
+  // DEMO_ONLY=G досыпает только счета на уже живой стенд, не переигрывая истории A–F.
+  if (process.env.DEMO_ONLY === 'G') { await storyG(); log('\nDone (только счета).'); return; }
 
   // ---------- A. Полный цикл до оплаты ----------
   const reqA = await mkApprovedRequest(T.srvReq, 'IT', [
@@ -314,6 +369,8 @@ const log = (s) => console.log(s);
     items: [{ poItemId: poF.items[0].id, qty: 60 }],
   });
   log('✓ F: прямой заказ выпущен, поправка ждёт решения поставщика');
+
+  await storyG();
 
   // ---------- Бюджеты ----------
   const year = new Date().getFullYear();
