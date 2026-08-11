@@ -1,5 +1,6 @@
 import { FormEvent, Fragment, useEffect, useState } from 'react';
 import { api, fmtDate, fmtMoney } from '../../api/client';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 
@@ -57,13 +58,6 @@ export default function Budgets() {
   const [policy, setPolicy] = useState<{ warnPct: number; blockPct: number | null; allowOverride: boolean } | null>(null);
   useEffect(() => { api.get('/departments').then((r) => setDeps(r.data)).catch(() => {}); }, []);
   useEffect(() => { api.get('/budgets/policy').then((r) => setPolicy(r.data)).catch(() => {}); }, []);
-
-  const savePolicy = async (patch: Record<string, unknown>) => {
-    try {
-      const { data } = await api.put('/budgets/policy', { ...policy, ...patch });
-      setPolicy(data);
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
-  };
 
   // Period + department filter over the list, all optional.
   const [filter, setFilter] = useState({ periodType: '', year: '', departmentId: '' });
@@ -251,28 +245,14 @@ export default function Budgets() {
           {err && <div className="error">{err}</div>}
         </div>
       )}
-      {isAdmin && policy && (
-        <div className="card">
-          <h3>{t('bud_thresholds')}</h3>
-          <div className="hint" style={{ marginBottom: 10 }}>{t('bud_thresholds_hint')}</div>
-          <div className="row" style={{ alignItems: 'flex-end', maxWidth: 760 }}>
-            <div><label>{t('bud_warn_pct')}</label>
-              <input type="number" min={1} max={1000} value={policy.warnPct}
-                onChange={(e) => setPolicy({ ...policy, warnPct: Number(e.target.value) })}
-                onBlur={(e) => savePolicy({ warnPct: Number(e.target.value) })} /></div>
-            <div><label>{t('bud_block_pct')}</label>
-              {/* empty = blocking off, which is the default: approvals never fail on budget */}
-              <input type="number" min={1} max={1000} placeholder={t('bud_block_off')}
-                value={policy.blockPct ?? ''}
-                onChange={(e) => setPolicy({ ...policy, blockPct: e.target.value === '' ? null : Number(e.target.value) })}
-                onBlur={(e) => savePolicy({ blockPct: e.target.value === '' ? null : Number(e.target.value) })} /></div>
-            <div><label>{t('bud_allow_override')}</label>
-              <select value={policy.allowOverride ? '1' : '0'}
-                onChange={(e) => savePolicy({ allowOverride: e.target.value === '1' })}>
-                <option value="1">{t('yes')}</option>
-                <option value="0">{t('no')}</option>
-              </select></div>
-          </div>
+      {/* The thresholds themselves are an organisation-wide RULE, and they live in Settings
+          next to the approval chain. What belongs here is their current state, where it
+          takes effect — read-only, one line, with a way to go change it. */}
+      {policy && (
+        <div className="hint" style={{ marginBottom: 14 }}>
+          {t('bud_thresholds')}: {t('bud_warn_pct')} {policy.warnPct}% ·{' '}
+          {t('bud_block_pct')} {policy.blockPct == null ? t('bud_block_off') : `${policy.blockPct}%`}
+          {isAdmin && <> · <Link to="/buyer/settings">{t('bud_thresholds_edit')}</Link></>}
         </div>
       )}
 

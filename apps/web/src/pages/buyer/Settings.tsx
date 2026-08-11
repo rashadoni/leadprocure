@@ -16,6 +16,11 @@ export default function Settings() {
   const [deps, setDeps] = useState<any[]>([]);
   const [newDep, setNewDep] = useState({ code: '', name: '', parentId: '' });
   const [nu, setNu] = useState({ email: '', fullName: '', password: '', role: 'BUYER_USER' });
+  // Budget thresholds are an organisation-wide RULE about approvals, which is what this
+  // page is for — they used to sit on the Budgets screen, in the way of the numbers.
+  const [policy, setPolicy] = useState<{ warnPct: number; blockPct: number | null; allowOverride: boolean } | null>(null);
+  const [policyDraft, setPolicyDraft] = useState<{ warnPct: string; blockPct: string; allowOverride: boolean } | null>(null);
+  const [policySaved, setPolicySaved] = useState(false);
   const isAdmin = session?.org.role === 'BUYER_ADMIN';
 
   // Method-policy editor (value bands → procurement method).
@@ -31,6 +36,14 @@ export default function Settings() {
     api.get('/requests/approval-policies').then((r) => setApprovals(r.data));
     api.get('/categories').then((r) => setCats(r.data)).catch(() => {});
     api.get('/departments').then((r) => setDeps(r.data)).catch(() => {});
+    api.get('/budgets/policy').then((r) => {
+      setPolicy(r.data);
+      setPolicyDraft({
+        warnPct: String(r.data.warnPct),
+        blockPct: r.data.blockPct == null ? '' : String(r.data.blockPct),
+        allowOverride: r.data.allowOverride,
+      });
+    }).catch(() => {});
   };
   useEffect(load, []);
 
@@ -81,6 +94,27 @@ export default function Settings() {
       .sort((a, b) => a.min - b.min),
   );
   const activeChainKey = Object.entries(CHAIN_PRESETS).find(([, pr]) => chainSig(pr.policies) === chainSig(approvals))?.[0];
+
+  // Explicit save. These fields can stop spending across the company; saving them on blur,
+  // the way they behaved before, was far too quiet for what they do.
+  const savePolicy = async () => {
+    if (!policyDraft) return;
+    try {
+      const { data } = await api.put('/budgets/policy', {
+        warnPct: Number(policyDraft.warnPct),
+        blockPct: policyDraft.blockPct === '' ? null : Number(policyDraft.blockPct),
+        allowOverride: policyDraft.allowOverride,
+      });
+      setPolicy(data);
+      setPolicySaved(true);
+      setTimeout(() => setPolicySaved(false), 2500);
+    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  };
+  const policyDirty = !!policy && !!policyDraft && (
+    Number(policyDraft.warnPct) !== policy.warnPct
+    || (policyDraft.blockPct === '' ? null : Number(policyDraft.blockPct)) !== policy.blockPct
+    || policyDraft.allowOverride !== policy.allowOverride
+  );
 
   const addUser = (e: FormEvent) => {
     e.preventDefault();
@@ -221,6 +255,37 @@ export default function Settings() {
           </form>
         )}
       </div>
+
+      {policyDraft && (
+        <div className="card">
+          <h3>{t('bud_thresholds')}</h3>
+          <div className="hint" style={{ marginBottom: 12 }}>{t('bud_thresholds_hint')}</div>
+          <div className="row" style={{ alignItems: 'flex-end', maxWidth: 880 }}>
+            <div><label>{t('bud_warn_label')}</label>
+              <input type="number" min={1} max={1000} disabled={!isAdmin} value={policyDraft.warnPct}
+                onChange={(e) => setPolicyDraft({ ...policyDraft, warnPct: e.target.value })} /></div>
+            <div><label>{t('bud_block_label')}</label>
+              <input type="number" min={1} max={1000} disabled={!isAdmin} placeholder={t('bud_block_off')}
+                value={policyDraft.blockPct}
+                onChange={(e) => setPolicyDraft({ ...policyDraft, blockPct: e.target.value })} /></div>
+            <div><label>{t('bud_override_label')}</label>
+              <select disabled={!isAdmin} value={policyDraft.allowOverride ? '1' : '0'}
+                onChange={(e) => setPolicyDraft({ ...policyDraft, allowOverride: e.target.value === '1' })}>
+                <option value="1">{t('yes')}</option>
+                <option value="0">{t('no')}</option>
+              </select></div>
+            {isAdmin && (
+              <div style={{ flex: '0 0 auto' }}>
+                <button className="btn" disabled={!policyDirty} onClick={savePolicy}>{t('save')}</button>
+              </div>
+            )}
+          </div>
+          <div className="hint" style={{ marginTop: 10 }}>
+            {policyDraft.blockPct === '' ? t('bud_block_off_hint') : t('bud_block_on_hint')}
+            {policySaved && <b style={{ color: 'var(--ok)', marginLeft: 8 }}>✓ {t('saved')}</b>}
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <h3>⚖️ {t('method_policy')}</h3>
