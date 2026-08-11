@@ -43,6 +43,7 @@ const TXT = {
     invOkReq: 'Картриджи для офисных принтеров', invOkItem: 'Картридж лазерный', 
     invBadReq: 'Резервные диски для серверов', invBadItem: 'Диск SSD 480 ГБ',
     invPayReq: 'Стеллажи для склада', invPayItem: 'Стеллаж металлический',
+    shipCustoms: 'Ожидает таможенного оформления', shipException: 'Повреждение упаковки, составлен акт',
     justification: 'Лучшее соотношение цена/срок по взвешенной оценке',
   },
   az: {
@@ -63,6 +64,7 @@ const TXT = {
     invOkReq: 'Ofis printerləri üçün kartriclər', invOkItem: 'Lazer kartric',
     invBadReq: 'Serverlər üçün ehtiyat disklər', invBadItem: 'SSD disk 480 GB',
     invPayReq: 'Anbar üçün rəf sistemi', invPayItem: 'Metal rəf',
+    shipCustoms: 'Gömrük rəsmiləşdirilməsi gözlənilir', shipException: 'Qablaşdırma zədəsi, akt tərtib edildi',
     justification: 'Çəkili qiymətləndirmə üzrə ən yaxşı qiymət/müddət nisbəti',
   },
   en: {
@@ -83,6 +85,7 @@ const TXT = {
     invOkReq: 'Toner cartridges for office printers', invOkItem: 'Laser cartridge',
     invBadReq: 'Spare disks for the servers', invBadItem: 'SSD disk 480 GB',
     invPayReq: 'Warehouse racking', invPayItem: 'Steel rack',
+    shipCustoms: 'Waiting for customs clearance', shipException: 'Packaging damaged, a report was filed',
     justification: 'Best price / lead-time ratio by the weighted score',
   },
 };
@@ -249,6 +252,42 @@ const log = (s) => console.log(s);
   // DEMO_ONLY=G досыпает только счета на уже живой стенд, не переигрывая истории A–F.
   if (process.env.DEMO_ONLY === 'G') { await storyG(); log('\nDone (только счета).'); return; }
 
+  // ---------- H. Доставки: доска в разных состояниях ----------
+  // Идемпотентно: отправка навешивается только на заказы, у которых её ещё нет, —
+  // так блок можно доливать на живой стенд, не плодя дублей.
+  const storyH = async () => {
+    const shipped = new Set((await get('/logistics', buyer)).map((s) => s.po_id));
+    const poPage = await get('/orders', buyer);
+    const orders = (Array.isArray(poPage) ? poPage : poPage.items ?? []).filter((o) => !shipped.has(o.id) && o.status !== 'DRAFT');
+    const plan = [
+      { status: 'CUSTOMS', carrier: 'Global Cargo', from: 'İstanbul', to: 'Bakı', days: 3, note: T.shipCustoms },
+      { status: 'EXCEPTION', carrier: 'Baku Express', from: 'Bakı', to: 'Gəncə', days: 1, note: T.shipException },
+      { status: 'DELIVERED', carrier: 'AzərPost', from: 'Bakı', to: 'Xırdalan', days: -1, note: null },
+      { status: 'PICKED_UP', carrier: 'Baku Express', from: 'Sumqayıt', to: 'Bakı', days: 5, note: null },
+    ];
+    let n = 0;
+    for (const o of orders.slice(0, plan.length)) {
+      const s = plan[n++];
+      await post(`/logistics/po/${o.id}/shipment`, sup1, {
+        carrier: s.carrier, trackingNo: `AZ${60_000_000 + n}`, origin: s.from, destination: s.to,
+        eta: new Date(Date.now() + s.days * DAY).toISOString(),
+      });
+      // История, а не один статус: проигрываем маршрут до нужного состояния. Таможня и
+      // происшествие случаются в пути, поэтому идут после отправки и погрузки.
+      const CHAIN = ['PICKED_UP', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED'];
+      const at = CHAIN.indexOf(s.status);
+      const steps = at >= 0 ? CHAIN.slice(0, at + 1) : [...CHAIN.slice(0, 2), s.status];
+      for (const step of steps) {
+        const last = step === s.status;
+        await post(`/logistics/po/${o.id}/events`, sup1, {
+          status: step, location: last ? s.to : s.from, note: last && s.note ? s.note : undefined,
+        });
+      }
+    }
+    log(`✓ H: доска доставок — ${n} отправк(и) в пути, на таможне, с происшествием и доставленная`);
+  };
+  if (process.env.DEMO_ONLY === 'H') { await storyH(); log('\nDone (только доставки).'); return; }
+
   // ---------- A. Полный цикл до оплаты ----------
   const reqA = await mkApprovedRequest(T.srvReq, 'IT', [
     { name: T.srvItem1, qty: 4, estUnitPriceMinor: 1_200_000 },
@@ -371,6 +410,7 @@ const log = (s) => console.log(s);
   log('✓ F: прямой заказ выпущен, поправка ждёт решения поставщика');
 
   await storyG();
+  await storyH();
 
   // ---------- Бюджеты ----------
   const year = new Date().getFullYear();
