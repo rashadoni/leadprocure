@@ -82,12 +82,18 @@ export type OrganizationStatus = (typeof ORGANIZATION_STATUSES)[number];
 export const MEMBERSHIP_ROLES = [
   'BUYER_ADMIN',
   'BUYER_APPROVER',
+  // Finance controller: owns the budget side (plans, thresholds, closing a period) and can
+  // be named as a step in an approval chain, but runs none of procurement itself.
+  'BUYER_FINANCE',
   'BUYER_USER',
   'SUPPLIER_USER',
 ] as const;
 export type MembershipRole = (typeof MEMBERSHIP_ROLES)[number];
 
-export const BUYER_ROLES: MembershipRole[] = ['BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER'];
+export const BUYER_ROLES: MembershipRole[] = ['BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_FINANCE', 'BUYER_USER'];
+
+// Who may act on the budget side at all: the plan, its thresholds and closing a period.
+export const BUDGET_ROLES: MembershipRole[] = ['BUYER_ADMIN', 'BUYER_FINANCE'];
 
 // ---------------- Suppliers ----------------
 export const SUPPLIER_RELATIONSHIP_STATUSES = ['INVITED', 'APPROVED', 'BLOCKED'] as const;

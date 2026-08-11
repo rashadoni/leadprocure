@@ -526,15 +526,40 @@ export class BudgetsService {
       .sort((a, b) => (a.departmentCode ?? '').localeCompare(b.departmentCode ?? ''));
   }
 
-  // A plain BUYER_USER sees only their own cost centre; approvers and admins see all.
+  // Who sees which budgets. Admin, finance and approvers see the whole plan — that is the
+  // point of their jobs. A plain user sees their own cost centre, and nothing if they have
+  // none: showing the organisation's entire plan to whoever happens to log in is the sort
+  // of default nobody notices until it matters.
+  //
+  // A department OWNER is a plain user with one exception — their own department — which
+  // falls out of the same rule, since the owner's home department is that department.
   async scopeFor(auth: AccessTokenPayload): Promise<string | null> {
     if (auth.role !== 'BUYER_USER') return null;
     const row = await this.rc.manager.query(
-      `SELECT department_id FROM memberships WHERE user_id = $1 AND org_id = $2 LIMIT 1`,
+      `SELECT COALESCE(
+                (SELECT d.id FROM departments d WHERE d.owner_user_id = $1 LIMIT 1),
+                (SELECT m.department_id FROM memberships m WHERE m.user_id = $1 AND m.org_id = $2 LIMIT 1)
+              ) AS department_id`,
       [auth.sub, auth.org_id],
     );
-    // No home department → no department budgets to show (rather than the whole org's).
     return row[0]?.department_id ?? NO_DEPARTMENT;
+  }
+
+  // Writing a plan is narrower than reading one. Admin and finance may touch any budget; a
+  // department owner may only touch their own department's, and only while it is theirs to
+  // move (a draft they are preparing, or an amount revision on their own plan).
+  private async assertMayWrite(auth: AccessTokenPayload, departmentId: string | null) {
+    if (auth.role === 'BUYER_ADMIN' || auth.role === 'BUYER_FINANCE') return;
+    const owned = departmentId
+      ? await this.rc.manager.query(
+          `SELECT 1 FROM departments WHERE id = $1 AND owner_user_id = $2`, [departmentId, auth.sub],
+        )
+      : [];
+    if (!owned.length) {
+      throw new ForbiddenException(
+        'You may only draft budgets for a department you own — ask finance or an admin for anything wider',
+      );
+    }
   }
 
   private shape(r: any) {
@@ -581,6 +606,7 @@ export class BudgetsService {
   async create(dto: UpsertBudgetDto, auth: AccessTokenPayload) {
     const period = resolveBudgetPeriod(dto);
     await this.assertKnownCategory(dto.category?.trim() || '*');
+    await this.assertMayWrite(auth, dto.departmentId ?? null);
     let row: { id: string };
     try {
       row = (
@@ -611,6 +637,7 @@ export class BudgetsService {
   async update(id: string, dto: UpsertBudgetDto, auth: AccessTokenPayload) {
     const period = resolveBudgetPeriod(dto);
     await this.assertKnownCategory(dto.category?.trim() || '*');
+    await this.assertMayWrite(auth, dto.departmentId ?? null);
     // The amount is money, not a field: changing it writes a revision so "the plan was
     // 500k until March" stays answerable.
     const before = (await this.rc.manager.query(`SELECT amount_minor, status FROM budgets WHERE id=$1`, [id]))[0];
@@ -945,7 +972,7 @@ export class BudgetsController {
   constructor(private readonly budgets: BudgetsService) {}
 
   @Get()
-  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_FINANCE', 'BUYER_USER')
   async list(
     @CurrentUser() auth: AccessTokenPayload,
     @Query('year') year?: string,
@@ -966,13 +993,13 @@ export class BudgetsController {
 
   // Approved spend that no budget covers — the blind spot a per-budget view can't show.
   @Get('unbudgeted')
-  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_FINANCE')
   unbudgeted(@Query('from') from?: string, @Query('to') to?: string) {
     return this.budgets.unbudgeted({ from: from || undefined, to: to || undefined });
   }
 
   @Get('export')
-  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_FINANCE')
   async exportCsv(
     @Res() res: Response,
     @Query('year') year?: string,
@@ -991,7 +1018,7 @@ export class BudgetsController {
 
   // Plan / commitment / actual / paid per department — the finance headline.
   @Get('rollup')
-  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_FINANCE', 'BUYER_USER')
   async rollup(
     @CurrentUser() auth: AccessTokenPayload,
     @Query('year') year?: string,
@@ -1013,87 +1040,87 @@ export class BudgetsController {
   }
 
   @Get('policy')
-  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_FINANCE', 'BUYER_USER')
   policy() {
     return this.budgets.getPolicy();
   }
 
   @Put('policy')
-  @Roles('BUYER_ADMIN')
+  @Roles('BUYER_ADMIN', 'BUYER_FINANCE')
   setPolicy(@Body() dto: BudgetPolicyDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.budgets.setPolicy(dto, auth);
   }
 
   // What approving this request would do to its budget — for the approve dialog.
   @Get('impact/:requestId')
-  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_FINANCE', 'BUYER_USER')
   impact(@Param('requestId') requestId: string) {
     return this.budgets.impactFor(requestId);
   }
 
   @Post()
-  @Roles('BUYER_ADMIN')
+  @Roles('BUYER_ADMIN', 'BUYER_FINANCE', 'BUYER_USER')
   create(@Body() dto: UpsertBudgetDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.budgets.create(dto, auth);
   }
 
   @Put(':id')
-  @Roles('BUYER_ADMIN')
+  @Roles('BUYER_ADMIN', 'BUYER_FINANCE', 'BUYER_USER')
   update(@Param('id') id: string, @Body() dto: UpsertBudgetDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.budgets.update(id, dto, auth);
   }
 
   @Get(':id/revisions')
-  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_FINANCE', 'BUYER_USER')
   revisions(@Param('id') id: string) {
     return this.budgets.revisions(id);
   }
 
   // Carry this budget's unspent remainder into another period's budget.
   @Post(':id/rollover')
-  @Roles('BUYER_ADMIN')
+  @Roles('BUYER_ADMIN', 'BUYER_FINANCE')
   rollover(@Param('id') id: string, @Body() dto: RolloverDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.budgets.rollover(dto.sourceBudgetId, id, auth);
   }
 
   @Post(':id/submit')
-  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  @Roles('BUYER_ADMIN', 'BUYER_FINANCE', 'BUYER_USER')
   submit(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
     return this.budgets.submit(id, auth);
   }
 
   @Post(':id/recall')
-  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  @Roles('BUYER_ADMIN', 'BUYER_FINANCE', 'BUYER_USER')
   recall(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
     return this.budgets.recall(id, auth);
   }
 
   @Post(':id/approve')
-  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  @Roles('BUYER_ADMIN', 'BUYER_FINANCE', 'BUYER_APPROVER')
   approveBudget(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
     return this.budgets.approveBudget(id, auth);
   }
 
   @Post(':id/reject')
-  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  @Roles('BUYER_ADMIN', 'BUYER_FINANCE', 'BUYER_APPROVER')
   rejectBudget(@Param('id') id: string, @Body() body: ReasonDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.budgets.rejectBudget(id, auth, body.reason);
   }
 
   @Post(':id/close')
-  @Roles('BUYER_ADMIN')
+  @Roles('BUYER_ADMIN', 'BUYER_FINANCE')
   close(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
     return this.budgets.close(id, auth);
   }
 
   @Post(':id/reopen')
-  @Roles('BUYER_ADMIN')
+  @Roles('BUYER_ADMIN', 'BUYER_FINANCE')
   reopen(@Param('id') id: string, @Body() body: ReasonDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.budgets.reopen(id, auth, body.reason);
   }
 
   @Delete(':id')
-  @Roles('BUYER_ADMIN')
+  @Roles('BUYER_ADMIN', 'BUYER_FINANCE', 'BUYER_USER')
   remove(@Param('id') id: string) {
     return this.budgets.remove(id);
   }

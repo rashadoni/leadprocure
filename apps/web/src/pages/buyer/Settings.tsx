@@ -56,13 +56,20 @@ export default function Settings() {
   const CHAIN_PRESETS: Record<string, { label: string; policies: any[] }> = {
     p0: { label: t('chain_p0'), policies: [] },
     p1: { label: t('chain_p1'), policies: [{ minAmountMinor: 0, maxAmountMinor: null, steps: [{ order: 1, role: 'BUYER_APPROVER' }] }] },
+    // Finance in the chain: over the threshold, the controller signs before the spend is
+    // allowed. approval_steps already checks the acting user's role, so naming the finance
+    // role here is all it takes.
+    p3: { label: t('chain_p3'), policies: [
+      { minAmountMinor: 0, maxAmountMinor: 5_000_000, steps: [{ order: 1, role: 'BUYER_APPROVER' }] },
+      { minAmountMinor: 5_000_000, maxAmountMinor: null, steps: [{ order: 1, role: 'BUYER_APPROVER' }, { order: 2, role: 'BUYER_FINANCE' }] },
+    ] },
     p2: { label: t('chain_p2'), policies: [
       { minAmountMinor: 0, maxAmountMinor: 5_000_000, steps: [{ order: 1, role: 'BUYER_APPROVER' }] },
       { minAmountMinor: 5_000_000, maxAmountMinor: null, steps: [{ order: 1, role: 'BUYER_APPROVER' }, { order: 2, role: 'BUYER_ADMIN' }] },
     ] },
   };
   const setChain = (key: string) => run(() => api.put('/requests/approval-policies', { policies: CHAIN_PRESETS[key].policies }));
-  const ROLE_ICO: Record<string, string> = { BUYER_ADMIN: '👑', BUYER_APPROVER: '🖊', BUYER_USER: '👤' };
+  const ROLE_ICO: Record<string, string> = { BUYER_ADMIN: '👑', BUYER_APPROVER: '🖊', BUYER_FINANCE: '💰', BUYER_USER: '👤' };
   // Which preset matches the currently saved chain (normalize camel/snake + ordering).
   const chainSig = (list: any[]) => JSON.stringify(
     (list ?? [])

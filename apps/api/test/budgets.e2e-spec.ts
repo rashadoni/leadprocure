@@ -159,6 +159,56 @@ describe('budgets & commitment control (API e2e)', () => {
     await http().post('/budgets').set(...bearer(buyerA)).send(body).expect(409);
   });
 
+  // ---------- who may touch the money ----------
+
+  it('a finance controller owns the budget side without running procurement', async () => {
+    await http().post('/settings/users').set(...bearer(buyerA))
+      .send({ email: `fin-${tag}@t.test`, fullName: 'Controller', password: 'password123', role: 'BUYER_FINANCE' }).expect(201);
+    const fin = (await http().post('/auth/login').send({ email: `fin-${tag}@t.test`, password: 'password123' }).expect(201)).body.accessToken;
+
+    // sees the whole plan, not one department
+    const all = (await http().get('/budgets').set(...bearer(fin)).expect(200)).body;
+    expect(all.length).toBeGreaterThan(1);
+
+    // can draft, submit and put a plan in force, and can set the thresholds
+    const d = (await http().post('/budgets').set(...bearer(fin))
+      .send({ name: `Fin ${tag}`, category: 'FIN', periodYear: YEAR, amountMinor: 70_000 }).expect(201)).body;
+    await http().post(`/budgets/${d.id}/submit`).set(...bearer(fin)).expect(201);
+    await http().post(`/budgets/${d.id}/approve`).set(...bearer(buyerA)).expect(201);
+    // same values as the default: this spec proves the RIGHT to set thresholds, and must
+    // not move a number the threshold specs below assert on
+    await http().put('/budgets/policy').set(...bearer(fin)).send({ warnPct: 80, blockPct: null }).expect(200);
+
+    // but procurement is not their job: they cannot approve a spending request
+    const req = await http().post('/requests').set(...bearer(buyerA))
+      .send({ title: `Fin req ${tag}`, category: 'FIN', items: [{ name: 'x', qty: 1, estUnitPriceMinor: 1000 }] }).expect(201);
+    await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyerA)).expect(201);
+    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(fin)).expect(403);
+  });
+
+  it('a department owner drafts their own budget and nobody else’s', async () => {
+    const ownerEmail = `own-${tag}@t.test`;
+    await http().post('/settings/users').set(...bearer(buyerA))
+      .send({ email: ownerEmail, fullName: 'Dept head', password: 'password123', role: 'BUYER_USER' }).expect(201);
+    const ownerId = (await http().get('/settings/users').set(...bearer(buyerA))).body.find((u: any) => u.email === ownerEmail).id;
+    const mine = (await http().post('/departments').set(...bearer(buyerA))
+      .send({ code: `OWNED-${tag}`, ownerUserId: ownerId }).expect(201)).body;
+    const theirs = (await http().post('/departments').set(...bearer(buyerA)).send({ code: `OTHER-${tag}` }).expect(201)).body;
+    const owner = (await http().post('/auth/login').send({ email: ownerEmail, password: 'password123' }).expect(201)).body.accessToken;
+
+    await http().post('/budgets').set(...bearer(owner))
+      .send({ name: `Mine ${tag}`, departmentId: mine.id, periodYear: YEAR, amountMinor: 5_000 }).expect(201);
+    // another department, or the org-wide ceiling, is not theirs to plan
+    await http().post('/budgets').set(...bearer(owner))
+      .send({ name: `Theirs ${tag}`, departmentId: theirs.id, periodYear: YEAR, amountMinor: 5_000 }).expect(403);
+    await http().post('/budgets').set(...bearer(owner))
+      .send({ name: `Orgwide ${tag}`, periodYear: YEAR, amountMinor: 5_000 }).expect(403);
+
+    // and they read only their own cost centre
+    const seen = (await http().get('/budgets').set(...bearer(owner)).expect(200)).body;
+    expect(seen.every((b: any) => b.departmentId === mine.id)).toBe(true);
+  });
+
   // ---------- the budget as a document ----------
 
   it('a new budget is a DRAFT and holds no money until it is approved', async () => {
