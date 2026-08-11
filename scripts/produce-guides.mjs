@@ -109,6 +109,19 @@ const L = (page, sel) => (typeof sel === 'string' ? page.locator(sel).first() : 
 // Pick a <select> option by the START of its label. Options are often "CODE · Full name",
 // and selectOption({label}) needs an EXACT match — a near-miss silently waits out the whole
 // default timeout, which lands in the recording as a dead pause the voice track can't fill.
+// The first clickable figure on the page may well be 0.00 — its document list is empty, so
+// nothing opens and the next scene waits out a 20s timeout as dead air. Pick a number that
+// actually has money behind it.
+async function firstNonZero(page, sel) {
+  const all = page.locator(sel);
+  const n = await all.count();
+  for (let i = 0; i < n; i++) {
+    const txt = (await all.nth(i).innerText().catch(() => '')) || '';
+    if (!/^0[.,]00/.test(txt.trim())) return all.nth(i);
+  }
+  return all.first();
+}
+
 async function selectByPrefix(page, sel, prefix) {
   const opt = page.locator(`${sel} option`).filter({ hasText: prefix }).first();
   if (!(await opt.count())) return false;
@@ -449,51 +462,60 @@ const SECTIONS = {
     { az: 'Yekunda: kataloq təkrarlanan alışları prosedurdan azad edir, amma nəzarəti saxlayır — qiymət razılaşdırılıb, minimum həcm qorunur, xərc isə düzgün büdcəyə yazılır.',
       do: async (p, l, h) => { await h.moveTo('table'); await h.holdUntil(0.35); await h.moveTo(p.locator('.badge').first()); await h.holdUntil(0.7); await h.moveTo('h1'); await h.holdUntil(0.9); await h.moveTo('table'); } },
   ]},
+  // Budgets: the section finance runs the company from. Every scene performs the thing it
+  // is talking about, and the beats are fractions of the narration (holdUntil), so the
+  // cursor never runs ahead of the voice or freezes waiting for it.
   'buyer-budgets': { role: 'buyer', path: '/buyer/budgets', scenes: [
-    { az: 'Büdcələr bölməsi. Burada şirkətin xərc planı yaşayır: hansı şöbənin nə qədər pulu var, nə qədəri artıq öhdəliyə gedib və nə qədəri real olaraq xərclənib. Gəlin yuxarıdan başlayaq — şöbələr üzrə yekun cədvəlindən.',
-      do: async (p, l, h) => { await h.scrollTo('h3:text-is("Şöbələr üzrə yekun")'); await h.holdUntil(0.45); await h.moveTo('.card:has(h3:text-is("Şöbələr üzrə yekun")) table'); await h.holdUntil(0.9); } },
-    { az: 'Hər sətir bir məsrəf mərkəzidir. «Bütün təşkilat» sətri ümumi tavandır, aşağıdakılar isə ayrı-ayrı şöbələr. Məbləğ sütunu plandır — ilin və ya rübün əvvəlində razılaşdırılmış rəqəm.',
-      do: async (p, l, h) => { const rows = p.locator('.card:has(h3:text-is("Şöbələr üzrə yekun")) tbody tr'); await h.moveTo(rows.nth(0)); await h.holdUntil(0.4); await h.moveTo(rows.nth(1)); await h.holdUntil(0.72); await h.moveTo(rows.nth(2)); await h.holdUntil(0.92); } },
-    { az: 'İndi ən vacib fərq. Öhdəlik — təsdiqlənmiş, amma hələ sifariş verilməmiş sorğulardır: pul ayrılıb, hələ xərclənməyib. Faktiki isə artıq verilmiş sifarişlərdir. Sistem eyni xərci heç vaxt iki dəfə saymır: sifariş veriləndə məbləğ öhdəlikdən faktikiyə keçir.',
-      do: async (p, l, h) => { const r = p.locator('.card:has(h3:text-is("Şöbələr üzrə yekun")) tbody tr').nth(1); await h.moveTo(r.locator('td').nth(2)); await h.holdUntil(0.5); await h.moveTo(r.locator('td').nth(3)); await h.holdUntil(0.95); } },
-    { az: 'Ödənilib sütunu ayrıca dayanır — bu, ödənişi tamamlanmış qaimələrdir. Diqqət edin: o, istifadəyə əlavə olunmur. Qaimə artıq faktiki kimi sayılmış sifarişin ödənişidir, toplasaq xərc iki dəfə görünərdi.',
-      do: async (p, l, h) => { const r = p.locator('.card:has(h3:text-is("Şöbələr üzrə yekun")) tbody tr').nth(0); await h.moveTo(r.locator('td').nth(4)); await h.holdUntil(0.55); await h.moveTo(r.locator('td').nth(6)); await h.holdUntil(0.92); } },
-    { az: 'Yeni büdcə yaratmaq üçün yuxarıdakı formadan istifadə edirik. Əvvəlcə ad veririk — məsələn, marketinq üçün illik büdcə.',
-      do: async (p, l, h) => { await h.scrollTo('form input'); await h.holdUntil(0.3); await h.fill(p.locator('form input').nth(0), 'Marketinq 2026'); await h.holdUntil(0.9); } },
-    { az: 'Sonra şöbəni seçirik. Boş buraxsanız, büdcə bütün təşkilata aid olur. Konkret şöbə seçəndə isə yalnız həmin şöbənin xərcləri ora yazılır — və şöbə büdcəsi həmişə ümumi büdcədən üstündür.',
-      do: async (p, l, h) => { await h.moveTo(p.locator('form select').nth(0)); await h.holdUntil(0.4); await p.locator('form select').nth(0).selectOption({ label: 'IT' }).catch(() => {}); await h.holdUntil(0.95); } },
-    { az: 'Dövr — illik, rüblük və ya aylıq. Maliyyəçi çox vaxt rübləri izləyir, ona görə rüblük seçirik: sistem dərhal rüb nömrəsini soruşur və büdcənin tarix aralığını özü hesablayır.',
-      do: async (p, l, h) => { await h.moveTo(p.locator('form select').nth(1)); await h.holdUntil(0.35); await p.locator('form select').nth(1).selectOption('QUARTER').catch(() => {}); await h.holdUntil(0.7); await h.moveTo(p.locator('form select').nth(2)); await h.holdUntil(0.95); } },
-    { az: 'Məbləği yazırıq və səbəb sahəsini doldururuq. Səbəb təsadüfi deyil: hər məbləğ dəyişikliyi tarixçəyə düşür, ona görə sonradan «plan niyə artıb» sualına cavab həmişə qalır. Formanı təsdiq etmirik — bu, sadəcə nümayişdir.',
-      do: async (p, l, h) => { await h.fill(p.locator('form input').nth(2), '12000'); await h.holdUntil(0.55); await h.fill(p.locator('form input').nth(3), 'rüblük plan'); await h.holdUntil(0.95); } },
-    { az: 'Aşağıda büdcə hədləri var. Xəbərdarlıq həddi keçiləndə şöbənin məsul şəxsinə bildiriş gedir. Blok həddi isə boşdur — yəni təsdiq heç vaxt dayandırılmır. Doldursanız, həddi aşan sorğunu yalnız administrator yazılı əsaslandırma ilə keçirə bilər.',
-      do: async (p, l, h) => { await h.scrollTo('h3:text-is("Büdcə hədləri")'); await h.holdUntil(0.35); await h.moveTo('.card:has(h3:text-is("Büdcə hədləri")) input'); await h.holdUntil(0.65); await h.moveTo('.card:has(h3:text-is("Büdcə hədləri")) select'); await h.holdUntil(0.95); } },
-    { az: 'Cədvəldə isə hər büdcə ayrıca sətirdir. Saat düyməsi dəyişikliklər tarixçəsini açır: ilkin plan, sonrakı düzəlişlər, kim və nə üçün etdi. Bu, maliyyəçinin ən çox soruşduğu şeydir.',
-      do: async (p, l, h) => { await h.scrollTo('button[data-tip]:has-text("🕘")'); await h.holdUntil(0.3); await h.click('button[data-tip]:has-text("🕘")'); await h.holdUntil(0.75); await h.wheel(150); await h.holdUntil(0.95); } },
-    { az: 'Ən aşağıda filtrlər və ixrac var: dövr növü, il və şöbə üzrə süzgəc, sonra isə CSV düyməsi. İxrac ekranda gördüyünüz seçimi olduğu kimi fayla yazır — plan, öhdəlik, faktiki və qalıq sütunları ilə birlikdə.',
+    { az: 'Büdcələr bölməsi. Burada şirkətin xərc planı yaşayır: hansı şöbənin nə qədər pulu var, nə qədəri öhdəliyə gedib, nə qədəri real xərclənib və dövrün sonunda nə gözlənilir. Şöbələr üzrə yekun cədvəlindən başlayaq.',
+      do: async (p, l, h) => { await h.scrollTo('h3:text-is("Şöbələr üzrə yekun")'); await h.holdUntil(0.4); await h.moveTo('.card:has(h3:text-is("Şöbələr üzrə yekun")) table'); await h.holdUntil(0.75); await h.moveTo(p.locator('.card:has(h3:text-is("Şöbələr üzrə yekun")) tbody tr').first()); await h.holdUntil(0.95); } },
+    { az: 'Öhdəlik — təsdiqlənmiş, amma hələ sifariş verilməmiş sorğulardır: pul ayrılıb, hələ xərclənməyib. Faktiki isə artıq verilmiş sifarişlərdir. Sistem eyni xərci iki dəfə saymır: sifariş veriləndə məbləğ öhdəlikdən faktikiyə keçir.',
+      do: async (p, l, h) => { const r = p.locator('.card:has(h3:text-is("Şöbələr üzrə yekun")) tbody tr').nth(1); await h.moveTo(r.locator('td').nth(2)); await h.holdUntil(0.45); await h.moveTo(r.locator('td').nth(3)); await h.holdUntil(0.8); await h.moveTo(r.locator('td').nth(4)); await h.holdUntil(0.95); } },
+    { az: 'Proqnoz sütunu ən çox soruşulan suala cavab verir: bu templə dövrün sonunda nə olacaq. Rəqəm qırmızıdırsa, plan aşılacaq, yanında isə aşımın məbləği yazılır. Səksən faiz mayda və səksən faiz noyabrda tamam fərqli şeylərdir.',
+      do: async (p, l, h) => { const rows = p.locator('.card:has(h3:text-is("Şöbələr üzrə yekun")) tbody tr'); await h.moveTo(rows.nth(0).locator('td').nth(6)); await h.holdUntil(0.5); await h.moveTo(rows.nth(1).locator('td').nth(6)); await h.holdUntil(0.95); } },
+    { az: 'İndi ən vacib imkan: hər rəqəmin arxasına baxmaq olar. Öhdəlik məbləğinə klikləyirik və sistem göstərir, məhz hansı sorğulardan ibarətdir. Maliyyəçinin istənilən cəm haqqında ilk sualı budur: nədən yığılıb.',
+      do: async (p, l, h) => { await h.scrollTo('table .linklike'); await h.holdUntil(0.25); const cell = await firstNonZero(p, 'table .linklike'); await h.click(cell); await h.holdUntil(0.65); await h.wheel(160); await h.holdUntil(0.95); } },
+    { az: 'Siyahıda sənədin nömrəsi, adı, kateqoriyası, şöbəsi və məbləği var. Bu siyahı həmişə yuxarıdakı rəqəmlə üst-üstə düşür, çünki eyni qayda ilə hesablanır — cədvəl ayrıca, rəqəm ayrıca yaşamır.',
+      do: async (p, l, h) => { const inner = p.locator('table table tbody tr'); if (await inner.count()) { await h.moveTo(inner.first()); await h.holdUntil(0.4); await h.moveTo(inner.last()); } else { await h.wheel(120); } await h.holdUntil(0.75); await h.wheel(-120); await h.holdUntil(0.95); } },
+    { az: 'Hər büdcənin öz statusu var. Qaralama hazırlanır və hələ pul saxlamır. Təsdiq gözləyən redaktə üçün bağlıdır. Qüvvədə olandan xərc silinir. Bağlanmış dövr isə artıq dəyişmir.',
+      do: async (p, l, h) => { await h.scrollTo('tbody .badge'); await h.holdUntil(0.35); await h.moveTo(p.locator('tbody .badge').first()); await h.holdUntil(0.65); await h.hover(p.locator('tbody .badge').first(), 900); await h.holdUntil(0.95); } },
+    { az: 'Bu, adi cədvəl sətri deyil — büdcə sənəddir. Qaralamanı redaktə edib təsdiqə göndərirsiniz, başqa bir adam onu təsdiqləyir. Öz göndərdiyini təsdiqləmək olmaz: bu, sorğularda olduğu kimi dörd göz qaydasıdır.',
+      do: async (p, l, h) => { await h.moveTo(p.locator('tbody button[data-tip]').first()); await h.holdUntil(0.4); await h.hover(p.locator('tbody button[data-tip]').first(), 900); await h.holdUntil(0.75); await h.moveTo(p.locator('tbody button[data-tip]').nth(1)); await h.holdUntil(0.95); } },
+    { az: 'Qüvvədə olan büdcənin adı, şöbəsi və dövrü artıq dəyişmir — bunlar təsdiqlənmiş şərtlərdir. Yalnız məbləğ düzəlir, özü də səbəb yazmadan yox. Saat düyməsi bütün düzəlişlərin tarixçəsini açır.',
+      do: async (p, l, h) => { await h.moveTo('button[data-tip]:has-text("🕘")'); await h.holdUntil(0.3); await h.click('button[data-tip]:has-text("🕘")'); await h.holdUntil(0.7); await h.wheel(140); await h.holdUntil(0.95); } },
+    { az: 'Yeni büdcə formadan yaradılır: ad, kateqoriya, şöbə və dövr. Şöbə boş qalsa, büdcə bütün təşkilata aid olur; konkret şöbə seçiləndə onun xərcləri məhz ora yazılır və şöbə büdcəsi ümumidən üstün olur.',
+      do: async (p, l, h) => { await h.wheel(-500); await h.holdUntil(0.25); await h.fill(p.locator('form input').nth(0), 'Marketinq 2026'); await h.holdUntil(0.6); await selectByPrefix(p, 'form select', 'IT'); await h.holdUntil(0.95); } },
+    { az: 'Dövr illik, rüblük və ya aylıq ola bilər. Rüblük seçirik — sistem rüb nömrəsini soruşur və tarix aralığını özü hesablayır. Sonra məbləğ və səbəb: səbəb tarixçəyə düşür, ona görə «plan niyə belədir» sualı həmişə cavablı qalır.',
+      do: async (p, l, h) => { await p.locator('form select').nth(1).selectOption('QUARTER').catch(() => {}); await h.holdUntil(0.4); await h.fill(p.locator('form input').nth(2), '12000'); await h.holdUntil(0.7); await h.fill(p.locator('form input').nth(3), 'rüblük plan'); await h.holdUntil(0.95); } },
+    { az: 'Yuxarıda büdcə hədləri bir sətirlə görünür: xəbərdarlıq faizi və blok faizi. Bunlar bütün təşkilat üçün qaydadır, ona görə özləri parametrlərdə redaktə olunur — burada isə sadəcə hansı qaydanın işlədiyi yazılır.',
+      do: async (p, l, h) => { await h.wheel(-300); await h.holdUntil(0.35); await h.moveTo('.hint a'); await h.holdUntil(0.7); await h.hover('.hint a', 800); await h.holdUntil(0.95); } },
+    { az: 'Ən aşağıda süzgəclər və ixrac: dövr növü, il, şöbə və CSV düyməsi. İxrac ekranda gördüyünüz seçimi olduğu kimi fayla yazır — plan, öhdəlik, faktiki və qalıq sütunları ilə.',
       do: async (p, l, h) => { await h.scrollTo('button:has-text("CSV")'); await h.holdUntil(0.35); await h.moveTo(p.locator('select').last()); await h.holdUntil(0.7); await h.moveTo('button:has-text("CSV")'); await h.holdUntil(0.95); } },
   ]},
   'buyer-analytics': { role: 'buyer', path: '/buyer/analytics', scenes: [
-    { az: 'Analitika bölməsi. Burada pulun hara getdiyi görünür: aylar üzrə xərc, şöbələr üzrə bölgü, kateqoriyalar, təchizatçılar və büdcənin mənimsənilmə tempi. Yuxarıdakı dörd yekundan başlayaq.',
-      do: async (p, l, h) => { await p.waitForSelector('.chart-bar', { timeout: 15000 }); await h.moveTo(p.locator('.card').nth(0)); await h.holdUntil(0.55); await h.moveTo(p.locator('.card').nth(1)); await h.holdUntil(0.92); } },
-    { az: 'Diqqət edin: xərc ƏDV-siz, qaimələr isə ƏDV daxil göstərilir. Ona görə ödənilmiş məbləğ bəzən xərcdən böyük görünə bilər — bu, səhv deyil, sadəcə fərqli baza.',
-      do: async (p, l, h) => { await h.moveTo(p.locator('.card').nth(2)); await h.holdUntil(0.5); await h.moveTo(p.locator('.card').nth(3)); await h.holdUntil(0.92); } },
-    { az: 'Aylıq qrafik son on iki ayı göstərir. Boş aylar sıfırdır, buraxılmış deyil — ona görə trend həqiqətən oxunur. Xərc kimi yalnız qəbul edilmiş sifariş sayılır.',
-      do: async (p, l, h) => { await h.scrollTo('.chart'); await h.holdUntil(0.35); await h.moveTo(p.locator('.chart-bar').nth(6)); await h.holdUntil(0.65); await h.moveTo(p.locator('.chart-bar').nth(11)); await h.holdUntil(0.93); } },
-    { az: 'İndi ən vacib cədvəl — büdcənin mənimsənilmə tempi. Sual sadədir: şöbə planını çox tez xərcləyirmi?',
-      do: async (p, l, h) => { await h.scrollTo('h3:text-is("Büdcənin mənimsənilmə tempi")'); await h.holdUntil(0.45); await h.moveTo('.card:has(h3:text-is("Büdcənin mənimsənilmə tempi")) table'); await h.holdUntil(0.9); } },
-    { az: 'Sol tərəfdə şöbə və plan, sonra mənimsənilən faiz. Bunun yanında isə dövrün nə qədərinin keçdiyi. Səksən faiz mayda və səksən faiz noyabrda tamam fərqli hekayələrdir — quru faiz bunu heç vaxt deməz.',
-      do: async (p, l, h) => { const t = p.locator('.card:has(h3:text-is("Büdcənin mənimsənilmə tempi")) tbody tr').nth(1); await h.moveTo(t.locator('td').nth(2)); await h.holdUntil(0.5); await h.moveTo(t.locator('td').nth(3)); await h.holdUntil(0.93); } },
-    { az: 'Sonuncu sütun — temp: mənimsənilən faizdən keçən vaxtın faizi çıxılır. Müsbət rəqəm o deməkdir ki, şöbə təqvimdən qabaqda xərcləyir. On faizdən çox fərq qırmızı ilə işarələnir — bu, söhbət üçün siqnaldır.',
-      do: async (p, l, h) => { const rows = p.locator('.card:has(h3:text-is("Büdcənin mənimsənilmə tempi")) tbody tr'); await h.moveTo(rows.nth(1).locator('td').last()); await h.holdUntil(0.5); await h.moveTo(rows.nth(2).locator('td').last()); await h.holdUntil(0.93); } },
-    { az: 'Aşağıda şöbələr üzrə xərc var. Burada bir texniki incəlik gizlənir: bölgü sifarişin öz şöbə sahəsindən oxunur, sorğu zəncirindən yox. Ona görə birbaşa alışlar və kataloq sifarişləri də düzgün şöbəyə düşür.',
-      do: async (p, l, h) => { await h.scrollTo('h3:text-is("Şöbələr üzrə xərc")'); await h.holdUntil(0.4); await h.moveTo('.card:has(h3:text-is("Şöbələr üzrə xərc")) .budget-bar'); await h.holdUntil(0.9); } },
-    { az: 'Yanında kateqoriyalar üzrə bölgü. Bu, «nə alırıq» sualına cavabdır, şöbə isə «kim xərcləyir» sualına. İki fərqli ölçü, hər ikisi lazımdır.',
-      do: async (p, l, h) => { await h.moveTo('.card:has(h3:text-is("Kateqoriyalar üzrə"))'); await h.holdUntil(0.5); await h.moveTo(p.locator('.card:has(h3:text-is("Kateqoriyalar üzrə")) .budget-bar').first()); await h.holdUntil(0.92); } },
-    { az: 'Ən aşağıda əsas təchizatçılar: qəbul edilmiş sifarişlərin həcminə görə ilk beşlik və hər biri üzrə sifariş sayı. Bu siyahı danışıqlar üçün faydalıdır — həcm arqumentdir.',
-      do: async (p, l, h) => { await h.scrollTo('h3:text-is("Əsas təchizatçılar")'); await h.holdUntil(0.4); await h.moveTo('.card:has(h3:text-is("Əsas təchizatçılar")) tbody tr'); await h.holdUntil(0.9); } },
-    { az: 'Bütün rəqəmlər real vaxtda hesablanır və yalnız sizin təşkilatınızın məlumatlarını əhatə edir. Heç bir əl ilə hesabat yığmaq lazım deyil — bölməni açmaq kifayətdir.',
-      do: async (p, l, h) => { await h.wheel(-400); await h.holdUntil(0.5); await h.moveTo('.chart'); await h.holdUntil(0.92); } },
+    { az: 'Analitika bölməsi. Burada pulun hara getdiyi görünür: aylar üzrə xərc, plan ilə müqayisə, büdcənin mənimsənilmə tempi, şöbələr, kateqoriyalar və təchizatçılar. Yuxarıdakı dörd yekundan başlayaq.',
+      do: async (p, l, h) => { await p.waitForSelector('.chart-bar', { timeout: 15000 }); await h.moveTo(p.locator('.card').nth(0)); await h.holdUntil(0.45); await h.moveTo(p.locator('.card').nth(1)); await h.holdUntil(0.75); await h.moveTo(p.locator('.card').nth(2)); await h.holdUntil(0.95); } },
+    { az: 'Diqqət edin: xərc ƏDV-siz, qaimələr isə ƏDV daxil göstərilir. Ona görə ödənilmiş məbləğ bəzən xərcdən böyük görünə bilər — bu, səhv deyil, sadəcə fərqli baza. Qənaət isə yalnız tenderlər üzrə hesablanır.',
+      do: async (p, l, h) => { await h.moveTo(p.locator('.card').nth(2)); await h.holdUntil(0.4); await h.moveTo(p.locator('.card').nth(3)); await h.holdUntil(0.7); await h.moveTo(p.locator('.card').nth(1)); await h.holdUntil(0.95); } },
+    { az: 'Dövr seçimi qrafikin üstündədir. Hazır düymələr ən çox soruşulan üç sualı örtür: son on iki ay, cari rüb və ilin əvvəlindən. Başqa aralıq lazımdırsa, iki ay sahəsini əl ilə doldurmaq olar.',
+      do: async (p, l, h) => { await h.scrollTo('.chart'); await h.holdUntil(0.25); await h.moveTo(p.locator('button:has-text("12")').first()); await h.holdUntil(0.5); await h.click(p.locator('button:has-text("12")').first()); await h.holdUntil(0.8); await h.moveTo(p.locator('input[type=month]').first()); await h.holdUntil(0.95); } },
+    { az: 'Seçilmiş dövr bütün panellərə tətbiq olunur — təkcə qrafikə yox, həm də kateqoriyalara, şöbələrə və təchizatçılara. Yəni «üçüncü rübü göstər» sualı bir kliklə cavab alır.',
+      do: async (p, l, h) => { await h.moveTo(p.locator('button:has-text("Rüb")').first()); await h.holdUntil(0.35); await h.click(p.locator('button:has-text("Rüb")').first()); await h.holdUntil(0.75); await p.waitForTimeout(400); await h.moveTo('.chart'); await h.holdUntil(0.95); } },
+    { az: 'Sütunlar faktiki xərcdir: yalnız qəbul edilmiş sifarişlər sayılır, plan və ya təsdiq gözləyən sorğular yox. Punktir xətt isə həmin ayın planıdır — büdcə öz dövrünə bərabər bölünür, bu, bölgü deyil, mütənasib hesablamadır.',
+      do: async (p, l, h) => { await h.click(p.locator('button:has-text("12")').first()); await h.holdUntil(0.3); await h.moveTo(p.locator('.chart-bar').nth(8)); await h.holdUntil(0.6); await h.moveTo(p.locator('.chart-bar').last()); await h.holdUntil(0.95); } },
+    { az: 'Ekranda gördüyünüz dövrü CSV faylına çıxarmaq olar: ay, plan və faktiki sütunları ilə. Hesabatı əl ilə yığmaq lazım gəlmir.',
+      do: async (p, l, h) => { await h.moveTo('button:has-text("CSV")'); await h.holdUntil(0.5); await h.hover('button:has-text("CSV")', 900); await h.holdUntil(0.95); } },
+    { az: 'Aşağıda büdcənin mənimsənilmə tempi. Sol tərəfdə şöbə və plan, sonra mənimsənilən faiz, onun yanında isə dövrün nə qədərinin keçdiyi. Bu iki rəqəm yan-yana durmalıdır, çünki ayrılıqda heç nə demir.',
+      do: async (p, l, h) => { await h.scrollTo('h3:text-is("Büdcənin mənimsənilmə tempi")'); await h.holdUntil(0.4); const t = p.locator('.card:has(h3:text-is("Büdcənin mənimsənilmə tempi")) tbody tr').nth(1); await h.moveTo(t.locator('td').nth(2)); await h.holdUntil(0.7); await h.moveTo(t.locator('td').nth(3)); await h.holdUntil(0.95); } },
+    { az: 'Sonuncu sütun tempdir: mənimsənilən faizdən keçən vaxtın faizi çıxılır. Müsbət rəqəm o deməkdir ki, şöbə təqvimdən qabaqda xərcləyir. On faizdən çox fərq qırmızı ilə işarələnir — bu, söhbət üçün siqnaldır.',
+      do: async (p, l, h) => { const rows = p.locator('.card:has(h3:text-is("Büdcənin mənimsənilmə tempi")) tbody tr'); await h.moveTo(rows.nth(1).locator('td').last()); await h.holdUntil(0.45); await h.moveTo(rows.nth(2).locator('td').last()); await h.holdUntil(0.8); await h.moveTo(rows.nth(0).locator('td').last()); await h.holdUntil(0.95); } },
+    { az: 'Şöbələr üzrə xərcdə bir texniki incəlik var: bölgü sifarişin öz şöbə sahəsindən oxunur, sorğu zəncirindən yox. Ona görə birbaşa alışlar və kataloq sifarişləri də düzgün şöbəyə düşür.',
+      do: async (p, l, h) => { await h.scrollTo('h3:text-is("Şöbələr üzrə xərc")'); await h.holdUntil(0.4); await h.moveTo('.card:has(h3:text-is("Şöbələr üzrə xərc")) .budget-bar'); await h.holdUntil(0.75); await h.wheel(120); await h.holdUntil(0.95); } },
+    { az: 'Yanında kateqoriyalar üzrə bölgü: bu, «nə alırıq» sualına cavabdır, şöbə isə «kim xərcləyir» sualına. İki fərqli ölçü, hər ikisi lazımdır — biri digərini əvəz etmir.',
+      do: async (p, l, h) => { await h.moveTo('.card:has(h3:text-is("Kateqoriyalar üzrə"))'); await h.holdUntil(0.4); await h.moveTo(p.locator('.card:has(h3:text-is("Kateqoriyalar üzrə")) .budget-bar').first()); await h.holdUntil(0.75); await h.moveTo('.card:has(h3:text-is("Şöbələr üzrə xərc"))'); await h.holdUntil(0.95); } },
+    { az: 'Ən aşağıda əsas təchizatçılar: qəbul edilmiş sifarişlərin həcminə görə ilk beşlik və hər biri üzrə sifariş sayı. Bu siyahı danışıqlarda faydalıdır, çünki həcm arqumentdir.',
+      do: async (p, l, h) => { await h.scrollTo('h3:text-is("Əsas təchizatçılar")'); await h.holdUntil(0.4); await h.moveTo('.card:has(h3:text-is("Əsas təchizatçılar")) tbody tr'); await h.holdUntil(0.75); await h.wheel(-150); await h.holdUntil(0.95); } },
+    { az: 'Bütün rəqəmlər real vaxtda hesablanır və yalnız sizin təşkilatınızın məlumatlarını əhatə edir. Hesabat yığmaq lazım deyil — bölməni açmaq və lazımi dövrü seçmək kifayətdir.',
+      do: async (p, l, h) => { await h.wheel(-400); await h.holdUntil(0.35); await h.moveTo('.chart'); await h.holdUntil(0.7); await h.moveTo(p.locator('.card').nth(0)); await h.holdUntil(0.95); } },
   ]},
   'buyer-logistics': { role: 'buyer', path: '/buyer/logistics', scenes: [
     { ru: 'Логистика. Все отгрузки по вашим заказам: перевозчик, трек-номер и события в пути — от передачи перевозчику до доставки. События отмечает поставщик, вы видите картину в реальном времени.',
