@@ -19,6 +19,7 @@ const MAIL_SUBJECTS: Record<string, string> = {
   VERIFICATION_OPENED: 'Открыта верификация · Yoxlama açılıb',
   VERIFICATION_DECIDED: 'Решение по верификации · Yoxlama qərarı',
   BUDGET_THRESHOLD_CROSSED: 'Бюджет на пороге · Büdcə həddə çatdı',
+  BUDGET_WEEKLY_DIGEST: 'Бюджеты под нагрузкой · Büdcələr yüklüdür',
 };
 // Only these payload fields may appear in an email body — a whitelist, so sealed or
 // internal values can never leak into outbound mail by accident.

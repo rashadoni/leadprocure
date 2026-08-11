@@ -1,4 +1,4 @@
-import { Controller, Get, Injectable, Module } from '@nestjs/common';
+import { Controller, Get, Injectable, Module, Query } from '@nestjs/common';
 import { Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 
@@ -87,17 +87,36 @@ export class DashboardService {
   // committed to pay after accepting delivery. Category comes via the PO→contract→event→
   // request chain, so direct/bare POs land under '—' (uncategorized). Savings are grouped
   // per awarded event so a multi-lot award doesn't double-count the request estimate.
-  async spendAnalytics() {
+  // `from`/`to` bound every panel on the page. Without them the chart was hard-wired to
+  // the last 12 months and the splits to all time, so "show me Q3" had no answer at all.
+  // Both default to the previous 12 months, which is what the page used to be.
+  async spendAnalytics(filter: { from?: string; to?: string } = {}) {
     const m = this.rc.manager;
+    const to = filter.to ?? null;
+    const from = filter.from ?? null;
 
     const [monthly, byCategory, topSuppliers, byDepartment, savingsRows, invoiceRows] = await Promise.all([
+      // Actual by month, plus the PLAN for that month. A budget's plan is spread evenly
+      // across the months its period covers — a year of 120k reads as 10k a month. It is a
+      // proration, not a phasing the user entered, which is why the tooltip says so.
       m.query(`
-        SELECT to_char(gs.m, 'YYYY-MM') AS month, COALESCE(sum(p.total_minor), 0)::bigint AS total
-        FROM generate_series(date_trunc('month', now()) - interval '11 months',
-                             date_trunc('month', now()), interval '1 month') gs(m)
+        SELECT to_char(gs.m, 'YYYY-MM') AS month,
+               COALESCE(sum(p.total_minor), 0)::bigint AS total,
+               COALESCE((
+                 SELECT sum(b.amount_minor / GREATEST(1, (
+                          (EXTRACT(YEAR FROM b.period_end) - EXTRACT(YEAR FROM b.period_start)) * 12
+                          + EXTRACT(MONTH FROM b.period_end) - EXTRACT(MONTH FROM b.period_start) + 1)))::bigint
+                 FROM budgets b
+                 WHERE b.status IN ('APPROVED','CLOSED')
+                   AND gs.m >= date_trunc('month', b.period_start)
+                   AND gs.m <= date_trunc('month', b.period_end)
+               ), 0)::bigint AS planned
+        FROM generate_series(
+               COALESCE($1::date, date_trunc('month', now()) - interval '11 months'),
+               COALESCE($2::date, date_trunc('month', now())), interval '1 month') gs(m)
         LEFT JOIN purchase_orders p
           ON date_trunc('month', p.created_at) = gs.m AND p.status = 'ACCEPTED'
-        GROUP BY gs.m ORDER BY gs.m`),
+        GROUP BY gs.m ORDER BY gs.m`, [from, to]),
       m.query(`
         SELECT COALESCE(pr.category, '—') AS category,
                sum(p.total_minor)::bigint AS total, count(*)::int AS po_count
@@ -106,12 +125,16 @@ export class DashboardService {
         LEFT JOIN sourcing_events e ON e.id = c.event_id
         LEFT JOIN procurement_requests pr ON pr.id = e.request_id
         WHERE p.status = 'ACCEPTED'
-        GROUP BY 1 ORDER BY 2 DESC`),
+          AND ($1::date IS NULL OR p.created_at >= $1::timestamptz)
+          AND ($2::date IS NULL OR p.created_at < ($2::date + interval '1 month')::timestamptz)
+        GROUP BY 1 ORDER BY 2 DESC`, [from, to]),
       m.query(`
         SELECT o.legal_name AS name, sum(p.total_minor)::bigint AS total, count(*)::int AS po_count
         FROM purchase_orders p JOIN organizations o ON o.id = p.supplier_org_id
         WHERE p.status = 'ACCEPTED'
-        GROUP BY o.id, o.legal_name ORDER BY 2 DESC LIMIT 5`),
+          AND ($1::date IS NULL OR p.created_at >= $1::timestamptz)
+          AND ($2::date IS NULL OR p.created_at < ($2::date + interval '1 month')::timestamptz)
+        GROUP BY o.id, o.legal_name ORDER BY 2 DESC LIMIT 5`, [from, to]),
       // Spend by cost centre. Reads the PO's OWN department_id rather than walking
       // PO→contract→event→request like the category split above: that chain breaks on
       // direct purchases and catalog call-offs, which is precisely the spend a department
@@ -146,7 +169,10 @@ export class DashboardService {
     const s = savingsRows[0];
     const inv = invoiceRows[0];
     return {
-      monthly: monthly.map((r: any) => ({ month: r.month, totalMinor: Number(r.total) })),
+      window: { from, to },
+      monthly: monthly.map((r: any) => ({
+        month: r.month, totalMinor: Number(r.total), plannedMinor: Number(r.planned),
+      })),
       byCategory: byCategory.map((r: any) => ({ category: r.category, totalMinor: Number(r.total), poCount: r.po_count })),
       byDepartment: byDepartment.map((r: any) => ({ department: r.department, totalMinor: Number(r.total), poCount: r.po_count })),
       topSuppliers: topSuppliers.map((r: any) => ({ name: r.name, totalMinor: Number(r.total), poCount: r.po_count })),
@@ -180,8 +206,8 @@ export class DashboardController {
 
   @Get('spend-analytics')
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
-  spendAnalytics() {
-    return this.dashboard.spendAnalytics();
+  spendAnalytics(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.dashboard.spendAnalytics({ from: from || undefined, to: to || undefined });
   }
 }
 

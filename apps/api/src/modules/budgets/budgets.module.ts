@@ -3,6 +3,9 @@ import {
   Injectable, Module, NotFoundException, Param, Post, Put, Query, Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { DataSource } from 'typeorm';
 import {
   IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min, MinLength,
 } from 'class-validator';
@@ -1183,10 +1186,76 @@ export class BudgetsController {
   }
 }
 
+// Weekly digest of budgets running hot. Monitoring was entirely passive: the only signal
+// was a notification fired at the instant somebody approved a request, which reaches you
+// once the money is already committed. A controller wants the list BEFORE the week starts.
+//
+// Runs without a request context, so it reads through the injected DataSource and speaks to
+// each org explicitly — the same seam the follow-up ticker uses.
+@Injectable()
+export class BudgetDigestScheduler {
+  private readonly logger = new Logger(BudgetDigestScheduler.name);
+  constructor(private readonly ds: DataSource) {}
+
+  @Cron(CronExpression.EVERY_WEEK)
+  async tick(): Promise<number> {
+    // Budgets in force whose period covers today, spending faster than the calendar by more
+    // than the org's warn threshold. The pace maths mirrors the rollup: share spent vs share
+    // of the period gone.
+    const hot: Array<{
+      buyer_org_id: string; id: string; name: string; department_code: string | null;
+      owner_user_id: string | null; used_pct: number; elapsed_pct: number;
+    }> = await this.ds.query(`
+      WITH live AS (
+        SELECT b.id, b.buyer_org_id, b.name, b.amount_minor, b.period_start, b.period_end,
+               d.code AS department_code, d.owner_user_id,
+               COALESCE(p.warn_pct, 80) AS warn_pct
+        FROM budgets b
+        LEFT JOIN departments d ON d.id = b.department_id
+        LEFT JOIN budget_policies p ON p.buyer_org_id = b.buyer_org_id
+        WHERE b.status = 'APPROVED'
+          AND now() BETWEEN b.period_start::timestamptz AND (b.period_end + 1)::timestamptz
+      ),
+      spend AS (
+        SELECT l.*, COALESCE((
+          SELECT sum(pr.estimated_total_minor)::bigint FROM procurement_requests pr
+          WHERE pr.status = 'APPROVED' AND pr.approved_at IS NOT NULL
+            AND pr.approved_at >= l.period_start::timestamptz
+            AND pr.approved_at < (l.period_end + 1)::timestamptz
+            AND pr.owner_org_id = l.buyer_org_id
+        ), 0) AS used_minor
+        FROM live l
+      )
+      SELECT buyer_org_id, id, name, department_code, owner_user_id,
+             round((used_minor::numeric / NULLIF(amount_minor, 0)) * 100, 1) AS used_pct,
+             round((EXTRACT(EPOCH FROM (now() - period_start::timestamptz))
+                    / NULLIF(EXTRACT(EPOCH FROM ((period_end + 1)::timestamptz - period_start::timestamptz)), 0)) * 100, 1) AS elapsed_pct
+      FROM spend
+      WHERE amount_minor > 0
+        AND (used_minor::numeric / amount_minor) * 100 >= warn_pct`);
+
+    for (const b of hot) {
+      // Addressed to whoever answers for the cost centre, exactly like the threshold
+      // warning; with nobody named it goes to the org so it is not lost.
+      await this.ds.query(`SELECT app_notify($1, $2, $3, $4::jsonb)`, [
+        b.buyer_org_id, b.owner_user_id, 'BUDGET_WEEKLY_DIGEST',
+        JSON.stringify({
+          title: `${b.department_code ? `${b.department_code} · ` : ''}${b.name}`,
+          budget: b.name,
+          utilization: `${b.used_pct}%`,
+          status: `elapsed ${b.elapsed_pct}%`,
+        }),
+      ]).catch((e) => this.logger.warn(`digest for ${b.id} failed: ${e?.message}`));
+    }
+    if (hot.length) this.logger.log(`budget digest: ${hot.length} budget(s) running hot`);
+    return hot.length;
+  }
+}
+
 @Module({
   imports: [NotifyModule],
   controllers: [BudgetsController],
-  providers: [BudgetsService],
+  providers: [BudgetsService, BudgetDigestScheduler],
   exports: [BudgetsService],
 })
 export class BudgetsModule {}
