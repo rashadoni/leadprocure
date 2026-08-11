@@ -693,7 +693,7 @@ const SECTIONS = {
   'sup-verification': { role: 'sup', path: '/supplier/verification', scenes: [
     { az: 'Yoxlama bölməsi. Burada alıcının sizin haqqınızda açdığı iş var. Məqsəd sadədir: sənədləriniz təsdiqlənəndən sonra sizə tender gözləmədən birbaşa sifariş vermək olur.',
       do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.4); await h.moveTo('table'); await h.holdUntil(0.95); } },
-    { az: 'Siyahıda alıcı şirkət, işin statusu və yüklədiyiniz sənədlərin sayı görünür. Status «yeni» olduqda top sizdədir — sənədləri gözləyirlər.',
+    { az: 'Siyahıda alıcı şirkət, işin statusu və yüklədiyiniz sənədlərin sayı görünür. Qərar verilməyibsə, top sizdədir — sənədləri gözləyirlər.',
       do: async (p, l, h) => { const r = p.locator('table tbody tr').first(); await h.moveTo(r.locator('td').nth(0)); await h.holdUntil(0.35); await h.moveTo(r.locator('.badge')); await h.holdUntil(0.65); await h.moveTo(r.locator('td').nth(2)); await h.holdUntil(0.95); } },
     { az: 'İşi açırıq. Aşağıda artıq yüklənmiş sənədlər sıralanır: hər birinin növü, faylın adı və qısa kod.',
       do: async (p, l, h) => { await h.click('table tbody tr a', 1600); await h.scrollTo('.card:has(.badge)'); await h.holdUntil(0.95); } },
