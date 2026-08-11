@@ -187,6 +187,18 @@ The budget module finance actually uses. Read this before changing anything unde
   amount change with delta, reason, author). The live amount stays on `budgets.amount_minor`
   — the ledger explains it, it is not the source of truth. Renaming writes no revision.
   Rollover of an unspent remainder = a revision of the TARGET pointing back at the source.
+- **Phasing** (0039, `budget_phasing`): a budget may carry one row per month of its period,
+  holding that month's share of the plan in basis points, summing to exactly 10000. Pace and
+  forecast then answer "are we ahead of the PLAN" instead of "ahead of the CALENDAR" —
+  heating lands in winter, so an even proration reads a department as overspending in March
+  and comfortable in October, both times wrongly. **No rows = the old even proration**, which
+  stays right for genuinely flat spend. Shares are percentages, not amounts, so a revision of
+  `amount_minor` cannot leave a phasing that no longer sums to the plan. A department's pace
+  is the amount-weighted pace of its budgets, so a phased and a flat plan can sit under the
+  same parent and still add up. `PUT /budgets/:id/phasing` replaces the whole set (a partial
+  edit would leave shares that do not total 100%); an empty list clears it. Closed periods
+  refuse. **Read a `date` column through `to_char`** — the driver returns a Date object, and
+  string-slicing that yields "Tue Aug 11", which parses to NaN and silently zeroes the plan.
 - **Visibility**: a plain BUYER_USER sees only their home department's budgets; with none
   set, an empty list (never the whole org's plan). See `scopeFor()`.
 - **`GET /budgets/rollup`** is the finance headline: plan / commitment / actual per
@@ -196,7 +208,23 @@ The budget module finance actually uses. Read this before changing anything unde
   the spend. Each row also carries `elapsedPct` and `paceDeltaPct` (utilization minus
   elapsed): 80% spent is unremarkable in November and alarming in May, and a bare
   utilization number cannot tell them apart. `?current=1` narrows to periods containing
-  today, which is the only window pace means anything in.
+  today, which is the only window pace means anything in. Rows also carry `phased`, so the
+  UI can say whether "should be at 58%" came from a plan or from a calendar.
+- **Exports**: `GET /budgets/export` is the whole picture for a person (plan, commitment,
+  actual, remainder). `GET /budgets/export/1c` is a different file on purpose — one row per
+  MONTH per budget carrying only the planned amount, because an accounting system loads a
+  plan by period and dimension and already holds the facts. Splitting a procurement-side
+  commitment across months would be an invention, not a figure. The last month absorbs the
+  rounding remainder so the rows total the plan exactly.
+- **Year on year**: every analytics split carries the same window a year earlier
+  (`prevTotalMinor`, `deltaMinor`, `deltaPct`), and a key present only in the earlier window
+  still returns a row — "we stopped buying this" is precisely what the view exists to show.
+  `deltaPct` is NULL when last year was zero; inventing a percentage there would be a lie.
+  The window is resolved in JS, not left NULL for SQL to default: the chart used to default
+  to the last twelve months while the splits defaulted to all time, and an unbounded
+  "previous year" simply means "everything". `YYYY-MM` is normalised to a first-of-month date
+  before it reaches Postgres — it cannot cast `'2026-06'::date`, so every windowed request
+  used to answer 500.
 - **Analytics** (`/buyer/analytics`) splits spend by department off
   `purchase_orders.department_id`, NOT by walking PO→contract→event→request the way the
   category split has to. That chain breaks on direct purchases and catalog call-offs — the

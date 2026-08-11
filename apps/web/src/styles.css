@@ -169,3 +169,8 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
    fact vs plan without a charting library */
 .chart-col { position: relative; }
 .chart-plan { position: absolute; left: 8%; right: 8%; height: 0; border-top: 2px dashed var(--warn); }
+
+/* Same month a year ago, marked the way the plan is marked — a line across the column. A
+   filled bar behind the current one would hide itself whenever last year was the smaller
+   of the two, which is exactly half the cases worth seeing. */
+.chart-prev { position: absolute; left: 8%; right: 8%; height: 0; border-top: 2px solid var(--muted); opacity: .55; }

@@ -257,6 +257,8 @@ export const AUDIT_ACTIONS = [
   'BUDGET_REJECTED',
   'BUDGET_CLOSED',
   'BUDGET_REOPENED',
+  'BUDGET_PHASING_SET',
+  'BUDGET_PHASING_CLEARED',
 ] as const;
 
 // ---------------- Invoices (P2P) ----------------

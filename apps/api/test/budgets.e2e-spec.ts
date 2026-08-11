@@ -939,4 +939,137 @@ describe('budgets & commitment control (API e2e)', () => {
     const lastYear = (await http().get(`/budgets?year=${YEAR - 1}`).set(...bearer(buyerA)).expect(200)).body;
     expect(lastYear.every((b: any) => b.periodYear === YEAR - 1)).toBe(true);
   });
+
+  // ---- Monthly phasing: the plan's shape over time ----------------------------------
+  // Pace and forecast used to assume spend arrives evenly. For seasonal budgets that reads
+  // a department as overspending in spring and comfortable in autumn, both times wrongly.
+  describe('monthly phasing', () => {
+    let phasedId: string;
+
+    it('an unphased budget still reports an even split, so the editor opens on reality', async () => {
+      // its own category: by this point the directory is curated, and the scope EXCLUDE
+      // constraint would collide with an earlier test's budget for the same year
+      await http().post('/categories').set(...bearer(buyerA)).send({ code: 'PHASE' }).expect(201);
+      const made = await mkBudget({ name: `Phase ${tag}`, category: 'PHASE', periodYear: YEAR, amountMinor: 1_200_000 });
+      phasedId = made.body.id;
+      const ph = (await http().get(`/budgets/${phasedId}/phasing`).set(...bearer(buyerA)).expect(200)).body;
+      expect(ph.phased).toBe(false);
+      expect(ph.months).toHaveLength(12);
+      expect(ph.months[0].shareBp).toBe(833); // 10000/12 rounded
+      expect(ph.months.every((m: any) => /^\d{4}-\d{2}$/.test(m.month))).toBe(true);
+    });
+
+    it('refuses a set that does not add up to 100%', async () => {
+      const months = Array.from({ length: 12 }, (_, i) => ({ month: `${YEAR}-${String(i + 1).padStart(2, '0')}`, shareBp: 800 }));
+      const res = await http().put(`/budgets/${phasedId}/phasing`).set(...bearer(buyerA)).send({ months }).expect(400);
+      expect(String(res.body.message)).toContain('100.00%');
+    });
+
+    it('refuses a month outside the period, and a period left incomplete', async () => {
+      const full = Array.from({ length: 12 }, (_, i) => ({ month: `${YEAR}-${String(i + 1).padStart(2, '0')}`, shareBp: i === 11 ? 833 + 4 : 833 }));
+      const stray = [...full.slice(0, 11), { month: `${YEAR + 1}-01`, shareBp: 837 }];
+      const out = await http().put(`/budgets/${phasedId}/phasing`).set(...bearer(buyerA)).send({ months: stray }).expect(400);
+      expect(String(out.body.message)).toContain('outside the budget period');
+
+      const short = await http().put(`/budgets/${phasedId}/phasing`).set(...bearer(buyerA))
+        .send({ months: full.slice(0, 6).map((m) => ({ ...m, shareBp: 1666 })) }).expect(400);
+      expect(String(short.body.message)).toContain('missing');
+    });
+
+    it('stores a seasonal split and reports each month in money', async () => {
+      // everything lands in December: the sharpest case pace has to survive
+      const months = Array.from({ length: 12 }, (_, i) => ({
+        month: `${YEAR}-${String(i + 1).padStart(2, '0')}`, shareBp: i === 11 ? 10000 : 0,
+      }));
+      const saved = (await http().put(`/budgets/${phasedId}/phasing`).set(...bearer(buyerA)).send({ months }).expect(200)).body;
+      expect(saved.phased).toBe(true);
+      expect(saved.months[11].shareBp).toBe(10000);
+      expect(saved.months[11].amountMinor).toBe(1_200_000);
+      expect(saved.months[0].amountMinor).toBe(0);
+    });
+
+    it('pace follows the plan, not the calendar', async () => {
+      // Compared against itself rather than against the calendar: the org-wide row mixes
+      // budgets of several periods, so no single calendar share is the right baseline.
+      const orgPace = async () => (await http().get(`/budgets/rollup?year=${YEAR}`).set(...bearer(buyerA)).expect(200))
+        .body.find((r: any) => r.departmentId === null).elapsedPct;
+
+      await http().put(`/budgets/${phasedId}/phasing`).set(...bearer(buyerA)).send({ months: [] }).expect(200);
+      const unphased = await orgPace();
+
+      // An even phasing must reproduce the even proration it replaces. This is the assertion
+      // that catches a phasing which silently evaluates to nothing.
+      const flat = Array.from({ length: 12 }, (_, i) => ({
+        month: `${YEAR}-${String(i + 1).padStart(2, '0')}`, shareBp: i === 11 ? 10000 - 11 * 833 : 833,
+      }));
+      await http().put(`/budgets/${phasedId}/phasing`).set(...bearer(buyerA)).send({ months: flat }).expect(200);
+      const even = await orgPace();
+      expect(Math.abs(even - unphased)).toBeLessThan(1);
+
+      // Everything in December: the plan says almost nothing should be spent yet, so the
+      // organisation reads as further behind than the calendar would ever suggest.
+      const dec = Array.from({ length: 12 }, (_, i) => ({
+        month: `${YEAR}-${String(i + 1).padStart(2, '0')}`, shareBp: i === 11 ? 10000 : 0,
+      }));
+      await http().put(`/budgets/${phasedId}/phasing`).set(...bearer(buyerA)).send({ months: dec }).expect(200);
+      expect(await orgPace()).toBeLessThan(unphased - 1);
+    });
+
+    it('clearing the phasing returns the budget to an even split', async () => {
+      const cleared = (await http().put(`/budgets/${phasedId}/phasing`).set(...bearer(buyerA)).send({ months: [] }).expect(200)).body;
+      expect(cleared.phased).toBe(false);
+      expect(cleared.months[11].shareBp).toBe(833);
+    });
+
+    it('a closed period cannot be re-phased', async () => {
+      // last year's plan: a budget can only be closed once its period is over
+      const past = await mkBudget({ name: `Phase past ${tag}`, category: 'PHASE', periodYear: YEAR - 1, amountMinor: 600_000 });
+      await http().post(`/budgets/${past.body.id}/close`).set(...bearer(buyerA)).expect(201);
+      const months = Array.from({ length: 12 }, (_, i) => ({
+        month: `${YEAR - 1}-${String(i + 1).padStart(2, '0')}`, shareBp: i === 11 ? 837 : 833,
+      }));
+      const res = await http().put(`/budgets/${past.body.id}/phasing`).set(...bearer(buyerA)).send({ months }).expect(409);
+      expect(String(res.body.message)).toContain('reopen');
+    });
+  });
+
+  // ---- Export for the accounting system --------------------------------------------
+  describe('1C export', () => {
+    it('emits a row per month, and the months add up to the plan exactly', async () => {
+      await http().post('/categories').set(...bearer(buyerA)).send({ code: 'ONEC' }).expect(201);
+      // 100.00 over 12 months does not divide evenly — the rounding has to land somewhere
+      const made = await mkBudget({ name: `1C ${tag}`, category: 'ONEC', periodYear: YEAR, amountMinor: 10_000 });
+      const csv = (await http().get(`/budgets/export/1c?year=${YEAR}`).set(...bearer(buyerA)).expect(200)).text;
+      const rows = csv.replace(/^\ufeff/, '').trim().split('\r\n');
+      expect(rows[0]).toContain('Период');
+      const mine = rows.slice(1).filter((r) => r.includes(`1C ${tag}`));
+      expect(mine).toHaveLength(12);
+      const sum = mine.reduce((n, r) => n + Math.round(Number(r.split(';')[7].replace(/"/g, '')) * 100), 0);
+      expect(sum).toBe(made.body.amountMinor);
+      expect(mine[0]).toContain(`"${YEAR}-01"`);
+      expect(mine[11]).toContain(`"${YEAR}-12"`);
+    });
+
+    it('a phased budget exports the shares finance entered, not an even split', async () => {
+      const b = (await http().get(`/budgets?year=${YEAR}`).set(...bearer(buyerA))).body
+        .find((x: any) => x.name === `1C ${tag}`);
+      const months = Array.from({ length: 12 }, (_, i) => ({
+        month: `${YEAR}-${String(i + 1).padStart(2, '0')}`, shareBp: i === 0 ? 5000 : i === 1 ? 5000 : 0,
+      }));
+      await http().put(`/budgets/${b.id}/phasing`).set(...bearer(buyerA)).send({ months }).expect(200);
+
+      const csv = (await http().get(`/budgets/export/1c?year=${YEAR}`).set(...bearer(buyerA)).expect(200)).text;
+      const mine = csv.trim().split('\r\n').slice(1).filter((r) => r.includes(`1C ${tag}`));
+      const amount = (row: string) => Number(row.split(';')[7].replace(/"/g, ''));
+      expect(amount(mine[0])).toBe(50);
+      expect(amount(mine[1])).toBe(50);
+      expect(amount(mine[5])).toBe(0);
+    });
+
+    it('a plain user cannot pull the whole plan out of the system', async () => {
+      const tok = (await http().post('/auth/login')
+        .send({ email: `bu-${tag}@t.test`, password: 'password123' }).expect(201)).body.accessToken;
+      await http().get('/budgets/export/1c').set(...bearer(tok)).expect(403);
+    });
+  });
 });

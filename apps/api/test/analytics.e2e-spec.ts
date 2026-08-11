@@ -161,4 +161,57 @@ describe('spend analytics (API e2e)', () => {
     expect(res.body.byCategory).toHaveLength(0);
     expect(res.body.savings.events).toBe(0);
   });
+
+  // ---- Year on year ---------------------------------------------------------------
+  // "We spent 40k on fuel" is not a finding. "We spent 40k, against 25k last year" is.
+  describe('year-on-year comparison', () => {
+    it('every split carries the same window a year earlier', async () => {
+      const res = await http().get('/dashboard/spend-analytics').set(...bearer(buyer)).expect(200);
+      for (const row of [...res.body.byCategory, ...res.body.byDepartment]) {
+        expect(row).toHaveProperty('prevTotalMinor');
+        expect(row).toHaveProperty('deltaMinor');
+        expect(row.deltaMinor).toBe(row.totalMinor - row.prevTotalMinor);
+      }
+      expect(res.body.monthly.every((m: any) => typeof m.prevTotalMinor === 'number')).toBe(true);
+    });
+
+    it('with nothing last year, the delta is the whole amount and the percentage is null', async () => {
+      const res = await http().get('/dashboard/spend-analytics').set(...bearer(buyer)).expect(200);
+      const dep = res.body.byDepartment.find((r: any) => r.totalMinor > 0);
+      expect(dep.prevTotalMinor).toBe(0);
+      expect(dep.deltaMinor).toBe(dep.totalMinor);
+      expect(dep.deltaPct).toBeNull(); // growth from zero has no percentage, and faking one lies
+    });
+
+    it('a real prior year produces a real percentage', async () => {
+      // backdate one accepted order by exactly a year, then read the same calendar window
+      const thisMonth = new Date().toISOString().slice(0, 7);
+      await db.query(
+        `UPDATE purchase_orders SET created_at = created_at - interval '1 year'
+         WHERE id = (SELECT id FROM purchase_orders WHERE status = 'ACCEPTED'
+                     AND buyer_org_id = (SELECT id FROM organizations WHERE legal_name = $1) LIMIT 1)`,
+        [`Ana Buyer ${tag}`],
+      );
+      const res = await http().get(`/dashboard/spend-analytics?from=${thisMonth}&to=${thisMonth}`)
+        .set(...bearer(buyer)).expect(200);
+      const dep = res.body.byDepartment.find((r: any) => r.prevTotalMinor > 0);
+      expect(dep).toBeTruthy();
+      expect(dep.prevTotalMinor).toBe(300_000);
+      // The whole of this department's spend moved into last year, so this year reads zero.
+      // The row must still come back: a department that stopped spending is the single most
+      // useful thing a year-on-year view can show, and dropping it would hide exactly that.
+      expect(dep.totalMinor).toBe(0);
+      expect(dep.deltaMinor).toBe(-300_000);
+      expect(dep.deltaPct).toBe(-100);
+    });
+
+    // The window above the page used to bound the chart and the category split, while the
+    // department split quietly reported all time.
+    it('the department split obeys the selected window', async () => {
+      const longAgo = '2000-01';
+      const res = await http().get(`/dashboard/spend-analytics?from=${longAgo}&to=${longAgo}`)
+        .set(...bearer(buyer)).expect(200);
+      expect(res.body.byDepartment.every((r: any) => r.totalMinor === 0)).toBe(true);
+    });
+  });
 });

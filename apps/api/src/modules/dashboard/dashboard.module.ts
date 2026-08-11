@@ -1,6 +1,8 @@
-import { Controller, Get, Injectable, Module, Query } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Injectable, Module, Query } from '@nestjs/common';
 import { Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
+
+const iso = (d: Date) => d.toISOString().slice(0, 10);
 
 // Buyer KPIs — every query is RLS-scoped by the request context, so plain
 // aggregates cannot leak across orgs by construction.
@@ -92,21 +94,73 @@ export class DashboardService {
   // Both default to the previous 12 months, which is what the page used to be.
   async spendAnalytics(filter: { from?: string; to?: string } = {}) {
     const m = this.rc.manager;
-    const to = filter.to ?? null;
-    const from = filter.from ?? null;
+    // The page sends 'YYYY-MM' (an <input type="month">), which Postgres cannot cast to a
+    // date — every windowed request answered 500, and no test had ever passed a window.
+    // Anything else is refused here rather than reaching the query as a cast error.
+    const monthStart = (d?: string): string | null => {
+      if (!d) return null;
+      if (/^\d{4}-(0[1-9]|1[0-2])$/.test(d)) return `${d}-01`;
+      if (/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(d)) return d;
+      throw new BadRequestException(`Expected YYYY-MM, got "${d}"`);
+    };
+    // Resolved here, not left as NULL for the SQL to default: the chart defaulted to the
+    // last twelve months while the splits defaulted to all time, and once a year-earlier
+    // window exists an unbounded "previous year" would simply mean "everything".
+    const now = new Date();
+    const firstOf = (year: number, monthIdx: number) => iso(new Date(Date.UTC(year, monthIdx, 1)));
+    const to = monthStart(filter.to) ?? firstOf(now.getUTCFullYear(), now.getUTCMonth());
+    const from = monthStart(filter.from) ?? firstOf(now.getUTCFullYear(), now.getUTCMonth() - 11);
+    // The same window a year earlier. "We spent 40k on fuel" means nothing on its own; the
+    // question a finance review actually asks is whether that is more or less than last year.
+    const shift = (d: string | null) => (d ? `${Number(d.slice(0, 4)) - 1}${d.slice(4)}` : null);
+    const prevFrom = shift(from);
+    const prevTo = shift(to);
+    // Both aggregates run twice — once per window — so the two halves cannot drift apart.
+    const CATEGORY_SQL = `
+      SELECT COALESCE(pr.category, '—') AS key,
+             sum(p.total_minor)::bigint AS total, count(*)::int AS po_count
+      FROM purchase_orders p
+      LEFT JOIN contracts c ON c.id = p.contract_id
+      LEFT JOIN sourcing_events e ON e.id = c.event_id
+      LEFT JOIN procurement_requests pr ON pr.id = e.request_id
+      WHERE p.status = 'ACCEPTED'
+        AND ($1::date IS NULL OR p.created_at >= $1::timestamptz)
+        AND ($2::date IS NULL OR p.created_at < ($2::date + interval '1 month')::timestamptz)
+      GROUP BY 1 ORDER BY 2 DESC`;
+    // Reads the PO's OWN department_id rather than walking PO→contract→event→request like
+    // the category split: that chain breaks on direct purchases and catalog call-offs, which
+    // is precisely the spend a department head asks about. Orders predating departments
+    // group under '—'. It also honours the window now — it used to report all time while the
+    // page showed a date filter above it.
+    const DEPARTMENT_SQL = `
+      SELECT COALESCE(d.code, '—') AS key,
+             sum(p.total_minor)::bigint AS total, count(*)::int AS po_count
+      FROM purchase_orders p
+      LEFT JOIN departments d ON d.id = p.department_id
+      WHERE p.status = 'ACCEPTED'
+        AND ($1::date IS NULL OR p.created_at >= $1::timestamptz)
+        AND ($2::date IS NULL OR p.created_at < ($2::date + interval '1 month')::timestamptz)
+      GROUP BY 1 ORDER BY 2 DESC`;
 
-    const [monthly, byCategory, topSuppliers, byDepartment, savingsRows, invoiceRows] = await Promise.all([
-      // Actual by month, plus the PLAN for that month. A budget's plan is spread evenly
-      // across the months its period covers — a year of 120k reads as 10k a month. It is a
-      // proration, not a phasing the user entered, which is why the tooltip says so.
+    const [
+      monthly, byCategory, topSuppliers, byDepartment, savingsRows, invoiceRows,
+      prevMonthly, prevCategory, prevDepartment,
+    ] = await Promise.all([
+      // Actual by month, plus the PLAN for that month. A phased budget contributes the share
+      // finance entered for that month; an unphased one is spread evenly across the months
+      // its period covers, so a year of 120k still reads as 10k a month.
       m.query(`
         SELECT to_char(gs.m, 'YYYY-MM') AS month,
                COALESCE(sum(p.total_minor), 0)::bigint AS total,
                COALESCE((
-                 SELECT sum(b.amount_minor / GREATEST(1, (
-                          (EXTRACT(YEAR FROM b.period_end) - EXTRACT(YEAR FROM b.period_start)) * 12
-                          + EXTRACT(MONTH FROM b.period_end) - EXTRACT(MONTH FROM b.period_start) + 1)))::bigint
+                 SELECT sum(CASE
+                          WHEN ph.share_bp IS NOT NULL THEN b.amount_minor * ph.share_bp / 10000
+                          ELSE b.amount_minor / GREATEST(1, (
+                            (EXTRACT(YEAR FROM b.period_end) - EXTRACT(YEAR FROM b.period_start)) * 12
+                            + EXTRACT(MONTH FROM b.period_end) - EXTRACT(MONTH FROM b.period_start) + 1))
+                        END)::bigint
                  FROM budgets b
+                 LEFT JOIN budget_phasing ph ON ph.budget_id = b.id AND ph.month_start = gs.m
                  WHERE b.status IN ('APPROVED','CLOSED')
                    AND gs.m >= date_trunc('month', b.period_start)
                    AND gs.m <= date_trunc('month', b.period_end)
@@ -117,17 +171,7 @@ export class DashboardService {
         LEFT JOIN purchase_orders p
           ON date_trunc('month', p.created_at) = gs.m AND p.status = 'ACCEPTED'
         GROUP BY gs.m ORDER BY gs.m`, [from, to]),
-      m.query(`
-        SELECT COALESCE(pr.category, '—') AS category,
-               sum(p.total_minor)::bigint AS total, count(*)::int AS po_count
-        FROM purchase_orders p
-        LEFT JOIN contracts c ON c.id = p.contract_id
-        LEFT JOIN sourcing_events e ON e.id = c.event_id
-        LEFT JOIN procurement_requests pr ON pr.id = e.request_id
-        WHERE p.status = 'ACCEPTED'
-          AND ($1::date IS NULL OR p.created_at >= $1::timestamptz)
-          AND ($2::date IS NULL OR p.created_at < ($2::date + interval '1 month')::timestamptz)
-        GROUP BY 1 ORDER BY 2 DESC`, [from, to]),
+      m.query(CATEGORY_SQL, [from, to]),
       m.query(`
         SELECT o.legal_name AS name, sum(p.total_minor)::bigint AS total, count(*)::int AS po_count
         FROM purchase_orders p JOIN organizations o ON o.id = p.supplier_org_id
@@ -135,17 +179,7 @@ export class DashboardService {
           AND ($1::date IS NULL OR p.created_at >= $1::timestamptz)
           AND ($2::date IS NULL OR p.created_at < ($2::date + interval '1 month')::timestamptz)
         GROUP BY o.id, o.legal_name ORDER BY 2 DESC LIMIT 5`, [from, to]),
-      // Spend by cost centre. Reads the PO's OWN department_id rather than walking
-      // PO→contract→event→request like the category split above: that chain breaks on
-      // direct purchases and catalog call-offs, which is precisely the spend a department
-      // head asks about. Orders predating departments group under '—'.
-      m.query(`
-        SELECT COALESCE(d.code, '—') AS department,
-               sum(p.total_minor)::bigint AS total, count(*)::int AS po_count
-        FROM purchase_orders p
-        LEFT JOIN departments d ON d.id = p.department_id
-        WHERE p.status = 'ACCEPTED'
-        GROUP BY 1 ORDER BY 2 DESC`),
+      m.query(DEPARTMENT_SQL, [from, to]),
       m.query(`
         WITH awarded AS (
           SELECT e.id, pr.estimated_total_minor AS est, sum(b.total_minor)::bigint AS awd
@@ -164,17 +198,57 @@ export class DashboardService {
                count(*) FILTER (WHERE status = 'PAID')::int AS paid_count,
                count(*) FILTER (WHERE status NOT IN ('PAID','REJECTED'))::int AS outstanding_count
         FROM invoices`),
+      // last year's same window
+      m.query(`
+        SELECT to_char(gs.m + interval '1 year', 'YYYY-MM') AS month,
+               COALESCE(sum(p.total_minor), 0)::bigint AS total
+        FROM generate_series(
+               COALESCE($1::date, date_trunc('month', now()) - interval '11 months') - interval '1 year',
+               COALESCE($2::date, date_trunc('month', now())) - interval '1 year', interval '1 month') gs(m)
+        LEFT JOIN purchase_orders p
+          ON date_trunc('month', p.created_at) = gs.m AND p.status = 'ACCEPTED'
+        GROUP BY gs.m ORDER BY gs.m`, [from, to]),
+      m.query(CATEGORY_SQL, [prevFrom, prevTo]),
+      m.query(DEPARTMENT_SQL, [prevFrom, prevTo]),
     ]);
+
+    // Merge this window with the same window a year earlier. A key that only appears in the
+    // earlier window still gets a row: "we stopped buying this" is exactly the kind of change
+    // a year-on-year view exists to surface, and dropping the row would hide it.
+    const compare = (cur: any[], prev: any[], label: string) => {
+      const prevBy = new Map(prev.map((r) => [r.key, Number(r.total)]));
+      const rows = cur.map((r) => {
+        const total = Number(r.total);
+        const prevTotal = prevBy.get(r.key) ?? 0;
+        prevBy.delete(r.key);
+        return {
+          [label]: r.key, totalMinor: total, poCount: r.po_count,
+          prevTotalMinor: prevTotal, deltaMinor: total - prevTotal,
+          deltaPct: prevTotal > 0 ? Math.round(((total - prevTotal) / prevTotal) * 1000) / 10 : null,
+        };
+      });
+      for (const [key, prevTotal] of prevBy) {
+        rows.push({
+          [label]: key, totalMinor: 0, poCount: 0,
+          prevTotalMinor: prevTotal, deltaMinor: -prevTotal, deltaPct: -100,
+        });
+      }
+      return rows.sort((a: any, b: any) => b.totalMinor - a.totalMinor || b.prevTotalMinor - a.prevTotalMinor);
+    };
 
     const s = savingsRows[0];
     const inv = invoiceRows[0];
     return {
       window: { from, to },
-      monthly: monthly.map((r: any) => ({
-        month: r.month, totalMinor: Number(r.total), plannedMinor: Number(r.planned),
-      })),
-      byCategory: byCategory.map((r: any) => ({ category: r.category, totalMinor: Number(r.total), poCount: r.po_count })),
-      byDepartment: byDepartment.map((r: any) => ({ department: r.department, totalMinor: Number(r.total), poCount: r.po_count })),
+      monthly: (() => {
+        const prevBy = new Map(prevMonthly.map((r: any) => [r.month, Number(r.total)]));
+        return monthly.map((r: any) => ({
+          month: r.month, totalMinor: Number(r.total), plannedMinor: Number(r.planned),
+          prevTotalMinor: prevBy.get(r.month) ?? 0,
+        }));
+      })(),
+      byCategory: compare(byCategory, prevCategory, 'category'),
+      byDepartment: compare(byDepartment, prevDepartment, 'department'),
       topSuppliers: topSuppliers.map((r: any) => ({ name: r.name, totalMinor: Number(r.total), poCount: r.po_count })),
       savings: {
         estimatedMinor: Number(s.estimated), awardedMinor: Number(s.awarded),

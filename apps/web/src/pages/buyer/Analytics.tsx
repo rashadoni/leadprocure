@@ -2,11 +2,21 @@ import { useEffect, useState } from 'react';
 import { api, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
 
+// Every split carries the same window a year earlier beside it. A row that exists only in
+// last year's half still comes back — "we stopped buying this" is a change worth seeing.
+type YoyRow<K extends string> = { [P in K]: string } & {
+  totalMinor: number;
+  poCount: number;
+  prevTotalMinor: number;
+  deltaMinor: number;
+  deltaPct: number | null;
+};
+
 interface Spend {
   window: { from: string | null; to: string | null };
-  monthly: { month: string; totalMinor: number; plannedMinor: number }[];
-  byCategory: { category: string; totalMinor: number; poCount: number }[];
-  byDepartment: { department: string; totalMinor: number; poCount: number }[];
+  monthly: { month: string; totalMinor: number; plannedMinor: number; prevTotalMinor: number }[];
+  byCategory: YoyRow<'category'>[];
+  byDepartment: YoyRow<'department'>[];
   topSuppliers: { name: string; totalMinor: number; poCount: number }[];
   savings: { estimatedMinor: number; awardedMinor: number; savedMinor: number; events: number };
   invoices: { paidMinor: number; outstandingMinor: number; paidCount: number; outstandingCount: number };
@@ -53,8 +63,11 @@ export default function Analytics() {
   // Auth-guarded CSV of exactly the window on screen.
   const exportCsv = () => {
     if (!d) return;
-    const rows = [[t('date'), t('plan'), t('fact')].join(';')]
-      .concat(d.monthly.map((m) => [m.month, (m.plannedMinor / 100).toFixed(2), (m.totalMinor / 100).toFixed(2)].join(';')));
+    const rows = [[t('date'), t('plan'), t('fact'), t('yoy_prev')].join(';')]
+      .concat(d.monthly.map((m) => [
+        m.month, (m.plannedMinor / 100).toFixed(2), (m.totalMinor / 100).toFixed(2),
+        (m.prevTotalMinor / 100).toFixed(2),
+      ].join(';')));
     const blob = new Blob(['\ufeff' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -65,7 +78,17 @@ export default function Analytics() {
   if (!d) return <><h1>{t('analytics')}</h1><div className="center">…</div></>;
 
   // the plan line must fit the same scale as the bars, or it lands off the chart
-  const maxMonth = Math.max(1, ...d.monthly.map((m) => Math.max(m.totalMinor, m.plannedMinor)));
+  const maxMonth = Math.max(1, ...d.monthly.map((m) => Math.max(m.totalMinor, m.plannedMinor, m.prevTotalMinor)));
+  // Growth reads as a cost, so up is red and down is green — the opposite of a sales chart.
+  const delta = (r: { prevTotalMinor: number; deltaMinor: number; deltaPct: number | null }) => {
+    if (r.prevTotalMinor === 0 && r.deltaMinor === 0) return null;
+    const up = r.deltaMinor > 0;
+    return (
+      <span className={up ? 'error' : 'hint'} data-tip={`${t('yoy_prev')}: ${fmtMoney(r.prevTotalMinor)}`}>
+        {up ? '▲' : '▼'} {r.deltaPct == null ? t('yoy_new') : `${Math.abs(r.deltaPct)}%`}
+      </span>
+    );
+  };
   const maxCat = Math.max(1, ...d.byCategory.map((c) => c.totalMinor));
   const maxDep = Math.max(1, ...d.byDepartment.map((c) => c.totalMinor));
   const savingsPct = d.savings.estimatedMinor > 0
@@ -107,9 +130,14 @@ export default function Analytics() {
         <div className="chart">
           {d.monthly.map((m) => (
             <div key={m.month} className="chart-col"
-              title={`${m.month}: ${t('fact')} ${fmtMoney(m.totalMinor)} · ${t('plan')} ${fmtMoney(m.plannedMinor)}`}>
+              title={`${m.month}: ${t('fact')} ${fmtMoney(m.totalMinor)} · ${t('plan')} ${fmtMoney(m.plannedMinor)} · ${t('yoy_prev')} ${fmtMoney(m.prevTotalMinor)}`}>
+              {/* the same month a year ago, behind the bar — the eye compares heights without
+                  a legend, and an empty last year simply shows nothing */}
+              {m.prevTotalMinor > 0 && (
+                <div className="chart-prev" style={{ bottom: `${Math.min(100, Math.round((m.prevTotalMinor / maxMonth) * 100))}%` }} />
+              )}
               <div className="chart-bar" style={{ height: `${Math.round((m.totalMinor / maxMonth) * 100)}%` }} />
-              {/* the plan for that month, prorated across the budget's period */}
+              {/* the plan for that month: the phasing finance entered, or an even proration */}
               {m.plannedMinor > 0 && (
                 <div className="chart-plan" style={{ bottom: `${Math.min(100, Math.round((m.plannedMinor / maxMonth) * 100))}%` }} />
               )}
@@ -153,25 +181,27 @@ export default function Analytics() {
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
         <div className="card" style={{ flex: 1 }}>
-          <h3>{t('by_department')}</h3>
+          <h3>{t('by_department')} <span className="hint" style={{ fontWeight: 400, fontSize: 12 }}>· {t('yoy_note')}</span></h3>
           {/* keyed off the PO's own department, so direct and catalog orders count too */}
           {d.byDepartment.length === 0 && <div className="hint">—</div>}
           {d.byDepartment.map((c) => (
             <div key={c.department} style={{ marginBottom: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span>{c.department}</span><span>{fmtMoney(c.totalMinor)} · {c.poCount} PO</span>
+                <span>{c.department}</span>
+                <span>{fmtMoney(c.totalMinor)} · {c.poCount} PO {delta(c)}</span>
               </div>
               <div className="budget-bar"><div className="budget-fill" style={{ width: `${Math.round((c.totalMinor / maxDep) * 100)}%` }} /></div>
             </div>
           ))}
         </div>
         <div className="card" style={{ flex: 1 }}>
-          <h3>{t('by_category')}</h3>
+          <h3>{t('by_category')} <span className="hint" style={{ fontWeight: 400, fontSize: 12 }}>· {t('yoy_note')}</span></h3>
           {d.byCategory.length === 0 && <div className="hint">—</div>}
           {d.byCategory.map((c) => (
             <div key={c.category} style={{ marginBottom: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span>{c.category}</span><span>{fmtMoney(c.totalMinor)} · {c.poCount} PO</span>
+                <span>{c.category}</span>
+                <span>{fmtMoney(c.totalMinor)} · {c.poCount} PO {delta(c)}</span>
               </div>
               <div className="budget-bar"><div className="budget-fill" style={{ width: `${Math.round((c.totalMinor / maxCat) * 100)}%` }} /></div>
             </div>

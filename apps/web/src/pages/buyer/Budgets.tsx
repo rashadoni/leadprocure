@@ -130,9 +130,11 @@ export default function Budgets() {
   };
 
   // Auth-guarded CSV download (a plain <a> would hit the API without the bearer token).
-  const exportCsv = async () => {
+  // Two files, two jobs: 'budgets.csv' is the whole picture for a person, 'budgets-1c.csv'
+  // is the plan by month and dimension for the accounting system to import.
+  const download = async (path: string, name: string) => {
     try {
-      const { data } = await api.get('/budgets/export', {
+      const { data } = await api.get(path, {
         params: {
           ...(filter.periodType ? { periodType: filter.periodType } : {}),
           ...(filter.year ? { year: filter.year } : {}),
@@ -142,10 +144,12 @@ export default function Budgets() {
       });
       const url = URL.createObjectURL(data as Blob);
       const a = document.createElement('a');
-      a.href = url; a.download = 'budgets.csv'; a.click();
+      a.href = url; a.download = name; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
     } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
+  const exportCsv = () => download('/budgets/export', 'budgets.csv');
+  const export1c = () => download('/budgets/export/1c', 'budgets-1c.csv');
 
   // Lifecycle actions. A budget is a document: drafted, submitted, approved by someone
   // else, and finally closed when the period is signed off.
@@ -174,6 +178,40 @@ export default function Budgets() {
     if (history[id]) { setHistory((h) => { const n = { ...h }; delete n[id]; return n; }); return; }
     const { data } = await api.get(`/budgets/${id}/revisions`);
     setHistory((h) => ({ ...h, [id]: data }));
+  };
+
+  // Monthly phasing: the shape of the plan over the period. Editing is deliberately a
+  // whole-set operation — shares only mean anything when they add to 100%, so the row keeps
+  // a running total in front of the reader and refuses to save until it lands.
+  const [phasing, setPhasing] = useState<Record<string, any>>({});
+  const togglePhasing = async (id: string) => {
+    if (phasing[id]) { setPhasing((p) => { const n = { ...p }; delete n[id]; return n; }); return; }
+    const { data } = await api.get(`/budgets/${id}/phasing`);
+    setPhasing((p) => ({ ...p, [id]: data }));
+  };
+  const setShare = (id: string, month: string, pct: string) => {
+    setPhasing((p) => {
+      const cur = p[id];
+      const bp = Math.round(Number(pct.replace(',', '.') || 0) * 100);
+      return {
+        ...p,
+        [id]: {
+          ...cur,
+          months: cur.months.map((m: any) => (m.month === month
+            ? { ...m, shareBp: bp, amountMinor: Math.round((cur.amountMinor * bp) / 10000) }
+            : m)),
+        },
+      };
+    });
+  };
+  const savePhasing = async (id: string, months: any[] | null) => {
+    try {
+      const { data } = await api.put(`/budgets/${id}/phasing`, {
+        months: months ? months.map((m) => ({ month: m.month, shareBp: m.shareBp })) : [],
+      });
+      setPhasing((p) => ({ ...p, [id]: data }));
+      load();
+    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
   // Rollover: carry another period's unspent remainder into this budget.
@@ -290,6 +328,13 @@ export default function Budgets() {
                         <div className={`budget-fill ${over ? 'over' : ''}`} style={{ width: `${Math.min(100, d.utilizationPct)}%` }} />
                       </div>
                       <span className="hint">{d.utilizationPct}%{over ? ` · ${t('budget_over')}` : ''}</span>
+                      {/* pace: spent versus what the plan says should be spent by now. A bare
+                          utilization figure never says whether 80% is early or late. */}
+                      <div className={d.paceDeltaPct > 0 ? 'error' : 'hint'} style={{ fontSize: 11 }}
+                        data-tip={d.phased ? t('bud_pace_phased_tip') : t('bud_pace_tip')}>
+                        {t('bud_pace')} {d.elapsedPct}%{d.phased ? ' 📅' : ''}
+                        {d.paceDeltaPct !== 0 && <> · {d.paceDeltaPct > 0 ? '+' : ''}{d.paceDeltaPct}</>}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -314,6 +359,7 @@ export default function Budgets() {
             {deps.map((d) => <option key={d.id} value={d.id}>{d.code}</option>)}
           </select>
           <button className="btn ghost small" onClick={exportCsv}>⤓ CSV</button>
+          <button className="btn ghost small" data-tip={t('bud_1c_tip')} onClick={export1c}>📤 {t('bud_1c')}</button>
           {isAdmin && (
             <>
               {/* Bulk entry: thirty department budgets through a one-row form is what pushes
@@ -390,6 +436,7 @@ export default function Budgets() {
                         <button className="btn small ghost" data-tip={t('bud_reopen_tip')} onClick={() => withReason(b.id, 'reopen', 'bud_reopen_prompt')}>🔓</button>
                       )}{' '}
                       <button className="btn small ghost" data-tip={t('bud_history')} onClick={() => toggleHistory(b.id)}>🕘</button>{' '}
+                      <button className="btn small ghost" data-tip={t('bud_phasing_tip')} onClick={() => togglePhasing(b.id)}>📅</button>{' '}
                       <button className="btn small ghost" data-tip={t('bud_rollover')} onClick={() => rollover(b.id)}>↪</button>{' '}
                       {b.status === 'DRAFT' && (
                         <button className="btn small ghost" data-tip={t('tip_delete')} onClick={() => remove(b.id)}>🗑</button>
@@ -451,6 +498,47 @@ export default function Budgets() {
                     </td>
                   </tr>
                 )}
+                {phasing[b.id] && (() => {
+                  const ph = phasing[b.id];
+                  const totalBp = ph.months.reduce((n: number, m: any) => n + m.shareBp, 0);
+                  const balanced = totalBp === 10000;
+                  return (
+                    <tr>
+                      <td colSpan={isAdmin ? 11 : 10} style={{ background: 'rgba(234,179,8,0.06)' }}>
+                        <b>{t('bud_phasing')}</b>
+                        <div className="hint" style={{ margin: '4px 0 8px' }}>{t('bud_phasing_hint')}</div>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {ph.months.map((m: any) => (
+                            <div key={m.month} style={{ minWidth: 96 }}>
+                              <div className="hint">{m.month}</div>
+                              <input type="number" step="0.01" min="0" max="100" style={{ width: 92 }}
+                                value={String(m.shareBp / 100)}
+                                disabled={!isAdmin || b.status === 'CLOSED'}
+                                onChange={(e) => setShare(b.id, m.month, e.target.value)} />
+                              <div className="hint">{fmtMoney(m.amountMinor, b.currency)}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ marginTop: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <span className={balanced ? 'hint' : 'error'}>
+                            {t('bud_phasing_total')}: {(totalBp / 100).toFixed(2)}%
+                          </span>
+                          {isAdmin && b.status !== 'CLOSED' && (
+                            <>
+                              <button className="btn small" disabled={!balanced}
+                                onClick={() => savePhasing(b.id, ph.months)}>{t('save')}</button>
+                              {ph.phased && (
+                                <button className="btn small ghost" data-tip={t('bud_phasing_clear_tip')}
+                                  onClick={() => savePhasing(b.id, null)}>{t('bud_phasing_clear')}</button>
+                              )}
+                            </>
+                          )}
+                          {!ph.phased && <span className="hint">· {t('bud_phasing_even')}</span>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })()}
                 </Fragment>
               );
             })}

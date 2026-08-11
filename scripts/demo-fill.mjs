@@ -549,7 +549,17 @@ const log = (s) => console.log(s);
       await post(`/budgets/${made.id}/approve`, approver);
     }
   }
-  log(`✓ бюджеты: ${budgets.filter((b) => b.approve).length} утверждённых (из них по отделам — 2) и 2 черновика`);
+  // Сезонность на одном годовом бюджете: без неё раздел разбивки выглядит пустой формой,
+  // а темп освоения везде считается по календарю. Закупки техники смещены к концу года.
+  // именно бюджет ОТДЕЛА: тогда сезонность видна в строке отдела, а не только в итоге
+  const itYear = (await get('/budgets', buyer)).find((b) => b.name === `${T.budgetItDept} ${year}`);
+  if (itYear) {
+    const shares = [400, 400, 600, 600, 600, 600, 800, 800, 1000, 1400, 1600, 1200]; // = 10000
+    await put(`/budgets/${itYear.id}/phasing`, buyer, {
+      months: shares.map((shareBp, i) => ({ month: `${year}-${String(i + 1).padStart(2, '0')}`, shareBp })),
+    });
+  }
+  log(`✓ бюджеты: ${budgets.filter((b) => b.approve).length} утверждённых (из них по отделам — 2), 2 черновика, у годового IT — разбивка по месяцам`);
   if (process.env.DEMO_ONLY === 'BUD') { log('\nDone (только бюджеты).'); return; }
 
   // ---------- Каталог + мгновенный заказ ----------

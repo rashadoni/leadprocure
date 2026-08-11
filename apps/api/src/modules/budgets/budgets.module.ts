@@ -7,8 +7,10 @@ import { Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DataSource } from 'typeorm';
 import {
-  IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min, MinLength,
+  IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min,
+  MinLength, ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import type { AccessTokenPayload } from '@leadprocure/shared';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
@@ -47,6 +49,17 @@ class ReasonDto {
 
 class ImportCsvDto {
   @IsString() @MinLength(5) csv!: string;
+}
+
+class PhasingMonthDto {
+  // 'YYYY-MM' — the month this share belongs to
+  @IsString() @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, { message: 'month: expected YYYY-MM' }) month!: string;
+  // basis points, so 12.5% is expressible without floats
+  @IsInt() @Min(0) @Max(10000) shareBp!: number;
+}
+class SetPhasingDto {
+  // an empty list clears the phasing and returns the budget to an even split
+  @IsArray() @ValidateNested({ each: true }) @Type(() => PhasingMonthDto) months!: PhasingMonthDto[];
 }
 
 class RolloverDto {
@@ -107,6 +120,46 @@ function elapsedShare(from: string, to: string, today: string): number {
   if (!(end > start)) return 100;
   const pct = ((now - start) / (end - start)) * 100;
   return Math.round(Math.min(100, Math.max(0, pct)) * 10) / 10;
+}
+
+// Every month a period touches, as first-of-month ISO dates. A budget is phased month by
+// month regardless of whether its period is a year, a quarter or a single month.
+export function monthsOfPeriod(from: string, to: string): string[] {
+  const out: string[] = [];
+  const end = new Date(`${to}T00:00:00Z`);
+  const cur = new Date(`${from}T00:00:00Z`);
+  cur.setUTCDate(1);
+  while (cur <= end) {
+    out.push(iso(cur));
+    cur.setUTCMonth(cur.getUTCMonth() + 1);
+  }
+  return out;
+}
+
+// How much of the PLAN should have been spent by `today`, in percent.
+//
+// Without phasing this is just the share of the calendar that has gone — right for flat
+// spend, wrong for anything seasonal. With phasing, a finished month contributes its whole
+// share and the running month contributes its share pro rata by days, so pace and forecast
+// answer "are we ahead of the plan" instead of "are we ahead of the calendar".
+export function plannedShare(
+  from: string,
+  to: string,
+  today: string,
+  phasing: Array<{ month_start: string; share_bp: number }>,
+): number {
+  if (!phasing.length) return elapsedShare(from, to, today);
+  const now = Date.parse(`${today}T00:00:00Z`) + DAY_MS; // end of today
+  let bp = 0;
+  for (const row of phasing) {
+    const monthStart = Date.parse(`${String(row.month_start).slice(0, 10)}T00:00:00Z`);
+    const next = new Date(monthStart);
+    next.setUTCMonth(next.getUTCMonth() + 1);
+    const monthEnd = next.getTime();
+    if (now >= monthEnd) bp += row.share_bp;
+    else if (now > monthStart) bp += (row.share_bp * (now - monthStart)) / (monthEnd - monthStart);
+  }
+  return Math.round(Math.min(10000, Math.max(0, bp)) / 100 * 10) / 10;
 }
 
 // Sentinel scope for a BUYER_USER with no home department: matches no budget, so they see
@@ -482,6 +535,26 @@ export class BudgetsService {
     } = {},
   ) {
     const budgets = await this.list(filter);
+    // Phasing for exactly these budgets, in one round trip. A department's pace is the
+    // amount-weighted pace of its budgets, so a phased plan and a flat one can sit side by
+    // side under the same parent and still add up.
+    const phasing = new Map<string, Array<{ month_start: string; share_bp: number }>>();
+    if (budgets.length) {
+      const rows = await this.rc.manager.query(
+        // to_char, not the raw date: the driver hands back a Date object for a `date` column,
+        // and String()-slicing that yields "Tue Aug 11" — which parses to NaN and silently
+        // made every phased budget report a planned share of zero.
+        `SELECT budget_id, to_char(month_start, 'YYYY-MM-DD') AS month_start, share_bp
+         FROM budget_phasing WHERE budget_id = ANY($1::uuid[]) ORDER BY month_start`,
+        [budgets.map((b: any) => b.id)],
+      );
+      for (const r of rows) {
+        const list = phasing.get(r.budget_id) ?? [];
+        list.push({ month_start: String(r.month_start).slice(0, 10), share_bp: Number(r.share_bp) });
+        phasing.set(r.budget_id, list);
+      }
+    }
+    const todayIso = iso(new Date());
     // Departments form a tree, and a parent that ignores its children is not a rollup. Fold
     // every child's figures into its parent as well as reporting the child itself, so a
     // division shows what the division spends — its own budgets plus its units'.
@@ -509,8 +582,13 @@ export class BudgetsService {
         depth: ancestors(key || null).length,
         includesChildren: false,
         currency: b.currency, amountMinor: 0, committedMinor: 0, actualMinor: 0, paidMinor: 0,
+        // plan that should have been spent by today, summed across this department's budgets
+        plannedMinor: 0, phased: false,
         periodFrom: b.periodStart, periodTo: b.periodEnd,
       };
+      const ph = phasing.get(b.id) ?? [];
+      if (ph.length) cur.phased = true;
+      cur.plannedMinor += (b.amountMinor * plannedShare(b.periodStart, b.periodEnd, todayIso, ph)) / 100;
       cur.amountMinor += b.amountMinor;
       cur.committedMinor += b.committedMinor;
       cur.actualMinor += b.actualMinor;
@@ -550,7 +628,11 @@ export class BudgetsService {
         // Pace: how much of the period has gone versus how much of the plan. "80% spent in
         // month five" is the thing finance wants to catch, and a bare utilization figure
         // never says it — 80% is fine in November and alarming in May.
-        const elapsedPct = elapsedShare(d.periodFrom, d.periodTo, today);
+        // Weighted across the department's budgets; with no phasing anywhere this is exactly
+        // the share of the calendar that has gone, which is what it always was.
+        const elapsedPct = d.amountMinor > 0
+          ? Math.round((d.plannedMinor / d.amountMinor) * 1000) / 10
+          : elapsedShare(d.periodFrom, d.periodTo, today);
         // Where this ends up if nothing changes. Pace answers "are we ahead?"; the forecast
         // answers the question that actually follows — "and what does that mean in money by
         // the end of the period?". Straight run-rate: spend so far, extrapolated over the
@@ -563,6 +645,8 @@ export class BudgetsService {
           remainingMinor: d.amountMinor - used,
           utilizationPct,
           elapsedPct,
+          // the reader needs to know whether "should be at 58%" came from a plan or a calendar
+          phased: d.phased,
           // positive = burning faster than the calendar
           paceDeltaPct: Math.round((utilizationPct - elapsedPct) * 10) / 10,
           forecastMinor,
@@ -773,6 +857,82 @@ export class BudgetsService {
   // Carry an unspent remainder forward. Modelled as a revision of the TARGET budget with a
   // pointer back to the source, so the money's provenance stays visible instead of the
   // target's plan quietly growing.
+  // The plan's shape over time. Returns a row per month of the period always — an unphased
+  // budget reports the even split it is actually being judged against, so the editor opens
+  // on the current behaviour instead of on an empty form.
+  async phasing(budgetId: string) {
+    const b = await this.getOne(budgetId);
+    const rows = await this.rc.manager.query(
+      `SELECT to_char(month_start, 'YYYY-MM') AS month, share_bp FROM budget_phasing
+       WHERE budget_id = $1 ORDER BY month_start`,
+      [budgetId],
+    );
+    const months = monthsOfPeriod(b.periodStart, b.periodEnd);
+    const saved = new Map<string, number>(rows.map((r: any) => [r.month, Number(r.share_bp)]));
+    const evenBp = months.length ? Math.round(10000 / months.length) : 0;
+    return {
+      budgetId,
+      phased: rows.length > 0,
+      amountMinor: b.amountMinor,
+      months: months.map((m) => {
+        const month = m.slice(0, 7);
+        const shareBp = saved.get(month) ?? evenBp;
+        return { month, shareBp, amountMinor: Math.round((b.amountMinor * shareBp) / 10000) };
+      }),
+    };
+  }
+
+  // Replace the phasing wholesale. Partial edits are refused on purpose: shares only mean
+  // anything as a set that adds to 100%, and accepting one month at a time would leave the
+  // plan in states that do not.
+  async setPhasing(
+    budgetId: string,
+    months: Array<{ month: string; shareBp: number }>,
+    auth: AccessTokenPayload,
+  ) {
+    const b = await this.getOne(budgetId);
+    await this.assertMayWrite(auth, b.departmentId ?? null);
+    if (b.status === 'CLOSED') {
+      throw new ConflictException('A closed period cannot be re-phased — reopen it first');
+    }
+    const expected = monthsOfPeriod(b.periodStart, b.periodEnd).map((m) => m.slice(0, 7));
+
+    if (months.length) {
+      const given = months.map((m) => m.month);
+      const dupes = given.filter((m, i) => given.indexOf(m) !== i);
+      if (dupes.length) throw new BadRequestException(`Duplicate month(s): ${[...new Set(dupes)].join(', ')}`);
+      const stray = given.filter((m) => !expected.includes(m));
+      if (stray.length) {
+        throw new BadRequestException(
+          `Month(s) outside the budget period ${b.periodLabel}: ${stray.join(', ')}`,
+        );
+      }
+      const missing = expected.filter((m) => !given.includes(m));
+      if (missing.length) {
+        throw new BadRequestException(`Every month of the period must be given; missing: ${missing.join(', ')}`);
+      }
+      const total = months.reduce((n, m) => n + m.shareBp, 0);
+      if (total !== 10000) {
+        throw new BadRequestException(
+          `Shares must add up to 100.00% — got ${(total / 100).toFixed(2)}%`,
+        );
+      }
+    }
+
+    await this.rc.manager.query(`DELETE FROM budget_phasing WHERE budget_id = $1`, [budgetId]);
+    for (const m of months) {
+      await this.rc.manager.query(
+        `INSERT INTO budget_phasing(buyer_org_id, budget_id, month_start, share_bp, created_by)
+         VALUES ($1,$2,$3::date,$4,$5)`,
+        [auth.org_id, budgetId, `${m.month}-01`, m.shareBp, auth.sub],
+      );
+    }
+    await this.audit.record(months.length ? 'BUDGET_PHASING_SET' : 'BUDGET_PHASING_CLEARED', 'budget', budgetId, {
+      months: months.length,
+    });
+    return this.phasing(budgetId);
+  }
+
   async rollover(sourceId: string, targetId: string, auth: AccessTokenPayload) {
     if (sourceId === targetId) throw new BadRequestException('Source and target must be different budgets');
     const all = await this.list();
@@ -1109,6 +1269,64 @@ export class BudgetsService {
     return '﻿' + [header.map(esc).join(';'), ...lines].join('\r\n'); // BOM so Excel reads UTF-8
   }
 
+  // Budgets for 1C. Deliberately not the same file as /budgets/export: that one is the
+  // whole picture for a human (plan, commitments, actual, remainder), while an accounting
+  // system loads a PLAN broken down by period and analytic dimension. Commitments and
+  // actuals are not exported here on purpose — 1C already holds the facts, and splitting a
+  // procurement-side commitment across months would be an invention, not a figure.
+  //
+  // One row per month per budget: a phased budget contributes the share finance entered, an
+  // unphased one an even split. The last month absorbs the rounding remainder so the rows
+  // add up to the plan exactly — an import that is off by a few qəpik gets rejected.
+  async export1cCsv(filter: Parameters<BudgetsService['list']>[0] = {}): Promise<string> {
+    const budgets = await this.list(filter);
+    const phasing = new Map<string, Map<string, number>>();
+    if (budgets.length) {
+      const rows = await this.rc.manager.query(
+        `SELECT budget_id, to_char(month_start, 'YYYY-MM') AS month, share_bp FROM budget_phasing
+         WHERE budget_id = ANY($1::uuid[])`,
+        [budgets.map((b: any) => b.id)],
+      );
+      for (const r of rows) {
+        const cur = phasing.get(r.budget_id) ?? new Map<string, number>();
+        cur.set(r.month, Number(r.share_bp));
+        phasing.set(r.budget_id, cur);
+      }
+    }
+
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const money = (m: number) => (m / 100).toFixed(2);
+    const header = [
+      'Период', 'Дата начала', 'Дата конца', 'Подразделение', 'Статья',
+      'Бюджет', 'Статус', 'Сумма', 'Валюта',
+    ];
+    const lines: string[] = [];
+    for (const b of budgets) {
+      const months = monthsOfPeriod(b.periodStart, b.periodEnd);
+      const shares = phasing.get(b.id);
+      let allocated = 0;
+      months.forEach((first, i) => {
+        const month = first.slice(0, 7);
+        const last = i === months.length - 1;
+        const amount = last
+          ? b.amountMinor - allocated // the remainder, so the file totals the plan exactly
+          : shares
+            ? Math.round((b.amountMinor * (shares.get(month) ?? 0)) / 10000)
+            : Math.round(b.amountMinor / months.length);
+        allocated += amount;
+        const monthEnd = new Date(`${first}T00:00:00Z`);
+        monthEnd.setUTCMonth(monthEnd.getUTCMonth() + 1);
+        monthEnd.setUTCDate(0);
+        lines.push([
+          month, first, iso(monthEnd),
+          b.departmentCode ?? '', b.category === '*' ? '' : b.category,
+          b.name, b.status, money(amount), b.currency,
+        ].map(esc).join(';'));
+      });
+    }
+    return '\ufeff' + [header.map(esc).join(';'), ...lines].join('\r\n'); // BOM so 1C reads UTF-8
+  }
+
   // Non-blocking: returns budgets that this (already-APPROVED) request has tipped over.
   // Called from request approval; never throws, so it can't break the approval flow.
   async warningsForRequest(req: { id: string; approved_at: string | Date | null }): Promise<BudgetWarning[]> {
@@ -1174,6 +1392,25 @@ export class BudgetsController {
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_FINANCE')
   unbudgeted(@Query('from') from?: string, @Query('to') to?: string) {
     return this.budgets.unbudgeted({ from: from || undefined, to: to || undefined });
+  }
+
+  // Integrations → 1C: the plan by month and dimension, ready to import.
+  @Get('export/1c')
+  @Roles('BUYER_ADMIN', 'BUYER_FINANCE', 'BUYER_APPROVER')
+  async export1c(
+    @Res() res: Response,
+    @Query('year') year?: string,
+    @Query('periodType') periodType?: string,
+    @Query('departmentId') departmentId?: string,
+  ) {
+    const csv = await this.budgets.export1cCsv({
+      year: year ? Number(year) : undefined,
+      periodType: periodType || undefined,
+      departmentId: departmentId || undefined,
+    });
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="budgets-1c.csv"');
+    res.send(csv);
   }
 
   @Get('export')
@@ -1261,6 +1498,18 @@ export class BudgetsController {
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_FINANCE', 'BUYER_USER')
   documents(@Param('id') id: string, @Query('kind') kind?: 'committed' | 'actual') {
     return this.budgets.documents(id, kind ?? 'all');
+  }
+
+  @Get(':id/phasing')
+  @Roles('BUYER_ADMIN', 'BUYER_FINANCE', 'BUYER_APPROVER', 'BUYER_USER')
+  phasing(@Param('id') id: string) {
+    return this.budgets.phasing(id);
+  }
+
+  @Put(':id/phasing')
+  @Roles('BUYER_ADMIN', 'BUYER_FINANCE', 'BUYER_USER')
+  setPhasing(@Param('id') id: string, @Body() dto: SetPhasingDto, @CurrentUser() auth: AccessTokenPayload) {
+    return this.budgets.setPhasing(id, dto.months, auth);
   }
 
   @Get(':id/revisions')
