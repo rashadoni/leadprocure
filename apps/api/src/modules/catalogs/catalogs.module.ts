@@ -41,6 +41,18 @@ export class CatalogsService {
     const c = (await m.query(`SELECT * FROM contracts WHERE id = $1`, [contractId]))[0];
     if (!c) throw new NotFoundException('Contract not found');
     if (c.buyer_org_id !== auth.org_id) throw new BadRequestException('Not your contract');
+    // A contract has one price list, and the button that calls this gives no visible result
+    // on the page it lives on — so a reader who clicks again because "nothing happened" used
+    // to end up with a second identical draft. An existing DRAFT for this contract is
+    // returned instead. An ACTIVE or archived one is left alone: re-issuing a price list
+    // after the previous one went live is a real thing to want.
+    const existing = (
+      await m.query(
+        `SELECT id FROM catalogs WHERE contract_id = $1 AND status = 'DRAFT' ORDER BY created_at LIMIT 1`,
+        [contractId],
+      )
+    )[0];
+    if (existing) return this.get(existing.id);
     const cat = (
       await m.query(
         `INSERT INTO catalogs(buyer_org_id, supplier_org_id, contract_id, title, currency, created_by)

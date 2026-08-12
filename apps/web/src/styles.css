@@ -174,3 +174,7 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
    filled bar behind the current one would hide itself whenever last year was the smaller
    of the two, which is exactly half the cases worth seeing. */
 .chart-prev { position: absolute; left: 8%; right: 8%; height: 0; border-top: 2px solid var(--muted); opacity: .55; }
+
+/* Confirmation of an action whose result lives on another screen. Not a toast: it stays
+   until dismissed, because the thing it is pointing at is a link the reader may want. */
+.note-ok { border-color: var(--accent); background: rgba(4, 120, 87, .06); padding: 10px 14px; }
