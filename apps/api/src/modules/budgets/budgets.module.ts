@@ -534,7 +534,11 @@ export class BudgetsService {
       scopeDepartmentId?: string | null;
     } = {},
   ) {
-    const budgets = await this.list(filter);
+    // Only signed-off plans. A draft is a proposal, not a ceiling: counting its amount here
+    // inflated the department's plan while it could never carry any spend (matching is
+    // restricted to APPROVED/CLOSED), so a department looked more comfortable the more
+    // unapproved drafts someone had lying around.
+    const budgets = (await this.list(filter)).filter((b: any) => b.status === 'APPROVED' || b.status === 'CLOSED');
     // Phasing for exactly these budgets, in one round trip. A department's pace is the
     // amount-weighted pace of its budgets, so a phased plan and a flat one can sit side by
     // side under the same parent and still add up.

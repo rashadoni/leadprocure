@@ -1034,6 +1034,18 @@ describe('budgets & commitment control (API e2e)', () => {
   });
 
   // ---- Export for the accounting system --------------------------------------------
+  it('a draft plan does not inflate the rollup: only signed-off budgets are a ceiling', async () => {
+    await http().post('/categories').set(...bearer(buyerA)).send({ code: 'DRAFTROLL' }).expect(201);
+    const before = (await http().get(`/budgets/rollup?year=${YEAR}`).set(...bearer(buyerA)).expect(200)).body
+      .find((r: any) => r.departmentId === null).amountMinor;
+    // created, never submitted — a proposal nobody has signed
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Draft roll ${tag}`, category: 'DRAFTROLL', periodYear: YEAR, amountMinor: 9_000_000 }).expect(201);
+    const after = (await http().get(`/budgets/rollup?year=${YEAR}`).set(...bearer(buyerA)).expect(200)).body
+      .find((r: any) => r.departmentId === null).amountMinor;
+    expect(after).toBe(before);
+  });
+
   describe('1C export', () => {
     it('emits a row per month, and the months add up to the plan exactly', async () => {
       await http().post('/categories').set(...bearer(buyerA)).send({ code: 'ONEC' }).expect(201);

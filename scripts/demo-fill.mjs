@@ -52,6 +52,8 @@ const TXT = {
     budgetItDept: 'Бюджет отдела IT', budgetOpsQ: 'Операции — квартал', budgetOffice: 'Офисное снабжение',
     budgetTraining: 'Обучение',
     catRows: [['Ручка шариковая, синяя', 'шт', 120, 50], ['Папка-регистратор 75 мм', 'шт', 480, 10], ['Степлер №24', 'шт', 850, 5], ['Скрепки 28 мм, 100 шт', 'уп', 95, 20], ['Маркер для доски', 'шт', 210, 10], ['Блок для записей 90×90', 'шт', 340, 10], ['Клейкая лента 48 мм', 'шт', 190, 12], ['Файл-вкладыш А4, 100 шт', 'уп', 720, 5]],
+    lastYearIt: 'Ноутбуки (прошлый год)', lastYearOps: 'Хозтовары (прошлый год)', lastYearFuel: 'Топливо (прошлый год)',
+    budgetOpsYear: 'Операции — год', budgetOfficeQ: 'Офисное снабжение', budgetNextYear: 'Головной офис',
     justification: 'Лучшее соотношение цена/срок по взвешенной оценке',
   },
   az: {
@@ -80,6 +82,8 @@ const TXT = {
     budgetItDept: 'IT şöbəsi', budgetOpsQ: 'OPS rüblük', budgetOffice: 'Ofis təchizatı',
     budgetTraining: 'Tədris',
     catRows: [['Diyircəkli qələm, mavi', 'ədəd', 120, 50], ['Registrator qovluğu 75 mm', 'ədəd', 480, 10], ['Stepler №24', 'ədəd', 850, 5], ['Sancaq 28 mm, 100 ədəd', 'paket', 95, 20], ['Lövhə üçün marker', 'ədəd', 210, 10], ['Qeyd bloku 90×90', 'ədəd', 340, 10], ['Yapışqan lent 48 mm', 'ədəd', 190, 12], ['A4 fayl, 100 ədəd', 'paket', 720, 5]],
+    lastYearIt: 'Noutbuklar (keçən il)', lastYearOps: 'Təsərrüfat malları (keçən il)', lastYearFuel: 'Yanacaq (keçən il)',
+    budgetOpsYear: 'OPS illik', budgetOfficeQ: 'Ofis təchizatı', budgetNextYear: 'Baş ofis',
     justification: 'Çəkili qiymətləndirmə üzrə ən yaxşı qiymət/müddət nisbəti',
   },
   en: {
@@ -108,6 +112,8 @@ const TXT = {
     budgetItDept: 'IT department budget', budgetOpsQ: 'Operations — quarter', budgetOffice: 'Office supplies',
     budgetTraining: 'Training',
     catRows: [['Ballpoint pen, blue', 'pcs', 120, 50], ['Lever arch file 75 mm', 'pcs', 480, 10], ['Stapler no. 24', 'pcs', 850, 5], ['Paper clips 28 mm, 100', 'pack', 95, 20], ['Whiteboard marker', 'pcs', 210, 10], ['Sticky notes 90×90', 'pcs', 340, 10], ['Packing tape 48 mm', 'pcs', 190, 12], ['A4 punched pockets, 100', 'pack', 720, 5]],
+    lastYearIt: 'Laptops (last year)', lastYearOps: 'Household goods (last year)', lastYearFuel: 'Fuel (last year)',
+    budgetOpsYear: 'Operations — year', budgetOfficeQ: 'Office supplies', budgetNextYear: 'Head office',
     justification: 'Best price / lead-time ratio by the weighted score',
   },
 };
@@ -399,11 +405,64 @@ const log = (s) => console.log(s);
   };
   if (process.env.DEMO_ONLY === 'J') { await storyJ(); log('\nDone (только живые процедуры).'); return; }
 
+  // ---------- K. Прошлый год: база для сравнения ----------
+  // Отчёт «год к году» без прошлого года показывает пустоту. Заказы создаются теми же
+  // потоками, что и всё остальное, и только потом сдвигаются на год назад — датой в БД,
+  // потому что через API прошлое не выписать.
+  const storyK = async () => {
+    const rows = [
+      { title: T.lastYearIt, category: 'IT', dep: 'IT', qty: 12, price: 150_000 },
+      { title: T.lastYearOps, category: 'OFFICE', dep: 'OPS', qty: 200, price: 1_200 },
+      { title: T.lastYearFuel, category: 'FUEL', dep: 'OPS', qty: 3000, price: 90 },
+    ];
+    // Прошлогодние объёмы выше порога прямого заказа, а разыгрывать три тендера ради
+    // истории незачем: политика на время блока снимается и тут же возвращается.
+    await put('/requests/method-policies', buyer, {
+      policies: [{ category: '*', minAmountMinor: 0, maxAmountMinor: null, method: 'DIRECT' }],
+    });
+    const made = [];
+    for (const r of rows) {
+      const reqId = await mkApprovedRequest(r.title, r.category, [
+        { name: r.title, qty: r.qty, estUnitPriceMinor: r.price },
+      ], depIds[r.dep]);
+      const po = await post(`/orders/direct/from-request/${reqId}`, buyer, { supplierOrgId: org1 });
+      await post(`/orders/${po.id}/status`, buyer, { status: 'ISSUED' });
+      for (const st of ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED']) {
+        await post(`/orders/${po.id}/status`, sup1, { status: st });
+      }
+      const det = await get(`/orders/${po.id}`, buyer);
+      await post(`/orders/${po.id}/receipts`, buyer, { items: [{ poItemId: det.items[0].id, qty: r.qty }] });
+      made.push(po.id);
+    }
+    await put('/requests/method-policies', buyer, {
+      policies: [
+        { category: '*', minAmountMinor: 0, maxAmountMinor: 50_000, method: 'DIRECT' },
+        { category: '*', minAmountMinor: 50_000, maxAmountMinor: null, method: 'RFQ' },
+      ],
+    });
+    // Сдвиг в прошлое: заказ, заявка и приёмка вместе, иначе аналитика и бюджеты разойдутся.
+    const ids = made.map((id) => `'${id}'`).join(',');
+    try {
+      execSync(
+        `docker exec ${PG} psql -U leadprocure_owner -d leadprocure -c ` +
+        `"UPDATE purchase_orders SET created_at = created_at - interval '1 year', updated_at = updated_at - interval '1 year' WHERE id IN (${ids}); ` +
+        `UPDATE procurement_requests SET created_at = created_at - interval '1 year', approved_at = approved_at - interval '1 year' ` +
+        `WHERE id IN (SELECT request_id FROM purchase_orders WHERE id IN (${ids})); ` +
+        `UPDATE goods_receipts SET created_at = created_at - interval '1 year' WHERE po_id IN (${ids});"`,
+        { stdio: 'pipe' },
+      );
+      log('✓ K: история прошлого года — есть с чем сравнивать в аналитике');
+    } catch (e) {
+      log(`  ! K: сдвиг в прошлое не удался (${e.message.split('\n')[0]}) — сравнение год к году будет пустым`);
+    }
+  };
+  if (process.env.DEMO_ONLY === 'K') { await storyK(); log('\nDone (только прошлый год).'); return; }
+
   // ---------- A. Полный цикл до оплаты ----------
   const reqA = await mkApprovedRequest(T.srvReq, 'IT', [
     { name: T.srvItem1, qty: 4, estUnitPriceMinor: 1_200_000 },
     { name: T.srvItem2, qty: 2, estUnitPriceMinor: 450_000 },
-  ]);
+  ], depIds.IT);
   const evA = await mkEvent(reqA, T.srvEv, 'RFQ', new Date(Date.now() + 3600_000).toISOString());
   const evAdet = await get(`/events/${evA}`, sup1);
   const itemsA = evAdet.items;
@@ -456,7 +515,7 @@ const log = (s) => console.log(s);
   const reqB = await mkApprovedRequest(T.furnReq, 'OFFICE', [
     { name: T.furnItem1, qty: 25, estUnitPriceMinor: 28_000 },
     { name: T.furnItem2, qty: 25, estUnitPriceMinor: 35_000 },
-  ]);
+  ], depIds.OPS);
   const evB = await mkEvent(reqB, T.furnEv, 'RFQ', new Date(Date.now() + 7 * DAY).toISOString());
   const itemsB = (await get(`/events/${evB}`, sup1)).items;
   await post(`/events/${evB}/bid`, sup1, {
@@ -472,7 +531,7 @@ const log = (s) => console.log(s);
   // ---------- C. RFI ----------
   const reqC = await mkApprovedRequest(T.logiReq, 'LOGISTICS', [
     { name: T.logiItem, qty: 1, estUnitPriceMinor: 10_000_000 },
-  ]);
+  ], depIds.OPS);
   const evC = await mkEvent(reqC, T.logiEv, 'RFI', new Date(Date.now() + 7 * DAY).toISOString());
   await post(`/events/${evC}/bid`, sup2, {
     proposalText: T.logiProposal,
@@ -482,7 +541,7 @@ const log = (s) => console.log(s);
   // ---------- D. Реверс-аукцион ----------
   const reqD = await mkApprovedRequest(T.fuelReq, 'FUEL', [
     { name: T.fuelItem, qty: 20000, estUnitPriceMinor: 160 },
-  ]);
+  ], depIds.OPS);
   const evD = await post(`/events/reverse/from-request/${reqD}`, buyer, {
     title: T.fuelEv,
     closeAt: new Date(Date.now() + 7 * DAY).toISOString(),
@@ -511,7 +570,7 @@ const log = (s) => console.log(s);
   // ---------- F. Прямой заказ с ожидающей поправкой ----------
   const reqF = await mkApprovedRequest(T.houseReq, 'OFFICE', [
     { name: T.houseItem, qty: 40, estUnitPriceMinor: 700 },
-  ]);
+  ], depIds.OPS);
   const poF = await post(`/orders/direct/from-request/${reqF}`, buyer, { supplierOrgId: org1 });
   await post(`/orders/${poF.id}/status`, buyer, { status: 'ISSUED' });
   await post(`/orders/${poF.id}/amendments`, buyer, {
@@ -524,6 +583,7 @@ const log = (s) => console.log(s);
   await storyH();
   await storyI();
   await storyJ();
+  await storyK();
 
   // ---------- Бюджеты ----------
   // DEMO_ONLY=BUD переигрывает только этот блок.
@@ -532,14 +592,22 @@ const log = (s) => console.log(s);
   // выглядит живым, а цифры в нём нулевые. Утверждает другой человек: своё не подписывают.
   const year = new Date().getFullYear();
   const quarter = Math.floor(new Date().getMonth() / 3) + 1;
+  // Суммы подобраны под реальный расход историй A–K: раздел должен показывать работающий
+  // план, а не 700% освоения. Заявка выбирает ОДИН бюджет по специфичности
+  // (отдел+статья → отдел → статья → вся организация), поэтому бюджет только по статье
+  // ничего не поймает, пока у отдела есть свой — такие в сид не кладём.
   const budgets = [
-    { name: `${T.budgetAll} ${year}`, category: '*', amountMinor: 20_000_000, approve: true },
-    { name: `${T.budgetIT} ${year}`, category: 'IT', amountMinor: 8_000_000, approve: true },
-    { name: `${T.budgetItDept} ${year}`, category: 'IT', departmentId: depIds.IT, amountMinor: 6_000_000, approve: true },
-    { name: T.budgetOpsQ, category: '*', departmentId: depIds.OPS, periodType: 'QUARTER', periodQuarter: quarter, amountMinor: 1_500_000, approve: true },
-    // Две штуки остаются черновиками — чтобы на экране был виден и сам жизненный цикл.
-    { name: `${T.budgetOffice} ${year}`, category: 'OFFICE', departmentId: depIds.OPS, amountMinor: 950_000, approve: false },
+    // общий потолок: ловит то, что не покрыто ничем более точным (например, заказ по каталогу)
+    { name: `${T.budgetAll} ${year}`, category: '*', amountMinor: 4_000_000, approve: true },
+    // IT: около 85% освоения — здоровый рабочий бюджет
+    { name: `${T.budgetItDept} ${year}`, category: '*', departmentId: depIds.IT, amountMinor: 9_500_000, approve: true },
+    // OPS: около 91% — отдел у самой границы, ровно тот случай, ради которого раздел и нужен
+    { name: `${T.budgetOpsYear} ${year}`, category: '*', departmentId: depIds.OPS, amountMinor: 19_000_000, approve: true },
+    // отдел+статья на квартал: и специфичность, и квартальный период в одном примере
+    { name: `${T.budgetOfficeQ} Q${quarter}`, category: 'OFFICE', departmentId: depIds.OPS, periodType: 'QUARTER', periodQuarter: quarter, amountMinor: 200_000, approve: true },
+    // Два черновика — чтобы на экране был виден и сам жизненный цикл документа.
     { name: `${T.budgetTraining} ${year}`, category: 'TRAINING', amountMinor: 420_000, approve: false },
+    { name: `${T.budgetNextYear} ${year + 1}`, category: '*', departmentId: depIds['MƏRKƏZ'], periodYear: year + 1, amountMinor: 30_000_000, approve: false },
   ];
   for (const b of budgets) {
     const { approve, ...dto } = b;
@@ -559,7 +627,7 @@ const log = (s) => console.log(s);
       months: shares.map((shareBp, i) => ({ month: `${year}-${String(i + 1).padStart(2, '0')}`, shareBp })),
     });
   }
-  log(`✓ бюджеты: ${budgets.filter((b) => b.approve).length} утверждённых (из них по отделам — 2), 2 черновика, у годового IT — разбивка по месяцам`);
+  log(`✓ бюджеты: ${budgets.filter((b) => b.approve).length} утверждённых (из них по отделам — 3), 2 черновика, у бюджета IT — разбивка по месяцам`);
   if (process.env.DEMO_ONLY === 'BUD') { log('\nDone (только бюджеты).'); return; }
 
   // ---------- Каталог + мгновенный заказ ----------

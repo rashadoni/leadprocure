@@ -124,8 +124,12 @@ describe('spend analytics (API e2e)', () => {
   it('budget pace compares the share spent with the share of the period gone', async () => {
     const year = new Date().getUTCFullYear();
     const dep = (await http().get('/departments').set(...bearer(buyer))).body.find((d: any) => d.code === `ANA-${tag}`);
-    await http().post('/budgets').set(...bearer(buyer))
+    // taken all the way to APPROVED: the rollup counts signed-off plans only, and a draft
+    // ceiling nobody approved is not a ceiling
+    const made = await http().post('/budgets').set(...bearer(buyer))
       .send({ name: `Pace ${tag}`, departmentId: dep.id, periodYear: year, amountMinor: 1_000_000 }).expect(201);
+    await http().post(`/budgets/${made.body.id}/submit`).set(...bearer(buyer)).expect(201);
+    await http().post(`/budgets/${made.body.id}/approve`).set(...bearer(approver)).expect(201);
 
     const rows = (await http().get('/budgets/rollup?current=1').set(...bearer(buyer)).expect(200)).body;
     const row = rows.find((r: any) => r.departmentCode === `ANA-${tag}`);
@@ -139,8 +143,10 @@ describe('spend analytics (API e2e)', () => {
   it('a period that has not started yet reads 0% elapsed, never negative', async () => {
     const nextYear = new Date().getUTCFullYear() + 1;
     const dep = (await http().get('/departments').set(...bearer(buyer))).body.find((d: any) => d.code === `ANA-${tag}`);
-    await http().post('/budgets').set(...bearer(buyer))
+    const future = await http().post('/budgets').set(...bearer(buyer))
       .send({ name: `Future ${tag}`, departmentId: dep.id, periodYear: nextYear, amountMinor: 500_000 }).expect(201);
+    await http().post(`/budgets/${future.body.id}/submit`).set(...bearer(buyer)).expect(201);
+    await http().post(`/budgets/${future.body.id}/approve`).set(...bearer(approver)).expect(201);
 
     const rows = (await http().get(`/budgets/rollup?year=${nextYear}`).set(...bearer(buyer)).expect(200)).body;
     const row = rows.find((r: any) => r.departmentCode === `ANA-${tag}`);
