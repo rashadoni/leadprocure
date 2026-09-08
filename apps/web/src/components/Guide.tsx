@@ -47,6 +47,11 @@ export default function Guide() {
 
   // a new section starts collapsed, whatever the previous one was doing
   useEffect(() => { setOpen(false); }, [pathname]);
+  // A failed recording hides the card for THAT section only. The component lives in the
+  // layout and is never remounted, so without this reset the first missing file would hide
+  // every later section's card for the rest of the session — and only a full page reload
+  // would bring them back.
+  useEffect(() => { setMissing(false); }, [guide?.key]);
 
   // Esc closes the expanded player, like any modal on the page.
   useEffect(() => {
