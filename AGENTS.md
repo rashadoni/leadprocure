@@ -1,5 +1,15 @@
 # AGENTS.md — Leadprocure (handoff for Codex)
 
+## Порядок доставки — `docs/DELIVERY-ARCHITECTURE.md`
+
+Этот документ главнее всего остального в том, что касается пути изменения до
+пользователей, и действует одинаково для Claude, Codex и любых будущих сессий.
+Коротко: в `main` только через PR; каждый PR разбирает агент, который его не
+писал (`agent-review` — единственная обязательная проверка, своё же ревью не
+считается); выкладка — как построена в этом репозитории; перед мержем того, что
+увидит пользователь, владельцу показывают короткий список человеческим языком и
+ждут «давай».
+
 Procurement/tender SaaS. Market: **Azerbaijan**, built to **international standards** (UNCITRAL, OCDS, Peppol, ISO 20400). Stack: **NestJS + TypeScript** (modular monolith), **PostgreSQL 16** (RLS + ACL hybrid), **React + Vite** SPA. Monorepo via **pnpm workspaces**.
 
 Full design plan (deep detail): `~/.claude/plans/mossy-nibbling-badger.md` (v2). This file is the working brief — follow it exactly so new code matches what already exists.
