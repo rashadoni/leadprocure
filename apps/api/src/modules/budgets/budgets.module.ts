@@ -973,8 +973,11 @@ export class BudgetsService {
     let selfApproved = false;
     if (b.submitted_by && b.submitted_by === auth.sub) {
       const others = await this.rc.manager.query(
+        // Every role the controller lets approve a budget must count here. BUYER_FINANCE was
+        // missing, so in an org of one admin and one finance user the admin could approve
+        // their own budget — the one case segregation of duties exists to prevent.
         `SELECT 1 FROM memberships WHERE org_id = $1 AND user_id <> $2
-           AND role IN ('BUYER_ADMIN','BUYER_APPROVER') LIMIT 1`,
+           AND role IN ('BUYER_ADMIN','BUYER_FINANCE','BUYER_APPROVER') LIMIT 1`,
         [auth.org_id, auth.sub],
       );
       if (others.length) {
