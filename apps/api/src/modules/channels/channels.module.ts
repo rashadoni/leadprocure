@@ -149,9 +149,17 @@ export class ChannelsService {
     const existing = await this.currentConfig(channel, auth);
     const { isActive, ...incoming } = dto as any;
     const config: Record<string, unknown> = { ...existing, ...incoming };
-    // blank secret = keep the stored one (so the UI never has to re-enter it)
+    // A blank secret means "keep the stored one", so the UI never has to re-enter it. On a
+    // FIRST connect there is nothing stored, and falling back to '' used to save a row with
+    // is_active = true: the channel reads as connected, while every send through it fails
+    // with an empty credential and the buyer is told nothing. Refuse instead.
     for (const key of SECRET_KEYS[channel]) {
-      if (incoming[key] == null || incoming[key] === '') config[key] = existing[key] ?? '';
+      if (incoming[key] != null && incoming[key] !== '') continue;
+      const stored = existing[key];
+      if (stored == null || stored === '') {
+        throw new BadRequestException(`${key} is required when connecting this channel for the first time`);
+      }
+      config[key] = stored;
     }
     // WhatsApp: verify the Meta token + phone id on connect (best-effort) and store the
     // verified business name for a friendly "connected as …" label, like the CRM.
