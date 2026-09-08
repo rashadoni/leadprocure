@@ -109,6 +109,17 @@ export interface BudgetPeriod {
 export const BUDGET_CURRENCY = 'AZN';
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
+// A `date` column comes back from the driver as a Date at LOCAL midnight, so serialising it
+// through toISOString() moves it a day whenever the server is not on UTC: a 2026 budget
+// starts on 2025-12-31, reads as thirteen months, and Q1 labels itself "2025 Q4".
+// Production runs UTC and never showed it; a developer machine on CET did. Calendar dates
+// carry no time zone, so they are formatted from the local parts the driver filled in.
+const dateOnly = (v: unknown): string => {
+  if (typeof v === 'string') return v.slice(0, 10);
+  const d = v instanceof Date ? v : new Date(String(v));
+  const p2 = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+};
 const DAY_MS = 86_400_000;
 
 // Share of a period already gone, clamped to 0–100: a period still ahead reads 0, a closed
@@ -707,8 +718,8 @@ export class BudgetsService {
     // Utilization is what the budget is actually carrying: orders placed plus estimates
     // not yet ordered.
     const used = committed + actual;
-    const start = iso(new Date(r.period_start));
-    const end = iso(new Date(r.period_end));
+    const start = dateOnly(r.period_start);
+    const end = dateOnly(r.period_end);
     return {
       // derived from the range, not stored — one source of truth for the period
       id: r.id, name: r.name, category: r.category, periodYear: Number(start.slice(0, 4)),
@@ -1176,7 +1187,7 @@ export class BudgetsService {
   async close(id: string, auth: AccessTokenPayload) {
     const b = await this.requireStatus(id, ['APPROVED']);
     const today = new Date().toISOString().slice(0, 10);
-    if (iso(new Date(b.period_end)) >= today) {
+    if (dateOnly(b.period_end) >= today) {
       throw new BadRequestException('The period has not ended yet — a budget can only be closed after its last day');
     }
     // Freeze what the budget WAS at sign-off. Read the live figures first, then store them:
@@ -1358,10 +1369,10 @@ export class BudgetsService {
       .filter((r: any) => r.used > Number(r.amount_minor))
       .map((r: any) => ({
         budgetId: r.id, name: r.name, category: r.category,
-        periodYear: Number(iso(new Date(r.period_start)).slice(0, 4)),
+        periodYear: Number(dateOnly(r.period_start).slice(0, 4)),
         departmentCode: r.department_code ?? null,
         periodType: r.period_type,
-        periodLabel: budgetPeriodLabel(r.period_type, iso(new Date(r.period_start))),
+        periodLabel: budgetPeriodLabel(r.period_type, dateOnly(r.period_start)),
         currency: r.currency, amountMinor: Number(r.amount_minor),
         committedMinor: r.used,
         overByMinor: r.used - Number(r.amount_minor),
