@@ -40,6 +40,9 @@ export default function Guide() {
   const { t } = useI18n();
   const guide = resolveGuide(pathname);
   const [open, setOpen] = useState(false);
+  // a listed section whose recording is missing or corrupt: hide the card, don't show a
+  // broken thumbnail over a player that will never load
+  const [missing, setMissing] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(dismissedSet);
 
   // a new section starts collapsed, whatever the previous one was doing
@@ -53,7 +56,7 @@ export default function Guide() {
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  if (!guide || dismissed.has(guide.key)) return null;
+  if (!guide || dismissed.has(guide.key) || missing) return null;
 
   // Recordings are Azerbaijani only — see guides.ts. Asking for the interface language
   // would 404 on every non-az UI and fall back a moment later, so ask for az directly.
@@ -72,7 +75,10 @@ export default function Guide() {
     <>
       <div className="help-card" data-help-video-widget>
         <button className="help-thumb" onClick={() => setOpen(true)} aria-label={t('guide_open')}>
-          <img src={posterUrl} alt="" />
+          {/* The old widget fell back to the .ru asset; ru/en recordings are gone, so there is
+                nothing to fall back TO. A stale or half-produced .az file must therefore take
+                the card away rather than leave a broken thumbnail and a dead player. */}
+            <img src={posterUrl} alt="" onError={() => setMissing(true)} />
           <span className="help-play">▶</span>
         </button>
         <div className="help-text">
@@ -89,7 +95,8 @@ export default function Guide() {
       {open && (
         <div className="help-modal" onClick={() => setOpen(false)}>
           <div className="help-modal-inner" onClick={(e) => e.stopPropagation()}>
-            <video key={videoUrl} src={videoUrl} poster={posterUrl} controls autoPlay />
+            <video key={videoUrl} src={videoUrl} poster={posterUrl} controls autoPlay
+                onError={() => { setOpen(false); setMissing(true); }} />
             <button className="btn ghost small help-collapse" onClick={() => setOpen(false)}>
               ⤡ {t('guide_collapse')}
             </button>

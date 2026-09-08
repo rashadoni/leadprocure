@@ -939,6 +939,25 @@ describe('budgets & commitment control (API e2e)', () => {
     const lastYear = (await http().get(`/budgets?year=${YEAR - 1}`).set(...bearer(buyerA)).expect(200)).body;
     expect(lastYear.every((b: any) => b.periodYear === YEAR - 1)).toBe(true);
   });
+  // Segregation of duties has to count every role that may approve. With BUYER_FINANCE left
+  // out of the "is there anybody else?" query, an admin who submitted could sign their own
+  // budget in an org whose only other member is a finance user.
+  it('an admin cannot self-approve when the org has a finance user who could approve instead', async () => {
+    const email = `fin2-${tag}@t.test`;
+    await http().post('/settings/users').set(...bearer(buyerA))
+      .send({ email, fullName: 'Finance Two', password: 'password123', role: 'BUYER_FINANCE' }).expect(201);
+    await http().post('/categories').set(...bearer(buyerA)).send({ code: 'SODFIN' }).expect(201);
+
+    const made = await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `SoD fin ${tag}`, category: 'SODFIN', periodYear: YEAR, amountMinor: 100_000 }).expect(201);
+    await http().post(`/budgets/${made.body.id}/submit`).set(...bearer(buyerA)).expect(201);
+    const res = await http().post(`/budgets/${made.body.id}/approve`).set(...bearer(buyerA)).expect(403);
+    expect(String(res.body.message)).toContain('segregation of duties');
+
+    // and the finance user can approve it, which is the point of refusing the submitter
+    const finTok = (await http().post('/auth/login').send({ email, password: 'password123' }).expect(201)).body.accessToken;
+    await http().post(`/budgets/${made.body.id}/approve`).set(...bearer(finTok)).expect(201);
+
 
   // ---- Monthly phasing: the plan's shape over time ----------------------------------
   // Pace and forecast used to assume spend arrives evenly. For seasonal budgets that reads
@@ -1082,6 +1101,6 @@ describe('budgets & commitment control (API e2e)', () => {
       const tok = (await http().post('/auth/login')
         .send({ email: `bu-${tag}@t.test`, password: 'password123' }).expect(201)).body.accessToken;
       await http().get('/budgets/export/1c').set(...bearer(tok)).expect(403);
-    });
+});
   });
 });
