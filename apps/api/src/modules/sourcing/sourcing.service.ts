@@ -1,3 +1,4 @@
+import { recommendationCopy } from '../../common/ai/recommendation-copy';
 import { lockEvent, assertSupplierAllowed, safeMoney, lineMoney, returnedRows } from '../../common/procurement/invariants';
 import {
   BadRequestException,
@@ -45,12 +46,13 @@ export class SourcingService {
   ) {}
 
   // AI recommendation — only once amounts are open (RLS + status gate both enforce this).
-  async aiRecommendation(eventId: string, auth: AccessTokenPayload, lotId?: string) {
+  async aiRecommendation(eventId: string, auth: AccessTokenPayload, lotId?: string, language = 'en') {
     const ev = await this.requireEvent(eventId, ['EVALUATION', 'AWARDED']);
     if (ev.type === 'RFI') throw new BadRequestException('RFI does not support scoring');
     const lots = await this.rc.manager.query(`SELECT id FROM event_lots WHERE event_id=$1`,[eventId]);
     if ((lotId && !lots.some((l:any)=>l.id===lotId)) || (!lotId && lots.length>1)) throw new BadRequestException('Select a valid lot for comparable recommendations');
-    return this.aiScorer.recommend(eventId, lotId ?? lots[0]?.id);
+    if (!['az','ru','en'].includes(language)) throw new BadRequestException('Unsupported language');
+    return recommendationCopy(await this.aiScorer.recommend(eventId, lotId ?? lots[0]?.id), language);
   }
 
   // ---------- buyer: create + publish ----------
@@ -722,7 +724,10 @@ export class SourcingService {
       FROM awards a JOIN bids b ON b.id=a.winning_bid_id JOIN organizations o ON o.id=b.supplier_org_id
       WHERE a.event_id=$1`,[eventId]) : [];
     const tag = ['tender'];
-    if (ev.status === 'AWARDED') tag.push('award');
+    if (awardDetails.length) tag.push('award');
+    const revision = this.sealed.sha256(JSON.stringify({status:ev.status,updatedAt:ev.updated_at,awards:awardDetails,items:ev.items})).slice(0,16);
+    const dates=[ev.updated_at,...awardDetails.flatMap((a:any)=>[a.awarded_at,a.cancelled_at])].filter(Boolean).map((d:any)=>new Date(d).getTime());
+    const releaseDate = new Date(Math.max(...dates)).toISOString();
     return {
       uri: `urn:leadprocure:ocds:${eventId}`,
       version: '1.1',
@@ -731,8 +736,8 @@ export class SourcingService {
       releases: [
         {
           ocid: `ocds-lp-${eventId}`,
-          id: `${eventId}-${ev.version ?? 1}`,
-          date: new Date().toISOString(),
+          id: `${eventId}-${revision}`,
+          date: releaseDate,
           language: 'az',
           tag,
           initiationType: 'tender',
@@ -740,10 +745,10 @@ export class SourcingService {
           tender: {
             id: eventId,
             title: ev.title,
-            status: ev.status === 'AWARDED' ? 'complete' : ev.status === 'CANCELLED' ? 'cancelled' : 'active',
+            status: ev.status === 'CANCELLED' ? 'cancelled' : ev.status === 'DRAFT' ? 'planned' : ['CLOSED','OPENING','EVALUATION','AWARDED'].includes(ev.status) ? 'complete' : 'active',
             procurementMethod: ev.visibility === 'PUBLIC' ? 'open' : 'selective',
             procurementMethodDetails: `${ev.format} ${ev.type}`,
-            tenderPeriod: { startDate: ev.open_at, endDate: ev.close_at },
+            tenderPeriod: { ...(ev.open_at ? {startDate:ev.open_at} : {}), ...(ev.close_at ? {endDate:ev.close_at} : {}) },
             items: (ev.items ?? []).map((i: any) => ({
               id: i.id, description: i.name, quantity: Number(i.qty), unit: { name: i.uom },
             })),

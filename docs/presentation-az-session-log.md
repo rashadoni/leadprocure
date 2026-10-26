@@ -146,3 +146,9 @@
 - Проверены реальные сгенерированные UBL (0% и inclusive 18%) по официальной OASIS UBL 2.1 XSD и OCDS по canonical 1.1.5 release-package schema: PASS. Это не Peppol BIS сертификация/передача и не ERP integration. Источники схем записаны в export-schema-results.json.
 - Web TypeScript: первоначальный container check не состоялся из-за отсутствующих web dependencies в API image. Выполнен ограниченный targeted install в /tmp и отдельная проверка текущего web source + shared: PASS. Полный web build/browser suite по-прежнему NOT RUN на Contabo.
 - Следующее действие: локализация объяснений/сообщений, полный hosted gate, приёмка развёртывания и синхронизация материалов. Production не менялся.
+
+## 2026-10-27 — авторизация GitHub и полный gate
+- Пользователь явно разрешил push ветки и CI, затем отдельно разрешил снять архивирование репозитория. Подключённый GitHub connector требует reauthentication; использован существующий CLI token владельца только в окружении дочернего процесса, без вывода/изменения активного аккаунта.
+- Репозиторий rashadrahimov/leadprocure разархивирован, ветка успешно отправлена. GitHub Actions были disabled; включены для разрешённого CI. Merge/deploy не выполняются.
+- Пользователь подтвердил, что тестовых SMTP/Meta подключений пока нет. Реальную доставку оставляем явно NOT RUN; проверка адаптеров и очереди выполняется на тестовых отправителях.
+- Подготовлен дополнительный hosted gate: schema 0027 → отказ на историческом дубле с полным rollback → исправленный синтетический fixture → current schema; проверка сохранения старых сумм и идемпотентности. Добавлен dump/restore disposable DB.

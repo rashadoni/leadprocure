@@ -125,6 +125,8 @@ describe('datasheet audit: files, financial boundaries and concurrency', () => {
     await db.query(`UPDATE sourcing_events SET close_at=now()-interval '1 second' WHERE id=$1`,[e.id]);await db.query(`SELECT * FROM close_due_events()`);
     await http().post(`/events/${e.id}/open`).set(...auth(buyer)).expect(201);
     const result=(await http().get(`/events/${e.id}/ai-recommendation?lotId=${e.lots[0].id}`).set(...auth(buyer)).expect(200)).body;
+    const az=(await http().get(`/events/${e.id}/ai-recommendation?lotId=${e.lots[0].id}&language=az`).set(...auth(buyer)).expect(200)).body;
+    expect(az.ranking[0].reasons[0]).toContain('Qiymət balı');
     expect(result.ranking[0].priceScore).toBe(100);expect(result.ranking[0].deliveryScore).toBe(100);expect(Number.isFinite(result.ranking[0].weightedTotal)).toBe(true);
   });
 

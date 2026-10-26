@@ -57,8 +57,11 @@ jobs:
           for i in $(seq 1 30); do curl -fsS http://localhost:9000/minio/health/live && break || sleep 1; done
           docker run --rm --network host --entrypoint sh minio/mc -c 'mc alias set audit http://localhost:9000 isolatedaccess isolatedsecret && mc mb audit/leadprocure-audit-test'
       - run: pnpm build:shared
-      - run: pnpm --filter api migration:run
+      - name: Upgrade from prior schema and reject historical duplicates safely
+        run: pnpm --filter api exec node -r ts-node/register ../../scripts/acceptance/upgrade-check.cjs
       - run: pnpm --filter api migration:run
       - run: pnpm --filter api typecheck
       - run: pnpm --filter api test:e2e
       - run: pnpm build
+      - name: Backup and restore disposable database
+        run: bash scripts/acceptance/backup-restore.sh

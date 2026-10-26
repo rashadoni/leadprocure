@@ -11,7 +11,7 @@ import { Badge } from '../../components/Badge';
 
 export default function EventDetail() {
   const { id } = useParams();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { session } = useAuth();
   const [ev, setEv] = useState<any>(null);
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -110,7 +110,7 @@ export default function EventDetail() {
   }, [ev]);
 
   const askAi = async () => {
-    try { setAi((await api.get(`/events/${id}/ai-recommendation?lotId=${aiLot || ev.lots[0]?.id}`)).data); }
+    try { setAi((await api.get(`/events/${id}/ai-recommendation?lotId=${aiLot || ev.lots[0]?.id}&language=${lang}`)).data); }
     catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
@@ -298,7 +298,7 @@ export default function EventDetail() {
                                 ▶ {t('followups_enroll_one')}
                               </button>
                             )}
-                            {(f.jobs ?? []).filter((j:any)=>['UNKNOWN','FAILED','NOT_CONFIGURED'].includes(j.status)).map((j:any)=><div key={j.id}>
+                            {(f.jobs ?? []).filter((j:any)=>['BUYER_ADMIN','BUYER_APPROVER'].includes(session?.org.role ?? '') && ['UNKNOWN','FAILED','NOT_CONFIGURED'].includes(j.status)).map((j:any)=><div key={j.id}>
                               <span>{t(`delivery_${j.status}`)} · {j.recipient}</span>
                               <button className="btn small ghost" onClick={()=>{
                                 const reason=window.prompt(t('delivery_reconcile_reason'));if(!reason)return;
@@ -491,7 +491,7 @@ export default function EventDetail() {
                 </tbody>
               </table>
               <div className="hint" style={{ marginTop: 6 }}>
-                {t('ai_model')}: {ai.model} · price {ai.weights.price * 100}% / delivery {ai.weights.delivery * 100}% / reliability {ai.weights.reliability * 100}%
+                {t('ai_model')}: {ai.model} · {t('crit_price')} {ai.weights.price * 100}% / {t('crit_delivery')} {ai.weights.delivery * 100}% / {t('reliability')} {ai.weights.reliability * 100}%
               </div>
             </>
           )}
