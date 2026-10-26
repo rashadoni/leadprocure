@@ -1,3 +1,4 @@
+import { lockOrder, uniqueIds, safeMoney, lineMoney, taxTotals } from '../../common/procurement/invariants';
 import {
   BadRequestException,
   Body,
@@ -37,7 +38,9 @@ export class InvoicesService {
     auth: AccessTokenPayload,
   ) {
     const m = this.rc.manager;
-    const po = (await m.query(`SELECT id, buyer_org_id, supplier_org_id, currency FROM purchase_orders WHERE id = $1`, [poId]))[0];
+    await lockOrder(m, poId);
+    uniqueIds(dto.items ?? [], 'poItemId');
+    const po = (await m.query(`SELECT id, buyer_org_id, supplier_org_id, currency, vat_mode FROM purchase_orders WHERE id = $1`, [poId]))[0];
     if (!po) throw new NotFoundException('Order not found');
     if (po.supplier_org_id !== auth.org_id) throw new BadRequestException('Only the awarded supplier invoices this order');
     if (!dto.items?.length) throw new BadRequestException('At least one line is required');
@@ -75,12 +78,15 @@ export class InvoicesService {
       });
       // Per-line ƏDV from the PO line's own rate (0% / exempt lines carry vat_rate_bp = 0),
       // not a flat 18% on the whole invoice.
-      const lineNet = Number(it.qty) * it.unitPriceMinor;
+      const amount = lineMoney(Number(it.qty), it.unitPriceMinor);
+      const lineTax = taxTotals(amount, Number(poItem.vat_rate_bp ?? VAT_RATE_BP), po.vat_mode);
+      (it as any).tax = { ...lineTax, rate: Number(poItem.vat_rate_bp ?? VAT_RATE_BP) };
+      const lineNet = lineTax.net;
       const rateBp = poItem.vat_rate_bp == null ? VAT_RATE_BP : Number(poItem.vat_rate_bp);
       net += lineNet;
-      vat += Math.round((lineNet * rateBp) / 10000);
+      vat += lineTax.tax;
     }
-    const gross = net + vat;
+    const gross = safeMoney(net + vat);
     const status: InvoiceStatus = allOk ? 'MATCHED' : 'DISPUTED';
 
     const n = await m.query(`SELECT next_document_no($1,'INV') AS n`, [auth.org_id]);
@@ -95,9 +101,9 @@ export class InvoicesService {
     )[0];
     for (const it of dto.items) {
       await m.query(
-        `INSERT INTO invoice_items(invoice_id, po_item_id, buyer_org_id, supplier_org_id, qty, unit_price_minor, line_total_minor)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [inv.id, it.poItemId, po.buyer_org_id, auth.org_id, it.qty, it.unitPriceMinor, Number(it.qty) * it.unitPriceMinor],
+        `INSERT INTO invoice_items(invoice_id, po_item_id, buyer_org_id, supplier_org_id, qty, unit_price_minor, line_total_minor, vat_rate_bp, vat_minor, gross_minor)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [inv.id, it.poItemId, po.buyer_org_id, auth.org_id, it.qty, it.unitPriceMinor, (it as any).tax.net, (it as any).tax.rate, (it as any).tax.tax, (it as any).tax.gross],
       );
     }
     await this.audit.record('INVOICE_SUBMITTED', 'invoice', inv.id, { po_id: poId, status, gross_minor: gross });
@@ -144,7 +150,7 @@ export class InvoicesService {
     return { ...inv, items };
   }
 
-  // Peppol BIS Billing 3.0-shaped UBL 2.1 Invoice XML. Real Peppol transmission needs an
+  // Generic UBL 2.1 Invoice XML; does not claim a Peppol BIS profile. Real Peppol transmission needs an
   // Access Point provider (external onboarding); this export is the document seam.
   async ublXml(id: string): Promise<string> {
     const m = this.rc.manager;
@@ -169,22 +175,28 @@ export class InvoicesService {
     const money = (minor: number | string) => (Number(minor) / 100).toFixed(2);
     const esc = (s: string) => String(s ?? '').replace(/[<>&'"]/g, (c) =>
       ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c] as string));
+    if (items.some((it: any) => it.vat_rate_bp == null || it.vat_minor == null))
+      throw new BadRequestException('Legacy invoice requires an audited tax snapshot before UBL export');
+    const taxGroups = new Map<number, {net:number;tax:number}>();
+    for (const it of items) {
+      const rate=Number(it.vat_rate_bp); const g=taxGroups.get(rate) ?? {net:0,tax:0};
+      g.net+=Number(it.line_total_minor);g.tax+=Number(it.vat_minor);taxGroups.set(rate,g);
+    }
+    const taxSubtotals = [...taxGroups].map(([rate,g]) => `<cac:TaxSubtotal><cbc:TaxableAmount currencyID="${inv.currency}">${money(g.net)}</cbc:TaxableAmount><cbc:TaxAmount currencyID="${inv.currency}">${money(g.tax)}</cbc:TaxAmount><cac:TaxCategory><cbc:ID>${rate ? 'S' : 'Z'}</cbc:ID><cbc:Percent>${rate/100}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory></cac:TaxSubtotal>`).join('');
     const lines = items.map((it: any, i: number) => `
   <cac:InvoiceLine>
     <cbc:ID>${i + 1}</cbc:ID>
     <cbc:InvoicedQuantity unitCode="C62">${Number(it.qty)}</cbc:InvoicedQuantity>
     <cbc:LineExtensionAmount currencyID="${inv.currency}">${money(it.line_total_minor)}</cbc:LineExtensionAmount>
     <cac:Item><cbc:Name>${esc(it.name)}</cbc:Name>
-      <cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>18</cbc:Percent>
+      <cac:ClassifiedTaxCategory><cbc:ID>${Number(it.vat_rate_bp) ? 'S' : 'Z'}</cbc:ID><cbc:Percent>${Number(it.vat_rate_bp)/100}</cbc:Percent>
         <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item>
-    <cac:Price><cbc:PriceAmount currencyID="${inv.currency}">${money(it.unit_price_minor)}</cbc:PriceAmount></cac:Price>
+    <cac:Price><cbc:PriceAmount currencyID="${inv.currency}">${(Number(it.line_total_minor)/Number(it.qty)/100).toFixed(6)}</cbc:PriceAmount></cac:Price>
   </cac:InvoiceLine>`).join('');
     return `<?xml version="1.0" encoding="UTF-8"?>
 <Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
          xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
          xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
-  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID>
-  <cbc:ProfileID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0</cbc:ProfileID>
   <cbc:ID>${esc(inv.invoice_no)}</cbc:ID>
   <cbc:IssueDate>${new Date(inv.issued_at).toISOString().slice(0, 10)}</cbc:IssueDate>
   <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
@@ -200,7 +212,7 @@ export class InvoicesService {
     <cac:PartyTaxScheme><cbc:CompanyID>${esc(inv.buyer_voen ?? '')}</cbc:CompanyID>
       <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
   </cac:Party></cac:AccountingCustomerParty>
-  <cac:TaxTotal><cbc:TaxAmount currencyID="${inv.currency}">${money(inv.vat_minor)}</cbc:TaxAmount></cac:TaxTotal>
+  <cac:TaxTotal><cbc:TaxAmount currencyID="${inv.currency}">${money(inv.vat_minor)}</cbc:TaxAmount>${taxSubtotals}</cac:TaxTotal>
   <cac:LegalMonetaryTotal>
     <cbc:LineExtensionAmount currencyID="${inv.currency}">${money(inv.net_minor)}</cbc:LineExtensionAmount>
     <cbc:TaxExclusiveAmount currencyID="${inv.currency}">${money(inv.net_minor)}</cbc:TaxExclusiveAmount>
@@ -212,6 +224,8 @@ export class InvoicesService {
 
   // reason is required by the DB seam only for the DISPUTED → APPROVED override.
   async setStatus(id: string, status: InvoiceStatus, auth: AccessTokenPayload, reason?: string) {
+    const inv = await this.get(id);
+    await lockOrder(this.rc.manager, inv.po_id);
     try {
       const rows = await this.rc.manager.query(
         `SELECT * FROM invoice_set_status($1, $2::invoice_status, $3)`, [id, status, reason ?? null]);

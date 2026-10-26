@@ -18,6 +18,14 @@ export class FeatureGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
+    const req = context.switchToHttp().getRequest();
+    const path = String(req.path ?? '').replace(/\/$/, '');
+    if (req.method === 'POST' && (/^\/requests$/.test(path) ||
+      /^\/(events|auctions)\/from-request\//.test(path) ||
+      /^\/contracts\/(from-award|direct)\//.test(path) ||
+      /^\/catalogs(?:$|\/from-contract\/|\/[^/]+\/order$)/.test(path) ||
+      /^\/contracts\/[^/]+\/orders$/.test(path) || /^\/events\/[^/]+\/publish$/.test(path)))
+      this.entitlements.assertCanCreateNew();
     if (!feature) return true;
     if (this.entitlements.status() === 'revoked') {
       throw new ForbiddenException('License revoked');

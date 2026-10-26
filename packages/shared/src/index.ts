@@ -63,6 +63,7 @@ export interface LicenseClaims {
 }
 
 export interface EntitlementSnapshot {
+  source?: 'installed' | 'file' | 'development' | 'missing';
   status: LicenseStatus;
   edition: Edition;
   deploymentMode: DeploymentMode;

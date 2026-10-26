@@ -146,11 +146,18 @@ describe('reverse auction + Q&A flow', () => {
 
     const ev = await http().get(`/events/${eventId}`).set(auth(buyerToken)).expect(200);
     expect(ev.body.status).toBe('EVALUATION');
+    const worst = ev.body.bids.reduce((a:any,b:any)=>Number(a.total_minor)>Number(b.total_minor)?a:b);
+    await http().post(`/events/${eventId}/award`).set(auth(buyerToken)).send({lotId,bidId:worst.id}).expect(400);
     const best = ev.body.bids.reduce((a: any, b: any) => (Number(a.total_minor) < Number(b.total_minor) ? a : b));
     expect(Number(best.total_minor)).toBe(9_500_000);
 
     await http().post(`/events/${eventId}/award`).set(auth(buyerToken))
       .send({ lotId, bidId: best.id }).expect(201);
+    const awarded=(await http().get(`/events/${eventId}`).set(auth(buyerToken)).expect(200)).body;
+    const c=(await http().post(`/contracts/from-award/${awarded.awards[0].id}`).set(auth(buyerToken)).expect(201)).body;
+    await http().post(`/contracts/${c.id}/activate`).set(auth(buyerToken)).expect(201);
+    const po=(await http().post(`/contracts/${c.id}/orders`).set(auth(buyerToken)).expect(201)).body;
+    expect(po.items.length).toBeGreaterThan(0);expect(Number(po.total_minor)).toBe(Number(best.total_minor));
     const done = await http().get(`/events/${eventId}`).set(auth(buyerToken)).expect(200);
     expect(done.body.status).toBe('AWARDED');
   });

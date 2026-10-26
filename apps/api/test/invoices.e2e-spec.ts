@@ -92,13 +92,14 @@ describe('invoices + 3-way match', () => {
     expect(paid.body.status).toBe('PAID');
   });
 
-  it('Peppol UBL export produces a BIS-3.0-shaped XML with correct totals', async () => {
+  it('generic UBL export produces tax snapshots and correct totals', async () => {
     const list = await http().get('/invoices').set(...bearer(buyer)).expect(200);
     const paid = list.body.find((i: any) => i.status === 'PAID') ?? list.body[0];
     const res = await http().get(`/invoices/${paid.id}/ubl`).set(...bearer(buyer)).expect(200);
     expect(res.headers['content-type']).toContain('application/xml');
     const xml = res.text;
-    expect(xml).toContain('urn:fdc:peppol.eu:2017:poacc:billing:3.0');
+    expect(xml).toContain('urn:oasis:names:specification:ubl:schema:xsd:Invoice-2');
+    expect(xml).not.toContain('peppol.eu');
     expect(xml).toContain(`<cbc:ID>${paid.invoice_no}</cbc:ID>`);
     expect(xml).toContain('<cbc:PayableAmount currencyID="AZN">11800.00</cbc:PayableAmount>'); // 1.18M minor
     expect(xml).toContain('<cbc:TaxAmount currencyID="AZN">1800.00</cbc:TaxAmount>');

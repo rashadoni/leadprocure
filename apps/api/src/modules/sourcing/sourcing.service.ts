@@ -1,3 +1,4 @@
+import { lockEvent, assertSupplierAllowed, safeMoney, lineMoney, returnedRows } from '../../common/procurement/invariants';
 import {
   BadRequestException,
   ForbiddenException,
@@ -44,10 +45,12 @@ export class SourcingService {
   ) {}
 
   // AI recommendation — only once amounts are open (RLS + status gate both enforce this).
-  async aiRecommendation(eventId: string, auth: AccessTokenPayload) {
+  async aiRecommendation(eventId: string, auth: AccessTokenPayload, lotId?: string) {
     const ev = await this.requireEvent(eventId, ['EVALUATION', 'AWARDED']);
     if (ev.type === 'RFI') throw new BadRequestException('RFI does not support scoring');
-    return this.aiScorer.recommend(eventId);
+    const lots = await this.rc.manager.query(`SELECT id FROM event_lots WHERE event_id=$1`,[eventId]);
+    if ((lotId && !lots.some((l:any)=>l.id===lotId)) || (!lotId && lots.length>1)) throw new BadRequestException('Select a valid lot for comparable recommendations');
+    return this.aiScorer.recommend(eventId, lotId ?? lots[0]?.id);
   }
 
   // ---------- buyer: create + publish ----------
@@ -125,8 +128,10 @@ export class SourcingService {
   }
 
   async publish(eventId: string, auth: AccessTokenPayload) {
+    await lockEvent(this.rc.manager, eventId);
     const m = this.rc.manager;
     const ev = await this.requireEvent(eventId, ['DRAFT']);
+    this.entitlements.assertCanCreateNew();
     if (new Date(ev.close_at).getTime() <= Date.now()) {
       throw new BadRequestException('closeAt already passed');
     }
@@ -142,6 +147,7 @@ export class SourcingService {
   // ---- multi-lot: split a DRAFT event's items into lots (award is already per-lot) ----
 
   async addLot(eventId: string, title: string) {
+    await lockEvent(this.rc.manager, eventId);
     await this.requireEvent(eventId, ['DRAFT']);
     const m = this.rc.manager;
     const lotNo = (await m.query(`SELECT COALESCE(MAX(lot_no),0)+1 AS n FROM event_lots WHERE event_id=$1`, [eventId]))[0].n;
@@ -154,20 +160,23 @@ export class SourcingService {
   }
 
   async assignItemToLot(eventId: string, itemId: string, lotId: string) {
+    await lockEvent(this.rc.manager, eventId);
     await this.requireEvent(eventId, ['DRAFT']);
     const m = this.rc.manager;
     const lot = await m.query(`SELECT id FROM event_lots WHERE id=$1 AND event_id=$2`, [lotId, eventId]);
     if (!lot.length) throw new NotFoundException('Lot not found on this event');
-    const upd = await m.query(`UPDATE event_items SET lot_id=$3 WHERE id=$1 AND event_id=$2 RETURNING id`, [
+    const upd = returnedRows(await m.query(`UPDATE event_items SET lot_id=$3 WHERE id=$1 AND event_id=$2 RETURNING id`, [
       itemId, eventId, lotId,
-    ]);
+    ]));
     if (!upd.length) throw new NotFoundException('Item not found on this event');
     return { ok: true };
   }
 
   async invite(eventId: string, supplierOrgId: string) {
+    await lockEvent(this.rc.manager, eventId);
     const m = this.rc.manager;
-    await this.requireEvent(eventId, ['DRAFT', 'OPEN']);
+    const ev = await this.requireEvent(eventId, ['DRAFT', 'OPEN']);
+    await assertSupplierAllowed(m, ev.buyer_org_id, supplierOrgId);
     await m.query(
       `INSERT INTO event_invitations(event_id, supplier_org_id) VALUES ($1,$2)
        ON CONFLICT (event_id, supplier_org_id) DO NOTHING`,
@@ -295,7 +304,7 @@ export class SourcingService {
     }
     const scores = await m.query(
       `SELECT es.bid_id, es.criterion, es.score, es.weighted FROM evaluation_scores es
-       JOIN evaluations ev2 ON ev2.id = es.evaluation_id WHERE ev2.event_id = $1`,
+       JOIN evaluations ev2 ON ev2.id = es.evaluation_id WHERE ev2.id = (SELECT id FROM evaluations WHERE event_id=$1 ORDER BY created_at DESC, id DESC LIMIT 1)`,
       [eventId],
     );
     const awards = await m.query(`SELECT * FROM awards WHERE event_id = $1`, [eventId]);
@@ -334,11 +343,14 @@ export class SourcingService {
     },
     auth: AccessTokenPayload,
   ) {
+    await lockEvent(this.rc.manager, eventId);
     const m = this.rc.manager;
     // Visibility is enforced by RLS: invisible events simply don't exist for this supplier.
     const evRows = await m.query(`SELECT * FROM sourcing_events WHERE id = $1`, [eventId]);
     if (!evRows.length) throw new NotFoundException('Event not found');
     const ev = evRows[0];
+    await assertSupplierAllowed(m, ev.buyer_org_id, auth.org_id);
+    if (dto.currency && dto.currency !== ev.evaluation_currency) throw new BadRequestException('Bid currency must match event currency');
     if (ev.type === 'AUCTION') throw new BadRequestException('Use the auction endpoint for this event');
     if (ev.status !== 'OPEN') throw new BadRequestException('Event is not open for bidding');
     if (new Date(ev.close_at).getTime() <= Date.now()) {
@@ -369,7 +381,7 @@ export class SourcingService {
         }
         if (submitted.has(it.eventItemId)) throw new BadRequestException(`Duplicate line for item ${it.eventItemId}`);
         submitted.add(it.eventItemId);
-        total += qty * it.unitPriceMinor; // server-side total — client totals are ignored
+        total = safeMoney(total + lineMoney(qty, it.unitPriceMinor)); // server-side total — client totals are ignored
       }
       // Responsiveness (UNCITRAL Art. 43): a bid that touches a lot must price EVERY item of
       // that lot. Multi-lot — a supplier may omit whole lots, but a partially-priced lot is
@@ -417,14 +429,15 @@ export class SourcingService {
   }
 
   async withdrawBid(eventId: string, auth: AccessTokenPayload) {
+    await lockEvent(this.rc.manager, eventId);
     const m = this.rc.manager;
     const ev = await this.visibleEvent(eventId);
-    if (ev.status !== 'OPEN') throw new BadRequestException('Can only withdraw while bidding is open');
-    const rows = await m.query(
+    if (ev.status !== 'OPEN' || new Date(ev.close_at).getTime() <= Date.now()) throw new BadRequestException('Withdrawal deadline has passed');
+    const rows = returnedRows(await m.query(
       `UPDATE bids SET state='WITHDRAWN', updated_at=now()
        WHERE event_id=$1 AND supplier_org_id=$2 AND state='SUBMITTED' RETURNING id`,
       [eventId, auth.org_id],
-    );
+    ));
     if (!rows.length) throw new NotFoundException('No submitted bid to withdraw');
     await this.audit.record('BID_WITHDRAWN', 'bid', rows[0].id, { event_id: eventId });
     return { ok: true };
@@ -433,6 +446,7 @@ export class SourcingService {
   // ---------- buyer: opening ceremony, evaluation, award ----------
 
   async openCeremony(eventId: string, auth: AccessTokenPayload) {
+    await lockEvent(this.rc.manager, eventId);
     const m = this.rc.manager;
     await m.query(`SELECT id FROM sourcing_events WHERE id=$1 FOR UPDATE`, [eventId]);
     const ev = await this.requireEvent(eventId, ['CLOSED']);
@@ -487,6 +501,7 @@ export class SourcingService {
     dto: { scores: Array<{ bidId: string; key: string; score: number }> },
     auth: AccessTokenPayload,
   ) {
+    await lockEvent(this.rc.manager, eventId);
     const m = this.rc.manager;
     const evRow = await this.requireEvent(eventId, ['EVALUATION']);
     if (evRow.type === 'RFI') throw new BadRequestException('RFI does not support evaluation');
@@ -506,6 +521,11 @@ export class SourcingService {
       if (!weightByKey.has(s.key)) throw new BadRequestException(`Unknown criterion ${s.key}`);
       if (!(s.score >= 0 && s.score <= 100)) throw new BadRequestException('Score must be 0..100');
     }
+
+    if (!eligible.size || dto.scores.length !== eligible.size * criteria.length)
+      throw new BadRequestException('Every eligible bid requires every locked criterion');
+    const pairs = new Set(dto.scores.map(s => `${s.bidId}:${s.key}`));
+    if (pairs.size !== dto.scores.length) throw new BadRequestException('Duplicate bid criterion');
 
     const evaluation = (
       await m.query(
@@ -531,11 +551,18 @@ export class SourcingService {
   }
 
   async award(eventId: string, dto: { lotId: string; bidId: string; justification?: string }, auth: AccessTokenPayload) {
+    await lockEvent(this.rc.manager, eventId);
     const m = this.rc.manager;
     await m.query(`SELECT id FROM sourcing_events WHERE id=$1 FOR UPDATE`, [eventId]);
     // AWARDED is allowed so a retried award of the same lot stays idempotent
     const evRow = await this.requireEvent(eventId, ['EVALUATION', 'AWARDED']);
     if (evRow.type === 'RFI') throw new BadRequestException('RFI does not support awarding');
+
+    if (!(await m.query(`SELECT id FROM event_lots WHERE id=$1 AND event_id=$2`, [dto.lotId,eventId])).length)
+      throw new BadRequestException('Lot does not belong to this event');
+    const supplier = (await m.query(`SELECT supplier_org_id FROM bids WHERE id=$1 AND event_id=$2`,[dto.bidId,eventId]))[0];
+    if (!supplier) throw new NotFoundException('Bid not found');
+    await assertSupplierAllowed(m, auth.org_id, supplier.supplier_org_id);
 
     // Idempotency: an ACTIVE award for the lot with the SAME bid replays; with a DIFFERENT
     // bid it's a conflict (cancel the standing award first). Runs before FOR UPDATE on bids
@@ -552,13 +579,24 @@ export class SourcingService {
     const isAuction = evRow.type === 'AUCTION' || evRow.format === 'REVERSE';
     // Otherwise the award must follow a real evaluation, and the bid must be eligible for the lot.
     const evalRows = isAuction ? [] : await m.query(
-      `SELECT id FROM evaluations WHERE event_id=$1 ORDER BY created_at DESC LIMIT 1`, [eventId]);
+      `SELECT id FROM evaluations WHERE event_id=$1 ORDER BY created_at DESC, id DESC LIMIT 1`, [eventId]);
     if (!isAuction && !evalRows.length) throw new BadRequestException('Evaluate the bids before awarding');
     const evaluationId = evalRows[0]?.id ?? null;
     const justification = dto.justification?.trim() || null;
     let isTop = true;
     let singleBid = false;
+    if (isAuction) {
+      const best = (await m.query(`SELECT b.id FROM bids b WHERE b.event_id=$1 AND b.state='OPENED'
+        AND NOT supplier_is_blocked($2,b.supplier_org_id)
+        ORDER BY b.total_minor ASC, b.submitted_at ASC, b.id ASC LIMIT 1`,[eventId,auth.org_id]))[0];
+      if (best?.id !== dto.bidId) throw new BadRequestException('Only the best eligible auction bid may be awarded');
+    }
     if (!isAuction) {
+      const incomplete = await m.query(`SELECT b.id FROM bids b WHERE b.event_id=$1 AND b.state='OPENED'
+        AND EXISTS (SELECT 1 FROM jsonb_array_elements($3::jsonb) c(value) WHERE NOT EXISTS
+          (SELECT 1 FROM evaluation_scores es WHERE es.evaluation_id=$2 AND es.bid_id=b.id AND es.criterion=(c.value->>'key')))`,
+        [eventId,evaluationId,JSON.stringify(evRow.evaluation_criteria)]);
+      if (incomplete.length) throw new BadRequestException('Evaluation is incomplete');
       const scoreRows = await m.query(
         `SELECT bid_id, sum(weighted)::float AS total FROM evaluation_scores WHERE evaluation_id=$1 GROUP BY bid_id`,
         [evaluationId]);
@@ -631,6 +669,7 @@ export class SourcingService {
   // disqualified bid drops out of ranking and can't be awarded. Can't disqualify a bid
   // that currently holds an active award (cancel the award first).
   async disqualifyBid(eventId: string, bidId: string, reason: string, auth: AccessTokenPayload) {
+    await lockEvent(this.rc.manager, eventId);
     const m = this.rc.manager;
     await this.requireEvent(eventId, ['EVALUATION']);
     if (!reason || reason.trim().length < 3) throw new BadRequestException('A disqualification reason is required');
@@ -650,6 +689,7 @@ export class SourcingService {
   // fresh award. Blocked once a contract has been created from the award. Never locks bid
   // rows while the event is AWARDED (ceremony RLS forbids it) — reverts to EVALUATION first.
   async cancelAward(eventId: string, lotId: string, reason: string, auth: AccessTokenPayload) {
+    await lockEvent(this.rc.manager, eventId);
     const m = this.rc.manager;
     await m.query(`SELECT id FROM sourcing_events WHERE id=$1 FOR UPDATE`, [eventId]);
     await this.requireEvent(eventId, ['EVALUATION', 'AWARDED']);
@@ -675,6 +715,12 @@ export class SourcingService {
 
   async ocdsRelease(eventId: string, auth: AccessTokenPayload) {
     const ev = await this.detail(eventId, auth);
+    const awardDetails = ev.amounts_visible ? await this.rc.manager.query(`
+      SELECT a.*, b.supplier_org_id, o.legal_name AS supplier_name, b.currency,
+        (SELECT sum(bi.line_total_minor) FROM bid_items bi JOIN event_items ei ON ei.id=bi.event_item_id
+         WHERE bi.bid_id=a.winning_bid_id AND ei.lot_id=a.lot_id) AS lot_total
+      FROM awards a JOIN bids b ON b.id=a.winning_bid_id JOIN organizations o ON o.id=b.supplier_org_id
+      WHERE a.event_id=$1`,[eventId]) : [];
     const tag = ['tender'];
     if (ev.status === 'AWARDED') tag.push('award');
     return {
@@ -703,9 +749,10 @@ export class SourcingService {
             })),
             value: undefined,
           },
-          awards: (ev.awards ?? []).map((a: any) => ({
-            id: a.id, status: 'active', date: a.awarded_at,
-            suppliers: undefined, relatedLots: [a.lot_id],
+          awards: awardDetails.map((a: any) => ({
+            id: a.id, status: a.cancelled_at ? 'cancelled' : 'active', date: a.awarded_at,
+            suppliers: [{id:a.supplier_org_id,name:a.supplier_name}],
+            value: {amount:Number(a.lot_total ?? 0)/100,currency:a.currency},
           })),
         },
       ],

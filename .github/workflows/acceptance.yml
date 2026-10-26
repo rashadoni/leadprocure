@@ -1,0 +1,64 @@
+name: Isolated procurement acceptance
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: leadprocure_owner
+          POSTGRES_PASSWORD: isolated_owner
+          POSTGRES_DB: leadprocure_audit_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U leadprocure_owner -d leadprocure_audit_test"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+    env:
+      NODE_ENV: test
+      LEADPROCURE_TEST_ISOLATED: '1'
+      DATABASE_OWNER_URL: postgres://leadprocure_owner:isolated_owner@localhost:5432/leadprocure_audit_test
+      DATABASE_URL: postgres://app_user:isolated_app@localhost:5432/leadprocure_audit_test
+      JWT_ACCESS_SECRET: isolated-test-access-key-never-production
+      JWT_REFRESH_SECRET: isolated-test-refresh-key-never-production
+      BID_MASTER_KEY_B64: dGVzdC1vbmx5LW5vdC1hLXByb2R1Y3Rpb24ta2V5ISE=
+      REFRESH_COOKIE_SECURE: 'false'
+      CLAMAV_ENABLED: 'false'
+      S3_ENDPOINT: http://localhost:9000
+      S3_ACCESS_KEY: isolatedaccess
+      S3_SECRET_KEY: isolatedsecret
+      S3_BUCKET: leadprocure-audit-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: node scripts/acceptance/assert-isolated.cjs
+      - run: pnpm install --frozen-lockfile
+      - name: Bootstrap application role
+        run: |
+          psql "$DATABASE_OWNER_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE app_user LOGIN PASSWORD 'isolated_app' NOSUPERUSER NOBYPASSRLS;
+          GRANT CONNECT ON DATABASE leadprocure_audit_test TO app_user;
+          GRANT USAGE ON SCHEMA public TO app_user;
+          ALTER DEFAULT PRIVILEGES FOR ROLE leadprocure_owner IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_user;
+          ALTER DEFAULT PRIVILEGES FOR ROLE leadprocure_owner IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO app_user;
+          SQL
+      - name: Disposable object storage
+        run: |
+          docker run -d --name audit-minio -p 9000:9000 -e MINIO_ROOT_USER=isolatedaccess -e MINIO_ROOT_PASSWORD=isolatedsecret minio/minio server /data
+          for i in $(seq 1 30); do curl -fsS http://localhost:9000/minio/health/live && break || sleep 1; done
+          docker run --rm --network host --entrypoint sh minio/mc -c 'mc alias set audit http://localhost:9000 isolatedaccess isolatedsecret && mc mb audit/leadprocure-audit-test'
+      - run: pnpm build:shared
+      - run: pnpm --filter api migration:run
+      - run: pnpm --filter api migration:run
+      - run: pnpm --filter api typecheck
+      - run: pnpm --filter api test:e2e
+      - run: pnpm build

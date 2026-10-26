@@ -232,8 +232,8 @@ export class SourcingController {
   @Get(':id/ai-recommendation')
   @RequiresFeature('ai.scoring')
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
-  aiRecommendation(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
-    return this.sourcing.aiRecommendation(id, auth);
+  aiRecommendation(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload, @Query('lotId') lotId?: string) {
+    return this.sourcing.aiRecommendation(id, auth, lotId);
   }
 }
 

@@ -57,7 +57,7 @@ export class VerificationService {
     const c = (await this.rc.manager.query(`SELECT * FROM supplier_verification_cases WHERE id = $1`, [id]))[0];
     if (!c) throw new NotFoundException('Case not found');
     const documents = await this.rc.manager.query(
-      `SELECT id, doc_type, filename, sha256, status, created_at FROM supplier_verification_documents WHERE case_id = $1 ORDER BY created_at`,
+      `SELECT id, doc_type, filename, sha256, status, av_status, created_at FROM supplier_verification_documents WHERE case_id = $1 ORDER BY created_at`,
       [id],
     );
     return { ...c, documents };
@@ -77,10 +77,11 @@ export class VerificationService {
     const c = (await m.query(`SELECT buyer_org_id, supplier_org_id FROM supplier_verification_cases WHERE id = $1`, [caseId]))[0];
     if (!c) throw new NotFoundException('Case not found');
     if (c.supplier_org_id !== auth.org_id) throw new BadRequestException('Not your case');
+    const uploaded = await this.docs.consumeUpload(auth.org_id, dto);
     const rows = await m.query(
-      `INSERT INTO supplier_verification_documents(case_id, buyer_org_id, supplier_org_id, doc_type, storage_key, filename, sha256)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [caseId, c.buyer_org_id, auth.org_id, dto.docType, dto.storageKey, dto.filename, dto.sha256],
+      `INSERT INTO supplier_verification_documents(case_id, buyer_org_id, supplier_org_id, doc_type, storage_key, filename, sha256, av_status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      [caseId, c.buyer_org_id, auth.org_id, dto.docType, uploaded.storageKey, uploaded.filename, uploaded.sha256, uploaded.avStatus],
     );
     await this.audit.record('VERIFICATION_DOC_UPLOADED', 'verification_document', rows[0].id, { case_id: caseId, doc_type: dto.docType });
     await this.notify.notifyOrg(c.buyer_org_id, 'VERIFICATION_DOC_UPLOADED', { case_id: caseId, doc_type: dto.docType });
@@ -88,8 +89,9 @@ export class VerificationService {
   }
 
   async docDownload(docId: string) {
-    const rows = await this.rc.manager.query(`SELECT storage_key FROM supplier_verification_documents WHERE id = $1`, [docId]);
+    const rows = await this.rc.manager.query(`SELECT storage_key, av_status FROM supplier_verification_documents WHERE id = $1`, [docId]);
     if (!rows.length) return { url: null };
+    this.docs.assertDownloadable(rows[0].av_status);
     return { url: await this.docs.signedGetUrl(rows[0].storage_key) };
   }
 

@@ -1,3 +1,4 @@
+import { returnedRows } from '../../common/procurement/invariants';
 import {
   ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID,
   Max, Min, ValidateNested,
@@ -131,11 +132,11 @@ export class FollowupsService {
   }
 
   async stop(eventId: string, supplierOrgId: string, auth: AccessTokenPayload) {
-    const rows = await this.rc.manager.query(
+    const rows = returnedRows(await this.rc.manager.query(
       `UPDATE followup_enrollments SET status = 'STOPPED', next_run_at = NULL, updated_at = now()
        WHERE event_id = $1 AND supplier_org_id = $2 AND status = 'ACTIVE' RETURNING id`,
       [eventId, supplierOrgId],
-    );
+    ));
     if (!rows.length) throw new NotFoundException('No active follow-up for this supplier');
     await this.audit.record('FOLLOWUP_STOPPED', 'followup_enrollment', rows[0].id, { event_id: eventId, supplier_org_id: supplierOrgId });
     return { ok: true };
@@ -185,67 +186,38 @@ export class FollowupsScheduler {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async tick(): Promise<number> {
-    const due: Array<{
-      enrollment_id: string; buyer_org_id: string; step_no: number; channel: string; event_title: string;
-      buyer_name: string; close_at: string | null; emails: string[] | null; phone: string | null;
-    }> = await this.ds.query(`SELECT * FROM followup_advance_due(50)`);
-
-    // Per-org channel config the buyer connected in Settings (secrets included; DEFINER
-    // seam so the RLS-less cron can read it). Cached per tick to avoid re-querying.
-    const orgCfg = new Map<string, any>();
-    const getCfg = async (org: string, channel: string) => {
-      const key = `${org}:${channel}`;
-      if (!orgCfg.has(key)) {
-        const r = await this.ds.query(`SELECT channel_config_get($1, $2) AS c`, [org, channel]).catch(() => [{ c: null }]);
-        orgCfg.set(key, r[0]?.c ?? null);
-      }
-      return orgCfg.get(key);
-    };
-
-    for (const w of due) {
-      const deadline = w.close_at ? new Date(w.close_at).toISOString().slice(0, 16).replace('T', ' ') : '—';
-      // Whitelisted fields only: title, buyer, deadline, link. Never amounts.
-      const text = `${w.buyer_name} · Leadprocure\n\nNapominaniye / Xatırlatma: tender "${w.event_title}" hələ açıqdır — приглашение ещё открыто.\nDeadline / Son tarix: ${deadline} (UTC)\n\n→ ${this.cfg.webBaseUrl}`;
-      const subject = `Leadprocure — Напоминание о тендере · Tender xatırlatması`;
-      const log = (recipient: string, status: 'SENT' | 'FAILED' | 'SKIPPED', detail?: string) =>
-        this.ds.query(`SELECT followup_log_message($1, $2, $3, $4, $5, $6)`, [
-          w.enrollment_id, w.step_no, w.channel, recipient, status, detail ?? null,
-        ]).catch((e) => this.logger.warn(`log_message failed: ${e?.message}`));
-
-      if (w.channel === 'EMAIL') {
-        const cfg = await getCfg(w.buyer_org_id, 'EMAIL'); // buyer's own mailbox, else global provider
-        for (const to of w.emails ?? []) {
-          try {
-            if (cfg?.host) await sendEmailVia(cfg, to, subject, text);
-            else await this.mail.send({ to, subject, html: `<pre>${text}</pre>`, text });
-            await log(to, 'SENT');
-          } catch (e: any) {
-            await log(to, 'FAILED', e?.message?.slice(0, 300));
-          }
-        }
-        if (!w.emails?.length) await log('-', 'SKIPPED', 'no active users');
-      } else if (w.channel === 'WHATSAPP') {
-        const cfg = await getCfg(w.buyer_org_id, 'WHATSAPP');
-        if (!w.phone) {
-          await log('-', 'SKIPPED', 'no phone on supplier org');
+    const due: any[] = await this.ds.query(`SELECT * FROM followup_claim_outbox()`);
+    for (const job of due) {
+      const w=job.work;
+      const finish = (status:string,detail?:string,provider?:string) => this.ds.query(
+        `SELECT followup_finish_outbox($1,$2,$3,$4)`,[job.id,status,detail ?? null,provider ?? null]);
+      let dispatched=false;
+      try {
+        const allowed=(await this.ds.query(`SELECT followup_dispatch_allowed($1) AS allowed`,[job.id]))[0]?.allowed;
+        if (!allowed) {await finish('CANCELLED');continue;}
+        if (job.recipient==='-') {await finish('SKIPPED','No recipient');continue;}
+        const cfg=(await this.ds.query(`SELECT channel_config_get($1,$2) AS c`,[job.buyer_org_id,w.channel]))[0]?.c;
+        const deadline=w.close_at ? new Date(w.close_at).toISOString() : '—';
+        const text=`${w.buyer_name} · Leadprocure\n${w.event_title}\nSon təqdimetmə tarixi: ${deadline}\n${this.cfg.webBaseUrl}`;
+        // Recheck immediately before handing the message to an external provider.
+        if (!(await this.ds.query(`SELECT followup_dispatch_allowed($1) AS allowed`,[job.id]))[0]?.allowed) {await finish('CANCELLED');continue;}
+        let provider:string|undefined;
+        if (w.channel==='EMAIL') {
+          if (!cfg?.host && this.mail.kind==='console') {await finish('NOT_CONFIGURED');continue;}
+          dispatched=true;
+          if (cfg?.host) await sendEmailVia(cfg,job.recipient,'Leadprocure · Tender xatırlatması',text);
+          else await this.mail.send({to:job.recipient,subject:'Leadprocure · Tender xatırlatması',text,html:`<pre>${text.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]!))}</pre>`});
         } else {
-          try {
-            let wamid: string | undefined;
-            if (cfg?.phoneNumberId) wamid = await sendWhatsappVia(cfg, w.phone, text);
-            else await this.wa.send(w.phone, text);
-            // Log with the provider message id so the delivery-status webhook can
-            // later flip SENT → DELIVERED → READ for this exact reminder.
-            if (wamid) {
-              await this.ds.query(`SELECT followup_log_message_ex($1, $2, $3, $4, $5, $6, $7)`, [
-                w.enrollment_id, w.step_no, w.channel, w.phone, 'SENT', null, wamid,
-              ]).catch((e) => this.logger.warn(`log_ex failed: ${e?.message}`));
-            } else {
-              await log(w.phone, 'SENT');
-            }
-          } catch (e: any) {
-            await log(w.phone, 'FAILED', e?.message?.slice(0, 300));
-          }
+          if (!cfg?.phoneNumberId && this.wa.kind==='console') {await finish('NOT_CONFIGURED');continue;}
+          dispatched=true;
+          if (cfg?.phoneNumberId) provider=await sendWhatsappVia(cfg,job.recipient,text);
+          else await this.wa.send(job.recipient,text);
         }
+        await finish('SENT',undefined,provider);
+      } catch(e:any) {
+        // A timeout after dispatch is ambiguous, not proof that delivery failed.
+        // Preserve it for reconciliation rather than risking duplicate supplier messages.
+        await finish(dispatched ? 'UNKNOWN':'FAILED',String(e?.message ?? 'Delivery failed').slice(0,300));
       }
     }
     if (due.length) this.logger.log(`follow-ups: advanced ${due.length} chain step(s)`);

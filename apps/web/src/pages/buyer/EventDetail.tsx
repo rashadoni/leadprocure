@@ -16,7 +16,8 @@ export default function EventDetail() {
   const [ev, setEv] = useState<any>(null);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [inviteOrg, setInviteOrg] = useState('');
-  const [scores, setScores] = useState<Record<string, { price: number; delivery: number }>>({});
+  const [aiLot, setAiLot] = useState('');
+  const [scores, setScores] = useState<Record<string, Record<string, number>>>({});
   const [ai, setAi] = useState<any>(null);
 
   const load = useCallback(() => api.get(`/events/${id}`).then((r) => setEv(r.data)), [id]);
@@ -73,11 +74,11 @@ export default function EventDetail() {
   const doEvaluate = async () => {
     // criteria are the ones locked on the event before opening — we submit only scores
     const list = (ev.bids ?? []).filter((b: any) => b.state === 'OPENED');
+    if (list.some((b: any) => (ev.evaluation_criteria ?? []).some((c: any) => !Number.isFinite(scores[b.id]?.[c.key])))) { alert(t('score_hint')); return; }
     await act('evaluate', {
-      scores: list.flatMap((b: any) => [
-        { bidId: b.id, key: 'price', score: scores[b.id]?.price ?? 50 },
-        { bidId: b.id, key: 'delivery', score: scores[b.id]?.delivery ?? 50 },
-      ]),
+      scores: list.flatMap((b: any) => (ev.evaluation_criteria ?? []).map((c: any) => ({
+        bidId:b.id,key:c.key,score:scores[b.id]?.[c.key] ?? NaN,
+      }))),
     });
   };
 
@@ -109,13 +110,13 @@ export default function EventDetail() {
   }, [ev]);
 
   const askAi = async () => {
-    try { setAi((await api.get(`/events/${id}/ai-recommendation`)).data); }
+    try { setAi((await api.get(`/events/${id}/ai-recommendation?lotId=${aiLot || ev.lots[0]?.id}`)).data); }
     catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
   if (!ev) return <div className="center">…</div>;
   const lot = ev.lots?.[0];
-  const awardedBidId = ev.awards?.[0]?.winning_bid_id;
+  const awardedBidId = ev.awards?.find((a: any) => !a.cancelled_at)?.winning_bid_id;
   const isRfi = ev.type === 'RFI';
   const canAi = ['EVALUATION', 'AWARDED'].includes(ev.status) && !isRfi;
 
@@ -136,15 +137,15 @@ export default function EventDetail() {
             <button className="btn" data-tip={t('tip_finalize')} onClick={() => act('auction/finalize')}>{t('finalize')}</button>
           )}
           <button className="btn ghost" data-tip={t('tip_ocds')} onClick={openOcds}>{t('ocds')}</button>
-          {ev.status === 'AWARDED' && ev.awards?.[0] && (
-            <button className="btn" data-tip={t('tip_make_contract')} onClick={async () => {
+          {(ev.awards ?? []).filter((a: any) => !a.cancelled_at).map((a: any) => (
+            <button key={a.id} className="btn" data-tip={t('tip_make_contract')} onClick={async () => {
               try {
-                const c = await api.post(`/contracts/from-award/${ev.awards[0].id}`);
-                await api.post(`/contracts/${c.data.id}/activate`).catch(() => {});
+                const c = await api.post(`/contracts/from-award/${a.id}`);
+                await api.post(`/contracts/${c.data.id}/activate`);
                 window.location.href = '/buyer/contracts';
               } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
-            }}>{t('make_contract')}</button>
-          )}
+            }}>{t('make_contract')} · {ev.lots.find((l: any) => l.id === a.lot_id)?.title}</button>
+          ))}
         </div>
         {['DRAFT', 'OPEN'].includes(ev.status) && (
           <div className="row" style={{ marginTop: 12, maxWidth: 480 }}>
@@ -423,12 +424,14 @@ export default function EventDetail() {
                 <td>{ev.amounts_visible ? (b.delivery_days ?? '—') : '🔒'}</td>
                 <td>{weightedByBid.has(b.id) ? weightedByBid.get(b.id)!.toFixed(1) : '—'}</td>
                 <td>
-                  {ev.status === 'EVALUATION' && !isRfi && b.state === 'OPENED' && (
+                  {ev.status === 'EVALUATION' && ev.format !== 'REVERSE' && !isRfi && b.state === 'OPENED' && (
                     <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                      <input style={{ width: 64 }} type="number" placeholder={t('crit_price')} data-tip={t('score_hint')} min={0} max={100}
-                        onChange={(e) => setScores({ ...scores, [b.id]: { ...(scores[b.id] ?? { delivery: 50 }), price: Number(e.target.value) } })} />
-                      <input style={{ width: 64 }} type="number" placeholder={t('crit_delivery')} data-tip={t('score_hint')} min={0} max={100}
-                        onChange={(e) => setScores({ ...scores, [b.id]: { ...(scores[b.id] ?? { price: 50 }), delivery: Number(e.target.value) } })} />
+                      {(ev.evaluation_criteria ?? []).map((c: any) => <label key={c.key}>
+                        {c.key} · {c.weight}%
+                        <input style={{width:64}} type="number" min={0} max={100} required
+                          value={scores[b.id]?.[c.key] ?? ''}
+                          onChange={e => setScores({...scores,[b.id]:{...scores[b.id],[c.key]:e.target.value === '' ? NaN : Number(e.target.value)}})} />
+                      </label>)}
                       <button className="btn small ghost" data-tip={t('disqualify')} onClick={() => disqualify(b.id)}>⛔</button>
                     </span>
                   )}
@@ -440,13 +443,16 @@ export default function EventDetail() {
             ))}
           </tbody>
         </table>
-        {ev.status === 'EVALUATION' && !isRfi && (ev.bids ?? []).some((b: any) => b.state === 'OPENED') && (
+        {ev.status === 'EVALUATION' && ev.format !== 'REVERSE' && !isRfi && (ev.bids ?? []).some((b: any) => b.state === 'OPENED') && (
           <div style={{ marginTop: 12 }}>
-            <button className="btn ghost" data-tip={t('tip_score')} onClick={doEvaluate}>{t('score')} (70% price / 30% delivery)</button>
+            <button className="btn ghost" data-tip={t('tip_score')} onClick={doEvaluate}>{t('score')}</button>
           </div>
         )}
       </div>
 
+      {canAi && <select aria-label={t('lots')} value={aiLot || ev.lots[0]?.id} onChange={e => {setAiLot(e.target.value);setAi(null);}}>
+        {(ev.lots ?? []).map((l: any) => <option key={l.id} value={l.id}>{l.title}</option>)}
+      </select>}
       {canAi && (
         <div className="card" style={{ borderColor: 'var(--accent2)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -470,7 +476,7 @@ export default function EventDetail() {
                       <td><b>{r.weightedTotal}</b></td>
                       <td>
                         {ev.status === 'EVALUATION' && !awardedBidId && lot && (
-                          <button className="btn small" data-tip={t('tip_award_bid')} onClick={() => awardBid(lot.id, r.bidId)}>{t('award')}</button>
+                          <button className="btn small" data-tip={t('tip_award_bid')} onClick={() => awardBid(aiLot || lot.id, r.bidId)}>{t('award')}</button>
                         )}
                       </td>
                     </tr>

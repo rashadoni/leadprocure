@@ -1,0 +1,24 @@
+(node:1) Warning: NodeVersionSupportWarning: The AWS SDK for JavaScript (v3)
+versions published after the first week of January 2027
+will require node >=22. You are running node v20.20.2.
+
+To continue receiving updates to AWS services, bug fixes,
+and security updates please upgrade to node >=22.
+
+More information can be found at: https://a.co/c895JFp
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS test/audit-regressions.e2e-spec.ts (24.069 s)
+  datasheet audit: files, financial boundaries and concurrency
+    ✓ rejects another organization upload grant and prevents overwrite after confirmation (386 ms)
+    ✓ rejects repeated invoice lines instead of silently matching 20 against 10 (67 ms)
+    ✓ concurrent invoices cannot both match the same received quantity (87 ms)
+    ✓ concurrent receipts cannot receive the same remaining quantity twice (54 ms)
+    ✓ preserves inclusive VAT and emits the snapshot in generic UBL (66 ms)
+    ✓ handles zero and exclusive tax without floating point totals (3 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       6 passed, 6 total
+Snapshots:   0 total
+Time:        24.42 s
+Ran all test suites within paths "test/audit-regressions.e2e-spec.ts".
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

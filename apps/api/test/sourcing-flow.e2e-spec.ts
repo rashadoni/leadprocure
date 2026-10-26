@@ -2,7 +2,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
 import { addApprover } from './helpers';
@@ -148,8 +148,11 @@ describe('sealed RFQ end-to-end flow', () => {
     const pre = await http().post(`/documents/bid/${bidId}/presign`).set('Authorization', `Bearer ${supplierToken}`)
       .send({ filename: 'spec.pdf', mime: 'application/pdf' }).expect(201);
     expect(pre.body.uploadUrl).toContain('http');
+    const bytes=Buffer.from('audit attachment fixture');
+    expect((await fetch(pre.body.uploadUrl,{method:'PUT',body:bytes,headers:{'Content-Type':'application/pdf'}})).ok).toBe(true);
+
     await http().post(`/documents/bid/${bidId}/confirm`).set('Authorization', `Bearer ${supplierToken}`)
-      .send({ storageKey: pre.body.storageKey, filename: 'spec.pdf', mime: 'application/pdf', sizeBytes: 1234, sha256: 'a'.repeat(64) })
+      .send({ storageKey: pre.body.storageKey, filename: 'spec.pdf', mime: 'application/pdf', sizeBytes: 1234, sha256: createHash('sha256').update(bytes).digest('hex') })
       .expect(201);
     // supplier sees own doc
     const asSupplier = await http().get(`/documents/bid/${bidId}`).set('Authorization', `Bearer ${supplierToken}`).expect(200);

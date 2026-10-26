@@ -1,3 +1,4 @@
+import { MailProvider } from '../src/common/mail/mail.module';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
@@ -57,7 +58,7 @@ describe('outreach follow-ups (API e2e)', () => {
     (await http().get(`/events/${eventId}/followups`).set(...bearer(token)).expect(200)).body as any[];
 
   beforeAll(async () => {
-    const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const mod = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(MailProvider).useValue({kind:'test',send:async()=>{}}).compile();
     app = mod.createNestApplication();
     app.use(cookieParser());
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));

@@ -4,6 +4,7 @@ type Lang = 'az' | 'ru' | 'en';
 
 const dict: Record<Lang, Record<string, string>> = {
   az: {
+    spend_date_basis: 'Qəbul edilmiş sifarişlər; ay sifarişin yaradılma tarixinə görə müəyyən edilir.', order_price_basis: 'Sifarişin qiymət rejimi',
     login: 'Daxil ol', logout: 'Çıxış', email: 'E-poçt', password: 'Şifrə', register: 'Qeydiyyat',
     requests: 'Sifarişlər', events: 'Tenderlər', suppliers: 'Təchizatçılar', market: 'Açıq tenderlər',
     create: 'Yarat', submit: 'Göndər', approve: 'Təsdiqlə', reject: 'Rədd et', publish: 'Dərc et',
@@ -131,6 +132,7 @@ const dict: Record<Lang, Record<string, string>> = {
     chain_active: 'Aktiv', chain_p0_desc: 'İstənilən təsdiqləyən bir kliklə təsdiqləyir — kiçik komandalar üçün.',
   },
   ru: {
+    spend_date_basis: 'Принятые заказы; месяц определяется датой создания заказа.', order_price_basis: 'Цены заказа',
     login: 'Войти', logout: 'Выход', email: 'Email', password: 'Пароль', register: 'Регистрация',
     requests: 'Заявки', events: 'Тендеры', suppliers: 'Поставщики', market: 'Открытые тендеры',
     create: 'Создать', submit: 'Отправить', approve: 'Утвердить', reject: 'Отклонить', publish: 'Опубликовать',
@@ -258,6 +260,7 @@ const dict: Record<Lang, Record<string, string>> = {
     chain_active: 'Активна', chain_p0_desc: 'Любой согласующий утверждает в один клик — для маленьких команд.',
   },
   en: {
+    spend_date_basis: 'Accepted orders; month is based on order creation date.', order_price_basis: 'Order price basis',
     login: 'Log in', logout: 'Log out', email: 'Email', password: 'Password', register: 'Register',
     requests: 'Requests', events: 'Tenders', suppliers: 'Suppliers', market: 'Open tenders',
     create: 'Create', submit: 'Submit', approve: 'Approve', reject: 'Reject', publish: 'Publish',
