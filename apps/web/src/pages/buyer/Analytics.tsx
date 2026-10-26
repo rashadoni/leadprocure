@@ -27,7 +27,7 @@ export default function Analytics() {
   return (
     <>
       <h1>{t('analytics')}</h1>
-      <select aria-label="Currency" value={currency} onChange={e=>setCurrency(e.target.value)}>{['AZN','USD','EUR'].map(c=><option key={c}>{c}</option>)}</select>
+      <select data-testid="analytics-currency" aria-label={t('currency')} value={currency} onChange={e=>setCurrency(e.target.value)}>{['AZN','USD','EUR'].map(c=><option key={c}>{c}</option>)}</select>
       <p className="hint">{t('spend_date_basis')}</p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12, marginBottom: 16 }}>

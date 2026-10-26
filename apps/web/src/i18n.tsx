@@ -4,6 +4,7 @@ type Lang = 'az' | 'ru' | 'en';
 
 const dict: Record<Lang, Record<string, string>> = {
   az: {
+    currency: "Valyuta",
     delivery_UNKNOWN: "Çatdırılma nəticəsi məlum deyil",
     delivery_FAILED: "Uğursuz cəhd",
     delivery_NOT_CONFIGURED: "Kanal sazlanmayıb",
@@ -146,6 +147,7 @@ const dict: Record<Lang, Record<string, string>> = {
     chain_active: 'Aktiv', chain_p0_desc: 'İstənilən təsdiqləyən bir kliklə təsdiqləyir — kiçik komandalar üçün.',
   },
   ru: {
+    currency: "Валюта",
     delivery_UNKNOWN: "Результат отправки неизвестен",
     delivery_FAILED: "Неудачная попытка",
     delivery_NOT_CONFIGURED: "Канал не настроен",
@@ -288,6 +290,7 @@ const dict: Record<Lang, Record<string, string>> = {
     chain_active: 'Активна', chain_p0_desc: 'Любой согласующий утверждает в один клик — для маленьких команд.',
   },
   en: {
+    currency: "Currency",
     delivery_UNKNOWN: "Delivery outcome unknown",
     delivery_FAILED: "Failed attempt",
     delivery_NOT_CONFIGURED: "Channel not configured",
