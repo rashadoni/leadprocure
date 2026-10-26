@@ -9,7 +9,7 @@
 - Upgrade: baseline schema 0027 → ожидаемый отказ на историческом дубле с полным rollback → согласованный синтетический fixture → current schema; суммы старого invoice сохранены, повторный migration run пустой.
 - Dump/restore: PASS; сохранены тестовый invoice, 34 миграции и 47 таблиц с RLS; app_user без контекста видит 0 invoices. Только disposable database; рабочая база не менялась.
 - Реальные UBL invoices с 0% и INCLUSIVE 18% прошли официальную OASIS UBL 2.1 XSD. OCDS result package прошёл canonical OCDS 1.1.5 JSON Schema. Это проверка структуры и конкретных примеров, не Peppol/правовая сертификация.
-- Workflow принят actionlint. На GitHub Actions три старта завершены до создания jobs: `startup_failure`, `path=BuildFailed`, 0 jobs, 0 check runs, нет логов runner. Примеры: [40404183594](https://github.com/rashadrahimov/leadprocure/actions/runs/40404183594), [40404978676](https://github.com/rashadrahimov/leadprocure/actions/runs/40404978676). Точная внешняя причина не установлена; это не PASS и не падение теста приложения.
+- Workflow принят actionlint. На GitHub Actions старты завершены до создания jobs: `startup_failure`, `path=BuildFailed`, 0 jobs, 0 check runs, нет логов runner. Примеры: [40404183594](https://github.com/rashadrahimov/leadprocure/actions/runs/40404183594), [40404978676](https://github.com/rashadrahimov/leadprocure/actions/runs/40404978676). Точная внешняя причина не установлена; это не PASS и не падение теста приложения.
 
 ## Матрица задач
 
@@ -43,3 +43,7 @@ Production не обновлялся. Push ветки, снятие архиви
 Перед отдельно разрешённым обновлением: выполнить `scripts/acceptance/preflight-readonly.sql`, проверить резервную копию и согласовать исторические дубли/налоговые снимки. Миграция намеренно не удаляет и не пересчитывает старые финансовые документы. Старые документы без налогового snapshot требуют документированной сверки перед UBL.
 
 Следующая обязательная точка: рабочий GitHub runner или разрешённый ephemeral worker, зелёный полный gate, затем итоговое решение о готовности. До этого нельзя объявлять все 20 задач полностью принятыми.
+
+## Последняя контрольная точка
+
+Commit `dff5b79` отправлен в feature branch; PR #10 остаётся draft. Новые push/PR runs [40407106728](https://github.com/rashadrahimov/leadprocure/actions/runs/40407106728) и [40407114230](https://github.com/rashadrahimov/leadprocure/actions/runs/40407114230) также `startup_failure`. Временные task-labelled PostgreSQL/MinIO/upgrade containers и internal network удалены после сохранения доказательств. Следующий шаг — восстановить hosted runner или использовать предусмотренный host contract ephemeral worker и выполнить полный gate.
