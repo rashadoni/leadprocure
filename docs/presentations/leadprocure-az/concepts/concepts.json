@@ -1,0 +1,69 @@
+{
+  "status": "concepts_for_user_selection",
+  "created": "2026-10-26",
+  "language": "az",
+  "full_deck": "deferred_until_user_selects_direction",
+  "source": "Canva generation with manual Azerbaijani copy corrections in draft editing transactions",
+  "variants": [
+    {
+      "variant": "A",
+      "name": "Signal",
+      "design": {
+        "id": "DAHZHP_E_cA",
+        "url": "https://canva.link/ng1vzyssp3n1red",
+        "edit_url": "https://canva.link/ng1vzyssp3n1red",
+        "print": {
+          "is_printable": false
+        }
+      },
+      "draft_edit_url": "https://www.canva.com/d/2LCkaqsKBEiZnIE",
+      "transaction_id": "502671549915298748",
+      "transaction_status": "open_uncommitted_awaiting_user_design_selection",
+      "content_pages": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "variant": "B",
+      "name": "Editorial",
+      "design": {
+        "id": "DAHZHDqhjBU",
+        "url": "https://canva.link/e1icrniq84kjlrc",
+        "edit_url": "https://canva.link/e1icrniq84kjlrc",
+        "print": {
+          "is_printable": false
+        }
+      },
+      "draft_edit_url": "https://www.canva.com/d/LzEhkGWkec5gOUa",
+      "transaction_id": "1505848365576723165",
+      "transaction_status": "open_uncommitted_awaiting_user_design_selection",
+      "content_pages": [
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "variant": "C",
+      "name": "Monograph",
+      "design": {
+        "id": "DAHZHCGwAlw",
+        "url": "https://canva.link/cgxz3skr5l533nu",
+        "edit_url": "https://canva.link/cgxz3skr5l533nu",
+        "print": {
+          "is_printable": false
+        }
+      },
+      "draft_edit_url": "https://www.canva.com/d/EGWwi08dizvFwJy",
+      "transaction_id": "6969840614159013245",
+      "transaction_status": "open_uncommitted_awaiting_user_design_selection",
+      "content_pages": [
+        4,
+        5,
+        6
+      ]
+    }
+  ]
+}
