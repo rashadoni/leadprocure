@@ -1,3 +1,7 @@
+import { DataSource } from 'typeorm';
+import { AppConfig } from '../src/common/config/config.service';
+import { ConsoleMailProvider } from '../src/common/mail/mail.module';
+import { ConsoleWhatsAppProvider } from '../src/modules/followups/followups.module';
 import { MailProvider } from '../src/common/mail/mail.module';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -183,4 +187,29 @@ describe('outreach follow-ups (API e2e)', () => {
     await http().get(`/events/${eventId}/followups`).set(...bearer(supplierToken)).expect(403);
     await http().post(`/events/${eventId}/followups`).set(...bearer(supplierToken)).send({}).expect(403);
   });
+  it('an unconfigured console channel does not create SENT evidence',async()=>{
+    const ev=await makeOpenEvent();await http().post(`/events/${ev.eventId}/followups`).set(...bearer(buyerToken)).send({supplierOrgIds:[supplierOrgId]}).expect(201);
+    await rewind(ev.eventId,supplierOrgId);
+    const consoleScheduler=new FollowupsScheduler(app.get(DataSource),new ConsoleMailProvider(),new ConsoleWhatsAppProvider(),app.get(AppConfig));
+    await consoleScheduler.tick();
+    const row=(await fups(ev.eventId)).find((r:any)=>r.supplier_org_id===supplierOrgId);
+    expect(row.messages.map((m:any)=>m.status)).toEqual(['NOT_CONFIGURED']);
+  });
+  it('expired delivery leases become UNKNOWN and require an authorized explanation before requeue',async()=>{
+    const ev=await makeOpenEvent();await http().post(`/events/${ev.eventId}/followups`).set(...bearer(buyerToken)).send({supplierOrgIds:[supplierOrgId]}).expect(201);
+    await rewind(ev.eventId,supplierOrgId);
+    const jobs=(await owner.query(`SELECT * FROM followup_claim_outbox()`)).rows;
+    const job=jobs.find((j:any)=>j.work.event_id===ev.eventId);expect(job).toBeTruthy();
+    await owner.query(`UPDATE followup_outbox SET lease_until=now()-interval '1 minute' WHERE id=$1`,[job.id]);
+    await owner.query(`SELECT * FROM followup_claim_outbox()`);
+    expect((await owner.query(`SELECT status FROM followup_outbox WHERE id=$1`,[job.id])).rows[0].status).toBe('UNKNOWN');
+    await http().post(`/events/${ev.eventId}/followups/jobs/${job.id}/reconcile`).set(...bearer(supplierToken)).send({decision:'CONFIRMED_NOT_SENT',reason:'Verified provider did not send'}).expect(403);
+    await http().post(`/events/${ev.eventId}/followups/jobs/${job.id}/reconcile`).set(...bearer(buyerToken)).send({decision:'CONFIRMED_NOT_SENT',reason:'short'}).expect(400);
+    await http().post(`/events/${ev.eventId}/followups/jobs/${job.id}/reconcile`).set(...bearer(buyerToken)).send({decision:'CONFIRMED_NOT_SENT',reason:'Verified provider did not send'}).expect(201);
+    expect((await owner.query(`SELECT status FROM followup_outbox WHERE id=$1`,[job.id])).rows[0].status).toBe('PENDING');
+    await http().post(`/events/${ev.eventId}/followups/${supplierOrgId}/stop`).set(...bearer(buyerToken)).expect(201);
+    await scheduler.tick();
+    expect((await owner.query(`SELECT status FROM followup_outbox WHERE id=$1`,[job.id])).rows[0].status).toBe('CANCELLED');
+  });
+
 });

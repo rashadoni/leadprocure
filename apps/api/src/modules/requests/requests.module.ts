@@ -1,3 +1,4 @@
+import { RequiresNewWork } from '../../common/auth/decorators';
 import { safeMoney, lineMoney } from '../../common/procurement/invariants';
 import {
   BadRequestException,
@@ -345,7 +346,8 @@ export class RequestsController {
   @Get(':id') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
   get(@Param('id') id: string) { return this.requests.get(id); }
 
-  @Post() @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  @Post()
+  @RequiresNewWork() @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
   create(@Body() dto: UpsertRequestDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.requests.create(dto, auth);
   }

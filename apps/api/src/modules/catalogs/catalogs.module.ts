@@ -1,3 +1,4 @@
+import { RequiresNewWork } from '../../common/auth/decorators';
 import { assertSupplierAllowed, uniqueIds, safeMoney, lineMoney, returnedRows } from '../../common/procurement/invariants';
 import {
   BadRequestException,
@@ -208,12 +209,14 @@ export class CatalogsController {
   }
 
   @Post()
+  @RequiresNewWork()
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   create(@Body() body: CreateCatalogDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.catalogs.create(body, auth);
   }
 
   @Post('from-contract/:contractId')
+  @RequiresNewWork()
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   fromContract(@Param('contractId') contractId: string, @CurrentUser() auth: AccessTokenPayload) {
     return this.catalogs.createFromContract(contractId, auth);
@@ -232,6 +235,7 @@ export class CatalogsController {
   }
 
   @Post(':id/order')
+  @RequiresNewWork()
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
   order(@Param('id') id: string, @Body() body: CatalogOrderDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.catalogs.order(id, body.items, auth);

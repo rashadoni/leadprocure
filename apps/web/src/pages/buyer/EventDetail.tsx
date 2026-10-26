@@ -298,6 +298,13 @@ export default function EventDetail() {
                                 ▶ {t('followups_enroll_one')}
                               </button>
                             )}
+                            {(f.jobs ?? []).filter((j:any)=>['UNKNOWN','FAILED','NOT_CONFIGURED'].includes(j.status)).map((j:any)=><div key={j.id}>
+                              <span>{t(`delivery_${j.status}`)} · {j.recipient}</span>
+                              <button className="btn small ghost" onClick={()=>{
+                                const reason=window.prompt(t('delivery_reconcile_reason'));if(!reason)return;
+                                fuAct(()=>api.post(`/events/${id}/followups/jobs/${j.id}/reconcile`,{decision:'CONFIRMED_NOT_SENT',reason}));
+                              }}>{t('delivery_confirm_not_sent')}</button>
+                            </div>)}
                             {f.enrolled && f.status === 'ACTIVE' && (
                               <button className="btn small ghost"
                                 onClick={() => fuAct(() => api.post(`/events/${id}/followups/${f.supplier_org_id}/stop`))}>
@@ -311,7 +318,7 @@ export default function EventDetail() {
                             <td colSpan={4} style={{ background: 'var(--card2, #fafafa)' }}>
                               {msgs.map((m: any, i: number) => (
                                 <div key={i} className="hint" style={{ padding: '2px 0' }}>
-                                  {chIco(m.channel)} {new Date(m.at).toLocaleString()} → {m.recipient} · {m.status}
+                                  {chIco(m.channel)} {new Date(m.at).toLocaleString()} → {m.recipient} · {t(`delivery_${m.status}`)}
                                 </div>
                               ))}
                             </td>

@@ -1,3 +1,4 @@
+import { RequiresNewWork } from '../../common/auth/decorators';
 import { Body, Controller, Get, Injectable, Logger, Module, Param, Post, Put, Query } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -127,6 +128,7 @@ export class SourcingController {
   }
 
   @Post('from-request/:requestId')
+  @RequiresNewWork()
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   create(
     @Param('requestId') requestId: string,
@@ -137,6 +139,7 @@ export class SourcingController {
   }
 
   @Post(':id/publish')
+  @RequiresNewWork()
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   publish(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
     return this.sourcing.publish(id, auth);
@@ -243,6 +246,7 @@ export class AuctionController {
   constructor(private readonly auction: AuctionService) {}
 
   @Post('reverse/from-request/:requestId')
+  @RequiresNewWork()
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   create(
     @Param('requestId') requestId: string,

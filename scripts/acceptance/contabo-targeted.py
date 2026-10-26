@@ -14,8 +14,11 @@ elif mode=='roles':
     docker(['exec',db,'psql','-U','leadprocure_owner','-d','leadprocure_audit_test','-v','ON_ERROR_STOP=1','-c',sql])
 elif mode in ['migrate','test','bucket','webtype']:
     args=['run','--rm','--network',network,'--memory','1g','--cpus','1','--tmpfs','/tmp:rw,size=128m','-w','/repo/apps/api']
-    for src,dst in [('apps/api/src','/repo/apps/api/src'),('apps/api/test','/repo/apps/api/test'),('packages/shared/src','/repo/packages/shared/src'),('apps/web/src','/repo/apps/web/src'),('scripts','/repo/scripts')]:args+=['-v',str(root/src)+':'+dst+':ro']
-    env={'NODE_ENV':'test','LEADPROCURE_TEST_ISOLATED':'1','DATABASE_URL':'postgres://app_user:isolated_app@postgres:5432/leadprocure_audit_test','DATABASE_OWNER_URL':'postgres://leadprocure_owner:isolated_owner@postgres:5432/leadprocure_audit_test','JWT_ACCESS_SECRET':'isolated-key','JWT_REFRESH_SECRET':'isolated-refresh','BID_MASTER_KEY_B64':'dGVzdC1vbmx5LW5vdC1hLXByb2R1Y3Rpb24ta2V5ISE=','CLAMAV_ENABLED':'false','S3_ENDPOINT':'http://minio:9000','S3_ACCESS_KEY':'isolatedaccess','S3_SECRET_KEY':'isolatedsecret','S3_BUCKET':'leadprocure-audit-test','TS_NODE_TRANSPILE_ONLY':'true'}
+    for src,dst in [('apps/api/src','/repo/apps/api/src'),('apps/api/test','/repo/apps/api/test'),('packages/shared/src','/repo/packages/shared/src'),('apps/web/src','/repo/apps/web/src'),('apps/web/tsconfig.json','/repo/apps/web/tsconfig.json'),('scripts','/repo/scripts')]:args+=['-v',str(root/src)+':'+dst+':ro']
+    exports=pathlib.Path('/tmp/leadprocure-audit-exports')
+    exports.mkdir(exist_ok=True)
+    args+=['-v',str(exports)+':/audit-exports']
+    env={'AUDIT_EXPORT_DIR':'/audit-exports','NODE_ENV':'test','LEADPROCURE_TEST_ISOLATED':'1','DATABASE_URL':'postgres://app_user:isolated_app@postgres:5432/leadprocure_audit_test','DATABASE_OWNER_URL':'postgres://leadprocure_owner:isolated_owner@postgres:5432/leadprocure_audit_test','JWT_ACCESS_SECRET':'isolated-key','JWT_REFRESH_SECRET':'isolated-refresh','BID_MASTER_KEY_B64':'dGVzdC1vbmx5LW5vdC1hLXByb2R1Y3Rpb24ta2V5ISE=','CLAMAV_ENABLED':'false','S3_ENDPOINT':'http://minio:9000','S3_ACCESS_KEY':'isolatedaccess','S3_SECRET_KEY':'isolatedsecret','S3_BUCKET':'leadprocure-audit-test','TS_NODE_TRANSPILE_ONLY':'true'}
     for k,v in env.items():args+=['-e',k+'='+v]
     args+=['--entrypoint','node','leadprocure-prod-api']
     if mode=='migrate':args+=['-r','ts-node/register','node_modules/typeorm/cli.js','migration:run','-d','src/common/db/data-source.ts']

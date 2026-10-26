@@ -1,0 +1,30 @@
+(node:1) Warning: NodeVersionSupportWarning: The AWS SDK for JavaScript (v3)
+versions published after the first week of January 2027
+will require node >=22. You are running node v20.20.2.
+
+To continue receiving updates to AWS services, bug fixes,
+and security updates please upgrade to node >=22.
+
+More information can be found at: https://a.co/c895JFp
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+PASS test/audit-regressions.e2e-spec.ts (24.195 s)
+  datasheet audit: files, financial boundaries and concurrency
+    ✓ rejects another organization upload grant and prevents overwrite after confirmation (468 ms)
+    ✓ rejects repeated invoice lines instead of silently matching 20 against 10 (84 ms)
+    ✓ concurrent invoices cannot both match the same received quantity (126 ms)
+    ✓ concurrent receipts cannot receive the same remaining quantity twice (47 ms)
+    ✓ preserves inclusive VAT and emits the snapshot in generic UBL (154 ms)
+    ✓ exports a zero VAT invoice without inventing 18 percent tax (89 ms)
+    ✓ handles zero and exclusive tax without floating point totals (6 ms)
+    ✓ BLOCKED is enforced for invitation, bidding and catalog creation (313 ms)
+    ✓ rejects mixed currencies, late withdrawals and incomplete/duplicated evaluations (634 ms)
+    ✓ lot-specific AI handles zero price and same-day delivery with finite scores (374 ms)
+    ✓ analytics excludes cancelled awards, separates currencies and normalizes inclusive orders (121 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       11 passed, 11 total
+Snapshots:   0 total
+Time:        24.513 s
+Ran all test suites within paths "test/audit-regressions.e2e-spec.ts".
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

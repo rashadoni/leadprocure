@@ -1,7 +1,7 @@
 import { returnedRows } from '../../common/procurement/invariants';
 import {
   ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID,
-  Max, Min, ValidateNested,
+  Max, Min, MinLength, ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import {
@@ -134,12 +134,20 @@ export class FollowupsService {
   async stop(eventId: string, supplierOrgId: string, auth: AccessTokenPayload) {
     const rows = returnedRows(await this.rc.manager.query(
       `UPDATE followup_enrollments SET status = 'STOPPED', next_run_at = NULL, updated_at = now()
-       WHERE event_id = $1 AND supplier_org_id = $2 AND status = 'ACTIVE' RETURNING id`,
+       WHERE event_id = $1 AND supplier_org_id = $2 AND (status = 'ACTIVE' OR (status='EXHAUSTED' AND EXISTS(SELECT 1 FROM followup_outbox j WHERE j.enrollment_id=followup_enrollments.id AND j.status IN ('PENDING','SENDING')))) RETURNING id`,
       [eventId, supplierOrgId],
     ));
     if (!rows.length) throw new NotFoundException('No active follow-up for this supplier');
     await this.audit.record('FOLLOWUP_STOPPED', 'followup_enrollment', rows[0].id, { event_id: eventId, supplier_org_id: supplierOrgId });
     return { ok: true };
+  }
+
+  async reconcile(eventId: string, jobId: string, decision: string, reason: string, auth: AccessTokenPayload) {
+    const row=(await this.rc.manager.query(`SELECT o.id FROM followup_outbox o JOIN followup_enrollments fe ON fe.id=o.enrollment_id WHERE o.id=$1 AND fe.event_id=$2`,[jobId,eventId]))[0];
+    if (!row) throw new NotFoundException('Delivery job not found');
+    await this.rc.manager.query(`SELECT followup_reconcile_outbox($1,$2,$3)`,[jobId,decision,reason]);
+    await this.audit.record('FOLLOWUP_RECONCILED','followup_outbox',jobId,{decision,reason});
+    return {ok:true};
   }
 
   // Every INVITED supplier is a row (not only enrolled ones), so the UI can show the
@@ -154,6 +162,7 @@ export class FollowupsService {
               fe.status, fe.current_step,
               COALESCE(jsonb_array_length(fe.steps), 0) AS total_steps,
               fe.steps, fe.next_run_at,
+              COALESCE((SELECT jsonb_agg(jsonb_build_object('id',j.id,'status',j.status,'recipient',j.recipient,'attempts',j.attempts)) FROM followup_outbox j WHERE j.enrollment_id=fe.id),'[]'::jsonb) AS jobs,
               COALESCE((SELECT count(*)::int FROM followup_messages fm WHERE fm.enrollment_id = fe.id), 0) AS sent_count,
               COALESCE((SELECT jsonb_agg(jsonb_build_object(
                           'step_no', fm.step_no, 'channel', fm.channel, 'recipient', fm.recipient,
@@ -172,8 +181,7 @@ export class FollowupsService {
 
 // Ticker. No request context — all reads/writes go through followup_advance_due()
 // (SECURITY DEFINER); the Node side only delivers messages and logs each attempt.
-// Delivery failures are logged, never retried within the same step (the next step of
-// the chain is the retry), and never affect business state.
+// Retries before dispatch are bounded. Ambiguous post-dispatch failures require review.
 @Injectable()
 export class FollowupsScheduler {
   private readonly logger = new Logger(FollowupsScheduler.name);
@@ -225,6 +233,11 @@ export class FollowupsScheduler {
   }
 }
 
+class ReconcileDto {
+  @IsIn(['CONFIRMED_SENT','CONFIRMED_NOT_SENT']) decision!: string;
+  @IsString() @MinLength(10) reason!: string;
+}
+
 @Controller()
 @RequiresFeature('outreach.followups')
 export class FollowupsController {
@@ -252,6 +265,12 @@ export class FollowupsController {
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   enroll(@Param('id') id: string, @Body() dto: EnrollDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.followups.enroll(id, dto, auth);
+  }
+
+  @Post('events/:id/followups/jobs/:jobId/reconcile')
+  @Roles('BUYER_ADMIN','BUYER_APPROVER')
+  reconcile(@Param('id') id:string,@Param('jobId') jobId:string,@Body() dto:ReconcileDto,@CurrentUser() auth:AccessTokenPayload) {
+    return this.followups.reconcile(id,jobId,dto.decision,dto.reason,auth);
   }
 
   @Post('events/:id/followups/:supplierOrgId/stop')

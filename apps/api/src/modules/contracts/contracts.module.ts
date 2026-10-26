@@ -1,3 +1,4 @@
+import { RequiresNewWork } from '../../common/auth/decorators';
 import { lockOrder, lockEvent, assertSupplierAllowed, uniqueIds, safeMoney, returnedRows } from '../../common/procurement/invariants';
 import {
   BadRequestException,
@@ -518,12 +519,14 @@ export class ContractsController {
   constructor(private readonly contracts: ContractsService) {}
 
   @Post('contracts/from-award/:awardId')
+  @RequiresNewWork()
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   fromAward(@Param('awardId') awardId: string, @CurrentUser() auth: AccessTokenPayload) {
     return this.contracts.createFromAward(awardId, auth);
   }
 
   @Post('orders/direct/from-request/:requestId')
+  @RequiresNewWork()
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   directOrder(
     @Param('requestId') requestId: string,
@@ -550,6 +553,7 @@ export class ContractsController {
   }
 
   @Post('contracts/:id/orders')
+  @RequiresNewWork()
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   createOrder(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
     return this.contracts.createOrder(id, auth);

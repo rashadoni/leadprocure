@@ -1,0 +1,19 @@
+[
+  {
+    "file": "inclusive.xml",
+    "schema": "https://docs.oasis-open.org/ubl/os-UBL-2.1/xsd/maindoc/UBL-Invoice-2.1.xsd",
+    "sha256": "60080a22e0c9a9f3256469cb9a505ae73fcd2eaeda8fb6ea1bd42d471bb374ee",
+    "result": "PASS"
+  },
+  {
+    "file": "zero.xml",
+    "schema": "https://docs.oasis-open.org/ubl/os-UBL-2.1/xsd/maindoc/UBL-Invoice-2.1.xsd",
+    "sha256": "faf60d07497c3401c4686c6ee19779bec1217510079460346f680cbae227fbf4",
+    "result": "PASS"
+  },
+  {
+    "file": "ocds.json",
+    "schema": "https://standard.open-contracting.org/schema/1__1__5/release-package-schema.json",
+    "result": "PASS"
+  }
+]

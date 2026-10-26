@@ -138,3 +138,11 @@
 - Targeted multilot + auction-flow: 15/15 PASS на отдельной PostgreSQL. Проверены два независимых lot-scoped contract/PO/catalog snapshots, отказ award худшей ставки, auction→contract→PO с ценовыми строками.
 - В процессе review добавлены общая блокировка проверки BLOCKED и смены статуса, отказ новых договоров/PO для заблокированного поставщика, запрет неявной подмены валюты legacy award; эти последние усиления включены в последующую проверку.
 - Текущая точка: продолжаются LP-A05–LP-A19; outbox retry/видимость UNKNOWN, лицензирование, аналитика и полная приёмка ещё не закрыты. Контрольный commit сохраняет текущую реализацию без push/deploy.
+
+## 2026-10-26 — оценка, блокировки, лицензии, доставка и схемы экспортов
+- Расширенный audit-regressions: 11/11 PASS (HTTP + PostgreSQL + MinIO), включая BLOCKED, mixed-currency rejection, late withdrawal, incomplete/duplicate evaluation, zero-valued AI, cancelled OCDS award, аналитика по валюте и net для INCLUSIVE PO.
+- Followups: 10/10 PASS, включая NOT_CONFIGURED вместо ложного SENT и UNKNOWN после истечения lease с авторизованным ручным восстановлением. Добавлена новая миграция 0033: bounded pre-dispatch retry, видимая история UNKNOWN, честное событие STEP_SCHEDULED, ручная reconciliation с причиной.
+- Signed-license checks: 3/3 PASS с настоящими Ed25519/PASETO; valid→grace→restricted без reload, renewal, future/revoked и production-missing license. New-work gating переведён с хрупких URL regex на явный RequiresNewWork; tenant admin в SaaS не устанавливает серверную лицензию.
+- Проверены реальные сгенерированные UBL (0% и inclusive 18%) по официальной OASIS UBL 2.1 XSD и OCDS по canonical 1.1.5 release-package schema: PASS. Это не Peppol BIS сертификация/передача и не ERP integration. Источники схем записаны в export-schema-results.json.
+- Web TypeScript: первоначальный container check не состоялся из-за отсутствующих web dependencies в API image. Выполнен ограниченный targeted install в /tmp и отдельная проверка текущего web source + shared: PASS. Полный web build/browser suite по-прежнему NOT RUN на Contabo.
+- Следующее действие: локализация объяснений/сообщений, полный hosted gate, приёмка развёртывания и синхронизация материалов. Production не менялся.
