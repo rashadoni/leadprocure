@@ -1,0 +1,99 @@
+{
+  "title": "Leadprocure",
+  "subtitle": "Müəssisələr üçün satınalma və təchizatçı əməkdaşlığı platforması",
+  "intro": "Daxili satınalma tələblərini, rəqabətli tenderləri, müqavilələri, sifarişləri və qaimə nəzarətini vahid iş prosesində birləşdirir. Alıcı və təchizatçı öz səlahiyyətləri daxilində eyni prosesin iştirakçısı olur.",
+  "targetBuyer": "Satınalma, maliyyə və əməliyyat bölmələri arasında nəzarətli iş axını qurmaq istəyən şirkətlər və korporativ satınalma komandaları.",
+  "capabilities": [
+    {
+      "title": "Revers-auksion",
+      "description": "Cari ən yaxşı qiymət, minimum endirim addımı və son anda verilən təkliflər üçün müddətin məhdud uzadılması ilə qiymət rəqabəti."
+    },
+    {
+      "title": "Məxfi RFQ və RFP",
+      "description": "Qiymət və texniki təkliflər açılışa qədər şifrələnir. RFI məlumat sorğusu və iştirakçılar üçün ümumi sual-cavab bölməsi də mövcuddur."
+    },
+    {
+      "title": "Satınalma qaydaları və təsdiq zəncirləri",
+      "description": "Məbləğə görə satınalma metodu və təsdiq addımları müəyyən edilir. Tələbin müəllifi öz tələbini təsdiqləyə bilmir."
+    },
+    {
+      "title": "Lotlar üzrə seçim və qiymətləndirmə",
+      "description": "Meyarlar əvvəlcədən müəyyən edilir; lotlar müxtəlif təchizatçılara verilə bilər. Qiymətləndirmədə birinci olmayan təklifin seçilməsi əsaslandırma tələb edir."
+    },
+    {
+      "title": "Təchizatçı reyestri və yoxlama",
+      "description": "Təchizatçı sənədləri, təsdiq və bloklama qərarları, çatdırılma, keyfiyyət və kommunikasiya üzrə performans qiymətləndirmələri bir yerdə saxlanılır."
+    },
+    {
+      "title": "Müqavilədən malın qəbuluna qədər",
+      "description": "Müqavilə əsasında sifariş, çatdırılma statusları və qəbul izlənir. Sifariş dəyişikliyi təchizatçının razılığından sonra tətbiq olunur."
+    },
+    {
+      "title": "Qaimələrin üçtərəfli üzləşdirilməsi",
+      "description": "Sifariş, faktiki qəbul və qaimə müqayisə edilir. Miqdar və qiymət uyğunsuzluqları təsdiqdən əvvəl görünür; ödəniş statusu uçota alınır."
+    },
+    {
+      "title": "Büdcə görünürlüğü və xərc analitikası",
+      "description": "Kateqoriya və il üzrə limitlər, təsdiqlənmiş tələblərin büdcəyə təsiri, qəbul edilmiş sifarişlər üzrə xərclər və tender nəticələri izlənir."
+    },
+    {
+      "title": "Razılaşdırılmış qiymət kataloqları",
+      "description": "Təkrar satınalmalar üçün təsdiqlənmiş təchizatçıların kataloqlarından sifariş verilir. Qiymət və minimum sifariş miqdarı sistem tərəfindən yoxlanılır."
+    },
+    {
+      "title": "Təchizatçı xatırlatmaları",
+      "description": "Cavab verməyən dəvətli təchizatçılar üçün e-poçt və WhatsApp ardıcıllıqları qurulur. Təklif təqdim ediləndə xatırlatma zənciri dayanır."
+    }
+  ],
+  "roles": [
+    "Alıcı administratoru",
+    "Təsdiqləyən şəxs",
+    "Satınalma tələbinin müəllifi",
+    "Təchizatçı istifadəçisi"
+  ],
+  "languages": [
+    "Azərbaycan dili",
+    "Rus dili",
+    "İngilis dili"
+  ],
+  "deployment": [
+    {
+      "title": "Buludda yerləşdirmə",
+      "description": "Təşkilatlar üzrə məlumat ayrılması ilə SaaS yerləşdirmə modeli."
+    },
+    {
+      "title": "Müştərinin infrastrukturunda",
+      "description": "Öz infrastrukturunda yerləşdirmə və lisenziyalaşdırma modeli; tətbiq şərtləri ayrıca razılaşdırılır."
+    }
+  ],
+  "integrations": [
+    {
+      "title": "Qaimə və tender məlumatlarının ixracı",
+      "description": "UBL qaimə faylı, OCDS quruluşunda tender/nəticə məlumatları və 1C-yə uyğunlaşdırıla bilən CSV."
+    },
+    {
+      "title": "E-poçt və WhatsApp",
+      "description": "Təşkilatın SMTP və Meta WhatsApp Cloud kanalları ilə qoşulma; işləməsi kanal sazlamalarından və uyğun şablonlardan asılıdır."
+    },
+    {
+      "title": "İzah edilən seçim tövsiyəsi",
+      "description": "Qiymət, çatdırılma müddəti və təchizatçı tarixçəsi üzrə hesablama. LLM izahı ayrıca konfiqurasiyadan asılıdır; yekun qərar alıcıdadır."
+    }
+  ],
+  "security": [
+    "Rollar üzrə əməliyyat səlahiyyətləri və təşkilatlar arasında məlumat ayrılması.",
+    "Məxfi təkliflər üçün AES-256-GCM şifrələməsi və açılış mərhələsinə bağlı görünürlük.",
+    "Təsdiq səlahiyyətlərinin ayrılması və əvvəlcədən müəyyən edilən qiymətləndirmə meyarları.",
+    "Əsas əməliyyatlar üçün tətbiq istifadəçisinin dəyişə bilmədiyi audit qeydləri.",
+    "Son təqdimetmə tarixinin və əsas məbləğ hesablamalarının serverdə yoxlanılması."
+  ],
+  "pilot": "Pilot üçün bir satınalma kateqoriyası, rol bölgüsü və təsdiq qaydaları seçilir. Təchizatçılarla bir proses keçirilir; nəticələr və növbəti mərhələnin əhatəsi birlikdə qiymətləndirilir.",
+  "caveats": [
+    "Büdcə aşımı xəbərdarlıq yaradır; təsdiqi avtomatik bloklamır.",
+    "Ödəniş statusu bank köçürməsi deyil. CSV ixracı canlı, ikiistiqamətli ERP sinxronlaşdırılması deyil.",
+    "UBL ixracı Peppol şəbəkəsinə qoşulma demək deyil; göndəriş üçün ayrıca xidmət tələb olunur.",
+    "ASAN İmza inteqrasiyası cari versiyada aktiv deyil. Təchizatçı yoxlaması sənədlər və alıcının qərarına əsaslanır.",
+    "Xarici kanallar, AI izahı və əlavə modulların əlçatanlığı konfiqurasiya və lisenziya əhatəsindən asılıdır.",
+    "Format dəstəyi sertifikatlaşdırma və ya hüquqi uyğunluq zəmanəti kimi təqdim edilmir."
+  ]
+}

@@ -1,0 +1,864 @@
+[
+  {
+    "slide": 1,
+    "title": "Satınalmanı vahid sistemdə idarə edin",
+    "text": [
+      "Leadprocure",
+      "AZƏRBAYCAN · MÜƏSSİSƏLƏR ÜÇÜN",
+      "Satınalmanı vahid sistemdə idarə edin",
+      "Tələbatdan tenderə, müqavilədən qəbul və ödənişin uçotuna qədər.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "01",
+      "Nəzarət.\nRəqabət.\nİzlənə bilən qərarlar.",
+      "Satınalma, maliyyə və rəhbərlik üçün ortaq iş mühiti.",
+      "Məhsulun real AZ demo interfeysi · nümunə məlumatlar"
+    ],
+    "images": [
+      {
+        "file": "buyer-dashboard.az.png",
+        "crop": null,
+        "rect": [
+          425.22222222222223,
+          211.0,
+          675.5555555555555,
+          380.0
+        ]
+      }
+    ],
+    "notes": "Leadprocure korporativ satınalma komandasını, təsdiqləyənləri və təchizatçıları vahid prosesdə birləşdirir. Bu təqdimat funksiyaları real demo ekranları ilə göstərir. Məhsulun təqdimatı, 26 oktyabr 2026.",
+    "sources": [
+      "README.md:3–33",
+      "docs/DEMO.md:23–34"
+    ]
+  },
+  {
+    "slide": 2,
+    "title": "Korporativ satınalmanın üç əsas sualına cavab",
+    "text": [
+      "Leadprocure",
+      "İDARƏETMƏ DƏYƏRİ",
+      "Korporativ satınalmanın üç əsas sualına cavab",
+      "Nəyə vəsait ayrılır? Qərarı kim verir? Təchizat hansı mərhələdədir?",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "02",
+      "01 / MALİYYƏ ŞƏFFAFLIĞI",
+      "Xərcləri görün",
+      "Büdcə, öhdəlik, qəbul edilmiş sifariş və qaimə statusunu əlaqəli izləyin.",
+      "02 / SƏLAHİYYƏT BÖLGÜSÜ",
+      "Qərarları əsaslandırın",
+      "Təsdiq zəncirləri, əvvəlcədən müəyyən edilən meyarlar və audit tarixçəsi.",
+      "03 / ƏMƏLİYYAT NƏZARƏTİ",
+      "İcraya nəzarət edin",
+      "Təklifdən çatdırılmaya qədər məsul tərəf və növbəti addım görünür.",
+      "Hədəf: dağınıq yazışmaları və əl ilə izlənən mərhələləri vahid prosesdə toplamaq."
+    ],
+    "images": [],
+    "notes": "Faydalar məhsul funksiyalarından çıxarılan əməliyyat dəyəridir; ölçülmüş müştəri ROI-si və ya zəmanətli qənaət təqdim edilmir.",
+    "sources": [
+      "apps/api/src/modules/requests/requests.module.ts",
+      "apps/api/src/modules/dashboard/dashboard.module.ts",
+      "apps/api/src/modules/contracts/contracts.module.ts"
+    ]
+  },
+  {
+    "slide": 3,
+    "title": "Sadəcə tender reyestrindən daha geniş imkanlar",
+    "text": [
+      "Leadprocure",
+      "FƏRQLƏNDİRİCİ İMKANLAR",
+      "Sadəcə tender reyestrindən daha geniş imkanlar",
+      "Rəqabəti, nəzarəti və təchizatçı ilə əməkdaşlığı birləşdirən funksiyalar.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "03",
+      "01",
+      "Revers-auksion",
+      "Qiymət rəqabəti, minimum addım və son saniyə təkliflərinə qarşı uzatma.",
+      "02",
+      "Məxfi təkliflər",
+      "Təkliflərin məbləğləri açılışa qədər alıcıdan gizli saxlanılır.",
+      "03",
+      "Çoxmərhələli təsdiq",
+      "Məbləğə uyğun razılaşdırma və səlahiyyətlərin ayrılması.",
+      "04",
+      "Üçtərəfli üzləşdirmə",
+      "Sifariş, faktiki qəbul və qaimə birlikdə yoxlanılır.",
+      "05",
+      "Avtomatik xatırlatma",
+      "Cavab verməmiş dəvətli təchizatçılar üçün izləmə zəncirləri.",
+      "06",
+      "Lotlar üzrə seçim",
+      "Bir tenderdə müxtəlif lotları fərqli təchizatçılara vermək imkanı."
+    ],
+    "images": [],
+    "notes": "Bu altı funksiya təqdimatın əsas məhsul fərqləndiriciləridir. Ətraflı nümunələr növbəti slaydlardadır.",
+    "sources": [
+      "apps/api/src/modules/sourcing/auction.service.ts",
+      "apps/api/src/common/crypto/sealed.service.ts",
+      "apps/api/src/modules/requests/requests.module.ts",
+      "apps/api/src/modules/invoices/invoices.module.ts",
+      "apps/api/src/modules/followups/followups.module.ts"
+    ]
+  },
+  {
+    "slide": 4,
+    "title": "Bir proses. İki tərəf. Aydın məsuliyyət.",
+    "text": [
+      "Leadprocure",
+      "TAM SATINALMA DÖVRÜ",
+      "Bir proses. İki tərəf. Aydın məsuliyyət.",
+      "Alıcı və təchizatçı eyni əməliyyatın özlərinə aid hissəsində işləyir.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "04",
+      "01",
+      "Tələbat",
+      "Mövqelər və smeta",
+      "→",
+      "02",
+      "Təsdiq",
+      "Rol və məbləğ qaydası",
+      "→",
+      "03",
+      "Rəqabət",
+      "Tender və ya auksion",
+      "→",
+      "04",
+      "Seçim",
+      "Qiymətləndirmə və qalib",
+      "05",
+      "Müqavilə",
+      "Razılaşdırılmış şərtlər",
+      "→",
+      "06",
+      "Sifariş",
+      "PO və çatdırılma",
+      "→",
+      "07",
+      "Qəbul",
+      "Faktiki miqdar",
+      "→",
+      "08",
+      "Qaimə",
+      "Üzləşdirmə və uçot",
+      "Alıcı: tələbat, təsdiq, seçim və qəbul",
+      "Təchizatçı: təklif, çatdırılma və qaimə"
+    ],
+    "images": [],
+    "notes": "PO — satınalma sifarişidir. Ödəniş mərhələsi sistemdə uçot/status qeydini bildirir, bank köçürməsini deyil.",
+    "sources": [
+      "docs/DEMO.md:23–34",
+      "apps/web/src/main.tsx:46–78"
+    ]
+  },
+  {
+    "slide": 5,
+    "title": "Görüləcək işlər bir idarə panelində",
+    "text": [
+      "Leadprocure",
+      "RƏHBƏRLİK VƏ SATINALMA KOMANDASI",
+      "Görüləcək işlər bir idarə panelində",
+      "Göstəricilər, qərar gözləyən tapşırıqlar və əməliyyat bildirişləri.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "05",
+      "AZ demo interfeysi",
+      "01",
+      "Prioritetlər görünür",
+      "Təsdiq, qalib seçimi və qəbul kimi növbəti addımlar.",
+      "02",
+      "Vahid baxış",
+      "Aktiv tenderlər, sifarişlər və bildirişlər eyni ekranda."
+    ],
+    "images": [
+      {
+        "file": "buyer-dashboard.az.png",
+        "crop": null,
+        "rect": [
+          81.33333333333337,
+          205.0,
+          693.3333333333333,
+          390.0
+        ]
+      }
+    ],
+    "notes": "Ekranda demo satınalma həcmi, qənaət, aktiv tenderlər, təsdiq gözləyən tələb və büdcə xəbərdarlığı göstərilir.",
+    "sources": [
+      "apps/web/src/guides.ts:15–43",
+      "apps/api/src/modules/dashboard/dashboard.module.ts:15–47"
+    ]
+  },
+  {
+    "slide": 6,
+    "title": "Satınalma dəqiq tələbatdan başlayır",
+    "text": [
+      "Leadprocure",
+      "TƏLƏBATIN İDARƏ EDİLMƏSİ",
+      "Satınalma dəqiq tələbatdan başlayır",
+      "Kateqoriya, miqdar və qiymət smetası sonrakı qərarların əsasını yaradır.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "06",
+      "AZ demo interfeysi",
+      "NÜMUNƏ / DATA MƏRKƏZİ",
+      "4 server\n2 kommutator",
+      "57 000 AZN",
+      "İlkin smeta, ƏDV-siz. Məbləğlər mövqelər əsasında serverdə hesablanır."
+    ],
+    "images": [
+      {
+        "file": "buyer-requests.az.png",
+        "crop": null,
+        "rect": [
+          62.83333333333337,
+          205.0,
+          693.3333333333333,
+          390.0
+        ]
+      }
+    ],
+    "notes": "İnterfeysdə daxili satınalma tələbi “Sifarişlər”, purchase order isə “Sifarişlər (PO)” kimi göstərilir. Təqdimatda qarışıqlığı azaltmaq üçün “tələbat” və “PO” ayrılır.",
+    "sources": [
+      "apps/api/src/modules/requests/requests.module.ts:170–227",
+      "scripts/demo-fill.mjs:197–201"
+    ]
+  },
+  {
+    "slide": 7,
+    "title": "Təsdiq prosesi aydın qaydalara əsaslanır",
+    "text": [
+      "Leadprocure",
+      "DAXİLİ NƏZARƏT",
+      "Təsdiq prosesi aydın qaydalara əsaslanır",
+      "Məbləğə görə təsdiq zənciri və vəzifələrin ayrılması.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "07",
+      "AZ demo interfeysi · ekran fraqmenti",
+      "Müəllif ≠ təsdiqləyən",
+      "Məbləğə görə marşrut",
+      "Hər addımın tarixçəsi"
+    ],
+    "images": [
+      {
+        "file": "buyer-settings-94s.png",
+        "crop": [
+          264,
+          320,
+          1248,
+          680
+        ],
+        "rect": [
+          166.0,
+          208.0,
+          820.0,
+          300.0
+        ]
+      }
+    ],
+    "notes": "Müəllif öz tələbini təsdiqləyə bilməz; bir şəxs eyni tələbin iki təsdiq addımını bağlaya bilməz. Şəkildəki hədlər demo konfiqurasiyasıdır, universal hüquqi limit deyil.",
+    "sources": [
+      "apps/api/src/modules/requests/requests.module.ts:177–201",
+      "scripts/produce-guides.mjs:462–509"
+    ]
+  },
+  {
+    "slide": 8,
+    "title": "Hər ehtiyac üçün uyğun prosedur",
+    "text": [
+      "Leadprocure",
+      "SATINALMA ÜSULLARI",
+      "Hər ehtiyac üçün uyğun prosedur",
+      "Metod siyasəti kateqoriya və məbləğ hədlərinə əsaslanır.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "08",
+      "RFQ",
+      "Qiymət sorğusu",
+      "Müəyyən edilmiş tələblər üzrə məxfi qiymət təklifləri.",
+      "RFP",
+      "Texniki təklif",
+      "Qiymətlə yanaşı məzmunlu texniki təklifin qiymətləndirilməsi.",
+      "RFI",
+      "Məlumat sorğusu",
+      "Bazar və həll variantları haqqında qiymətsiz məlumat toplama.",
+      "AUKSİON",
+      "Azalan qiymət",
+      "Təchizatçıların qaydalı şəkildə daha aşağı qiymət verməsi.",
+      "BİRBAŞA",
+      "Sadə satınalma",
+      "Siyasətin icazə verdiyi məbləğlər üçün birbaşa PO.",
+      "KATALOQ",
+      "Təkrar sifariş",
+      "Razılaşdırılmış qiymətlər və minimum sifariş miqdarı."
+    ],
+    "images": [],
+    "notes": "RFI məlumat toplamaq üçündür; qiymət üzrə qalib seçimi və müqavilə mükafatı üçün nəzərdə tutulmur. Birbaşa sifarişin uyğunluğu təşkilat siyasətindən asılıdır.",
+    "sources": [
+      "apps/web/src/guides.ts:66–74",
+      "apps/api/src/modules/sourcing/sourcing.service.ts:349–355"
+    ]
+  },
+  {
+    "slide": 9,
+    "title": "Qiymətlər açılışa qədər qorunur",
+    "text": [
+      "Leadprocure",
+      "MƏXFİ TENDER",
+      "Qiymətlər açılışa qədər qorunur",
+      "Alıcı iştirak faktını görür; təchizatçı öz təklifini idarə edir.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "09",
+      "AZ demo interfeysi",
+      "TƏCHİZATÇI KABİNETİ",
+      "01",
+      "Şifrələnmiş məbləğ",
+      "Açılışdan əvvəl alıcı üçün qiymət məlumatı bağlıdır.",
+      "02",
+      "Bərabər məlumat",
+      "Sual-cavab bölməsində cavablar iştirakçılar üçün ortaqdır."
+    ],
+    "images": [
+      {
+        "file": "sup-market-43s.png",
+        "crop": null,
+        "rect": [
+          76.72222222222223,
+          211.0,
+          675.5555555555555,
+          380.0
+        ]
+      }
+    ],
+    "notes": "Bu ekran TƏCHİZATÇI kabinetidir: öz qiymətini görməsi normaldır. Alıcı məbləği açılışa qədər görə bilmir. Təklifin məbləği şifrələnir; ümumi sual-cavab bütün uyğun iştirakçılar üçün eyni məlumatı təmin edir.",
+    "sources": [
+      "apps/api/src/common/crypto/sealed.service.ts:5–33",
+      "apps/api/src/modules/sourcing/sourcing.service.ts:327–415",
+      "scripts/produce-guides.mjs:520–545"
+    ]
+  },
+  {
+    "slide": 10,
+    "title": "57 000 AZN smetadan 51 500 AZN təklifə",
+    "text": [
+      "Leadprocure",
+      "NÜMAYİŞ NÜMUNƏSİ",
+      "57 000 AZN smetadan 51 500 AZN təklifə",
+      "Data mərkəzi üçün 4 server və 2 kommutatorun satınalması.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "10",
+      "Mövqe",
+      "İlkin smeta",
+      "Supply One",
+      "Baku Metal",
+      "4 server",
+      "48 000 AZN",
+      "43 200 AZN",
+      "46 000 AZN",
+      "2 kommutator",
+      "9 000 AZN",
+      "8 300 AZN",
+      "8 600 AZN",
+      "Cəmi / ƏDV-siz",
+      "57 000 AZN",
+      "51 500 AZN",
+      "54 600 AZN",
+      "Çatdırılma",
+      "—",
+      "21 gün",
+      "14 gün",
+      "5 500 AZN",
+      "9,65%",
+      "Smeta ilə qalib təklif arasındakı fərq.\nSeçim qiymət və çatdırılma meyarları ilə əsaslandırılır.",
+      "Nümayiş məlumatlarıdır; real müştəri nəticəsi deyil."
+    ],
+    "images": [],
+    "notes": "Rəqəmlər scripts/demo-fill.mjs-dəki nümayiş ssenarisindəndir. Bu, real müştəri nəticəsi və ya qənaət zəmanəti deyil. Qiymətlər ƏDV-sizdir. 5 500 / 57 000 = 9,6491%, iki onluğa yuvarlaq 9,65%.",
+    "sources": [
+      "scripts/demo-fill.mjs:197–246"
+    ]
+  },
+  {
+    "slide": 11,
+    "title": "Qalib seçiminin məntiqi görünür",
+    "text": [
+      "Leadprocure",
+      "QİYMƏTLƏNDİRMƏ VƏ QƏRAR",
+      "Qalib seçiminin məntiqi görünür",
+      "Əvvəlcədən müəyyən edilən meyarlar, çəkili bal və lot üzrə qərar.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "11",
+      "AZ demo interfeysi · ekran fraqmenti",
+      "01",
+      "Meyarlar əvvəlcədən",
+      "Tender yaradılarkən meyarlar sabitlənir.",
+      "02",
+      "İstisna əsaslandırılır",
+      "Reytinqdən fərqli seçim üçün səbəb qeydə alınır.",
+      "03",
+      "İzah edilən tövsiyə",
+      "Qiymət, müddət və tarixçə qərarı dəstəkləyir."
+    ],
+    "images": [
+      {
+        "file": "buyer-events-28s.png",
+        "crop": [
+          265,
+          245,
+          1247,
+          539
+        ],
+        "rect": [
+          113.391156462585,
+          205.0,
+          925.21768707483,
+          277.0
+        ]
+      }
+    ],
+    "notes": "Demoda meyarlar qiymət 70%, çatdırılma 30%-dir; Supply One 95×0,7+75×0,3=89; Baku Metal 82×0,7+90×0,3=84,4. AI tövsiyəsi ayrıca dəstək funksiyasıdır, bu cədvəldəki rəsmi qiymətləndirmənin əvəzi deyil. Yekun qərar alıcıdadır.",
+    "sources": [
+      "apps/api/src/modules/sourcing/sourcing.service.ts:485–618",
+      "scripts/demo-fill.mjs:218–230",
+      "services/ai-orchestrator/main.py:68–114"
+    ]
+  },
+  {
+    "slide": 12,
+    "title": "Rəqabət qiyməti addım-addım aşağı salır",
+    "text": [
+      "Leadprocure",
+      "ƏSAS İMKAN / REVERS-AUKSİON",
+      "Rəqabət qiyməti addım-addım aşağı salır",
+      "Ən yaxşı təklif, növbəti qiymət həddi və son tarix bir paneldə.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "12",
+      "AZ demo interfeysi · ekran fraqmenti",
+      "01",
+      "Minimum addım",
+      "Yeni təklif cari ən yaxşı qiymətdən müəyyən addım aşağı olmalıdır.",
+      "02",
+      "Vaxtın uzadılması",
+      "Son saniyə təklifləri üçün avtomatik uzatma qaydası.",
+      "03",
+      "Rəqabətin görünməsi",
+      "Təchizatçı cari ən yaxşı qiyməti izləyir."
+    ],
+    "images": [
+      {
+        "file": "sup-auction-14s.png",
+        "crop": [
+          263,
+          250,
+          1247,
+          480
+        ],
+        "rect": [
+          46.0,
+          211.1178861788618,
+          1060.0,
+          247.7642276422764
+        ]
+      }
+    ],
+    "notes": "Auksion nümunəsi dizel yanacağı üçündür. Şəkildə start 32 000, ən yaxşı qiymət 31 200, növbəti maksimum 30 880 AZN-dir. Son saniyədə təklif veriləndə qaydaya əsasən vaxt uzadılır. Nəticə nümunədir.",
+    "sources": [
+      "apps/api/src/modules/sourcing/auction.service.ts:98–111,164–200",
+      "scripts/produce-guides.mjs:573–584"
+    ]
+  },
+  {
+    "slide": 13,
+    "title": "Dəvətdən cavaba qədər izləmə avtomatlaşdırılır",
+    "text": [
+      "Leadprocure",
+      "TƏCHİZATÇI İŞTİRAKI",
+      "Dəvətdən cavaba qədər izləmə avtomatlaşdırılır",
+      "Təklif verməmiş təchizatçılara planlı xatırlatmalar.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "13",
+      "AZ demo interfeysi · ekran fraqmenti",
+      "Dəvət",
+      "→",
+      "Planlı xatırlatma",
+      "→",
+      "Təklif daxil olur",
+      "→",
+      "Zəncir dayanır"
+    ],
+    "images": [
+      {
+        "file": "buyer-events-84s.png",
+        "crop": [
+          264,
+          315,
+          1249,
+          614
+        ],
+        "rect": [
+          98.32441471571906,
+          211.0,
+          955.3511705685619,
+          290.0
+        ]
+      }
+    ],
+    "notes": "SMTP və WhatsApp/Meta kanalları ayrıca sazlanır. Təklif verildikdə xatırlatma zənciri dayanır. Burada canlı mesaj göndərilməsi yoxlanılmayıb; göstərilən demo planıdır.",
+    "sources": [
+      "apps/api/src/modules/followups/followups.module.ts:186–249",
+      "apps/api/src/modules/channels/channels.module.ts:30–79",
+      "apps/api/src/modules/sourcing/sourcing.service.ts:413–415"
+    ]
+  },
+  {
+    "slide": 14,
+    "title": "Qalib təklif icra edilən sifarişə çevrilir",
+    "text": [
+      "Leadprocure",
+      "MÜQAVİLƏ VƏ İCRA",
+      "Qalib təklif icra edilən sifarişə çevrilir",
+      "Müqavilə, qiymət şərtləri, PO və çatdırılma mərhələləri əlaqəlidir.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "14",
+      "AZ demo interfeysi · ekran fraqmenti",
+      "Müqavilə",
+      "→",
+      "PO",
+      "→",
+      "Çatdırılma",
+      "→",
+      "Qəbul"
+    ],
+    "images": [
+      {
+        "file": "buyer-contracts.az.png",
+        "crop": [
+          262,
+          0,
+          1252,
+          480
+        ],
+        "rect": [
+          257.34375,
+          206.0,
+          637.3125,
+          309.0
+        ]
+      }
+    ],
+    "notes": "Müqavilə qalib tender əsasında yaranır. PO-nun təsdiq, qablaşdırma, göndəriş, çatdırılma və qəbul mərhələləri var. Logistika hadisələrini təchizatçı daxil edir; GPS və ya daşıyıcı inteqrasiyası iddia edilmir.",
+    "sources": [
+      "apps/web/src/guides.ts:110–129",
+      "apps/api/src/modules/logistics/logistics.module.ts"
+    ]
+  },
+  {
+    "slide": 15,
+    "title": "Sifarişdə dəyişiklik qarşı tərəfin razılığı ilə",
+    "text": [
+      "Leadprocure",
+      "DƏYİŞİKLİK NƏZARƏTİ",
+      "Sifarişdə dəyişiklik qarşı tərəfin razılığı ilə",
+      "Köhnə və yeni şərtlər görünür; tarixçə saxlanılır.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "15",
+      "AZ demo interfeysi · ekran fraqmenti",
+      "40 → 60 bağlama",
+      "280 → 420 AZN",
+      "Qəbul / rədd"
+    ],
+    "images": [
+      {
+        "file": "sup-orders-18s.png",
+        "crop": [
+          264,
+          144,
+          1245,
+          440
+        ],
+        "rect": [
+          112.01351351351349,
+          210.0,
+          927.972972972973,
+          280.0
+        ]
+      }
+    ],
+    "notes": "İkinci nümayiş nümunəsi: A4 kağız 40×7=280 AZN-dən 60×7=420 AZN-ə dəyişir. Təchizatçı qəbul və ya rədd edir. Məbləğ yalnız qəbuldan sonra yenilənir. Sifariş dəyişiklikləri üçün status və qəbul şərtləri mövcuddur.",
+    "sources": [
+      "scripts/demo-fill.mjs:307–315",
+      "scripts/produce-guides.mjs:547–558"
+    ]
+  },
+  {
+    "slide": 16,
+    "title": "Sifariş, qəbul və qaimə üçtərəfli yoxlanılır",
+    "text": [
+      "Leadprocure",
+      "MALİYYƏ NƏZARƏTİ",
+      "Sifariş, qəbul və qaimə üçtərəfli yoxlanılır",
+      "Fərqlər görünür; təsdiq qərarı faktiki əməliyyata söykənir.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "16",
+      "Sifariş (PO)",
+      "Nə və hansı qiymətə alınıb?",
+      "Qəbul",
+      "Faktiki nə qədər qəbul edilib?",
+      "Qaimə",
+      "Qaimədə nə göstərilib?",
+      "AZ demo interfeysi · ekran fraqmenti",
+      "51 500 + 9 270 = 60 770 AZN",
+      "Məbləğ + 18% ƏDV = qaimənin yekunu · demo",
+      "Ödəniş statusu\nsistemdə qeydə alınır."
+    ],
+    "images": [
+      {
+        "file": "buyer-invoices.az.png",
+        "crop": [
+          263,
+          0,
+          1247,
+          210
+        ],
+        "rect": [
+          248.0,
+          337.0,
+          656.0,
+          140.0
+        ]
+      }
+    ],
+    "notes": "Sistem sifariş, qəbul edilmiş miqdar və qaimə sətirlərini üzləşdirir. Uyğunsuzluq DISPUTED statusu yaradır. Qəbul sonradan daxil edilərsə, yoxlama yenilənir. PAID yalnız ödənişin uçotudur, bank əməliyyatı deyil. Demo ƏDV hesabı 51 500×18%=9 270; cəmi 60 770.",
+    "sources": [
+      "apps/api/src/modules/invoices/invoices.module.ts:32–84,214–220,292–295",
+      "apps/api/src/modules/contracts/contracts.module.ts:320–327",
+      "scripts/demo-fill.mjs:237–246"
+    ]
+  },
+  {
+    "slide": 17,
+    "title": "Razılaşdırılmış qiymətlərlə təkrar sifariş verin",
+    "text": [
+      "Leadprocure",
+      "TƏKRAR SATINALMA",
+      "Razılaşdırılmış qiymətlərlə təkrar sifariş verin",
+      "Kataloqlar standart mallar üzrə təkrar sifarişi sadələşdirir.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "17",
+      "AZ demo interfeysi · ekran fraqmenti",
+      "01",
+      "Razılaşdırılmış qiymət",
+      "Eyni malı hər dəfə yenidən qiymətləndirmək ehtiyacı azalır.",
+      "02",
+      "Minimum miqdar",
+      "Kataloqdakı sifariş hədləri avtomatik yoxlanılır.",
+      "03",
+      "Birbaşa PO",
+      "Uyğun kataloq mövqeləri üzrə satınalma sifarişi yaradılır."
+    ],
+    "images": [
+      {
+        "file": "buyer-catalogs.az.png",
+        "crop": [
+          263,
+          0,
+          1247,
+          220
+        ],
+        "rect": [
+          171.2181818181818,
+          218.0,
+          809.5636363636364,
+          181.0
+        ]
+      }
+    ],
+    "notes": "Aktiv kataloq müqavilədən yaradıla və ya razılaşdırılmış qiymətləri saxlaya bilər. Sifarişdə qiymət və minimum miqdar yoxlanılır. Bunlar təşkilatın münasibət və lisenziya qaydalarına tabedir.",
+    "sources": [
+      "apps/web/src/guides.ts:143–153",
+      "apps/api/src/modules/catalogs/catalogs.module.ts"
+    ]
+  },
+  {
+    "slide": 18,
+    "title": "Plan, öhdəlik və faktiki xərc ayrı görünür",
+    "text": [
+      "Leadprocure",
+      "BÜDCƏ VƏ ANALİTİKA",
+      "Plan, öhdəlik və faktiki xərc ayrı görünür",
+      "Maliyyə nəzarəti və idarəetmə hesabatı eyni məlumat zəncirinə əsaslanır.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "18",
+      "Büdcə və öhdəlik",
+      "Faktiki xərc və qənaət",
+      "AZ demo interfeysi · ekran fraqmenti",
+      "AZ demo interfeysi · ekran fraqmenti",
+      "Limit aşımı barədə xəbərdarlıq.\nYekun qərar səlahiyyətli şəxsdədir."
+    ],
+    "images": [
+      {
+        "file": "buyer-budgets.az.png",
+        "crop": [
+          264,
+          24,
+          1248,
+          470
+        ],
+        "rect": [
+          46.0,
+          252.3739837398374,
+          508.0,
+          230.2520325203252
+        ]
+      },
+      {
+        "file": "buyer-analytics.az.png",
+        "crop": [
+          263,
+          30,
+          1248,
+          644
+        ],
+        "rect": [
+          617.7817589576547,
+          250.0,
+          468.43648208469057,
+          292.0
+        ]
+      }
+    ],
+    "notes": "Büdcə istifadəsi təsdiqlənmiş tələblərin öhdəliyi əsasında hesablanır, analitikada xərc isə ACCEPTED PO-lardır. Aşım xəbərdarlığı avtomatik bloklama deyil. Demo ekranlarındakı qənaət real müştəri nəticəsi sayılmır.",
+    "sources": [
+      "apps/api/src/modules/budgets/budgets.module.ts:30–63,114–137",
+      "apps/api/src/modules/dashboard/dashboard.module.ts:86–147"
+    ]
+  },
+  {
+    "slide": 19,
+    "title": "Təchizatçı bazasını sənəd və nəticə ilə qiymətləndirin",
+    "text": [
+      "Leadprocure",
+      "TƏCHİZATÇI İDARƏÇİLİYİ",
+      "Təchizatçı bazasını sənəd və nəticə ilə qiymətləndirin",
+      "Reyestr, sənəd yoxlaması və icra göstəriciləri bir-birini tamamlayır.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "19",
+      "AZ demo interfeysi · ekran fraqmenti",
+      "01",
+      "Reyestr",
+      "Dəvət, təsdiq və bloklama.",
+      "02",
+      "Sənəd yoxlaması",
+      "VÖEN, lisenziya və tələb edilən sənədlər.",
+      "03",
+      "Təchizatçı reytinqi",
+      "Çatdırılma, keyfiyyət və ünsiyyət."
+    ],
+    "images": [
+      {
+        "file": "buyer-suppliers.az.png",
+        "crop": [
+          263,
+          0,
+          1249,
+          409
+        ],
+        "rect": [
+          232.46699266503663,
+          210.0,
+          687.0660146699267,
+          285.0
+        ]
+      }
+    ],
+    "notes": "KYC burada sənədlərin toplanması və alıcının qərarıdır; dövlət reyestrinə avtomatik sorğu deyil. Reytinq vaxtında çatdırılma, keyfiyyət və kommunikasiya qiymətlərini toplayır.",
+    "sources": [
+      "apps/web/src/guides.ts:207–232",
+      "apps/api/src/modules/verification/verification.module.ts"
+    ]
+  },
+  {
+    "slide": 20,
+    "title": "Korporativ tələblərə uyğun iş mühiti",
+    "text": [
+      "Leadprocure",
+      "ETİBAR VƏ UYĞUNLAŞDIRMA",
+      "Korporativ tələblərə uyğun iş mühiti",
+      "Məlumat nəzarəti, lokal iş qaydaları və müxtəlif yerləşdirmə variantları.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "20",
+      "MƏLUMAT",
+      "Ayrılmış giriş",
+      "Təşkilatlar üzrə məlumat sərhədləri, rol əsaslı səlahiyyət və audit tarixçəsi.",
+      "LOKAL İŞ MÜHİTİ",
+      "AZ · RU · EN",
+      "Azərbaycan dili, AZN, ƏDV və VÖEN; bölmələr üzrə video bələdçilər.",
+      "YERLƏŞDİRMƏ",
+      "Bulud və on-premise",
+      "Ortaq bulud modeli və müəssisənin öz infrastrukturunda yerləşdirmə seçimi.",
+      "Audit üçün izlənən qərarlar. Komanda üçün aydın rollar. Təchizatçı üçün vahid portal."
+    ],
+    "images": [],
+    "notes": "RLS/ACL, AES-256-GCM və append-only audit kod səviyyəsində nəzərdə tutulmuş nəzarətlərdir. Sertifikasiya, penetrasiya testinin yeni nəticəsi və ya canlı SLA iddia edilmir. Yerləşdirmə və funksiyalar lisenziya və texniki konfiqurasiyadan asılıdır.",
+    "sources": [
+      "README.md:3–33",
+      "infra/DEPLOY.md:1–63",
+      "apps/api/src/common/crypto/sealed.service.ts:5–33",
+      "apps/api/src/common/audit/audit.service.ts:6–43"
+    ]
+  },
+  {
+    "slide": 21,
+    "title": "Məlumat mübadiləsi və qoşulma imkanları",
+    "text": [
+      "Leadprocure",
+      "MƏLUMAT MÜBADİLƏSİ",
+      "Məlumat mübadiləsi və qoşulma imkanları",
+      "Hazır ixrac imkanları və ayrıca qurulan bağlantılar.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "21",
+      "OCDS",
+      "Tender və qalib məlumatlarının strukturlaşdırılmış ixracı.",
+      "UBL / qaimə",
+      "Elektron qaimə faylı; Peppol ötürülməsi üçün ayrıca operator lazımdır.",
+      "1C / CSV",
+      "Qaimələrin 1C-yə uyğunlaşdırıla bilən CSV faylı ilə ixracı.",
+      "E-poçt / WhatsApp",
+      "Müştərinin kanalları və təsdiqlənmiş şablonları ilə konfiqurasiya olunur.",
+      "ASAN İmza",
+      "Hazırda aktiv deyil; operator bağlantısı ayrıca qurulmalıdır."
+    ],
+    "images": [],
+    "notes": "OCDS ixracı tender və qalib məlumatları üçündür. UBL faylı Peppol şəbəkəsi vasitəsilə öz-özünə göndərilmir; Access Point tələb olunur. 1C üçün CSV var, iki tərəfli sinxronizasiya deyil. ASAN İmza operator inteqrasiyası tələb edir; hazırda development provider işləyir.",
+    "sources": [
+      "apps/api/src/modules/sourcing/sourcing.service.ts:674–712",
+      "apps/api/src/modules/invoices/invoices.module.ts:119–148",
+      "apps/api/src/modules/channels/channels.module.ts:30–79",
+      "apps/api/src/common/signature/signature.provider.ts:5–35"
+    ]
+  },
+  {
+    "slide": 22,
+    "title": "Bir pilot satınalma ilə dəyəri ölçün",
+    "text": [
+      "Leadprocure",
+      "NÖVBƏTİ ADDIM",
+      "Bir pilot satınalma ilə dəyəri ölçün",
+      "Real ehtiyac, seçilmiş təchizatçılar və əvvəlcədən razılaşdırılmış uğur meyarları.",
+      "KORPORATİV SATINALMA  /  MƏHSUL TƏQDİMATI",
+      "22",
+      "01",
+      "Çərçivəni seçin",
+      "Bir kateqoriya, bir satınalma və məsul komanda.",
+      "02",
+      "Qaydaları qurun",
+      "Rollar, təsdiq hədləri, qiymətləndirmə və təchizatçılar.",
+      "03",
+      "Dövrü tamamlayın",
+      "Tələbdən təklifə, sifarişdən qəbul və qaiməyə.",
+      "04",
+      "Nəticəni qiymətləndirin",
+      "Dövr müddəti, iştirak, smeta fərqi və uyğunsuzluqlar.",
+      "Növbəti görüş: şirkətinizin bir satınalma ssenarisini birlikdə xəritələndirək."
+    ],
+    "images": [],
+    "notes": "Bu, təklif olunan pilot planıdır; müqavilə öhdəliyi, qiymət və ya müddət zəmanəti deyil. Qiymətləndirmə meyarları müştəri ilə əvvəlcədən razılaşdırılmalıdır.",
+    "sources": [
+      "Təklif olunan müştəri pilot planı — müəllif tövsiyəsi"
+    ]
+  }
+]
