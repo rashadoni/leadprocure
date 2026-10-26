@@ -1,0 +1,35 @@
+{
+  "document": "Leadprocure_Data_Sheet_AZ.pdf",
+  "pageCount": 2,
+  "requiredPageCount": 2,
+  "pageSize": "A4 portrait",
+  "pageSizesPt": [
+    [
+      595.28,
+      841.89
+    ],
+    [
+      595.28,
+      841.89
+    ]
+  ],
+  "displayFont": "Barlow Condensed",
+  "bodyFont": "IBM Plex Sans",
+  "minimumBodyFontPt": 10.25,
+  "minimumConditionFontPt": 9.0,
+  "minimumFooterFontPt": 8.5,
+  "capabilities": 10,
+  "layoutIssues": [],
+  "missingText": [],
+  "replacementCharacterPresent": false,
+  "sourceCopyPreserved": true,
+  "page1GridTopPt": 272.0,
+  "page1CapabilityRowHeightPt": 104.2,
+  "page2ConditionsBottomPt": 701.0,
+  "page2PilotBottomPt": 792,
+  "visualReview": "PASS: both final A4 pages inspected; no clipping or overlap; page 2 logo top margin is 20pt; capability dividers removed to preserve paragraph breathing room.",
+  "docx": "NOT RUN: python-docx is unavailable; no dependency installation requested. Editable Markdown source supplied.",
+  "pdfBytes": 67123,
+  "glyphBoundsIssues": [],
+  "a4FontGlyphsReviewed": "Azərbaycan letters visibly intact; content extraction has no replacement characters."
+}

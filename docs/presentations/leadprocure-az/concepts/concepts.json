@@ -1,8 +1,8 @@
 {
-  "status": "concepts_for_user_selection",
+  "status": "user_selected_C",
   "created": "2026-10-26",
   "language": "az",
-  "full_deck": "deferred_until_user_selects_direction",
+  "full_deck": "completed_in_v2",
   "source": "Canva generation with manual Azerbaijani copy corrections in draft editing transactions",
   "variants": [
     {
@@ -58,12 +58,13 @@
       },
       "draft_edit_url": "https://www.canva.com/d/EGWwi08dizvFwJy",
       "transaction_id": "6969840614159013245",
-      "transaction_status": "open_uncommitted_awaiting_user_design_selection",
+      "transaction_status": "committed_after_user_selected_C",
       "content_pages": [
         4,
         5,
         6
       ]
     }
-  ]
+  ],
+  "selected_variant": "C"
 }
