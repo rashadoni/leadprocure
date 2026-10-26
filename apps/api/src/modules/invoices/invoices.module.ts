@@ -183,10 +183,16 @@ export class InvoicesService {
       g.net+=Number(it.line_total_minor);g.tax+=Number(it.vat_minor);taxGroups.set(rate,g);
     }
     const taxSubtotals = [...taxGroups].map(([rate,g]) => `<cac:TaxSubtotal><cbc:TaxableAmount currencyID="${inv.currency}">${money(g.net)}</cbc:TaxableAmount><cbc:TaxAmount currencyID="${inv.currency}">${money(g.tax)}</cbc:TaxAmount><cac:TaxCategory><cbc:ID>${rate ? 'S' : 'Z'}</cbc:ID><cbc:Percent>${rate/100}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory></cac:TaxSubtotal>`).join('');
+    const unitCode = (uom: string) => {
+      const codes: Record<string,string> = {pcs:'C62','ədəd':'C62','əd':'C62','шт':'C62',kg:'KGM','кг':'KGM',g:'GRM',t:'TNE',l:'LTR',m:'MTR',m2:'MTK',m3:'MTQ',h:'HUR',hour:'HUR',day:'DAY','gün':'DAY',box:'XBX',pack:'XPK',set:'SET','dəst':'SET'};
+      const code=codes[String(uom).toLowerCase()];
+      if (!code) throw new BadRequestException('Invoice unit requires an explicit UBL unit mapping');
+      return code;
+    };
     const lines = items.map((it: any, i: number) => `
   <cac:InvoiceLine>
     <cbc:ID>${i + 1}</cbc:ID>
-    <cbc:InvoicedQuantity unitCode="C62">${Number(it.qty)}</cbc:InvoicedQuantity>
+    <cbc:InvoicedQuantity unitCode="${unitCode(it.uom)}">${Number(it.qty)}</cbc:InvoicedQuantity>
     <cbc:LineExtensionAmount currencyID="${inv.currency}">${money(it.line_total_minor)}</cbc:LineExtensionAmount>
     <cac:Item><cbc:Name>${esc(it.name)}</cbc:Name>
       <cac:ClassifiedTaxCategory><cbc:ID>${Number(it.vat_rate_bp) ? 'S' : 'Z'}</cbc:ID><cbc:Percent>${Number(it.vat_rate_bp)/100}</cbc:Percent>

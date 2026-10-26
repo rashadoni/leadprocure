@@ -6,7 +6,7 @@ Uses audited local copy, licensed bundled fonts, and one generated cover artwork
 No application build, production access or screenshots.
 """
 from pathlib import Path
-import json, math, hashlib
+import json, math, hashlib, os
 from PIL import Image, ImageDraw, ImageFont
 from pptx import Presentation
 from pptx.util import Pt
@@ -21,7 +21,9 @@ from reportlab.lib.colors import HexColor
 from reportlab.lib.utils import ImageReader
 import pymupdf
 
-ROOT = Path(__file__).resolve().parent
+RESOURCES = Path(__file__).resolve().parent
+ROOT = Path(os.environ.get('LEADPROCURE_MATERIAL_ROOT', str(RESOURCES)))
+VERSION = os.environ.get('LEADPROCURE_MATERIAL_VERSION', 'v2')
 OUT = ROOT / 'output'
 PREVIEW = OUT / 'preview'
 OUT.mkdir(exist_ok=True)
@@ -32,7 +34,7 @@ SILVER, MID, MUTED, LIGHT, HAIR = 'B5B5B5', '737373', '525252', 'D1D1D1', 'D6D6D
 FONT_FILES = {'Display': 'BarlowCondensed-Bold.ttf', 'DisplayRegular': 'BarlowCondensed-Regular.ttf',
               'Body': 'IBMPlexSans-Regular.ttf', 'BodyBold': 'IBMPlexSans-Bold.ttf'}
 for name, filename in FONT_FILES.items():
-    pdfmetrics.registerFont(TTFont(name, str(ROOT/'fonts'/filename)))
+    pdfmetrics.registerFont(TTFont(name, str(RESOURCES/'fonts'/filename)))
 
 CONTENT = json.loads((ROOT/'content-reviewed.json').read_text())['slides']
 
@@ -48,7 +50,7 @@ class Deck:
         self.prs.core_properties.title = 'Leadprocure — Korporativ təqdimat / Monograph'
         self.prs.core_properties.subject = 'Azərbaycan dilində korporativ müştəri təqdimatı'
         self.prs.core_properties.author = 'Leadprocure'
-        self.pdf = canvas.Canvas(str(OUT/'Leadprocure_Korporativ_Teqdimat_AZ_v2.pdf'), pagesize=(W,H))
+        self.pdf = canvas.Canvas(str(OUT/f'Leadprocure_Korporativ_Teqdimat_AZ_{VERSION}.pdf'), pagesize=(W,H))
         self.pdf.setTitle(self.prs.core_properties.title)
         self.pdf.setAuthor('Leadprocure')
         self.pages, self.issues = [], []
@@ -147,7 +149,7 @@ class Deck:
     def image(self,path,x,y,w,h):
         self.slide.shapes.add_picture(str(path),Pt(x),Pt(y),width=Pt(w),height=Pt(h))
         self.pdf.drawImage(str(path),x,H-y-h,width=w,height=h)
-        self.page['images'].append({'file':str(path.relative_to(ROOT)), 'bounds':[x,y,w,h]})
+        self.page['images'].append({'file':os.path.relpath(path, ROOT), 'bounds':[x,y,w,h]})
 
     def person(self,cx,y,scale=1,color=None):
         color=color or self.fg
@@ -180,7 +182,7 @@ class Deck:
 
     def save(self):
         self.pdf.save()
-        self.prs.save(OUT/'Leadprocure_Korporativ_Teqdimat_AZ_v2.pptx')
+        self.prs.save(OUT/f'Leadprocure_Korporativ_Teqdimat_AZ_{VERSION}.pptx')
         (OUT/'slide-manifest.json').write_text(json.dumps(self.pages,ensure_ascii=False,indent=2))
         (OUT/'qa-presentation.json').write_text(json.dumps({'slide_count':len(self.pages),'text_layout_issues':self.issues,
             'screenshots':0,'cover_illustrations':sum(len(p['images']) for p in self.pages),
@@ -189,14 +191,14 @@ class Deck:
         for p in self.pages:
             notes += [f"## {p['slide']:02d}. {p['title']}\n",p['speaker_notes']+'\n','Mənbələr: '+ '; '.join(p['sources'])+'\n']
         (OUT/'Meruzeci_Qeydleri_AZ.md').write_text('\n'.join(notes))
-        doc=pymupdf.open(OUT/'Leadprocure_Korporativ_Teqdimat_AZ_v2.pdf')
+        doc=pymupdf.open(OUT/f'Leadprocure_Korporativ_Teqdimat_AZ_{VERSION}.pdf')
         for i,p in enumerate(doc):
             p.get_pixmap(matrix=pymupdf.Matrix(1,1),alpha=False).save(PREVIEW/f'slide-{i+1:02d}.png')
         # Small sequential renders and contact sheets, never full browser E2E.
         for start in (0,6,12):
             subset=list(range(start,min(start+6,len(doc))))
             board=Image.new('RGB',(1280,math.ceil(len(subset)/2)*392),'#E8E8E8')
-            d=ImageDraw.Draw(board); font=ImageFont.truetype(str(ROOT/'fonts'/'IBMPlexSans-Regular.ttf'),15)
+            d=ImageDraw.Draw(board); font=ImageFont.truetype(str(RESOURCES/'fonts'/'IBMPlexSans-Regular.ttf'),15)
             for j,i in enumerate(subset):
                 im=Image.open(PREVIEW/f'slide-{i+1:02d}.png').convert('RGB'); im.thumbnail((620,349))
                 x=10+(j%2)*640;y=10+(j//2)*392
@@ -211,7 +213,7 @@ d=Deck()
 
 # 01 — Preserve the selected cover's monumental type and sculptural network.
 d.begin(1,'Satınalmanı strateji üstünlüyə çevirin.',dark=True)
-d.image(ROOT/'assets'/'monograph-network.png',0,0,W,H)
+d.image(RESOURCES/'assets'/'monograph-network.png',0,0,W,H)
 d.text('Leadprocure',72,74,530,82,font='Display',leading=1)
 d.text('Satınalmanı\nstrateji üstünlüyə\nçevirin.',72,294,540,78,font='Display',leading=1.02,max_lines=3)
 d.text('Korporativ satınalma\nplatforması',72,591,500,25,LIGHT,leading=1.25)

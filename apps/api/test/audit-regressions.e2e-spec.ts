@@ -26,12 +26,12 @@ describe('datasheet audit: files, financial boundaries and concurrency', () => {
   });
   afterAll(async()=>{if(db){await db.end();}if(app)await app.close();});
   // Fixtures are confined to the disposable test DB. Keeping rows until DB disposal preserves audit history.
-  const po=async(qty=10,price=100,mode='EXCLUSIVE',vat=0)=>{
+  const po=async(qty=10,price=100,mode='EXCLUSIVE',vat=0,uom='pcs')=>{
     const user=(await db.query(`SELECT user_id FROM memberships WHERE org_id=$1 LIMIT 1`,[buyer.org.id])).rows[0].user_id;
     const p=(await db.query(`INSERT INTO purchase_orders(buyer_org_id,supplier_org_id,po_no,status,total_minor,currency,created_by,vat_mode)
       VALUES($1,$2,$3,'DELIVERED',$4,'AZN',$5,$6) RETURNING id`,[buyer.org.id,supplier.org.id,randomUUID(),qty*price,user,mode])).rows[0].id;
     const i=(await db.query(`INSERT INTO purchase_order_items(po_id,buyer_org_id,supplier_org_id,line_no,name,qty,uom,unit_price_minor,line_total_minor,vat_rate_bp)
-      VALUES($1,$2,$3,1,'Audit item',$4,'pcs',$5,$6,$7) RETURNING id`,[p,buyer.org.id,supplier.org.id,qty,price,qty*price,vat])).rows[0].id;
+      VALUES($1,$2,$3,1,'Audit item',$4,$8,$5,$6,$7) RETURNING id`,[p,buyer.org.id,supplier.org.id,qty,price,qty*price,vat,uom])).rows[0].id;
     return {p,i};
   };
   const event=async()=>{
@@ -54,6 +54,9 @@ describe('datasheet audit: files, financial boundaries and concurrency', () => {
     expect(await (await fetch(download.url)).text()).toBe(content.toString());
     const foreign=(await http().get(`/documents/${doc.id}/download`).set(...auth(other)).expect(200)).body;
     expect(foreign.url).toBeNull();
+    const forged=(await db.query(`INSERT INTO documents(owner_org_id,entity_type,storage_key,filename,mime,size_bytes,sha256,av_status,created_by)
+      SELECT $1,'audit',$2,'legacy.txt','text/plain',1,'legacy','SKIPPED',user_id FROM memberships WHERE org_id=$1 LIMIT 1 RETURNING id`,[buyer.org.id,`${other.org.id}/known-foreign-object`])).rows[0];
+    await http().get(`/documents/${forged.id}/download`).set(...auth(buyer)).expect(403);
   });
   it('rejects repeated invoice lines instead of silently matching 20 against 10',async()=>{
     const {p,i}=await po();await http().post(`/orders/${p}/receipts`).set(...auth(buyer)).send({items:[{poItemId:i,qty:10}]}).expect(201);
@@ -80,10 +83,10 @@ describe('datasheet audit: files, financial boundaries and concurrency', () => {
     if(process.env.AUDIT_EXPORT_DIR)writeFileSync(`${process.env.AUDIT_EXPORT_DIR}/inclusive.xml`,xml);
   });
   it('exports a zero VAT invoice without inventing 18 percent tax',async()=>{
-    const {p,i}=await po(1,10000,'EXCLUSIVE',0);await http().post(`/orders/${p}/receipts`).set(...auth(buyer)).send({items:[{poItemId:i,qty:1}]}).expect(201);
+    const {p,i}=await po(1,10000,'EXCLUSIVE',0,'kg');await http().post(`/orders/${p}/receipts`).set(...auth(buyer)).send({items:[{poItemId:i,qty:1}]}).expect(201);
     const inv=(await http().post(`/invoices/from-po/${p}`).set(...auth(supplier)).send({items:[{poItemId:i,qty:1,unitPriceMinor:10000}]}).expect(201)).body;
     const xml=(await http().get(`/invoices/${inv.id}/ubl`).set(...auth(buyer)).expect(200)).text;
-    expect(xml).toContain('<cbc:Percent>0</cbc:Percent>');expect(xml).not.toContain('<cbc:Percent>18</cbc:Percent>');
+    expect(xml).toContain('unitCode="KGM"');expect(xml).toContain('<cbc:Percent>0</cbc:Percent>');expect(xml).not.toContain('<cbc:Percent>18</cbc:Percent>');
     if(process.env.AUDIT_EXPORT_DIR)writeFileSync(`${process.env.AUDIT_EXPORT_DIR}/zero.xml`,xml);
   });
   it('handles zero and exclusive tax without floating point totals',()=>{

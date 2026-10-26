@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Body,
   Controller,
   Get,
@@ -98,6 +99,10 @@ export class DocumentsService {
       avStatus:this.cfg.clamavEnabled ? 'PENDING' : 'SKIPPED' };
   }
 
+  assertStorageOwner(storageKey: string, ownerOrgId: string) {
+    if (!storageKey.startsWith(`${ownerOrgId}/`)) throw new ForbiddenException('Document storage namespace does not match its owner');
+  }
+
   assertDownloadable(status: string) {
     if (status !== 'CLEAN' && !(status === 'SKIPPED' && !this.cfg.clamavEnabled))
       throw new BadRequestException('Document is awaiting a clean antivirus verdict');
@@ -138,8 +143,9 @@ export class DocumentsService {
   }
 
   async downloadUrl(id: string) {
-    const rows = await this.rc.manager.query(`SELECT storage_key, av_status FROM documents WHERE id=$1`, [id]);
+    const rows = await this.rc.manager.query(`SELECT storage_key, av_status, owner_org_id FROM documents WHERE id=$1`, [id]);
     if (!rows.length) return { url: null };
+    this.assertStorageOwner(rows[0].storage_key, rows[0].owner_org_id);
     this.assertDownloadable(rows[0].av_status);
     const url = await getSignedUrl(
       this.s3Public,
@@ -194,13 +200,15 @@ export class DocumentsService {
   }
 
   // Generic signed GET for any storage key (used by verification docs etc.).
-  async signedGetUrl(storageKey: string) {
+  async signedGetUrl(storageKey: string, ownerOrgId: string) {
+    this.assertStorageOwner(storageKey, ownerOrgId);
     return getSignedUrl(this.s3Public, new GetObjectCommand({ Bucket: this.bucket, Key: storageKey }), { expiresIn: 900 });
   }
 
   async bidDocDownloadUrl(id: string) {
-    const rows = await this.rc.manager.query(`SELECT storage_key, av_status FROM bid_documents WHERE id=$1`, [id]);
+    const rows = await this.rc.manager.query(`SELECT storage_key, av_status, supplier_org_id AS owner_org_id FROM bid_documents WHERE id=$1`, [id]);
     if (!rows.length) return { url: null };
+    this.assertStorageOwner(rows[0].storage_key, rows[0].owner_org_id);
     this.assertDownloadable(rows[0].av_status);
     const url = await getSignedUrl(
       this.s3Public,

@@ -579,6 +579,8 @@ export class SourcingService {
     // A reverse auction IS the evaluation — real-time price competition ranks the bids, so
     // it awards the auction's best bid without a separate weighted scoring step.
     const isAuction = evRow.type === 'AUCTION' || evRow.format === 'REVERSE';
+    if (!isAuction && (!Array.isArray(evRow.evaluation_criteria) || !evRow.evaluation_criteria.length))
+      throw new BadRequestException('Legacy event has no locked evaluation criteria');
     // Otherwise the award must follow a real evaluation, and the bid must be eligible for the lot.
     const evalRows = isAuction ? [] : await m.query(
       `SELECT id FROM evaluations WHERE event_id=$1 ORDER BY created_at DESC, id DESC LIMIT 1`, [eventId]);

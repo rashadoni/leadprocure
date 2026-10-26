@@ -89,10 +89,10 @@ export class VerificationService {
   }
 
   async docDownload(docId: string) {
-    const rows = await this.rc.manager.query(`SELECT storage_key, av_status FROM supplier_verification_documents WHERE id = $1`, [docId]);
+    const rows = await this.rc.manager.query(`SELECT storage_key, av_status, supplier_org_id FROM supplier_verification_documents WHERE id = $1`, [docId]);
     if (!rows.length) return { url: null };
     this.docs.assertDownloadable(rows[0].av_status);
-    return { url: await this.docs.signedGetUrl(rows[0].storage_key) };
+    return { url: await this.docs.signedGetUrl(rows[0].storage_key, rows[0].supplier_org_id) };
   }
 
   // Buyer decides the case; APPROVED promotes the supplier in the registry.

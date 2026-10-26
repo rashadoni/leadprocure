@@ -1,0 +1,8 @@
+{
+  "result": "PASS",
+  "database": "disposable upgrade fixture",
+  "invoice_migration_rls_counts": "1,34,47",
+  "no_context_runtime_invoice_count": 0,
+  "backup_sha256": "460ab002599aa10e4bd9635224eff988aa1cfecfb56f3ce72cdb84f30baaa94d",
+  "backup_bytes": 251310
+}

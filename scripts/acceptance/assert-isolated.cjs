@@ -3,7 +3,7 @@ module.exports = function assertIsolated(env = process.env) {
   assert.equal(env.LEADPROCURE_TEST_ISOLATED, '1', 'Refusing tests without explicit isolated environment');
   for (const key of ['DATABASE_URL', 'DATABASE_OWNER_URL']) {
     const u = new URL(env[key] || '');
-    assert(['localhost', '127.0.0.1', 'postgres'].includes(u.hostname), `${key}: test host required`);
+    assert(['localhost', '127.0.0.1', 'postgres', 'postgres-upgrade'].includes(u.hostname), `${key}: test host required`);
     assert.equal(u.pathname, '/leadprocure_audit_test', `${key}: disposable database required`);
   }
   assert.equal(env.NODE_ENV, 'test');

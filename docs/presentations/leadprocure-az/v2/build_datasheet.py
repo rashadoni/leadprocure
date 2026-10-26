@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import pymupdf as fitz
 from pptx import Presentation
@@ -17,7 +18,9 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen.canvas import Canvas
 
 
-ROOT = Path(__file__).resolve().parent
+RESOURCES = Path(__file__).resolve().parent
+ROOT = Path(os.environ.get('LEADPROCURE_MATERIAL_ROOT', str(RESOURCES)))
+VERSION = os.environ.get('LEADPROCURE_MATERIAL_VERSION', 'v2')
 DATA = json.loads((ROOT / "datasheet-content.json").read_text())
 OUT = ROOT / "output"
 PREVIEW = OUT / "preview"
@@ -49,7 +52,7 @@ for alias, filename in (
     ("Body", "IBMPlexSans-Regular.ttf"),
     ("BodyMedium", "IBMPlexSans-Medium.ttf"),
 ):
-    pdfmetrics.registerFont(TTFont(alias, str(ROOT / "fonts" / filename)))
+    pdfmetrics.registerFont(TTFont(alias, str(RESOURCES / "fonts" / filename)))
 
 c = Canvas(str(PDF_PATH), pagesize=A4, pageCompression=1)
 c.setTitle("Leadprocure — Məhsul məlumat vərəqi")
