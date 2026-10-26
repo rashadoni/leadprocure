@@ -5,6 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import pymupdf as fitz
+from pptx import Presentation
+from pptx.util import Pt
+from pptx.dml.color import RGBColor
+from pptx.enum.shapes import MSO_SHAPE, MSO_CONNECTOR
+from pptx.oxml.xmlchemy import OxmlElement
 from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase import pdfmetrics
@@ -22,6 +27,11 @@ PREVIEW.mkdir(parents=True, exist_ok=True)
 PDF_PATH = OUT / "Leadprocure_Data_Sheet_AZ.pdf"
 MD_PATH = OUT / "Leadprocure_Data_Sheet_AZ.md"
 W, H = A4
+prs = Presentation()
+prs.slide_width, prs.slide_height = Pt(W), Pt(H)
+prs.core_properties.title = 'Leadprocure — Məhsul məlumat vərəqi'
+prs.core_properties.author = 'Leadprocure'
+slide = None
 INK = HexColor("#161616")
 MID = HexColor("#555555")
 SILVER = HexColor("#B8B8B8")
@@ -91,6 +101,19 @@ def text(value: str, x: float, top: float, width: float, size: float = 10.25,
         if line_width > width + 0.1:
             ISSUES.append(f"Page {PAGE}: unwrapped word exceeds box: {line_value}")
         c.drawString(x, H - top - size - i * leading, line_value)
+        ascent = pdfmetrics.getAscent(font, size)
+        box = slide.shapes.add_textbox(Pt(x), Pt(top + size - ascent + i * leading), Pt(width + 1), Pt(size * 1.55))
+        tf = box.text_frame
+        tf.word_wrap = False
+        tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+        p = tf.paragraphs[0]
+        p.text = line_value
+        p.font.name = 'Barlow Condensed' if font.startswith('Display') else 'IBM Plex Sans'
+        p.font.bold = font.startswith('Display')
+        p.font.size = Pt(size)
+        p.font.color.rgb = RGBColor(*(round(v * 255) for v in (color.red, color.green, color.blue)))
+        p.space_before = p.space_after = Pt(0)
+        p.line_spacing = 1.0
     if record:
         BOXES.append({"page": PAGE, "text": value, "x": x, "top": top,
                       "width": width, "height": height, "font": font, "fontSize": size})
@@ -101,11 +124,20 @@ def rule(x: float, top: float, width: float, color=RULE, thickness: float = 0.5)
     c.setStrokeColor(color)
     c.setLineWidth(thickness)
     c.line(x, H - top, x + width, H - top)
+    sh = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Pt(x), Pt(top), Pt(x + width), Pt(top))
+    sh.line.width = Pt(thickness)
+    sh.line.color.rgb = RGBColor(*(round(v * 255) for v in (color.red, color.green, color.blue)))
+    sh._element.spPr.append(OxmlElement('a:effectLst'))
 
 
 def panel(x: float, top: float, width: float, height: float, color=INK):
     c.setFillColor(color)
     c.rect(x, H - top - height, width, height, fill=1, stroke=0)
+    sh = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Pt(x), Pt(top), Pt(width), Pt(height))
+    sh.fill.solid()
+    sh.fill.fore_color.rgb = RGBColor(*(round(v * 255) for v in (color.red, color.green, color.blue)))
+    sh.line.fill.background()
+    sh._element.spPr.append(OxmlElement('a:effectLst'))
 
 
 def footer():
@@ -132,6 +164,7 @@ def labeled(title: str, body: str, x: float, top: float, width: float,
 
 # PAGE 1 — white body, dark brand band, ten numbered capabilities.
 PAGE = 1
+slide = prs.slides.add_slide(prs.slide_layouts[6])
 panel(0, 0, W, 130)
 text(DATA["title"], LEFT, 18, 330, size=46, font="Display", color=WHITE, leading=51)
 text(az_upper(DATA["subtitle"]), RIGHT - 180, 28, 180, size=9.5,
@@ -164,6 +197,7 @@ c.showPage()
 
 # PAGE 2 — specification columns, shared condition notes, restrained closing band.
 PAGE = 2
+slide = prs.slides.add_slide(prs.slide_layouts[6])
 panel(0, 0, W, 112)
 text("Leadprocure", LEFT, 20, 230, size=17, font="Display", color=WHITE, leading=21)
 text("Profil və tətbiq şərtləri", LEFT, 48, FULL, size=43, font="Display", color=WHITE, leading=49)
@@ -212,6 +246,7 @@ text(DATA["pilot"], LEFT + 13, pilot_top + 32, FULL - 26,
 footer()
 c.showPage()
 c.save()
+prs.save(OUT / 'Leadprocure_Data_Sheet_AZ.pptx')
 
 
 def markdown() -> str:
@@ -246,6 +281,8 @@ for i, page in enumerate(doc, 1):
 
 qa = {
     "document": PDF_PATH.name,
+    "editablePowerPoint": "Leadprocure_Data_Sheet_AZ.pptx",
+    "powerPointPages": len(prs.slides),
     "pageCount": len(doc),
     "requiredPageCount": 2,
     "pageSize": "A4 portrait",

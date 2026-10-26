@@ -7,6 +7,7 @@ User selected concept C on 26 October 2026 and explicitly requested the matching
 - `output/Leadprocure_Korporativ_Teqdimat_AZ_v2.pptx`: 13 slides, native editable text and diagrams, speaker notes on every slide.
 - `output/Leadprocure_Korporativ_Teqdimat_AZ_v2.pdf`: presentation PDF with embedded fonts, ready to show.
 - `output/Leadprocure_Data_Sheet_AZ.pdf`: separate two-page A4 product data sheet, 10 capabilities plus operating profile, deployment, controls and integration conditions.
+- `output/Leadprocure_Data_Sheet_AZ.pptx`: the same two A4 portrait pages as editable PowerPoint text and shapes, added at the user's explicit request. Text parity with the PDF verified; desktop PowerPoint rendering not run.
 - `output/Meruzeci_Qeydleri_AZ.md`: presenter notes and source references.
 - `output/Leadprocure_Data_Sheet_AZ.md`: editable data-sheet copy.
 - `output/Leadprocure_AZ_Monograph_Pack.zip`: client-facing files, notes and fonts for PowerPoint editing.
