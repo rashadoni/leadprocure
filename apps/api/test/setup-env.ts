@@ -1,6 +1,6 @@
 import { loadRootEnv } from '../src/common/config/env';
 
-loadRootEnv();
+require('../../../scripts/acceptance/assert-isolated.cjs')();
 
 // The refresh reuse-leeway assertion (auth.e2e) compares wall-clock against a rotation
 // timestamp. Under the full runInBand suite the connection pool can delay a single request

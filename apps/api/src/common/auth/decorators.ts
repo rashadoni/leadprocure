@@ -7,6 +7,9 @@ export const Public = () => SetMetadata(IS_PUBLIC, true);
 export const ROLES_KEY = 'roles';
 export const Roles = (...roles: MembershipRole[]) => SetMetadata(ROLES_KEY, roles);
 
+export const NEW_WORK_KEY = 'requiresNewWork';
+export const RequiresNewWork = () => SetMetadata(NEW_WORK_KEY, true);
+
 export const FEATURE_KEY = 'requiredFeature';
 export const RequiresFeature = (feature: FeatureKey) => SetMetadata(FEATURE_KEY, feature);
 

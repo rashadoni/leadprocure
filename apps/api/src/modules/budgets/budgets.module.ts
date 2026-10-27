@@ -1,3 +1,4 @@
+import { returnedRows } from '../../common/procurement/invariants';
 import {
   Body, ConflictException, Controller, Delete, Get, Injectable, Module, NotFoundException,
   Param, Post, Put, Query,
@@ -88,18 +89,18 @@ export class BudgetsService {
   }
 
   async update(id: string, dto: UpsertBudgetDto) {
-    const res = await this.rc.manager.query(
+    const res = returnedRows(await this.rc.manager.query(
       `UPDATE budgets SET name=$2, category=$3, period_year=$4, amount_minor=$5, currency=$6, updated_at=now()
        WHERE id=$1 RETURNING id`,
       [id, dto.name, dto.category?.trim() || '*', dto.periodYear, dto.amountMinor, dto.currency ?? 'AZN'],
-    );
+    ));
     if (!res[0]) throw new NotFoundException('Budget not found');
     await this.audit.record('BUDGET_UPDATED', 'budget', id, { name: dto.name });
     return this.getOne(id);
   }
 
   async remove(id: string) {
-    const res = await this.rc.manager.query(`DELETE FROM budgets WHERE id=$1 RETURNING id`, [id]);
+    const res = returnedRows(await this.rc.manager.query(`DELETE FROM budgets WHERE id=$1 RETURNING id`, [id]));
     if (!res[0]) throw new NotFoundException('Budget not found');
     await this.audit.record('BUDGET_DELETED', 'budget', id, {});
     return { ok: true };

@@ -29,7 +29,7 @@ class BidIn(BaseModel):
     bid_id: str
     supplier_name: str
     total_minor: int = Field(ge=0)
-    delivery_days: Optional[int] = None
+    delivery_days: Optional[int] = Field(default=None, ge=0)
     reliability: int = Field(default=60, ge=0, le=100)
 
 
@@ -49,10 +49,10 @@ def score(bids: list[BidIn]) -> list[dict]:
     best_delivery = min(deliveries) if deliveries else None
     out = []
     for b in bids:
-        price_score = round(best_price / b.total_minor * 100) if b.total_minor else 0
-        delivery_score = 60 if (b.delivery_days is None or best_delivery is None) else round(best_delivery / b.delivery_days * 100)
+        price_score = round(best_price / b.total_minor * 100) if b.total_minor else 100
+        delivery_score = 60 if (b.delivery_days is None or best_delivery is None) else (100 if b.delivery_days == 0 else round(best_delivery / b.delivery_days * 100))
         weighted = round(price_score * WEIGHTS["price"] + delivery_score * WEIGHTS["delivery"] + b.reliability * WEIGHTS["reliability"], 1)
-        reasons = ["Lowest price" if b.total_minor == best_price else f"{round((b.total_minor - best_price) / best_price * 100)}% above best price"]
+        reasons = ["Lowest price" if b.total_minor == best_price else ("Above a zero-priced bid" if best_price == 0 else f"{round((b.total_minor - best_price) / best_price * 100)}% above best price")]
         if b.delivery_days is not None:
             reasons.append(f"Delivery in {b.delivery_days} days")
         reasons.append(f"Reliability {b.reliability}/100")

@@ -3,6 +3,7 @@ import { api, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import { BUYER_ROLES } from '@leadprocure/shared';
+import { ChannelsCard } from '../../components/ChannelsCard';
 
 export default function Settings() {
   const { t } = useI18n();
@@ -14,6 +15,13 @@ export default function Settings() {
   const [newCat, setNewCat] = useState({ code: '', name: '' });
   const [nu, setNu] = useState({ email: '', fullName: '', password: '', role: 'BUYER_USER' });
   const isAdmin = session?.org.role === 'BUYER_ADMIN';
+
+  // Method-policy editor (value bands → procurement method).
+  const [mpEditing, setMpEditing] = useState(false);
+  const [mpDraft, setMpDraft] = useState<Array<{ category: string; minAzn: number; maxAzn: number | string; method: string }>>([]);
+  const MP_COLOR: Record<string, string> = { DIRECT: '#e7f6ec', RFQ: '#eef2ff', OPEN_TENDER: '#fff7ed' };
+  const MP_ICO: Record<string, string> = { DIRECT: '📦', RFQ: '🔒', OPEN_TENDER: '🌐' };
+  const mLabel = (m: string) => { const l = t(`mt_${m}`); return l === `mt_${m}` ? m : l; };
 
   const load = () => {
     api.get('/settings/users').then((r) => setUsers(r.data));
@@ -51,6 +59,18 @@ export default function Settings() {
     ] },
   };
   const setChain = (key: string) => run(() => api.put('/requests/approval-policies', { policies: CHAIN_PRESETS[key].policies }));
+  const ROLE_ICO: Record<string, string> = { BUYER_ADMIN: '👑', BUYER_APPROVER: '🖊', BUYER_USER: '👤' };
+  // Which preset matches the currently saved chain (normalize camel/snake + ordering).
+  const chainSig = (list: any[]) => JSON.stringify(
+    (list ?? [])
+      .map((p: any) => ({
+        min: Number(p.minAmountMinor ?? p.min_amount_minor ?? 0),
+        max: (p.maxAmountMinor ?? p.max_amount_minor) == null ? null : Number(p.maxAmountMinor ?? p.max_amount_minor),
+        steps: (p.steps ?? []).slice().sort((a: any, b: any) => a.order - b.order).map((s: any) => s.role),
+      }))
+      .sort((a, b) => a.min - b.min),
+  );
+  const activeChainKey = Object.entries(CHAIN_PRESETS).find(([, pr]) => chainSig(pr.policies) === chainSig(approvals))?.[0];
 
   const addUser = (e: FormEvent) => {
     e.preventDefault();
@@ -124,32 +144,113 @@ export default function Settings() {
       </div>
 
       <div className="card">
-        <h3>{t('method_policy')}</h3>
-        <table>
-          <thead><tr><th>{t('category')}</th><th>{t('from')}</th><th>{t('to')}</th><th>{t('method')}</th></tr></thead>
-          <tbody>
-            {policies.map((p) => (
-              <tr key={p.id}>
-                <td>{p.category}</td>
-                <td>{fmtMoney(p.min_amount_minor)}</td>
-                <td>{p.max_amount_minor ? fmtMoney(p.max_amount_minor) : '∞'}</td>
-                <td><span className="badge INVITED">{p.method}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {isAdmin && policies.length === 0 && (
-          <button className="btn small" style={{ marginTop: 10 }}
-            onClick={() => run(() => api.put('/requests/method-policies', {
-              policies: [
-                { category: '*', minAmountMinor: 0, maxAmountMinor: 5_000_000, method: 'DIRECT' },
-                { category: '*', minAmountMinor: 5_000_000, maxAmountMinor: null, method: 'RFQ' },
-              ],
-            }))}>
-            {t('method_set_default')}
+        <h3>⚖️ {t('method_policy')}</h3>
+        <p className="hint" style={{ marginTop: 2 }}>{t('method_policy_desc')}</p>
+
+        {/* One coloured scale per category: the whole policy is visible at a glance —
+            which amounts go straight to an order and where the tender starts. */}
+        {Object.entries(
+          policies.reduce((g: Record<string, any[]>, p: any) => {
+            (g[p.category] = g[p.category] ?? []).push(p); return g;
+          }, {}),
+        ).map(([cat, bands]) => (
+          <div key={cat} style={{ margin: '10px 0' }}>
+            <div className="hint" style={{ marginBottom: 4 }}>
+              {cat === '*' ? `🌍 ${t('mp_all_categories')}` : `🏷 ${cat}`}
+            </div>
+            <div style={{ display: 'flex', borderRadius: 10, overflow: 'hidden', border: '1px solid #e2e6ea' }}>
+              {(bands as any[]).sort((a, b) => Number(a.min_amount_minor) - Number(b.min_amount_minor)).map((p) => (
+                <div key={p.id} style={{
+                  flex: 1, padding: '8px 12px', borderRight: '2px solid #fff',
+                  background: MP_COLOR[p.method] ?? '#f5f5f5',
+                }}>
+                  <div style={{ fontWeight: 600 }}>{MP_ICO[p.method] ?? '•'} {mLabel(p.method)}</div>
+                  <div className="hint">{fmtMoney(p.min_amount_minor)} — {p.max_amount_minor ? fmtMoney(p.max_amount_minor) : '∞'}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        {policies.length === 0 && <p className="hint">— {isAdmin ? t('mp_empty_admin') : t('mp_empty')}</p>}
+
+        {isAdmin && !mpEditing && (
+          <button className="btn small ghost" style={{ marginTop: 6 }}
+            onClick={() => {
+              setMpDraft(policies.length
+                ? policies.map((p: any) => ({
+                    category: p.category,
+                    minAzn: Number(p.min_amount_minor) / 100,
+                    maxAzn: p.max_amount_minor == null ? '' : Number(p.max_amount_minor) / 100,
+                    method: p.method,
+                  }))
+                : [
+                    { category: '*', minAzn: 0, maxAzn: 500, method: 'DIRECT' },
+                    { category: '*', minAzn: 500, maxAzn: '', method: 'RFQ' },
+                  ]);
+              setMpEditing(true);
+            }}>
+            ✎ {t('followups_edit')}
           </button>
         )}
+
+        {isAdmin && mpEditing && (
+          <div style={{ marginTop: 8 }}>
+            <table>
+              <thead><tr><th>{t('category')}</th><th>{t('from')} (AZN)</th><th>{t('to')} (AZN)</th><th>{t('method')}</th><th /></tr></thead>
+              <tbody>
+                {mpDraft.map((d, i) => (
+                  <tr key={i}>
+                    <td>
+                      <input list="mp-cats" value={d.category} style={{ width: 130 }} placeholder="*"
+                        onChange={(e) => setMpDraft(mpDraft.map((x, j) => j === i ? { ...x, category: e.target.value || '*' } : x))} />
+                    </td>
+                    <td>
+                      <input type="number" min={0} value={d.minAzn} style={{ width: 110 }}
+                        onChange={(e) => setMpDraft(mpDraft.map((x, j) => j === i ? { ...x, minAzn: Number(e.target.value) } : x))} />
+                    </td>
+                    <td>
+                      <input type="number" min={0} value={d.maxAzn} style={{ width: 110 }} placeholder="∞"
+                        onChange={(e) => setMpDraft(mpDraft.map((x, j) => j === i ? { ...x, maxAzn: e.target.value } : x))} />
+                    </td>
+                    <td>
+                      <select value={d.method}
+                        onChange={(e) => setMpDraft(mpDraft.map((x, j) => j === i ? { ...x, method: e.target.value } : x))}>
+                        <option value="DIRECT">{MP_ICO.DIRECT} {mLabel('DIRECT')}</option>
+                        <option value="RFQ">{MP_ICO.RFQ} {mLabel('RFQ')}</option>
+                        <option value="OPEN_TENDER">{MP_ICO.OPEN_TENDER} {mLabel('OPEN_TENDER')}</option>
+                      </select>
+                    </td>
+                    <td><button className="btn small ghost" onClick={() => setMpDraft(mpDraft.filter((_, j) => j !== i))}>✕</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <datalist id="mp-cats">
+              <option value="*" />
+              {cats.map((c: any) => <option key={c.code} value={c.code} />)}
+            </datalist>
+            <button className="btn small ghost" onClick={() => {
+              const last = mpDraft[mpDraft.length - 1];
+              setMpDraft([...mpDraft, { category: last?.category ?? '*', minAzn: Number(last?.maxAzn) || 0, maxAzn: '', method: 'RFQ' }]);
+            }}>{t('mp_add_band')}</button>
+            <button className="btn small" style={{ marginLeft: 6 }} disabled={!mpDraft.length}
+              onClick={() => run(async () => {
+                await api.put('/requests/method-policies', {
+                  policies: mpDraft.map((d) => ({
+                    category: d.category.trim() || '*',
+                    minAmountMinor: Math.round(Number(d.minAzn) * 100),
+                    maxAmountMinor: d.maxAzn === '' ? null : Math.round(Number(d.maxAzn) * 100),
+                    method: d.method,
+                  })),
+                });
+                setMpEditing(false);
+              })}>{t('followups_save')}</button>
+            <button className="btn small ghost" onClick={() => setMpEditing(false)}>{t('followups_cancel')}</button>
+          </div>
+        )}
       </div>
+
+      <ChannelsCard isAdmin={isAdmin} />
 
       <div className="card">
         <h3>{t('integrations')}</h3>
@@ -158,29 +259,56 @@ export default function Settings() {
       </div>
 
       <div className="card">
-        <h3>{t('approval_chain')}</h3>
-        <div className="hint" style={{ marginBottom: 10 }}>{t('chain_explain')}</div>
+        <h3>🖊 {t('approval_chain')}</h3>
+        <div className="hint" style={{ marginBottom: 4 }}>{t('chain_explain')}</div>
+        <div className="hint" style={{ marginBottom: 10 }}>🛡 {t('chain_sod_note')}</div>
+
         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>{t('chain_current')}</div>
-        {approvals.length === 0 && <div>{t('chain_none')}</div>}
+        {approvals.length === 0 && <div style={{ marginBottom: 8 }}>{t('chain_none')}</div>}
         {approvals
           .slice()
           .sort((a: any, b: any) => Number(a.min_amount_minor) - Number(b.min_amount_minor))
           .map((p) => (
             <div key={p.id} style={{ padding: '6px 0', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <b>{fmtMoney(p.min_amount_minor)} – {p.max_amount_minor ? fmtMoney(p.max_amount_minor) : '∞'}</b>
-              <span style={{ color: 'var(--muted)' }}>→</span>
-              {(p.steps ?? []).sort((a: any, b: any) => a.order - b.order).map((s: any, i: number) => (
-                <span key={i} className="badge INVITED">{i + 1}. {roleLabel(s.role)}</span>
+              <span style={{ color: 'var(--muted)' }}>:</span>
+              {(p.steps ?? []).sort((a: any, b: any) => a.order - b.order).map((s: any, i: number, arr: any[]) => (
+                <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <span className="badge INVITED">{ROLE_ICO[s.role] ?? '👤'} {i + 1} · {roleLabel(s.role)}</span>
+                  {i < arr.length - 1 && <span style={{ color: 'var(--muted)' }}>→</span>}
+                </span>
               ))}
             </div>
           ))}
+
         {isAdmin && (
           <div style={{ marginTop: 14 }}>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>{t('chain_presets')}</div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {Object.entries(CHAIN_PRESETS).map(([key, preset]) => (
-                <button key={key} className="btn small ghost" onClick={() => setChain(key)}>{preset.label}</button>
-              ))}
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {Object.entries(CHAIN_PRESETS).map(([key, preset]) => {
+                const active = activeChainKey === key;
+                return (
+                  <div key={key} role="button" tabIndex={0}
+                    onClick={() => !active && setChain(key)}
+                    onKeyDown={(e) => e.key === 'Enter' && !active && setChain(key)}
+                    style={{
+                      cursor: active ? 'default' : 'pointer', minWidth: 220, flex: '1 1 220px', maxWidth: 340,
+                      border: `2px solid ${active ? 'var(--accent, #2f7050)' : '#e2e6ea'}`,
+                      background: active ? '#f2faf5' : '#fff', borderRadius: 10, padding: '10px 12px',
+                    }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                      {preset.label} {active && <span className="badge APPROVED" style={{ marginLeft: 4 }}>✓ {t('chain_active')}</span>}
+                    </div>
+                    {preset.policies.length === 0 && <div className="hint">{t('chain_p0_desc')}</div>}
+                    {preset.policies.map((b: any, i: number) => (
+                      <div key={i} className="hint" style={{ padding: '2px 0' }}>
+                        {fmtMoney(b.minAmountMinor)} – {b.maxAmountMinor ? fmtMoney(b.maxAmountMinor) : '∞'}:{' '}
+                        {b.steps.map((s: any) => `${ROLE_ICO[s.role] ?? '👤'} ${roleLabel(s.role)}`).join(' → ')}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

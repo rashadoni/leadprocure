@@ -225,6 +225,44 @@ export const GUIDES: Record<string, SectionGuide> = {
       },
     },
   ]),
+  '/buyer/settings': g('buyer-settings', [
+    {
+      selector: '.card:nth-of-type(1)',
+      title: { ru: 'Пользователи и роли', az: 'İstifadəçilər və rollar', en: 'Users & roles' },
+      text: {
+        ru: 'Администратор управляет всем, согласующий утверждает заявки, пользователь их создаёт. Роль меняется прямо в таблице.',
+        az: 'Administrator hər şeyi idarə edir, təsdiqləyən sifarişləri təsdiqləyir, istifadəçi onları yaradır. Rol cədvəldə dəyişdirilir.',
+        en: 'The admin manages everything, the approver clears requests, the user creates them. Roles change right in the table.',
+      },
+    },
+    {
+      selector: '.card:nth-of-type(2)',
+      title: { ru: 'Справочник категорий', az: 'Kateqoriya sorğu kitabçası', en: 'Category directory' },
+      text: {
+        ru: 'Единый список категорий — по нему работают политика метода, бюджеты и аналитика.',
+        az: 'Vahid kateqoriya siyahısı — metod siyasəti, büdcələr və analitika ona əsaslanır.',
+        en: 'One category list — the method policy, budgets and analytics all key off it.',
+      },
+    },
+    {
+      selector: '.card:nth-of-type(3)',
+      title: { ru: '⚖️ Политика метода закупки', az: '⚖️ Satınalma metodu siyasəti', en: '⚖️ Procurement-method policy' },
+      text: {
+        ru: 'Шкала сумм: до какой суммы заявка уходит в прямой заказ, с какой — в тендер. Метод проставляется автоматически при утверждении; автор заявки его не выбирает. «Изменить» — редактор диапазонов.',
+        az: 'Məbləğ şkalası: hansı məbləğə qədər sifariş birbaşa sifarişə, hansından tenderə gedir. Metod təsdiqdə avtomatik təyin olunur; müəllif onu seçmir. «Dəyiş» — aralıq redaktoru.',
+        en: 'An amount scale: up to which sum a request becomes a direct order, from which — a tender. The method is set automatically at approval; the requester never picks it. “Edit” opens the band editor.',
+      },
+    },
+    {
+      selector: '.card:nth-of-type(5)',
+      title: { ru: '🖊 Цепочка согласования', az: '🖊 Təsdiq zənciri', en: '🖊 Approval chain' },
+      text: {
+        ru: 'Сколько подписей нужно заявке в зависимости от суммы. Активная схема отмечена галочкой; один человек не может закрыть два шага (разделение полномочий).',
+        az: 'Məbləğdən asılı olaraq sifarişə neçə imza lazımdır. Aktiv sxem işarələnib; bir nəfər iki addımı bağlaya bilməz (səlahiyyətlərin bölünməsi).',
+        en: 'How many sign-offs a request needs depending on the amount. The active scheme is ticked; no single person can clear two steps (segregation of duties).',
+      },
+    },
+  ]),
   '/supplier/dashboard': g('sup-dashboard', [
     {
       selector: 'h1',

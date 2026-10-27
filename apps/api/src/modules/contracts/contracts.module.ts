@@ -1,3 +1,5 @@
+import { RequiresNewWork } from '../../common/auth/decorators';
+import { lockOrder, lockEvent, assertSupplierAllowed, uniqueIds, safeMoney, returnedRows } from '../../common/procurement/invariants';
 import {
   BadRequestException,
   Body,
@@ -39,6 +41,7 @@ export class ContractsService {
     if (req.method_resolved && req.method_resolved !== 'DIRECT') {
       throw new BadRequestException(`Method is ${req.method_resolved}; use a sourcing event, not a direct order`);
     }
+    await assertSupplierAllowed(m, auth.org_id, supplierOrgId);
     const sup = await m.query(
       `SELECT status FROM supplier_relationships WHERE buyer_org_id = $1 AND supplier_org_id = $2`,
       [auth.org_id, supplierOrgId],
@@ -53,6 +56,7 @@ export class ContractsService {
       [requestId],
     );
     const total = items.reduce((s: number, it: any) => s + Number(it.qty) * Number(it.est_unit_price_minor), 0);
+    safeMoney(total);
     const n = await m.query(`SELECT next_document_no($1,'PO') AS n`, [auth.org_id]);
     const poNo = `PO-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
     const po = (
@@ -62,6 +66,7 @@ export class ContractsService {
         [auth.org_id, supplierOrgId, poNo, total, req.currency, auth.sub],
       )
     )[0];
+    await m.query(`UPDATE purchase_orders SET vat_mode=$2 WHERE id=$1`,[po.id, req.vat_mode]);
     for (const it of items) {
       await m.query(
         `INSERT INTO purchase_order_items(po_id, buyer_org_id, supplier_org_id, event_item_id, line_no, name, qty, uom, unit_price_minor, line_total_minor, vat_rate_bp)
@@ -79,22 +84,31 @@ export class ContractsService {
   // items are copied per-PO later (a contract can cover many partial orders).
   async createFromAward(awardId: string, auth: AccessTokenPayload) {
     const m = this.rc.manager;
+    const event = (await m.query(`SELECT event_id FROM awards WHERE id=$1`,[awardId]))[0];
+    if (!event) throw new NotFoundException('Award not found');
+    await lockEvent(m, event.event_id);
     const rows = await m.query(
       `SELECT a.id AS award_id, a.event_id, a.winning_bid_id, e.title, e.buyer_org_id,
-              e.evaluation_currency, e.vat_mode, b.supplier_org_id, b.total_minor
+              e.evaluation_currency, e.vat_mode, b.currency AS bid_currency, b.supplier_org_id,
+              (SELECT sum(bi.line_total_minor) FROM bid_items bi JOIN event_items ei ON ei.id=bi.event_item_id
+               WHERE bi.bid_id=a.winning_bid_id AND ei.lot_id=a.lot_id) AS total_minor
        FROM awards a
        JOIN sourcing_events e ON e.id = a.event_id
        JOIN bids b ON b.id = a.winning_bid_id
-       WHERE a.id = $1`,
+       WHERE a.id = $1 AND a.cancelled_at IS NULL`,
       [awardId],
     );
     if (!rows.length) throw new NotFoundException('Award not found');
     const a = rows[0];
     if (a.buyer_org_id !== auth.org_id) throw new NotFoundException('Award not found');
+    if (a.bid_currency !== a.evaluation_currency) throw new BadRequestException('Award requires an explicit currency conversion');
+    if (a.total_minor == null) throw new BadRequestException('Award has no priced lot snapshot');
 
     const dup = await m.query(`SELECT id FROM contracts WHERE award_id = $1`, [awardId]);
     if (dup.length) return this.get(dup[0].id); // idempotent
+    await assertSupplierAllowed(m, auth.org_id, a.supplier_org_id);
 
+    safeMoney(Number(a.total_minor ?? 0));
     const n = await m.query(`SELECT next_document_no($1,'CTR') AS n`, [auth.org_id]);
     const contractNo = `CTR-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
     const c = (
@@ -114,10 +128,10 @@ export class ContractsService {
   }
 
   async activate(id: string) {
-    const rows = await this.rc.manager.query(
+    const rows = returnedRows(await this.rc.manager.query(
       `UPDATE contracts SET status='ACTIVE', updated_at=now() WHERE id=$1 AND status='DRAFT' RETURNING id`,
       [id],
-    );
+    ));
     if (!rows.length) throw new BadRequestException('Contract not found or not DRAFT');
     await this.audit.record('CONTRACT_ACTIVATED', 'contract', id, {});
     return this.get(id);
@@ -164,6 +178,7 @@ export class ContractsService {
     const c = cRows[0];
     if (c.buyer_org_id !== auth.org_id) throw new BadRequestException('Only the buyer creates orders');
     if (c.status !== 'ACTIVE') throw new BadRequestException('Contract must be ACTIVE');
+    await assertSupplierAllowed(m, auth.org_id, c.supplier_org_id);
 
     const items = await m.query(
       `SELECT ei.id AS event_item_id, ei.line_no, ei.name, ei.qty, ei.uom, ei.vat_rate_bp,
@@ -172,7 +187,7 @@ export class ContractsService {
        JOIN awards a ON a.id = c.award_id
        JOIN bid_items bi ON bi.bid_id = a.winning_bid_id
        JOIN event_items ei ON ei.id = bi.event_item_id
-       WHERE c.id = $1 ORDER BY ei.line_no`,
+       WHERE c.id = $1 AND ei.lot_id=a.lot_id AND a.cancelled_at IS NULL ORDER BY ei.line_no`,
       [contractId],
     );
     if (!items.length) throw new BadRequestException('No priced items on the awarded bid');
@@ -190,6 +205,7 @@ export class ContractsService {
     );
     const overByMinor = drawn + total - Number(c.total_minor);
 
+    safeMoney(total);
     const n = await m.query(`SELECT next_document_no($1,'PO') AS n`, [auth.org_id]);
     const poNo = `PO-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
     const po = (
@@ -200,6 +216,7 @@ export class ContractsService {
         [contractId, c.buyer_org_id, c.supplier_org_id, poNo, total, c.currency, auth.sub],
       )
     )[0];
+    await m.query(`UPDATE purchase_orders SET vat_mode=$2 WHERE id=$1`,[po.id,c.vat_mode]);
     for (const it of items) {
       await m.query(
         `INSERT INTO purchase_order_items(po_id, buyer_org_id, supplier_org_id, event_item_id,
@@ -258,6 +275,7 @@ export class ContractsService {
     auth: AccessTokenPayload,
   ) {
     const m = this.rc.manager;
+    await lockOrder(m, poId);
     const po = (await m.query(`SELECT id, buyer_org_id, supplier_org_id FROM purchase_orders WHERE id = $1`, [poId]))[0];
     if (!po) throw new NotFoundException('Order not found');
     if (po.buyer_org_id !== auth.org_id) throw new BadRequestException('Only the buyer records receipts');
@@ -312,6 +330,21 @@ export class ContractsService {
       }
     }
     await this.notify.notifyOrg(po.supplier_org_id, 'GRN_RECORDED', { po_id: poId });
+
+    // The receipt changes what is billable → re-run the 3-way match of every still-open
+    // invoice on this PO (DEFINER seam: invoices are supplier-owned rows). An invoice
+    // submitted before the goods arrived flips DISPUTED → MATCHED here instead of
+    // staying disputed forever.
+    const rematched: Array<{ invoice_id: string; invoice_no: string; supplier_org_id: string; old_status: string; new_status: string }> =
+      await m.query(`SELECT * FROM invoice_rematch($1)`, [poId]);
+    for (const r of rematched) {
+      await this.audit.record('INVOICE_STATUS_CHANGED', 'invoice', r.invoice_id, {
+        status: r.new_status, from: r.old_status, via: 'rematch_on_receipt',
+      });
+      await this.notify.notifyOrg(r.supplier_org_id, 'INVOICE_STATUS_CHANGED', {
+        invoice_no: r.invoice_no, status: r.new_status,
+      });
+    }
     return this.getReceipts(poId);
   }
 
@@ -352,6 +385,7 @@ export class ContractsService {
     auth: AccessTokenPayload,
   ) {
     const m = this.rc.manager;
+    await lockOrder(m, poId);
     const po = (await m.query(`SELECT * FROM purchase_orders WHERE id = $1`, [poId]))[0];
     if (!po) throw new NotFoundException('Order not found');
     if (po.buyer_org_id !== auth.org_id) throw new BadRequestException('Only the buyer proposes amendments');
@@ -371,11 +405,14 @@ export class ContractsService {
       [poId],
     );
     const byId = new Map<string, any>(items.map((i: any) => [i.id, i]));
+    uniqueIds(dto.items, 'poItemId');
     const changes = dto.items.map((ch) => {
       const cur = byId.get(ch.poItemId);
       if (!cur) throw new BadRequestException(`Item ${ch.poItemId} is not on this order`);
       const newQty = ch.qty ?? Number(cur.qty);
+      safeMoney(newQty);
       const newPrice = ch.unitPriceMinor ?? Number(cur.unit_price_minor);
+      safeMoney(newPrice);
       if (newQty === Number(cur.qty) && newPrice === Number(cur.unit_price_minor)) {
         throw new BadRequestException(`Line "${cur.name}" has no actual change`);
       }
@@ -410,6 +447,7 @@ export class ContractsService {
 
   async decideAmendment(poId: string, amendmentId: string, dto: { accept: boolean; note?: string }, auth: AccessTokenPayload) {
     const m = this.rc.manager;
+    await lockOrder(m, poId);
     const am = (await m.query(`SELECT * FROM po_amendments WHERE id = $1 AND po_id = $2`, [amendmentId, poId]))[0];
     if (!am) throw new NotFoundException('Amendment not found');
     try {
@@ -428,6 +466,7 @@ export class ContractsService {
   }
 
   async setOrderStatus(id: string, status: PoStatus, note: string | undefined, auth: AccessTokenPayload) {
+    await lockOrder(this.rc.manager, id);
     try {
       const rows = await this.rc.manager.query(`SELECT * FROM po_apply_status($1, $2, $3)`, [
         id, status, note ?? null,
@@ -480,12 +519,14 @@ export class ContractsController {
   constructor(private readonly contracts: ContractsService) {}
 
   @Post('contracts/from-award/:awardId')
+  @RequiresNewWork()
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   fromAward(@Param('awardId') awardId: string, @CurrentUser() auth: AccessTokenPayload) {
     return this.contracts.createFromAward(awardId, auth);
   }
 
   @Post('orders/direct/from-request/:requestId')
+  @RequiresNewWork()
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   directOrder(
     @Param('requestId') requestId: string,
@@ -512,6 +553,7 @@ export class ContractsController {
   }
 
   @Post('contracts/:id/orders')
+  @RequiresNewWork()
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   createOrder(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
     return this.contracts.createOrder(id, auth);

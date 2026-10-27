@@ -142,7 +142,12 @@ export default function Requests() {
       </div>
       <div className="card">
         <input placeholder={`🔎 ${t('title')}…`} value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} style={{ maxWidth: 320, marginBottom: 6 }} />
-        <div className="hint" style={{ marginBottom: 10 }}>{t('legend_procedures')}</div>
+        <div className="hint" style={{ marginBottom: 10 }}>
+          {t('legend_procedures')}
+          {['BUYER_ADMIN', 'BUYER_APPROVER'].includes(session?.org.role ?? '') && (
+            <> · <a href="/buyer/settings">⚖️ {t('method_policy')}</a></>
+          )}
+        </div>
         <table>
           <thead><tr><th>#</th><th>{t('title')}</th><th>{t('category')}</th><th>{t('date')}</th><th>{t('requester')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('method')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>

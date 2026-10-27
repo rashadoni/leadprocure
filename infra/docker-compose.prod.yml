@@ -106,6 +106,8 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         VITE_API_BASE_URL: ${PUBLIC_API_URL:?set in .env.prod (e.g. https://api.example.com)}
+        # "1" shows seeded demo logins on the login page — demo stands only, never prod.
+        VITE_DEMO_HINT: ${VITE_DEMO_HINT:-}
     restart: unless-stopped
     depends_on:
       - api

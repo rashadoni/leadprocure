@@ -62,9 +62,9 @@ export default function Orders() {
     setShip((s) => ({ ...s, [poId]: r.data }));
   };
   const startShipment = async (poId: string) => {
-    const carrier = prompt('Carrier (перевозчик):', 'AzərPost');
+    const carrier = prompt(`${t('carrier')}:`, 'AzərPost');
     if (carrier == null) return;
-    const trackingNo = prompt('Tracking № (трек-номер):', 'AZ' + Math.floor(Math.random() * 1e8));
+    const trackingNo = prompt(`${t('tracking_no')}:`, 'AZ' + Math.floor(Math.random() * 1e8));
     await api.post(`/logistics/po/${poId}/shipment`, { carrier, trackingNo });
     loadShip(poId);
   };

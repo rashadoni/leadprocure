@@ -67,7 +67,7 @@ export default function Verification() {
             ))}
           </tbody>
         </table>
-        {cases.length === 0 && <div className="hint">—{isBuyer ? ' откройте кейс кнопкой 🛡 на странице Поставщики' : ''}</div>}
+        {cases.length === 0 && <div className="hint">—{isBuyer ? ` ${t('hint_verification_empty')}` : ''}</div>}
       </div>
 
       {Object.entries(open).filter(([, v]) => v).map(([id, c]) => (

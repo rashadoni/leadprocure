@@ -18,6 +18,9 @@ const RENEWAL_WINDOW_MS = 7 * 24 * 3600 * 1000;
 export class EntitlementService implements OnModuleInit {
   private readonly logger = new Logger(EntitlementService.name);
   private snap!: EntitlementSnapshot;
+  private claims?: LicenseClaims;
+  private revoked = false;
+  private source: 'installed'|'file'|'development'|'missing' = 'missing';
 
   constructor(
     private readonly ds: DataSource,
@@ -33,7 +36,14 @@ export class EntitlementService implements OnModuleInit {
       `SELECT * FROM licenses ORDER BY installed_at DESC LIMIT 1`,
     );
     if (rows.length) {
-      this.snap = this.fromRow(rows[0]);
+      try {
+        this.claims = await this.verify(rows[0].raw_token);
+        this.revoked = rows[0].status === 'revoked';
+        this.source = 'installed';
+        this.snap = this.fromClaims(this.claims, this.revoked);
+      } catch {
+        this.claims = undefined; this.source = 'missing'; this.snap = this.restricted();
+      }
       this.logger.log(`License loaded: edition=${this.snap.edition} status=${this.snap.status}`);
       return;
     }
@@ -41,6 +51,7 @@ export class EntitlementService implements OnModuleInit {
       try {
         const token = readFileSync(this.cfg.licenseFile, 'utf8').trim();
         const claims = await this.verify(token);
+        this.claims = claims; this.revoked = false; this.source = 'file';
         this.snap = this.fromClaims(claims, false);
         this.logger.log(`License file verified: edition=${claims.edition}`);
         return;
@@ -48,8 +59,10 @@ export class EntitlementService implements OnModuleInit {
         this.logger.error(`License file invalid: ${(e as Error).message}`);
       }
     }
-    this.snap = this.devFallback();
-    this.logger.warn(`No license installed — using dev fallback (edition=${this.snap.edition})`);
+    this.claims = undefined;
+    this.source = this.cfg.nodeEnv === 'production' ? 'missing' : 'development';
+    this.snap = this.source === 'missing' ? this.restricted() : this.devFallback();
+    this.logger.warn(`License source=${this.source}, status=${this.snap.status}`);
   }
 
   async installFromToken(token: string): Promise<void> {
@@ -69,18 +82,19 @@ export class EntitlementService implements OnModuleInit {
   }
 
   snapshot(): EntitlementSnapshot {
-    return this.snap;
+    if (this.claims) this.snap = this.fromClaims(this.claims, this.revoked);
+    return { ...this.snap, source: this.source };
   }
   hasFeature(f: FeatureKey): boolean {
-    return this.snap.features.includes(f);
+    return this.snapshot().features.includes(f);
   }
   status(): LicenseStatus {
-    return this.snap.status;
+    return this.snapshot().status;
   }
   // Graceful degradation: creating NEW work is blocked once restricted/revoked,
   // but completing already-live procurement stays allowed (enforced in services).
   canCreateNew(): boolean {
-    return this.snap.status !== 'expired_restricted' && this.snap.status !== 'revoked';
+    return !['expired_restricted','revoked'].includes(this.status());
   }
   assertCanCreateNew(): void {
     if (!this.canCreateNew()) {
@@ -90,12 +104,18 @@ export class EntitlementService implements OnModuleInit {
 
   private async verify(token: string): Promise<LicenseClaims> {
     if (!this.cfg.licensePublicKeyB64) throw new Error('LICENSE_PUBLIC_KEY_B64 not configured');
-    return verifyLicenseToken(token, publicKeyFromB64Pem(this.cfg.licensePublicKeyB64));
+    const c = await verifyLicenseToken(token, publicKeyFromB64Pem(this.cfg.licensePublicKeyB64));
+    if (![c.valid_from,c.expires_at,c.grace_until].every(x=>Number.isFinite(Date.parse(x))) ||
+        Date.parse(c.valid_from)>Date.parse(c.expires_at) || Date.parse(c.expires_at)>Date.parse(c.grace_until) ||
+        !Array.isArray(c.features) || c.features.some(f=>!FEATURE_KEYS.includes(f)) || !c.limits || c.schema_version!==1)
+      throw new Error('Invalid license claims');
+    return c;
   }
 
   private computeStatus(claims: LicenseClaims, revoked: boolean): LicenseStatus {
     if (revoked) return 'revoked';
     const now = Date.now();
+    if (now < Date.parse(claims.valid_from)) return 'expired_restricted';
     const expires = Date.parse(claims.expires_at);
     const grace = Date.parse(claims.grace_until);
     if (now > grace) return 'expired_restricted';
@@ -132,6 +152,10 @@ export class EntitlementService implements OnModuleInit {
       schema_version: 1,
     };
     return this.fromClaims(claims, row.status === 'revoked');
+  }
+
+  private restricted(): EntitlementSnapshot {
+    return {...this.devFallback(),status:'expired_restricted',expiresAt:new Date(0).toISOString(),graceUntil:new Date(0).toISOString()};
   }
 
   private devFallback(): EntitlementSnapshot {

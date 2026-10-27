@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { FeatureKey } from '@leadprocure/shared';
-import { FEATURE_KEY } from '../auth/decorators';
+import { FEATURE_KEY, NEW_WORK_KEY } from '../auth/decorators';
 import { EntitlementService } from './entitlement.service';
 
 // Coarse feature gate: blocks endpoints whose @RequiresFeature() is not in the license.
@@ -18,6 +18,8 @@ export class FeatureGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
+    const newWork = this.reflector.getAllAndOverride<boolean>(NEW_WORK_KEY, [context.getHandler(),context.getClass()]);
+    if (newWork) this.entitlements.assertCanCreateNew();
     if (!feature) return true;
     if (this.entitlements.status() === 'revoked') {
       throw new ForbiddenException('License revoked');

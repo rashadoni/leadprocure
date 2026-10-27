@@ -40,7 +40,7 @@ export default function Catalogs() {
       <h1>📖 {t('catalogs')}</h1>
       <div className="card">
         <table>
-          <thead><tr><th>{t('title')}</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th>{t('status')}</th><th>Items</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>{t('title')}</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th>{t('status')}</th><th>{t('items')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
             {rows.map((c) => (
               <tr key={c.id}>
@@ -57,7 +57,7 @@ export default function Catalogs() {
             ))}
           </tbody>
         </table>
-        {rows.length === 0 && <div className="hint">— {isBuyer ? 'создайте каталог из контракта (кнопка «Каталог» на контракте)' : ''}</div>}
+        {rows.length === 0 && <div className="hint">— {isBuyer ? t('hint_catalogs_empty') : ''}</div>}
       </div>
 
       {Object.entries(open).filter(([, v]) => v).map(([id, cat]) => (

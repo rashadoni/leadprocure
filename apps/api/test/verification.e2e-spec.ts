@@ -2,7 +2,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
 
@@ -48,8 +48,11 @@ describe('supplier verification (KYC)', () => {
 
     const pre = await http().post('/verification/presign').set(...bearer(supplier))
       .send({ filename: 'voen.pdf', mime: 'application/pdf' }).expect(201);
+
+    const bytes=Buffer.from('audit attachment fixture');
+    expect((await fetch(pre.body.uploadUrl,{method:'PUT',body:bytes,headers:{'Content-Type':'application/pdf'}})).ok).toBe(true);
     const withDoc = await http().post(`/verification/cases/${caseId}/documents`).set(...bearer(supplier))
-      .send({ docType: 'VOEN', storageKey: pre.body.storageKey, filename: 'voen.pdf', sha256: 'a'.repeat(64) }).expect(201);
+      .send({ docType: 'VOEN', storageKey: pre.body.storageKey, filename: 'voen.pdf', sha256: createHash('sha256').update(bytes).digest('hex') }).expect(201);
     expect(withDoc.body.documents).toHaveLength(1);
     expect(withDoc.body.documents[0].doc_type).toBe('VOEN');
   });

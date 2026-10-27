@@ -1,3 +1,5 @@
+import { RequiresNewWork } from '../../common/auth/decorators';
+import { safeMoney, lineMoney } from '../../common/procurement/invariants';
 import {
   BadRequestException,
   ForbiddenException,
@@ -12,7 +14,7 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
-import { IsArray, IsIn, IsInt, IsOptional, IsString, Min, MinLength, ValidateNested } from 'class-validator';
+import { IsArray, IsIn, IsInt, IsOptional, IsString, Max, Min, MinLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import type { ProcurementMethod } from '@leadprocure/shared';
 import { CurrentUser, Roles } from '../../common/auth/decorators';
@@ -28,7 +30,7 @@ class ItemDto {
   @IsInt() @Min(1) qty!: number;
   @IsOptional() @IsString() uom?: string;
   @IsInt() @Min(0) estUnitPriceMinor!: number;
-  @IsOptional() @IsInt() vatRateBp?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(10000) vatRateBp?: number;
 }
 class UpsertRequestDto {
   @IsString() @MinLength(3) title!: string;
@@ -288,7 +290,7 @@ export class RequestsService {
 
   private computeTotal(items: ItemDto[]): number {
     if (!items.length) throw new BadRequestException('At least one item is required');
-    return items.reduce((sum, it) => sum + it.qty * it.estUnitPriceMinor, 0);
+    return safeMoney(items.reduce((sum, it) => sum + lineMoney(it.qty, it.estUnitPriceMinor), 0));
   }
 
   private async insertItems(requestId: string, orgId: string, items: ItemDto[]): Promise<void> {
@@ -344,7 +346,8 @@ export class RequestsController {
   @Get(':id') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
   get(@Param('id') id: string) { return this.requests.get(id); }
 
-  @Post() @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  @Post()
+  @RequiresNewWork() @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
   create(@Body() dto: UpsertRequestDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.requests.create(dto, auth);
   }

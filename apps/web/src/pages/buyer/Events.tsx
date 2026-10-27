@@ -35,7 +35,7 @@ export default function Events() {
                 <td>
                   <span className="chip" data-tip={t(`tip_${(r.type ?? '').toLowerCase()}`)}>
                     <span className="chip-ico">{TYPE_META[r.type]?.ico ?? '•'}</span>
-                    {TYPE_META[r.type]?.label ?? r.type}
+                    {r.type === 'AUCTION' ? t('auction') : (TYPE_META[r.type]?.label ?? r.type)}
                   </span>
                 </td>
                 <td><Badge status={r.status} /></td>

@@ -1,4 +1,4 @@
-import { Global, Injectable, Module } from '@nestjs/common';
+import { BadRequestException, Global, Injectable, Module } from '@nestjs/common';
 import { RequestContextService } from '../context/request-context.service';
 
 // Boundary for the AI scoring service. Phase 3 swaps HeuristicScorer for a client to
@@ -26,7 +26,7 @@ export interface Recommendation {
 }
 
 export abstract class AiScorer {
-  abstract recommend(eventId: string): Promise<Recommendation>;
+  abstract recommend(eventId: string, lotId?: string): Promise<Recommendation>;
   abstract readonly model: string;
 }
 
@@ -40,18 +40,19 @@ export class HeuristicScorer extends AiScorer {
     super();
   }
 
-  async recommend(eventId: string): Promise<Recommendation> {
+  async recommend(eventId: string, lotId?: string): Promise<Recommendation> {
     const m = this.rc.manager;
     // Only opened bids carry cleartext amounts (RLS + status gate protect this).
     const bids: Array<{
       id: string; supplier_org_id: string; supplier_name: string;
-      total_minor: string; delivery_days: number | null;
+      currency: string; evaluation_currency: string; total_minor: string; delivery_days: number | null;
     }> = await m.query(
-      `SELECT b.id, b.supplier_org_id, s.legal_name AS supplier_name, b.total_minor, b.delivery_days
-       FROM bids b JOIN organizations s ON s.id = b.supplier_org_id
-       WHERE b.event_id = $1 AND b.state = 'OPENED' AND b.total_minor IS NOT NULL`,
-      [eventId],
+      `SELECT b.id, b.supplier_org_id, s.legal_name AS supplier_name, b.currency, e.evaluation_currency, (SELECT sum(bi.line_total_minor) FROM bid_items bi JOIN event_items ei ON ei.id=bi.event_item_id WHERE bi.bid_id=b.id AND ($2::uuid IS NULL OR ei.lot_id=$2)) AS total_minor, b.delivery_days
+       FROM bids b JOIN organizations s ON s.id = b.supplier_org_id JOIN sourcing_events e ON e.id=b.event_id
+       WHERE b.event_id = $1 AND NOT supplier_is_blocked(e.buyer_org_id,b.supplier_org_id) AND b.state = 'OPENED' AND b.total_minor IS NOT NULL AND EXISTS(SELECT 1 FROM bid_items bi JOIN event_items ei ON ei.id=bi.event_item_id WHERE bi.bid_id=b.id AND ($2::uuid IS NULL OR ei.lot_id=$2))`,
+      [eventId, lotId ?? null],
     );
+    if (bids.some(b => b.currency !== b.evaluation_currency)) throw new BadRequestException('Mixed-currency bids require explicit conversion');
     if (!bids.length) {
       return { model: this.model, weights: this.W, ranking: [], recommendedBidId: null, rationale: 'No opened bids to score yet.' };
     }
@@ -72,15 +73,15 @@ export class HeuristicScorer extends AiScorer {
 
     const ranking: ScoredBid[] = bids.map((b) => {
       const total = Number(b.total_minor);
-      const priceScore = Math.round((bestPrice / total) * 100); // cheapest = 100
+      const priceScore = total === 0 ? 100 : Math.round((bestPrice / total) * 100); // cheapest = 100
       const deliveryScore =
-        b.delivery_days == null || bestDelivery == null ? 60 : Math.round((bestDelivery / Number(b.delivery_days)) * 100);
+        b.delivery_days == null || bestDelivery == null ? 60 : Number(b.delivery_days) === 0 ? 100 : Math.round((bestDelivery / Number(b.delivery_days)) * 100);
       const reliabilityScore = relById.get(b.supplier_org_id) ?? 60;
       const weightedTotal =
         Math.round((priceScore * this.W.price + deliveryScore * this.W.delivery + reliabilityScore * this.W.reliability) * 10) / 10;
 
       const reasons: string[] = [];
-      reasons.push(total === bestPrice ? 'Lowest price' : `${Math.round(((total - bestPrice) / bestPrice) * 100)}% above the best price`);
+      reasons.push(total === bestPrice ? 'Lowest price' : bestPrice === 0 ? 'Above a zero-priced bid' : `${Math.round(((total - bestPrice) / bestPrice) * 100)}% above the best price`);
       if (b.delivery_days != null) reasons.push(`Delivery in ${b.delivery_days} days`);
       reasons.push(relById.has(b.supplier_org_id) ? `Reliability index ${reliabilityScore}/100 (scorecard history)` : 'No scorecard history yet (neutral reliability)');
 
@@ -117,16 +118,17 @@ export class HttpAiScorer extends AiScorer {
     super();
   }
 
-  async recommend(eventId: string): Promise<Recommendation> {
+  async recommend(eventId: string, lotId?: string): Promise<Recommendation> {
     try {
       const m = this.rc.manager;
       const bids = await m.query(
-        `SELECT b.id, s.legal_name AS supplier_name, b.total_minor, b.delivery_days, b.supplier_org_id
-         FROM bids b JOIN organizations s ON s.id = b.supplier_org_id
-         WHERE b.event_id = $1 AND b.state = 'OPENED' AND b.total_minor IS NOT NULL`,
-        [eventId],
+        `SELECT b.id, s.legal_name AS supplier_name, b.currency, e.evaluation_currency, (SELECT sum(bi.line_total_minor) FROM bid_items bi JOIN event_items ei ON ei.id=bi.event_item_id WHERE bi.bid_id=b.id AND ($2::uuid IS NULL OR ei.lot_id=$2)) AS total_minor, b.delivery_days, b.supplier_org_id
+         FROM bids b JOIN organizations s ON s.id = b.supplier_org_id JOIN sourcing_events e ON e.id=b.event_id
+         WHERE b.event_id = $1 AND NOT supplier_is_blocked(e.buyer_org_id,b.supplier_org_id) AND b.state = 'OPENED' AND b.total_minor IS NOT NULL AND EXISTS(SELECT 1 FROM bid_items bi JOIN event_items ei ON ei.id=bi.event_item_id WHERE bi.bid_id=b.id AND ($2::uuid IS NULL OR ei.lot_id=$2))`,
+        [eventId, lotId ?? null],
       );
-      if (!bids.length) return this.local.recommend(eventId);
+      if (bids.some((b: any) => b.currency !== b.evaluation_currency)) throw new BadRequestException('Mixed-currency bids require explicit conversion');
+      if (!bids.length) return this.local.recommend(eventId, lotId);
       const rel = await m.query(
         `SELECT supplier_org_id, round(avg(score))::int AS score FROM supplier_scorecard_entries
          WHERE supplier_org_id = ANY($1::uuid[]) GROUP BY supplier_org_id`,
@@ -152,6 +154,11 @@ export class HttpAiScorer extends AiScorer {
       });
       if (!res.ok) throw new Error(`orchestrator ${res.status}`);
       const data = (await res.json()) as any;
+      if (!Array.isArray(data.ranking) || data.ranking.length !== bids.length ||
+          new Set(data.ranking.map((r:any)=>r.bidId)).size !== bids.length ||
+          data.ranking.some((r:any)=> !bids.some((b:any)=>b.id===r.bidId) ||
+            ['priceScore','deliveryScore','reliabilityScore','weightedTotal'].some(k=>!Number.isFinite(r[k]) || r[k]<0 || r[k]>100)) ||
+          data.recommendedBidId !== data.ranking[0]?.bidId) throw new Error('Invalid scorer response');
       return {
         model: data.model,
         weights: data.weights,
@@ -165,7 +172,7 @@ export class HttpAiScorer extends AiScorer {
         rationale: data.rationale,
       };
     } catch {
-      return this.local.recommend(eventId); // service down → local heuristic
+      return this.local.recommend(eventId, lotId); // service down → local heuristic
     }
   }
 }

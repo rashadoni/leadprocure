@@ -36,6 +36,7 @@ const TXT = {
     houseReq: 'Хозтовары для офиса', houseItem: 'Бумага А4, пачка',
     amendReason: 'Увеличиваем объём: открылся второй офис',
     budgetAll: 'Общий бюджет', budgetIT: 'IT-бюджет',
+    catNames: { IT: 'ИТ и техника', OFFICE: 'Офис и хозтовары', CONSTRUCTION: 'Строительство и ремонт', FUEL: 'Топливо', LOGISTICS: 'Логистика и склад' },
     catTitle: 'Офисные расходники — Supply One', catItem1: 'Бумага А4 80г', catItem2: 'Тонер HP 26A', uomReam: 'пачка', uomPcs: 'шт',
     qnaQ: 'Допускается ли поставка кресел партиями по 10 штук?', qnaA: 'Да, партиями допускается, полный объём — до конца месяца.',
     justification: 'Лучшее соотношение цена/срок по взвешенной оценке',
@@ -51,6 +52,7 @@ const TXT = {
     houseReq: 'Ofis üçün təsərrüfat malları', houseItem: 'A4 kağız, top',
     amendReason: 'Həcmi artırırıq: ikinci ofis açıldı',
     budgetAll: 'Ümumi büdcə', budgetIT: 'IT büdcəsi',
+    catNames: { IT: 'İT və texnika', OFFICE: 'Ofis və təsərrüfat', CONSTRUCTION: 'Tikinti və təmir', FUEL: 'Yanacaq', LOGISTICS: 'Logistika və anbar' },
     catTitle: 'Ofis sərfiyyatı — Supply One', catItem1: 'A4 kağız 80q', catItem2: 'Toner HP 26A', uomReam: 'top', uomPcs: 'ədəd',
     qnaQ: 'Kresloları 10 ədədlik partiyalarla çatdırmaq olarmı?', qnaA: 'Bəli, partiyalarla olar, tam həcm — ay sonuna qədər.',
     justification: 'Çəkili qiymətləndirmə üzrə ən yaxşı qiymət/müddət nisbəti',
@@ -66,6 +68,7 @@ const TXT = {
     houseReq: 'Office household supplies', houseItem: 'A4 paper, ream',
     amendReason: 'Increasing volume: a second office opened',
     budgetAll: 'Overall budget', budgetIT: 'IT budget',
+    catNames: { IT: 'IT & hardware', OFFICE: 'Office & supplies', CONSTRUCTION: 'Construction & repair', FUEL: 'Fuel', LOGISTICS: 'Logistics & warehouse' },
     catTitle: 'Office consumables — Supply One', catItem1: 'A4 paper 80g', catItem2: 'Toner HP 26A', uomReam: 'ream', uomPcs: 'pcs',
     qnaQ: 'May the chairs be delivered in batches of 10?', qnaA: 'Yes, batches are allowed; the full volume by month-end.',
     justification: 'Best price / lead-time ratio by the weighted score',
@@ -79,7 +82,7 @@ function resetStory() {
   try {
     execSync(
       `docker exec ${PG} psql -U leadprocure_owner -d leadprocure -c ` +
-      `"TRUNCATE procurement_requests, budgets, catalogs, supplier_verification_cases, notifications, document_counters RESTART IDENTITY CASCADE;"`,
+      `"TRUNCATE procurement_requests, budgets, catalogs, supplier_verification_cases, notifications, document_counters, procurement_categories RESTART IDENTITY CASCADE;"`,
       { stdio: 'pipe' },
     );
     console.log(`✓ story data reset (lang=${LANG})`);
@@ -163,6 +166,12 @@ const log = (s) => console.log(s);
       { category: '*', minAmountMinor: 50_000, maxAmountMinor: null, method: 'RFQ' },
     ],
   });
+
+  // Curated category directory (Settings) — the shared vocabulary the method policy,
+  // budgets and analytics key off. Idempotent: 409 on an existing code is fine.
+  for (const [code, name] of Object.entries(T.catNames)) {
+    await postIdempotent('/categories', buyer, { code, name });
+  }
   // Pin a deterministic single-step approval chain so the story's requests reach
   // APPROVED with one approver click, regardless of whatever multi-step chain the
   // stand happens to carry (otherwise submit→approve leaves them SUBMITTED and
