@@ -259,3 +259,9 @@
 - Added GitHub-hosted-only fresh production Compose gate: missing-license restriction, ephemeral signed-file license, real buyer/approver actions, over-budget warning with APPROVED result, cross-org isolation, private presigned uploads/downloads, real clean/EICAR asynchronous scans, runtime DB role and no-context RLS.
 - Targeted checks PASS: shell/Node syntax, both Compose configurations, git diff whitespace. Resources inspected before checks: ~11GiB available RAM, 102GiB free disk, memory pressure0. Heavy builds not run on Contabo. Hosted fresh-install gate pending; prior 195 API/9 browser PASS remains evidence for earlier code82e323a, not this new installer.
 - Independent reviewer requested for this concrete implementation per AGENTS. Push/CI already authorized; no Leadprocure merge/deploy authorized.
+
+## 2026-10-28 — installer isolated for bounded review
+
+- Integration implementation checkpoint6a8893d. Product PR3's combined diff reached404283bytes and correctly failed the unchanged400000byte review guard. No cap was increased or bypassed. Stale candidate CI40584090650 cancelled to avoid duplicate heavy work.
+- Split installer into draft PR6, base codex/leadprocure-audit-controls, head f5b7e776709ef8506b7e9635ae52f9bc41bbf71f. PR3 now has the original accepted source tree at2c710bc52e779987c94894e89da450f8dfe452bf; checkpoint history preserved with normal forward commits, no force push. PR6 attached to chat.
+- PR6 https://github.com/rashadoni/leadprocure/pull/6; hosted run40584185358 pending. Independent source reviewer found no blocking installer defects; no fresh runtime PASS claimed. Budget claim now explicitly links the8 budgets tests within prior195 PASS and distinguishes soft warnings from blocking or standalone financial planning.
