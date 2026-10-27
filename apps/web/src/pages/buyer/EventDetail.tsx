@@ -452,7 +452,7 @@ export default function EventDetail() {
         </table>
         {ev.status === 'EVALUATION' && ev.format !== 'REVERSE' && !isRfi && (ev.bids ?? []).some((b: any) => b.state === 'OPENED') && (
           <div style={{ marginTop: 12 }}>
-            <button className="btn ghost" data-tip={t('tip_score')} onClick={doEvaluate}>{t('score')}</button>
+            <button className="btn ghost" aria-label={t('score')} data-tip={t('tip_score')} onClick={doEvaluate}>{t('score')}</button>
           </div>
         )}
       </div>
