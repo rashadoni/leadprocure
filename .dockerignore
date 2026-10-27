@@ -5,6 +5,9 @@
 **/.git
 **/.env
 **/.env.local
+**/.env.prod
+**/*.license
+**/license-private.pem
 **/*.log
 playwright-report
 test-results
