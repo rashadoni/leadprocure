@@ -1,8 +1,38 @@
 # Исполнение LP-A00–LP-A19
 
-**Актуально:** `rashadoni/leadprocure`. Code PR [#3](https://github.com/rashadoni/leadprocure/pull/3), materials PR [#4](https://github.com/rashadoni/leadprocure/pull/4). Aggregate PR2 закрыт без merge после разделения для review cap. Codebcfc322 ожидает hosted run40456574853 attempt2. До этого: первый полный API run184 PASS/5 FAIL (стенд ClamAV и старое auth expectation), исправлено и повторяется; независимое ревью нашло3 дефекта, все исправлены и повторно подтверждены по коду. LFS108 objects восстановлены. Исторические сведения ниже сохранены; прежний account и вывод «нет рабочего CI» superseded.
+## Актуальный результат — 27 октября 2026
 
-Обновлено 27 октября 2026, время пользователя Asia/Baku. Рабочая ветка `codex/leadprocure-client-presentation-az`, draft PR [#2](https://github.com/rashadoni/leadprocure/pull/2). Это текущий статус исправлений; исходный REPORT.md остаётся историческим отчётом аудита.
+Действующий репозиторий — `rashadoni/leadprocure`. Code PR [#3](https://github.com/rashadoni/leadprocure/pull/3), материалы [#4](https://github.com/rashadoni/leadprocure/pull/4), доказательства [#5](https://github.com/rashadoni/leadprocure/pull/5). Aggregate PR2 закрыт без merge. Production не обновлялся; merge/deploy не разрешены.
+
+**Полный hosted acceptance PASS:** [run40518660742](https://github.com/rashadoni/leadprocure/actions/runs/40518660742), code SHA `82e323a8183614cd6c853e223ddb783cb5e6c570` (integration checkpoint `29efa30`). Проверено на GitHub runner, не на Contabo:
+
+| Проверка | Фактический результат |
+|---|---|
+| Upgrade baseline0027 → current + rollback при историческом дубле | PASS, финансовые fixtures сохранены; повторный migration run PASS |
+| API typecheck | PASS |
+| Полный API/security/RLS regression suite | **23 suites, 195/195 PASS**, включая ClamAV/EICAR и подписанные webhook callbacks |
+| Официальные схемы export | PASS: OASIS UBL2.1 для двух примеров, OCDS1.1.5 package |
+| Полная сборка monorepo | PASS |
+| Native Chromium на изолированном API/DB/MinIO | **9/9 PASS**: buyer/supplier sections, create draft, role guard, custom criteria/re-evaluation и AZ/RU/EN analytics |
+| Dump/restore disposable DB | PASS: 35 миграций, 9 invoices, 47 RLS-enabled tables |
+| Независимое source review | Найденные code/materials/runbook defects исправлены и повторно проверены; см. INDEPENDENT-REVIEW.md |
+| v3 PPTX/PDF | 13 слайдов + 2 страницы; native text/структура, локальный PDF visual QA и SHA256 PASS |
+
+LP-A01–LP-A18 реализованы и входят в указанный regression gate; это не доказательство всех возможных нагрузок, налоговых сочетаний или коммерческих интеграций. **LP-A19 остаётся частично открытой по on-prem provisioning и внешней приёмке**, а не из-за неработающего CI. Нельзя объявлять все 20 задач полностью принятыми.
+
+Оставшиеся границы:
+
+- **Fresh bundled Docker Compose installation: NO-GO.** Используемые MinIO Docker images недоступны upstream. Pinned официальный binary в disposable CI является тестовой инфраструктурой и не исправляет production/on-prem provisioning. Рабочий runtime не менялся.
+- **Real SMTP/Meta sends: NOT RUN** — пользователь подтвердил, что тестовых подключений нет. Outbox, подпись callbacks и failure/recovery paths проверены; реальная доставка не подтверждена.
+- Реальный клиентский on-prem + коммерческая лицензия: NOT RUN; signed PASETO controls проверены в suite.
+- Внешний LLM, live ERP/банк, ASAN/Peppol не подтверждены; CSV не live ERP, PAID не банковский перевод, dev signature не ASAN.
+- Полный concurrency/load stress и native PowerPoint/Google Slides visual rendering: NOT RUN. Проверенные сценарии и PDF QA не заменяют эти проверки.
+
+Следующее действие по Leadprocure: устранить подтверждённый Compose provisioning blocker и выполнить отдельную fresh-install приёмку на изолированном hosted worker; внешние sends — после появления согласованных тестовых подключений. Перед любым production update нужны read-only preflight/backup и отдельное разрешение.
+
+## История до завершения hosted gate — SUPERSEDED
+
+Ниже сохранена прежняя матрица и диагностика. Сведения о retired owner, startup_failure, PR10/aggregate PR2 как активном и «полный gate NOT RUN» являются историческими и заменены актуальным результатом выше. Не использовать прежний аккаунт или старые маршруты.
 
 ## Проверки, которые выполнены
 
