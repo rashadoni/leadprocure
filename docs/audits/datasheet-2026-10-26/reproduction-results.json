@@ -1,0 +1,80 @@
+{
+  "scope": "Real service code; mocked DB and external adapters. Not integration or production verification.",
+  "results": [
+    {
+      "id": "F01_duplicate_invoice_lines",
+      "result": "CONFIRMED",
+      "detail": "Received 10; one invoice bills 20 using duplicated poItemId; status MATCHED, net 2000. No unique invoice/PO-line constraint in migration 0016."
+    },
+    {
+      "id": "F02_ubl_zero_vat",
+      "result": "CONFIRMED",
+      "detail": "Actual generated XML: zero total VAT, line tax category S / 18%. No schema conformance claim made by this test."
+    },
+    {
+      "id": "F03_auction_awards_nonlowest",
+      "result": "CONFIRMED",
+      "detail": "Requested OPENED bid awarded without any best-price query or justification. DB adapter contains no ranking enforcement; inspect migrations separately."
+    },
+    {
+      "id": "F04_empty_formal_evaluation",
+      "result": "CONFIRMED",
+      "detail": "Two eligible bids + zero scores creates a formal evaluation. No completeness guard."
+    },
+    {
+      "id": "F05_ai_zero_values",
+      "result": "CONFIRMED",
+      "detail": "Valid zero unit price / zero delivery days => NaN scores (JSON null) and NaN rationale."
+    },
+    {
+      "id": "F06_ai_incomparable_currency",
+      "result": "CONFIRMED",
+      "detail": "100 USD is ranked cheaper than 150 AZN purely by raw minor units; neither currency nor FX enters query/calculation. Same issue for unequal lot coverage."
+    },
+    {
+      "id": "F07_kyc_foreign_storage_key",
+      "result": "CONFIRMED",
+      "detail": "Caller-supplied foreign object key accepted and handed to signer. Exploit requires knowledge of existing key; no live object downloaded."
+    },
+    {
+      "id": "F08_multilot_po_scope",
+      "result": "CONFIRMED",
+      "detail": "Actual query selects all winning-bid items, no award lot filter; won 100 + other lot 900 produces PO 1000. Same omission in catalog seeding; contract header uses entire bid total."
+    },
+    {
+      "id": "F09_followup_stop_returning_shape",
+      "result": "CONFIRMED",
+      "detail": "TypeORM PostgreSQL UPDATE shape [rows,count] gives undefined audit entityId; stop succeeds. [[],0] also has length and incorrectly reports success for absent enrollment."
+    },
+    {
+      "id": "PASS_crypto_roundtrip_tamper",
+      "result": "CONFIRMED",
+      "detail": "Actual AES-GCM round-trip works, altered ciphertext rejected."
+    },
+    {
+      "id": "PASS_self_approval_blocked",
+      "result": "CONFIRMED",
+      "detail": "Creator cannot approve own request in real service method."
+    },
+    {
+      "id": "PASS_catalog_moq",
+      "result": "CONFIRMED",
+      "detail": "Below-MOQ order rejected."
+    },
+    {
+      "id": "F10_auction_no_priced_lines_for_po",
+      "result": "CONFIRMED",
+      "detail": "Auction stores payload and bid total but no bid_items; normal contract-to-PO method rejects empty priced lines. Checked migrations: no trigger materializes these lines."
+    },
+    {
+      "id": "F04_duplicate_formal_scores",
+      "result": "CONFIRMED",
+      "detail": "Duplicate criterion for same bid yields 200/100 score; no unique constraint on evaluation_scores in migrations."
+    },
+    {
+      "id": "F13_ocds_cancelled_award_active",
+      "result": "CONFIRMED",
+      "detail": "Soft-cancelled award exported as active; supplier and award value omitted. Not a full schema-validation test."
+    }
+  ]
+}

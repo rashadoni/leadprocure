@@ -1,0 +1,3 @@
+API source TypeScript (current shared source): PASS
+Web source TypeScript: PASS
+Full build: NOT RUN — hosted runner startup_failure before jobs; Contabo host contract prohibits full builds.

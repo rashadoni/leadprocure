@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-27",
+  "source_commit": "542ee1088e1436b6639c43a03d3944d445d3ecd7",
+  "repository": "rashadrahimov/leadprocure",
+  "current_runs": [
+    40407222256,
+    40407230554
+  ],
+  "result": "startup_failure",
+  "path": "BuildFailed",
+  "check_runs": 0,
+  "rerun": {
+    "http": 403,
+    "message": "This workflow run cannot be retried"
+  },
+  "actions_enabled": true,
+  "allowed_actions": "all",
+  "self_hosted_runners": 0,
+  "historical_public_probe": {
+    "repository": "rashadrahimov/actions-lock-test",
+    "run": 33473921959,
+    "check": 102461502369,
+    "annotation": "The job was not started because your account is locked due to a billing issue.",
+    "fresh_rerun": "403: created over a month ago",
+    "current_billing_state": "NOT VERIFIED"
+  },
+  "codespaces": "Current token cannot access user Codespaces API; no usable worker verified",
+  "azure_devops": {
+    "organization": "rashadrahimov",
+    "project": "leaddrive-v2",
+    "lead_drive_definitions": "disabled",
+    "pool_and_queue_inspection": "401",
+    "changes": "none"
+  },
+  "alternative_github": {
+    "repository": "rashadoni/leadprocure",
+    "private": false,
+    "last_known_success_run": 38175611519,
+    "source_transfer": "NOT PERFORMED",
+    "proposed_target": "rashadoni/leadprocure-acceptance (private)",
+    "authorization": "PENDING"
+  },
+  "mac_ephemeral_worker": "No configured SSH route found",
+  "contabo_full_gate": "NOT RUN: host contract prohibits heavy build/browser E2E here",
+  "merge_deploy": "NOT PERFORMED"
+}
