@@ -13,9 +13,8 @@
 // quota). Azure's Azerbaijani (Banu) was too weak, which is why az moved to Gemini.
 
 import { createRequire } from 'module';
-import { createHash } from 'crypto';
 import { execSync } from 'child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync, renameSync } from 'fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync, renameSync } from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -42,12 +41,12 @@ if (existsSync(join(ROOT, '.env'))) {
 // via TTS_<LANG> env (e.g. TTS_RU=azure).
 const ENGINE = {
   az: process.env.TTS_AZ ?? 'gemini',
-  ru: process.env.TTS_RU ?? 'azure', // Dmitry: fast, unmetered; Gemini quota stays for az
+  ru: process.env.TTS_RU ?? 'gemini',
   en: process.env.TTS_EN ?? 'azure',
 };
 const KEY = process.env.AZURE_SPEECH_KEY, REGION = process.env.AZURE_SPEECH_REGION;
 const GEMINI_KEY = process.env.GEMINI_API_KEY;
-const AZURE_VOICE = { ru: 'ru-RU-DmitryNeural', az: 'az-AZ-BanuNeural', en: 'en-US-JennyNeural' };
+const AZURE_VOICE = { ru: 'ru-RU-SvetlanaNeural', az: 'az-AZ-BanuNeural', en: 'en-US-JennyNeural' };
 const XLANG = { ru: 'ru-RU', az: 'az-AZ', en: 'en-US' };
 const GEMINI_VOICE = { az: 'Kore', ru: 'Kore', en: 'Kore' };
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash-preview-tts';
@@ -109,44 +108,10 @@ async function clickAt(page, sel, waitMs = 900) {
   await P(waitMs);
 }
 
-// Beat-synchronised helpers passed to every scene as the 3rd argument. Actions are
-// paced as FRACTIONS of the scene's narration (h.holdUntil(0.4)), never fixed sleeps:
-// az narration runs much longer than en/ru, so fixed pauses tuned for az leave
-// trailing silence on the shorter languages (ported from the leaddrive-v2 recorder).
-function makeHelpers(page) {
-  let t0 = Date.now(), ms = 6000;
-  return {
-    sleep: P,
-    setSceneBudget(m) { t0 = Date.now(); ms = m || 6000; },
-    async holdUntil(frac) {
-      const target = t0 + Math.max(0, Math.min(1, frac)) * ms;
-      const remain = target - Date.now();
-      if (remain > 0) await P(remain);
-    },
-    loc: (sel) => L(page, sel),
-    moveTo: (sel, hold = 450) => moveTo(page, sel, hold),
-    hover: (sel, hold = 900) => hoverTip(page, sel, hold),
-    click: (sel, wait = 600) => clickAt(page, sel, wait),
-    fill: (sel, text) => fillAt(page, sel, text),
-    scrollTo: (sel) => scrollTo(page, sel),
-    wheel: (dy) => page.mouse.wheel(0, dy),
-  };
-}
-
 // Route each language to its engine; both write an mp3 to `out`, so the duration probe +
 // ffmpeg mux are engine-agnostic.
-// Narration cache: identical text+voice is synthesized once and reused across runs —
-// the record→verify→fix→re-record loop would otherwise burn the daily Gemini quota
-// on unchanged az lines.
-const TTS_CACHE = join(ROOT, 'scripts/.tts-cache');
-mkdirSync(TTS_CACHE, { recursive: true });
 async function tts(text, lang, out) {
-  const voice = ENGINE[lang] === 'azure' ? AZURE_VOICE[lang] : `gemini-${GEMINI_VOICE[lang]}`;
-  const key = createHash('sha256').update(`${voice}|${lang}|${text}`).digest('hex').slice(0, 32);
-  const cached = join(TTS_CACHE, `${key}.mp3`);
-  if (existsSync(cached)) { copyFileSync(cached, out); return; }
-  await (ENGINE[lang] === 'azure' ? azureTts(text, lang, out) : geminiTts(text, lang, out));
-  copyFileSync(out, cached);
+  return ENGINE[lang] === 'azure' ? azureTts(text, lang, out) : geminiTts(text, lang, out);
 }
 
 async function azureTts(text, lang, out) {
@@ -232,12 +197,6 @@ const NAV = {
   furnitureTender: { ru: 'офисная мебель', az: 'ofis mebeli', en: 'office furniture' },
   fuelTender: { ru: 'дизельное топливо', az: 'dizel yanacağı', en: 'diesel fuel' },
 };
-// Localized button captions the scenarios click (t() keys from apps/web/src/i18n.tsx).
-const BTN = {
-  invite: { ru: 'Пригласить', az: 'Dəvət et', en: 'Invite' },
-  cancel: { ru: 'Отмена', az: 'Ləğv et', en: 'Cancel' },
-  bids: { ru: 'Ставки', az: 'Təkliflər', en: 'Bids' },
-};
 const API_URL = process.env.DEMO_API ?? 'http://localhost:3000';
 
 // ---------------- scenes: {ru,az,en} narration + camera action ----------------
@@ -259,120 +218,53 @@ const SECTIONS = {
     { ru: 'Раздел «Заявки» — отсюда начинается любая закупка. Заявка фиксирует внутреннюю потребность компании: что нужно, в каком количестве и по какой ориентировочной цене. Давайте создадим новую заявку вместе, шаг за шагом.',
       az: 'Sifarişlər bölməsi — istənilən satınalma buradan başlayır. Sifariş şirkətin daxili tələbatını qeyd edir: nə lazımdır, hansı miqdarda və təxminən hansı qiymətə. Gəlin birlikdə, addım-addım yeni sifariş yaradaq.',
       en: 'The Requests section — every purchase begins here. A request captures an internal need: what is needed, in what quantity, and at roughly what price. Let’s create a new one together, step by step.',
-      do: async (p, l, h) => { await h.moveTo(p.locator('form > .row').nth(0).locator('input').nth(0)); await h.holdUntil(0.55); await h.moveTo('table'); await h.holdUntil(0.92); } },
+      do: (p) => moveTo(p, p.locator('form > .row').nth(0).locator('input').nth(0)) },
     { ru: 'Сначала — название и категория. Категория здесь ключевая: именно по ней срабатывает политика метода закупки, ведётся контроль бюджета и строится аналитика по направлениям. Наводим курсор на поле и заполняем.',
       az: 'Əvvəlcə ad və kateqoriya. Kateqoriya burada açardır: məhz ona görə satınalma metodu siyasəti işə düşür, büdcə nəzarəti aparılır və istiqamətlər üzrə analitika qurulur. Kursoru sahəyə gətirib doldururuq.',
       en: 'First, the title and category. The category is pivotal: it drives the procurement-method policy, budget control, and per-category analytics. We move the cursor to the field and fill it in.',
-      do: async (p, lang, h) => {
-        await h.fill(p.locator('form > .row').nth(0).locator('input').nth(0), FILL[lang].reqTitle);
-        await h.holdUntil(0.55);
-        await h.fill('input[list="req-categories"]', 'IT');
-        await h.holdUntil(0.92);
+      do: async (p, lang) => {
+        await fillAt(p, p.locator('form > .row').nth(0).locator('input').nth(0), FILL[lang].reqTitle);
+        await fillAt(p, 'input[list="req-categories"]', 'IT');
       } },
     { ru: 'Теперь позиции. По каждой указываем наименование, количество и цену за единицу. Итоговую сумму считает сервер — по количеству и цене каждой позиции, поэтому она всегда точная и защищена от подмены. Строк можно добавить сколько угодно кнопкой «плюс позиция».',
       az: 'İndi mövqelər. Hər biri üçün ad, miqdar və vahid qiyməti göstəririk. Yekun məbləği server hesablayır — hər mövqenin sayı və qiymətinə görə, ona görə həmişə dəqiqdir və dəyişdirilmədən qorunur. «Mövqe əlavə et» düyməsi ilə istənilən qədər sətir əlavə etmək olar.',
       en: 'Now the line items. For each we enter a name, a quantity and a unit price. The total is computed by the server — from each line’s quantity and price — so it is always accurate and protected from tampering. You can add as many rows as needed with the plus-item button.',
-      do: async (p, lang, h) => {
+      do: async (p, lang) => {
         const row = p.locator('form > .row').nth(1);
-        await h.fill(row.locator('input').nth(0), FILL[lang].reqItem);
-        await h.holdUntil(0.35);
-        await h.fill(row.locator('input').nth(1), '10');
-        await h.holdUntil(0.5);
-        await h.fill(row.locator('input').nth(2), '1500');
-        await h.holdUntil(0.72);
-        await h.hover('button.ghost.small', 900);
-        await h.holdUntil(0.92);
+        await fillAt(p, row.locator('input').nth(0), FILL[lang].reqItem);
+        await fillAt(p, row.locator('input').nth(1), '10');
+        await fillAt(p, row.locator('input').nth(2), '1500');
+        await hoverTip(p, 'button.ghost.small', 900);
       } },
     { ru: 'Нажимаем «Создать» — и заявка появляется в реестре ниже, со статусом «черновик». Дальше её отправляют на утверждение; причём утвердить собственную заявку нельзя — это разделение полномочий, второй пары глаз.',
       az: 'Yarat düyməsini basırıq — və sifariş aşağıdakı reyestrdə «qaralama» statusu ilə görünür. Sonra o, təsdiqə göndərilir; özü də öz sifarişini təsdiqləmək olmaz — bu, səlahiyyətlərin bölünməsidir, ikinci cüt gözdür.',
       en: 'We click Create — and the request appears in the register below as a draft. Then it’s sent for approval; note you cannot approve your own request — that’s segregation of duties, a second pair of eyes.',
-      do: async (p, l, h) => { await h.click('form button.btn:not(.ghost):not([type=button])', 1100); await h.holdUntil(0.45); await h.scrollTo('table'); await h.holdUntil(0.92); } },
+      do: async (p) => { await clickAt(p, 'form button.btn:not(.ghost):not([type=button])', 1100); await scrollTo(p, 'table'); } },
     { ru: 'У утверждённой заявки открывается выбор процедуры закупки. Наведём курсор на кнопки — и подсказки объяснят каждую: RFQ — закрытый тендер с запечатанными ценами; RFP — с техническим предложением; RFI — сбор информации без цен; а молния — реверс-аукцион, где поставщики снижают цену в реальном времени. Мелкие суммы политика отправляет напрямую в заказ, без тендера.',
       az: 'Təsdiqlənmiş sifarişdə satınalma proseduru seçimi açılır. Kursoru düymələrin üzərinə gətirək — ipuçları hər birini izah edəcək: RFQ — möhürlü qiymətlərlə qapalı tender; RFP — texniki təkliflə; RFI — qiymətsiz məlumat toplama; şimşək isə revers-auksiondur, təchizatçılar qiyməti real vaxtda aşağı salır. Kiçik məbləğləri siyasət tendersiz birbaşa sifarişə göndərir.',
       en: 'An approved request opens the choice of procurement procedure. We hover the buttons and the tooltips explain each: RFQ — a sealed tender with encrypted prices; RFP — with a technical proposal; RFI — information gathering without prices; and the lightning — a reverse auction where suppliers drive the price down in real time. Small amounts go straight to a direct order, no tender.',
-      do: async (p, l, h) => {
-        await h.hover('button:has-text("RFQ")', 1400); await h.holdUntil(0.4);
-        await h.hover('button:has-text("RFP")', 1400); await h.holdUntil(0.62);
-        await h.hover('button:has-text("RFI")', 1400); await h.holdUntil(0.92);
-      } },
-    { ru: 'Кто решает, будет тендер или прямой заказ? Не автор заявки — колонку «метод» заполняет система в момент утверждения, по политике организации: до какой суммы прямой заказ, с какой — тендер. Настроить шкалу администратор может по ссылке с весами прямо отсюда — так исключаются закупки в обход конкуренции.',
-      az: 'Tender, yoxsa birbaşa sifariş olacağını kim həll edir? Sifarişin müəllifi yox — «metod» sütununu sistem təsdiq anında doldurur, təşkilatın siyasətinə görə: hansı məbləğə qədər birbaşa sifariş, hansından tender. Şkalanı administrator elə buradakı tərəzili keçidlə tənzimləyə bilər — beləcə rəqabətdən yan keçən satınalmalar istisna olunur.',
-      en: 'Who decides between a tender and a direct order? Not the requester — the method column is filled by the system at approval time, from the organisation’s policy: up to which amount a direct order, from which a tender. The admin tunes the scale via the scales link right here — which rules out purchases that dodge competition.',
-      do: async (p, l, h) => {
-        await h.holdUntil(0.25);
-        await h.hover('a:has-text("⚖️")', 1800);
-        await h.holdUntil(0.6);
-        await h.scrollTo('table');
-        await h.holdUntil(0.92);
+      do: async (p) => {
+        await hoverTip(p, 'button:has-text("RFQ")');
+        await hoverTip(p, 'button:has-text("RFP")');
+        await hoverTip(p, 'button:has-text("RFI")');
       } },
   ]},
   'buyer-events': { role: 'buyer', path: '/buyer/events', scenes: [
     { ru: 'Раздел «Тендеры». Все процедуры со статусами — наведите на статус, и он объяснит себя — и количество поданных ставок по каждой.',
       az: 'Tenderlər bölməsi. Bütün prosedurlar statuslarla — statusun üzərinə gətirin, o özünü izah edəcək — və hər biri üzrə verilmiş təkliflərin sayı.',
-      en: 'The Tenders section. All procedures with their statuses — hover a status and it explains itself — and the number of bids on each.',
-      do: async (p, l, h) => { await h.holdUntil(0.35); await h.hover('.badge', 1600); await h.holdUntil(0.92); } },
+      en: 'The Tenders section. All procedures with their statuses — hover a status and it explains itself — and the number of bids on each.' },
     { ru: 'Откроем завершённый тендер серверного оборудования.',
       az: 'Server avadanlığının başa çatmış tenderini açaq.',
       en: 'Let’s open the completed server-hardware tender.',
-      do: async (p, lang, h) => { await h.click(`a:has-text("${NAV.serverTender[lang]}")`, 1400); await p.waitForSelector('h1', { timeout: 15000 }); await h.holdUntil(0.92); } },
+      do: async (p, lang) => { await clickAt(p, `a:has-text("${NAV.serverTender[lang]}")`, 1400); await p.waitForSelector('h1', { timeout: 15000 }); } },
     { ru: 'Позиции тендера — неизменяемый снимок из заявки. При необходимости их делят на лоты, и каждый лот можно наградить своему поставщику.',
       az: 'Tenderin mövqeləri — sifarişdən dəyişməz görüntüdür. Lazım olarsa, lotlara bölünür və hər lot öz təchizatçısına verilə bilər.',
       en: 'The tender items are an immutable snapshot of the request. They can be split into lots, and each lot awarded to its own supplier.',
-      do: async (p, l, h) => { await h.holdUntil(0.3); await h.wheel(160); await h.holdUntil(0.55); await h.wheel(160); await h.holdUntil(0.8); await h.wheel(120); await h.holdUntil(0.92); } },
+      do: (p) => slowScroll(p, 3) },
     { ru: 'Ставки. До вскрытия закупщик видит только факт участия — суммы зашифрованы. После вскрытия появляются цены, сроки, взвешенная оценка и награждение. Здесь победил поставщик со ставкой ниже оценки — экономия видна сразу.',
       az: 'Təkliflər. Açılışa qədər alıcı yalnız iştirak faktını görür — məbləğlər şifrələnib. Açılışdan sonra qiymətlər, müddətlər, çəkili qiymətləndirmə və qalib seçimi görünür. Burada təxmindən aşağı təkliflə təchizatçı qalib gəldi — qənaət dərhal görünür.',
       en: 'The bids. Before opening, the buyer sees only that a supplier took part — the amounts are encrypted. After opening come the prices, lead times, the weighted score and the award. Here the winner bid below the estimate — the saving is visible at once.',
-      do: async (p, lang, h) => { await h.scrollTo(`h3:has-text("${BTN.bids[lang]}")`); await h.holdUntil(0.4); await h.wheel(180); await h.holdUntil(0.7); await h.wheel(140); await h.holdUntil(0.92); } },
-    { ru: 'А теперь тендер, который идёт прямо сейчас — офисная мебель. Здесь работает новая функция: автоматические напоминания поставщикам.',
-      az: 'İndi isə hazırda gedən tender — ofis mebeli. Burada yeni funksiya işləyir: təchizatçılara avtomatik xatırlatmalar.',
-      en: 'And now a tender that is running right now — office furniture. This is where a new feature works: automatic supplier reminders.',
-      do: async (p, lang, h) => {
-        await p.goto(`${BASE}/buyer/events`);
-        await p.waitForSelector('h1', { timeout: 15000 });
-        await injectCursor(p);
-        await h.holdUntil(0.35);
-        await h.click(`a:has-text("${NAV.furnitureTender[lang]}")`, 1400);
-        await p.waitForSelector('h1', { timeout: 15000 });
-        await injectCursor(p);
-        await h.holdUntil(0.92);
-      } },
-    { ru: 'Карточка «Авто-напоминания». План виден заранее: письмо через сутки, ещё одно через двое, затем ватсап. Приглашённые без ставки получают напоминания сами — вам не нужно никого дёргать. Как только поставщик подаёт ставку, его цепочка мгновенно останавливается.',
-      az: 'Avtomatik xatırlatmalar kartı. Plan əvvəlcədən görünür: bir gündən sonra məktub, iki gündən sonra daha biri, sonra vatsap. Təklif verməyən dəvətlilər xatırlatmaları özləri alır — heç kimi narahat etməyə ehtiyac yoxdur. Təchizatçı təklif verən kimi onun zənciri dərhal dayanır.',
-      en: 'The auto follow-ups card. The plan is visible up front: an email after a day, another after two, then WhatsApp. Invited suppliers who haven’t bid get reminded automatically — you chase no one. The moment a supplier bids, their chain stops instantly.',
-      do: async (p, l, h) => {
-        await h.scrollTo('h3:has-text("⏰")');
-        await h.holdUntil(0.3);
-        const chips = p.locator('.chip');
-        const n = Math.min(await chips.count(), 3);
-        const beats = [0.5, 0.7, 0.92];
-        for (let i = 0; i < n; i++) { await moveToLoc(p, chips.nth(i), 700); await h.holdUntil(beats[i] ?? 0.92); }
-      } },
-    { ru: 'Покажем в деле: приглашаем второго поставщика и включаем ему цепочку одной кнопкой. Статус сразу «активна», рядом — когда уйдёт первое письмо. Кнопка «стоп» в любой момент останавливает напоминания вручную.',
-      az: 'Gəlin əməldə göstərək: ikinci təchizatçını dəvət edib bir düymə ilə zəncirini aktivləşdiririk. Status dərhal «aktiv», yanında ilk məktubun nə vaxt gedəcəyi görünür. «Dayandır» düyməsi xatırlatmaları istənilən an əl ilə dayandırır.',
-      en: 'Let’s see it live: we invite the second supplier and enable their chain with one button. The status turns active at once, with the time of the first email next to it. The stop button halts the reminders manually at any moment.',
-      do: async (p, lang, h) => {
-        // invite Baku Metal if the dropdown offers it, then enable their chain
-        const sel = p.locator('select').first();
-        if (await sel.count()) {
-          const opt = sel.locator('option', { hasText: 'Baku Metal' });
-          if (await opt.count()) {
-            await moveToLoc(p, sel, 500);
-            await sel.selectOption({ label: (await opt.first().textContent()) ?? 'Baku Metal ASC' }).catch(() => {});
-            await h.holdUntil(0.18);
-            await h.click(`button:has-text("${BTN.invite[lang]}")`, 1200);
-          }
-        }
-        await h.holdUntil(0.38);
-        const enable = p.locator('button:has-text("▶")').first();
-        if (await enable.count()) await h.click(enable, 1400);
-        await h.holdUntil(0.62);
-        const badge = p.locator('h3:has-text("⏰")').locator('..').locator('.badge').first();
-        if (await badge.count()) await moveToLoc(p, badge, 900);
-        await h.holdUntil(0.8);
-        const stop = p.locator('button:has-text("⏹")').first();
-        if (await stop.count()) await moveToLoc(p, stop, 1100); // show it — never click
-        await h.holdUntil(0.94);
-      } },
+      do: async (p) => { await scrollTo(p, 'h3:has-text("Bids")'); await slowScroll(p, 3); } },
   ]},
   'buyer-contracts': { role: 'buyer', path: '/buyer/contracts', scenes: [
     { ru: 'Контракты и заказы. Контракт создаётся из награждённого тендера одним нажатием и фиксирует цены победителя.',
@@ -391,14 +283,10 @@ const SECTIONS = {
     { ru: 'Счета. Поставщик выставляет счёт по заказу, и система автоматически проводит трёхстороннюю сверку: что заказано, что принято по факту и что в счёте.',
       az: 'Qaimələr. Təchizatçı sifariş üzrə qaimə verir və sistem avtomatik üçtərəfli yoxlama aparır: nə sifariş olunub, faktiki nə qəbul edilib və qaimədə nə var.',
       en: 'Invoices. The supplier issues an invoice against the order, and the system runs an automatic three-way match: what was ordered, what was actually received and what’s on the invoice.' },
-    { ru: 'Совпало — счёт помечается «сошёлся»: его можно утвердить и оплатить. Расхождение — «спорный», с деталями по каждой строке. Наведите на статус — подсказка объяснит, что именно не сошлось.',
-      az: 'Uyğun gəldi — qaimə «uyğundur» kimi işarələnir: onu təsdiqləyib ödəmək olar. Uyğunsuzluq — «mübahisəli», hər sətir üzrə təfərrüatla. Statusun üzərinə gətirin — ipucu nəyin uyğun gəlmədiyini izah edəcək.',
-      en: 'A match marks the invoice as matched: it can be approved and paid. A discrepancy makes it disputed, with per-line details. Hover the status — the tooltip explains exactly what didn’t add up.',
-      do: async (p, l, h) => { await h.holdUntil(0.3); await h.hover('.badge[data-tip]', 1800); await h.holdUntil(0.7); await h.wheel(160); await h.holdUntil(0.92); } },
-    { ru: 'Важно: сверка живая. Если поставщик выставил счёт раньше, чем товар доехал, счёт временно спорный — но как только вы оформите приёмку, система пересчитает сверку сама и счёт станет «сошёлся» без единого клика. Ручное утверждение с обоснованием остаётся только для настоящих исключений. Кнопка UBL выгружает счёт в международном формате.',
-      az: 'Vacib: yoxlama canlıdır. Təchizatçı qaiməni mal çatmamışdan əvvəl veribsə, qaimə müvəqqəti mübahisəlidir — amma qəbulu rəsmiləşdirən kimi sistem yoxlamanı özü yenidən hesablayır və qaimə bir klik olmadan «uyğundur» olur. Əsaslandırma ilə əl təsdiqi yalnız əsl istisnalar üçün qalır. UBL düyməsi qaiməni beynəlxalq formatda ixrac edir.',
-      en: 'Importantly, the match is live. If the supplier invoices before the goods arrive, the invoice is disputed only temporarily — the moment you record the receipt, the system re-runs the match by itself and the invoice turns matched without a single click. Manual approval with a justification remains for genuine exceptions only. The UBL button exports the invoice in the international format.',
-      do: async (p, l, h) => { await h.holdUntil(0.35); await h.wheel(160); await h.holdUntil(0.6); await h.hover('.badge[data-tip]', 1500); await h.holdUntil(0.92); } },
+    { ru: 'Совпало — статус MATCHED: счёт можно утвердить и оплатить. Расхождение — DISPUTED, с деталями по каждой строке. Кнопка UBL выгружает счёт в международном формате.',
+      az: 'Uyğun gəldi — MATCHED statusu: qaiməni təsdiqləyib ödəmək olar. Uyğunsuzluq — DISPUTED, hər sətir üzrə təfərrüatla. UBL düyməsi qaiməni beynəlxalq formatda ixrac edir.',
+      en: 'A match gives the MATCHED status: the invoice can be approved and paid. A discrepancy is DISPUTED, with details per line. The UBL button exports the invoice in an international format.',
+      do: (p) => slowScroll(p, 4) },
   ]},
   'buyer-catalogs': { role: 'buyer', path: '/buyer/catalogs', scenes: [
     { ru: 'Каталоги — согласованные прайс-листы поставщиков, обычно созданные из выигранного тендера.',
@@ -458,55 +346,6 @@ const SECTIONS = {
       az: 'Siz hər sənədi yoxlayıb qərar verirsiniz. Təsdiq təchizatçının reyestrdəki statusunu avtomatik yüksəldir.',
       en: 'You review each document and make a decision. Approval automatically raises the supplier’s status in the registry.',
       do: (p) => slowScroll(p, 3) },
-  ]},
-  'buyer-settings': { role: 'buyer', path: '/buyer/settings', scenes: [
-    { ru: 'Настройки — центр управления организацией. Начнём с пользователей: администратор управляет всем, согласующий утверждает заявки, обычный пользователь их создаёт. Роль меняется прямо в таблице, а новый сотрудник добавляется формой ниже.',
-      az: 'Parametrlər — təşkilatın idarəetmə mərkəzi. İstifadəçilərdən başlayaq: administrator hər şeyi idarə edir, təsdiqləyən sifarişləri təsdiqləyir, adi istifadəçi onları yaradır. Rol cədvəldə dəyişdirilir, yeni əməkdaş isə aşağıdakı forma ilə əlavə olunur.',
-      en: 'Settings — the organisation’s control centre. Starting with users: the admin manages everything, the approver clears requests, a regular user creates them. Roles change right in the table, and a new colleague is added with the form below.',
-      do: async (p, l, h) => { await h.holdUntil(0.3); await h.moveTo('table select, table .badge', 900); await h.holdUntil(0.65); await h.wheel(180); await h.holdUntil(0.92); } },
-    { ru: 'Справочник категорий. Единый список нужен, чтобы «АйТи» и «IT» не жили раздельно: по категории срабатывает политика метода, считаются бюджеты и строится аналитика.',
-      az: 'Kateqoriya sorğu kitabçası. Vahid siyahı ona görə lazımdır ki, «AyTi» və «IT» ayrı yaşamasın: kateqoriyaya görə metod siyasəti işə düşür, büdcələr hesablanır və analitika qurulur.',
-      en: 'The category directory. One list keeps “IT” and “I.T.” from living apart: the category drives the method policy, the budgets and the analytics.',
-      do: async (p, l, h) => { await h.scrollTo('.card:nth-of-type(2)'); await h.holdUntil(0.45); await h.moveTo('.card:nth-of-type(2) .badge', 900); await h.holdUntil(0.92); } },
-    { ru: 'Политика метода закупки — та самая шкала, по которой система сама решает судьбу утверждённой заявки. Зелёная зона — мелкие суммы, прямой заказ без тендера. Дальше — закрытый тендер с запечатанными ценами. Автор заявки метод не выбирает — это защита от закупок в обход конкуренции.',
-      az: 'Satınalma metodu siyasəti — sistemin təsdiqlənmiş sifarişin taleyini özü həll etdiyi həmin şkala. Yaşıl zona — kiçik məbləğlər, tendersiz birbaşa sifariş. Sonra — möhürlü qiymətlərlə qapalı tender. Sifarişin müəllifi metodu seçmir — bu, rəqabətdən yan keçən satınalmalardan qorunmadır.',
-      en: 'The procurement-method policy — the very scale by which the system decides an approved request’s fate on its own. The green zone is small amounts: a direct order, no tender. Beyond it — a sealed tender with encrypted prices. The requester never picks the method — that guards against dodging competition.',
-      do: async (p, l, h) => {
-        await h.scrollTo('h3:has-text("⚖️")');
-        await h.holdUntil(0.3);
-        const segs = p.locator('.card:nth-of-type(3) > div > div > div');
-        const n = Math.min(await segs.count(), 2);
-        const beats = [0.6, 0.92];
-        for (let i = 0; i < n; i++) { await moveToLoc(p, segs.nth(i), 1100); await h.holdUntil(beats[i] ?? 0.92); }
-      } },
-    { ru: 'Шкала полностью редактируется: нажимаем «изменить» — и каждый диапазон открыт для правки. Категория, суммы в манатах, метод из списка; кнопкой «плюс диапазон» добавляются новые полосы — например, отдельное правило для строительства. Сейчас ничего не сохраняем — «отмена».',
-      az: 'Şkala tam redaktə olunur: «dəyiş» düyməsini basırıq — və hər aralıq düzəlişə açıqdır. Kateqoriya, manatla məbləğlər, siyahıdan metod; «aralıq əlavə et» düyməsi ilə yeni zolaqlar əlavə olunur — məsələn, tikinti üçün ayrıca qayda. İndi heç nə saxlamırıq — «ləğv et».',
-      en: 'The scale is fully editable: we click Edit — and every band opens up. Category, amounts in manats, the method from a list; the add-band button creates new bands — say, a separate rule for construction. We save nothing now — Cancel.',
-      do: async (p, lang, h) => {
-        await h.click('button:has-text("✎")', 1100);
-        await h.holdUntil(0.3);
-        const inp = p.locator('.card:nth-of-type(3) input[type=number]').first();
-        if (await inp.count()) await moveToLoc(p, inp, 900);
-        await h.holdUntil(0.5);
-        const sel = p.locator('.card:nth-of-type(3) select').first();
-        if (await sel.count()) await moveToLoc(p, sel, 900);
-        await h.holdUntil(0.72);
-        const add = p.locator('.card:nth-of-type(3) button:has-text("+")').last();
-        if (await add.count()) await h.click(add, 700);
-        await h.holdUntil(0.88);
-        await h.click(`.card:nth-of-type(3) button:has-text("${BTN.cancel[lang]}")`, 800);
-      } },
-    { ru: 'И цепочка согласования: сколько подписей нужно заявке в зависимости от суммы. Готовые схемы показаны карточками, активная отмечена галочкой; переключение — один клик. Один человек не может закрыть два шага одной заявки, а автор — согласовать свою собственную: разделение полномочий встроено в саму систему.',
-      az: 'Və təsdiq zənciri: məbləğdən asılı olaraq sifarişə neçə imza lazımdır. Hazır sxemlər kartlarla göstərilib, aktiv olanı işarələnib; keçid — bir klik. Bir nəfər eyni sifarişin iki addımını bağlaya bilməz, müəllif isə özününkünü təsdiqləyə bilməz: səlahiyyətlərin bölünməsi sistemin özünə hörülüb.',
-      en: 'And the approval chain: how many sign-offs a request needs depending on its amount. The presets are cards, the active one is ticked; switching is one click. No single person can clear two steps of one request, and the author can never approve their own: segregation of duties is built into the system itself.',
-      do: async (p, l, h) => {
-        await h.scrollTo('h3:has-text("🖊")');
-        await h.holdUntil(0.3);
-        const cards = p.locator('[role=button]');
-        const n = Math.min(await cards.count(), 3);
-        const beats = [0.55, 0.75, 0.94];
-        for (let i = 0; i < n; i++) { await moveToLoc(p, cards.nth(i), 950); await h.holdUntil(beats[i] ?? 0.94); }
-      } },
   ]},
   'sup-dashboard': { role: 'sup', path: '/supplier/dashboard', scenes: [
     { ru: 'Рабочий стол поставщика. Открытые тендеры, мои ставки, выигранные контракты, заказы в работе и счета — всё на одном экране.',
@@ -665,17 +504,12 @@ async function login(ctx, email) {
         await injectCursor(page);
         const offsets = [];
         const LEAD = 650; // narration starts first; the cursor follows so voice never lags behind
-        const h = makeHelpers(page);
         for (const scene of sec.scenes) {
-          const startMs = Date.now() - t0;        // audio starts at the scene boundary
-          offsets.push(startMs);
+          offsets.push(Date.now() - t0);          // audio starts at the scene boundary
           await P(LEAD);                          // let the voice begin before the cursor moves
-          h.setSceneBudget(scene.sec * 1000);     // anchor holdUntil() to THIS narration
-          try { await scene.do?.(page, lang, h); }
-          catch (e) { console.log(`  (${key}/${lang}: ${e.message.split('\n')[0]})`); }
-          // hold the scene until its narration (plus a small tail) has fully played out
-          const remain = startMs + scene.sec * 1000 + 700 - (Date.now() - t0);
-          if (remain > 0) await P(remain);
+          const act = Promise.resolve(scene.do?.(page, lang)).catch((e) => console.log(`  (${key}/${lang}: ${e.message.split('\n')[0]})`));
+          await P(Math.max(0, scene.sec * 1000 + 700 - LEAD));
+          await act; // if the action outlasts the narration, hold until it finishes
         }
         await P(1200);
         produced.push({ key, video: page.video(), offsets, scenes: sec.scenes.map((s) => ({ audio: s.audio })) });

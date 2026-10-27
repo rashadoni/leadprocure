@@ -212,4 +212,16 @@ describe('outreach follow-ups (API e2e)', () => {
     expect((await owner.query(`SELECT status FROM followup_outbox WHERE id=$1`,[job.id])).rows[0].status).toBe('CANCELLED');
   });
 
+  it('leases only the job being dispatched while later recipients remain pending',async()=>{
+    await scheduler.tick();
+    const ev=await makeOpenEvent();await http().post(`/events/${ev.eventId}/followups`).set(...bearer(buyerToken)).send({}).expect(201);await rewind(ev.eventId);
+    const first=(await owner.query(`SELECT * FROM followup_claim_outbox()`)).rows;expect(first).toHaveLength(1);
+    const waiting=(await owner.query(`SELECT o.id,o.status FROM followup_outbox o JOIN followup_enrollments e ON e.id=o.enrollment_id WHERE e.event_id=$1 AND o.id<>$2`,[ev.eventId,first[0].id])).rows;
+    expect(waiting).toHaveLength(1);expect(waiting[0].status).toBe('PENDING');
+    await owner.query(`UPDATE followup_outbox SET lease_until=now()-interval '1 minute' WHERE id=$1`,[first[0].id]);
+    const second=(await owner.query(`SELECT * FROM followup_claim_outbox()`)).rows;expect(second).toHaveLength(1);expect(second[0].id).toBe(waiting[0].id);
+    expect((await owner.query(`SELECT status FROM followup_outbox WHERE id=$1`,[first[0].id])).rows[0].status).toBe('UNKNOWN');
+    await owner.query(`SELECT followup_finish_outbox($1,'SENT',NULL,NULL)`,[second[0].id]);
+  });
+
 });

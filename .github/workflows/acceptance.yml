@@ -21,6 +21,12 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U leadprocure_owner -d leadprocure_audit_test"
           --health-interval 5s --health-timeout 5s --health-retries 15
+      clamav:
+        image: clamav/clamav:stable
+        ports: ['3310:3310']
+        options: >-
+          --health-cmd "clamdscan --ping=1"
+          --health-start-period 90s --health-interval 10s --health-timeout 5s --health-retries 30
     env:
       NODE_ENV: test
       LEADPROCURE_TEST_ISOLATED: '1'
@@ -38,6 +44,8 @@ jobs:
       AUDIT_EXPORT_DIR: /tmp/leadprocure-audit-exports
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.4

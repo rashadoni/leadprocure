@@ -89,6 +89,18 @@ describe('datasheet audit: files, financial boundaries and concurrency', () => {
     expect(xml).toContain('unitCode="KGM"');expect(xml).toContain('<cbc:Percent>0</cbc:Percent>');expect(xml).not.toContain('<cbc:Percent>18</cbc:Percent>');
     if(process.env.AUDIT_EXPORT_DIR)writeFileSync(`${process.env.AUDIT_EXPORT_DIR}/zero.xml`,xml);
   });
+  it('disputed overbilling cannot displace a matched invoice when the final receipt arrives',async()=>{
+    const {p,i}=await po(20);
+    await http().post(`/orders/${p}/receipts`).set(...auth(buyer)).send({items:[{poItemId:i,qty:10}]}).expect(201);
+    const submit=(qty:number)=>http().post(`/invoices/from-po/${p}`).set(...auth(supplier)).send({items:[{poItemId:i,qty,unitPriceMinor:100}]}).expect(201);
+    const valid=(await submit(10)).body;expect(valid.status).toBe('MATCHED');
+    const excess=(await submit(15)).body;expect(excess.status).toBe('DISPUTED');
+    await http().post(`/orders/${p}/receipts`).set(...auth(buyer)).send({items:[{poItemId:i,qty:10}]}).expect(201);
+    expect((await http().get(`/invoices/${valid.id}`).set(...auth(buyer)).expect(200)).body.status).toBe('MATCHED');
+    expect((await http().get(`/invoices/${excess.id}`).set(...auth(buyer)).expect(200)).body.status).toBe('DISPUTED');
+    expect((await submit(10)).body.status).toBe('MATCHED');
+    expect((await submit(1)).body.status).toBe('DISPUTED');
+  });
   it('handles zero and exclusive tax without floating point totals',()=>{
     expect(taxTotals(10000,0,'EXCLUSIVE')).toEqual({net:10000,tax:0,gross:10000});
     expect(taxTotals(10000,1800,'EXCLUSIVE')).toEqual({net:10000,tax:1800,gross:11800});

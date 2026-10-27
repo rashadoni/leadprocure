@@ -16,7 +16,7 @@ elif mode in ['roles','roles-upgrade']:
     sql="CREATE ROLE app_user LOGIN PASSWORD 'isolated_app' NOSUPERUSER NOBYPASSRLS; GRANT CONNECT ON DATABASE leadprocure_audit_test TO app_user; GRANT USAGE ON SCHEMA public TO app_user; ALTER DEFAULT PRIVILEGES FOR ROLE leadprocure_owner IN SCHEMA public GRANT SELECT,INSERT,UPDATE,DELETE ON TABLES TO app_user; ALTER DEFAULT PRIVILEGES FOR ROLE leadprocure_owner IN SCHEMA public GRANT USAGE,SELECT ON SEQUENCES TO app_user;"
     docker(['exec',db,'psql','-U','leadprocure_owner','-d','leadprocure_audit_test','-v','ON_ERROR_STOP=1','-c',sql])
 elif mode in ['migrate','test','bucket','webtype','typecheck','upgrade']:
-    args=['run','--rm','--network',network,'--memory','1g','--cpus','1','--tmpfs','/tmp:rw,size=128m','-w','/repo/apps/api']
+    args=['run','--rm','--network',network if mode!='typecheck' else 'none','--memory','1g','--cpus','1','--tmpfs','/tmp:rw,size=128m','-w','/repo/apps/api']
     for src,dst in [('apps/api/src','/repo/apps/api/src'),('apps/api/test','/repo/apps/api/test'),('packages/shared/src','/repo/packages/shared/src'),('apps/web/src','/repo/apps/web/src'),('apps/web/tsconfig.json','/repo/apps/web/tsconfig.json'),('scripts','/repo/scripts')]:args+=['-v',str(root/src)+':'+dst+':ro']
     exports=pathlib.Path('/tmp/leadprocure-audit-exports')
     exports.mkdir(exist_ok=True)

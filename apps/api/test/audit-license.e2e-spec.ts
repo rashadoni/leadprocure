@@ -38,6 +38,13 @@ describe('audit licensing: signed claims, time and graceful continuation',()=>{
     await service.installFromToken(await signLicenseToken({...claims,license_id:'renewed',expires_at:new Date(now+60*86400000).toISOString(),grace_until:new Date(now+70*86400000).toISOString()},pair.privateKey));
     expect(service.status()).toBe('valid');
   });
+  it('on-prem verification refuses malformed and tampered signed tokens',async()=>{
+    const service=new EntitlementService({query:async()=>[]} as any,cfg);
+    await expect(service.installFromToken('not-a-paseto-token')).rejects.toThrow();
+    const token=await signLicenseToken(claims,pair.privateKey);
+    const parts=token.split('.');parts[2]=(parts[2][0]==='A'?'B':'A')+parts[2].slice(1);
+    await expect(service.installFromToken(parts.join('.'))).rejects.toThrow();
+  });
   it('future and revoked signed licenses do not permit new operations',async()=>{
     const token=await signLicenseToken({...claims,valid_from:new Date(now+86400000).toISOString()},pair.privateKey);
     const service=new EntitlementService({query:async()=>[{raw_token:token,status:'valid'}]} as any,cfg);

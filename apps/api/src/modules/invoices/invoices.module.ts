@@ -57,13 +57,13 @@ export class InvoicesService {
       const received = Number(
         (await m.query(`SELECT COALESCE(SUM(qty_received),0) AS r FROM goods_receipt_items WHERE po_item_id=$1`, [it.poItemId]))[0].r,
       );
-      // Draw-down: quantities already billed on prior, non-rejected invoices cannot be billed
+      // Draw-down: quantities already allocated to matched/approved/paid invoices cannot be billed
       // again — otherwise the same delivery could be invoiced (and paid) twice.
       const invoiced = Number(
         (await m.query(
           `SELECT COALESCE(SUM(ii.qty),0) AS q FROM invoice_items ii
            JOIN invoices i ON i.id = ii.invoice_id
-           WHERE ii.po_item_id=$1 AND i.status <> 'REJECTED'`,
+           WHERE ii.po_item_id=$1 AND i.status IN ('MATCHED','APPROVED','PAID')`,
           [it.poItemId],
         ))[0].q,
       );
