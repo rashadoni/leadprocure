@@ -1,6 +1,8 @@
 # Исполнение LP-A00–LP-A19
 
-Обновлено 27 октября 2026, время пользователя Asia/Baku. Рабочая ветка `codex/leadprocure-client-presentation-az`, draft PR [#10](https://github.com/rashadrahimov/leadprocure/pull/10). Это текущий статус исправлений; исходный REPORT.md остаётся историческим отчётом аудита.
+**Актуальный маршрут по уточнению владельца:** `rashadoni/leadprocure`, PR #2. Старый account rashadrahimov и прежние выводы об отсутствии рабочего CI superseded. Run40455265322 в правильном репозитории создал runner/job и выполняет hosted acceptance. Итоговый результат ещё ожидается. Исторические сведения ниже сохранены.
+
+Обновлено 27 октября 2026, время пользователя Asia/Baku. Рабочая ветка `codex/leadprocure-client-presentation-az`, draft PR [#2](https://github.com/rashadoni/leadprocure/pull/2). Это текущий статус исправлений; исходный REPORT.md остаётся историческим отчётом аудита.
 
 ## Проверки, которые выполнены
 

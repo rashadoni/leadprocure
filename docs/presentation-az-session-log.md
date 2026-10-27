@@ -189,3 +189,15 @@
 - Проверен текущий rashadoni/leadprocure: main680f0ae, owner доступен с admin rights, repository public и не archived. Получен main через отдельный tracking ref; история имеет общий ancestor ee6224f. Рабочие checkpoint commits сохранены.
 - Новый main добавляет delivery contract и проверку main protection, без приложения/deployment workflow. Перед продолжением прочитаны актуальные AGENTS.md и docs/DELIVERY-ARCHITECTURE.md: main только PR, agent review, пользовательское разрешение перед merge. Main/production не меняются.
 - Исправляется origin на https://github.com/rashadoni/leadprocure.git; current main интегрируется в feature branch без переписывания checkpoint history. Canonical checkout files/dirty state не меняются.
+
+## 2026-10-27 — CI запущен в настоящем репозитории
+- Origin успешно исправлен на https://github.com/rashadoni/leadprocure.git. Общий Git remote исправлен; canonical рабочие файлы и main не менялись. В feature branch обычным merge включён актуальный main680f0ae; все старые checkpoint commits остались в истории. Head04f8c86.
+- Разрешённая пользователем ветка отправлена в rashadoni/leadprocure, tracking origin настроен. Создан draft PR2 https://github.com/rashadoni/leadprocure/pull/2; прикреплён к задаче. Старое attachment PR10 удалено из задачи, сам старый PR не изменялся.
+- Hosted push acceptance run40455265322 создал job122026993973: контейнеры PostgreSQL подняты, checkout и pnpm setup прошли. PR acceptance40455295145 и Agent review40455295157 также зарегистрированы. Блокер startup_failure старого account больше не относится к текущему пути; прежние выводы в STATUS/CI-OPTIONS помечены superseded.
+- Текущая точка: выполняется полный hosted gate на настоящем repo. Следующее действие: анализировать результаты и исправлять дефекты без остановок после каждого задания. Merge/main/deploy не разрешались и не выполняются.
+
+## 2026-10-27 — первые реальные результаты hosted gate
+- Рабочий runner правильного account дошёл до установки зависимостей и bootstrap app_user. Остановка на MinIO: Docker Hub minio/minio недоступен (pull access denied); Quay tag probes также не дали manifest. Тесты приложения в этом run не начались.
+- Hosted storage bootstrap переведён на официальный GitHub release binary MinIO RELEASE.2025-09-07T16-13-09Z с SHA256 из upstream release API; bucket создаёт уже установленный AWS SDK, дополнительный mc image не нужен. Это disposable CI fixture, production images не меняются; fresh on-prem bootstrap требует отдельной проверки из-за upstream distribution change.
+- acceptance triggers ограничены PR/main push/manual, чтобы feature push и тот же PR не запускали дублирующие полные suites. Gate не сокращён.
+- Agent-review честно отклонил aggregate diff3,471,359bytes при лимите400,000. Лимит/проверка не ослабляются. Готовится разделение на code acceptance, финальные материалы и audit evidence PRs; aggregate branch/checkpoint history сохраняется. Черновые дизайн-концепции остаются в исходной task branch.
