@@ -1,0 +1,130 @@
+{
+  "version": "v3-audit-reviewed",
+  "title": "Leadprocure",
+  "subtitle": "Məhsul məlumat vərəqi",
+  "tagline": "Korporativ satınalma və təchizatçı əməkdaşlığı platforması",
+  "intro": "Satınalma tələbindən tenderə, müqavilədən sifariş, qəbul və qaiməyə qədər vahid iş prosesi. Leadprocure məsul şəxsləri, qərarları və əməliyyat məlumatlarını əlaqələndirərək satınalma, maliyyə və əməliyyat komandalarına ortaq baxış verir.",
+  "targetBuyer": "Daxili təsdiq qaydaları, rəqabətli seçim və təchizatın icrası üzərində sistemli nəzarət qurmaq istəyən müəssisələr və korporativ satınalma komandaları.",
+  "pagePlan": [
+    {
+      "page": 1,
+      "sections": [
+        "title",
+        "subtitle",
+        "tagline",
+        "intro",
+        "targetBuyer",
+        "capabilities"
+      ]
+    },
+    {
+      "page": 2,
+      "sections": [
+        "roles",
+        "languages",
+        "financialFields",
+        "deployment",
+        "integrations",
+        "security",
+        "caveats",
+        "pilot"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "title": "Revers-auksion",
+      "description": "Cari ən yaxşı qiymət və növbəti maksimum təklif həddi iştirakçıya görünür. Minimum endirim addımı və son anda gələn təkliflər üçün müddətin məhdud uzadılması qaydası tətbiq olunur."
+    },
+    {
+      "title": "Məxfi RFQ və RFP",
+      "description": "Qiymət təklifi sorğusunda və texniki təklifli tenderdə məbləğlər açılışa qədər alıcıdan gizlidir. RFI ilə qiymətsiz məlumat toplamaq, ümumi sual-cavab bölməsində iştirakçıları məlumatlandırmaq mümkündür."
+    },
+    {
+      "title": "Təsdiq zəncirləri və səlahiyyət bölgüsü",
+      "description": "Məbləğə görə satınalma metodu və təsdiq addımları müəyyən edilir. Müəllif öz tələbini təsdiqləmir; bir şəxs eyni tələbin iki təsdiq addımını yerinə yetirə bilmir."
+    },
+    {
+      "title": "Lotlar üzrə seçim və formal qiymətləndirmə",
+      "description": "Meyarlar əvvəlcədən müəyyən edilir. Lotlar müxtəlif təchizatçılara verilə bilər. Qiymətləndirmədə birinci olmayan təklifin seçilməsi və yalnız bir uyğun təklifin olduğu hallar əsaslandırma tələb edir."
+    },
+    {
+      "title": "İzah edilən AI tövsiyəsi",
+      "description": "Açılmış təkliflər eyni lot və valyuta üzrə qiymət, çatdırılma və tarixçə əsasında sıralanır. İzah edilən köməkçi tövsiyə formal qiymətləndirməni əvəz etmir; qalib ayrıca təsdiqlənir."
+    },
+    {
+      "title": "Təchizatçı reyestri və sənəd yoxlaması",
+      "description": "Reyestr, sənədlərə əsaslanan KYC və performans tarixçəsi idarə olunur. Bloklama yeni satınalma əməliyyatlarına tətbiq edilir; mövcud öhdəliklərin icrası ayrıca davam edir."
+    },
+    {
+      "title": "Müqavilələr, sifarişlər və qiymət kataloqları",
+      "description": "Müqavilədən PO və qəbula qədər icra izlənir. Dəyişiklik təchizatçının razılığı ilə tətbiq olunur. Razılaşdırılmış qiymət kataloqları minimum miqdar yoxlaması ilə təkrar sifariş imkanı verir."
+    },
+    {
+      "title": "Qaimələrin üçtərəfli üzləşdirilməsi",
+      "description": "Sifariş, faktiki qəbul və qaimə müqayisə edilir; qiymət və miqdar uyğunsuzluqları göstərilir. Mübahisəli qaimənin istisna olaraq təsdiqi əsaslandırılır. Ödəniş statusu uçota alınır."
+    },
+    {
+      "title": "Büdcə və xərc analitikası",
+      "description": "Kateqoriya və il üzrə limitlər, tələblərin büdcəyə təsiri və aşım xəbərdarlıqları görünür. Qəbul edilmiş sifarişlər üzrə xərclər valyuta ilə ayrılır; ay sifarişin yaradılma tarixinə görə hesablanır."
+    },
+    {
+      "title": "Planlı təchizatçı xatırlatmaları",
+      "description": "Cavab verməmiş dəvətli təchizatçılar üçün e-poçt və WhatsApp ardıcıllıqları qurulur. Təklif daxil olduqda zəncir dayanır; alıcı xatırlatmaları əl ilə də dayandıra bilər."
+    }
+  ],
+  "roles": [
+    "Alıcı administratoru",
+    "Təsdiqləyən şəxs",
+    "Alıcı istifadəçisi",
+    "Təchizatçı istifadəçisi"
+  ],
+  "languages": [
+    "Azərbaycan dili",
+    "Rus dili",
+    "İngilis dili"
+  ],
+  "financialFields": [
+    "Serverdə hesablanan yekunlar; hər satınalma prosesi daxilində vahid valyuta.",
+    "VÖEN, mövqe üzrə ƏDV, daxil və xaric vergi rejimləri; AZN ilə iş axını."
+  ],
+  "deployment": [
+    {
+      "title": "Bulud modeli",
+      "description": "Təşkilatlar üzrə məlumat ayrılması ilə SaaS yerləşdirmə."
+    },
+    {
+      "title": "Müştərinin infrastrukturunda",
+      "description": "Öz infrastrukturunda yerləşdirmə və lisenziyalaşdırma; texniki əhatə ayrıca razılaşdırılır."
+    }
+  ],
+  "integrations": [
+    {
+      "title": "UBL və OCDS",
+      "description": "Ümumi UBL 2.1 qaimə sənədi və OCDS 1.1.5 quruluşunda tender/nəticə məlumatlarının ixracı."
+    },
+    {
+      "title": "1C üçün CSV",
+      "description": "Qaimələrin 1C-yə uyğunlaşdırıla bilən CSV faylı ilə ixracı."
+    },
+    {
+      "title": "E-poçt və WhatsApp",
+      "description": "Təşkilatın SMTP və Meta WhatsApp Cloud kanalları ilə qoşulma."
+    }
+  ],
+  "security": [
+    "Rollar üzrə əməliyyat səlahiyyətləri və təşkilatlar arasında məlumat ayrılması.",
+    "Məxfi təkliflər üçün AES-256-GCM şifrələməsi və açılışa bağlı görünürlük.",
+    "Təsdiq səlahiyyətlərinin ayrılması və əvvəlcədən müəyyən edilən qiymətləndirmə meyarları.",
+    "Əsas əməliyyatlar üçün tətbiq istifadəçisinin dəyişə bilmədiyi audit qeydləri.",
+    "Son təqdimetmə tarixinin və məbləğ hesablamalarının serverdə yoxlanılması."
+  ],
+  "caveats": [
+    "Büdcə aşımı təsdiqi avtomatik bloklamır. Ödəniş statusunun qeydi bank köçürməsi deyil.",
+    "CSV canlı ERP sinxronlaşdırılması deyil. Ümumi UBL ixracı Peppol şəbəkəsinə qoşulma deyil; ayrıca Access Point tələb olunur.",
+    "Təchizatçı yoxlaması sənədlər və alıcının qərarına əsaslanır. Real ASAN İmza operator bağlantısı cari versiyada aktiv deyil.",
+    "SMTP/Meta göndərişi kanallar qoşulduqdan sonra pilotda yoxlanılır. LLM izahı konfiqurasiyadan asılıdır; yerli evristik model mövcuddur.",
+    "Modulların əlçatanlığı lisenziya və texniki konfiqurasiyadan asılıdır. Format dəstəyi sertifikatlaşdırma və ya hüquqi uyğunluq zəmanəti deyil."
+  ],
+  "pilot": "Pilot üçün bir satınalma kateqoriyası seçilir; rollar, qaydalar və nəticənin qiymətləndirilməsi meyarları birlikdə müəyyən edilir."
+}

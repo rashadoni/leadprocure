@@ -1,0 +1,15 @@
+{
+  "slide_count": 13,
+  "text_layout_issues": [],
+  "screenshots": 0,
+  "cover_illustrations": 1,
+  "design": "C / Monograph",
+  "fonts": {
+    "Display": "BarlowCondensed-Bold.ttf",
+    "DisplayRegular": "BarlowCondensed-Regular.ttf",
+    "Body": "IBMPlexSans-Regular.ttf",
+    "BodyBold": "IBMPlexSans-Bold.ttf"
+  },
+  "native_pptx_render": "NOT RUN for v3: native PowerPoint/Google Slides rendering unavailable in this pass",
+  "visualReview": "PASS: all local PDF pages and contact sheets reviewed; no clipping or missing Azerbaijani glyphs"
+}

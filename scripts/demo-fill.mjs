@@ -10,14 +10,16 @@
 //   + бюджеты, каталог с заказом, верификация, Q&A
 //
 // Usage:  node scripts/demo-fill.mjs [API_URL]
-//   API_URL default http://localhost:3000
-//   DEMO_PG_CONTAINER (default leadprocure-prod-postgres-1) — used only to nudge the
-//   story-A deadline via `docker exec psql`; if unavailable, story A stays OPEN.
+//   API_URL must be the explicit disposable http://127.0.0.1:<published-port>.
+//   Requires DEMO_ISOLATED=1, explicit DEMO_PG_CONTAINER and DEMO_API_CONTAINER,
+//   both labelled leadprocure.disposable=true. DB must be leadprocure_demo.
+//   API_URL must match the API port bound specifically on127.0.0.1.
 
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
+import {assertDemoTarget} from './demo-target.mjs';
 
 const API = process.argv[2] ?? 'http://localhost:3000';
-const PG = process.env.DEMO_PG_CONTAINER ?? 'leadprocure-prod-postgres-1';
+const {pg:PG,dbName:DB} = assertDemoTarget(process.env,API);
 const PASS = 'Passw0rd!';
 const DAY = 24 * 3600_000;
 const LANG = process.env.DEMO_LANG ?? 'ru'; // seed the story content in this language
@@ -36,6 +38,7 @@ const TXT = {
     houseReq: 'Хозтовары для офиса', houseItem: 'Бумага А4, пачка',
     amendReason: 'Увеличиваем объём: открылся второй офис',
     budgetAll: 'Общий бюджет', budgetIT: 'IT-бюджет',
+    catNames: { IT: 'ИТ и техника', OFFICE: 'Офис и хозтовары', CONSTRUCTION: 'Строительство и ремонт', FUEL: 'Топливо', LOGISTICS: 'Логистика и склад' },
     catTitle: 'Офисные расходники — Supply One', catItem1: 'Бумага А4 80г', catItem2: 'Тонер HP 26A', uomReam: 'пачка', uomPcs: 'шт',
     qnaQ: 'Допускается ли поставка кресел партиями по 10 штук?', qnaA: 'Да, партиями допускается, полный объём — до конца месяца.',
     justification: 'Лучшее соотношение цена/срок по взвешенной оценке',
@@ -51,6 +54,7 @@ const TXT = {
     houseReq: 'Ofis üçün təsərrüfat malları', houseItem: 'A4 kağız, top',
     amendReason: 'Həcmi artırırıq: ikinci ofis açıldı',
     budgetAll: 'Ümumi büdcə', budgetIT: 'IT büdcəsi',
+    catNames: { IT: 'İT və texnika', OFFICE: 'Ofis və təsərrüfat', CONSTRUCTION: 'Tikinti və təmir', FUEL: 'Yanacaq', LOGISTICS: 'Logistika və anbar' },
     catTitle: 'Ofis sərfiyyatı — Supply One', catItem1: 'A4 kağız 80q', catItem2: 'Toner HP 26A', uomReam: 'top', uomPcs: 'ədəd',
     qnaQ: 'Kresloları 10 ədədlik partiyalarla çatdırmaq olarmı?', qnaA: 'Bəli, partiyalarla olar, tam həcm — ay sonuna qədər.',
     justification: 'Çəkili qiymətləndirmə üzrə ən yaxşı qiymət/müddət nisbəti',
@@ -66,6 +70,7 @@ const TXT = {
     houseReq: 'Office household supplies', houseItem: 'A4 paper, ream',
     amendReason: 'Increasing volume: a second office opened',
     budgetAll: 'Overall budget', budgetIT: 'IT budget',
+    catNames: { IT: 'IT & hardware', OFFICE: 'Office & supplies', CONSTRUCTION: 'Construction & repair', FUEL: 'Fuel', LOGISTICS: 'Logistics & warehouse' },
     catTitle: 'Office consumables — Supply One', catItem1: 'A4 paper 80g', catItem2: 'Toner HP 26A', uomReam: 'ream', uomPcs: 'pcs',
     qnaQ: 'May the chairs be delivered in batches of 10?', qnaA: 'Yes, batches are allowed; the full volume by month-end.',
     justification: 'Best price / lead-time ratio by the weighted score',
@@ -76,16 +81,9 @@ const T = TXT[LANG] ?? TXT.ru;
 // Wipe the story data (keeping orgs/users/policies) so each language re-seeds cleanly.
 // Runs as the DB owner via the PG container — bypasses RLS; audit_events is left intact.
 function resetStory() {
-  try {
-    execSync(
-      `docker exec ${PG} psql -U leadprocure_owner -d leadprocure -c ` +
-      `"TRUNCATE procurement_requests, budgets, catalogs, supplier_verification_cases, notifications, document_counters RESTART IDENTITY CASCADE;"`,
-      { stdio: 'pipe' },
-    );
-    console.log(`✓ story data reset (lang=${LANG})`);
-  } catch (e) {
-    console.log(`  ! reset failed (${e.message.split('\n')[0]})`);
-  }
+  execFileSync('docker',['exec',PG,'psql','-U','leadprocure_owner','-d',DB,'-v','ON_ERROR_STOP=1','-c',
+    'TRUNCATE procurement_requests, budgets, catalogs, supplier_verification_cases, notifications, document_counters, procurement_categories RESTART IDENTITY CASCADE;'],{stdio:'pipe'});
+  console.log(`✓ disposable story data reset (lang=${LANG})`);
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -116,10 +114,9 @@ const login = async (email) => (await post('/auth/login', undefined, { email, pa
 
 function nudgeClose(eventId) {
   try {
-    execSync(
-      `docker exec ${PG} psql -U leadprocure_owner -d leadprocure -c "UPDATE sourcing_events SET close_at = now() - interval '1 second' WHERE id='${eventId}'; SELECT * FROM close_due_events();"`,
-      { stdio: 'pipe' },
-    );
+    if (!/^[0-9a-f-]{36}$/i.test(eventId)) throw new Error('Invalid event ID');
+    execFileSync('docker',['exec',PG,'psql','-U','leadprocure_owner','-d',DB,'-v','ON_ERROR_STOP=1','-c',
+      `UPDATE sourcing_events SET close_at = now() - interval '1 second' WHERE id='${eventId}'; SELECT * FROM close_due_events();`],{stdio:'pipe'});
     return true;
   } catch (e) {
     console.log(`  ! deadline nudge failed (${e.message.split('\n')[0]}) — tender stays OPEN`);
@@ -163,6 +160,12 @@ const log = (s) => console.log(s);
       { category: '*', minAmountMinor: 50_000, maxAmountMinor: null, method: 'RFQ' },
     ],
   });
+
+  // Curated category directory (Settings) — the shared vocabulary the method policy,
+  // budgets and analytics key off. Idempotent: 409 on an existing code is fine.
+  for (const [code, name] of Object.entries(T.catNames)) {
+    await postIdempotent('/categories', buyer, { code, name });
+  }
   // Pin a deterministic single-step approval chain so the story's requests reach
   // APPROVED with one approver click, regardless of whatever multi-step chain the
   // stand happens to carry (otherwise submit→approve leaves them SUBMITTED and

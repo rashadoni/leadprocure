@@ -1,0 +1,6 @@
+/native-qa/
+/posters-*.jpg
+/frames-*.jpg
+/output/preview/
+/output/datasheet-page-*.png
+__pycache__/

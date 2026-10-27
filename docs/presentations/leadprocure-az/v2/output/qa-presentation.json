@@ -1,0 +1,20 @@
+{
+  "slide_count": 13,
+  "text_layout_issues": [],
+  "screenshots": 0,
+  "cover_illustrations": 1,
+  "design": "C / Monograph",
+  "fonts": {
+    "Display": "BarlowCondensed-Bold.ttf",
+    "DisplayRegular": "BarlowCondensed-Regular.ttf",
+    "Body": "IBMPlexSans-Regular.ttf",
+    "BodyBold": "IBMPlexSans-Bold.ttf"
+  },
+  "native_pptx_render": "PASS: imported into Google Slides; all 13 pages rendered and visually inspected; final page 7 checked again after VAT label update",
+  "native_google_slides": "https://docs.google.com/presentation/d/1euJAo_qUy5CRCNruBXUA99Wph5qNwnvU1Bu5WPZ1rio/edit",
+  "local_visual_review": "PASS: all 13 slides reviewed by two agents; no clipping/overlap/glyph errors",
+  "speaker_notes": "13/13 present; slides 2 and 6 updated to rendered diagram and auction arithmetic; mirrored to Google Slides",
+  "arithmetic": "PASS: 31200-320=30880; 57000-51500=5500; 5500/57000=9.65% rounded",
+  "final_status": "ready_for_client_review",
+  "powerpoint_desktop": "NOT RUN: unavailable on host; native Google Slides import/render used"
+}

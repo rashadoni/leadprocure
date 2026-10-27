@@ -1,0 +1,42 @@
+name: Independent presentation rendering
+on:
+  pull_request:
+    paths:
+      - 'docs/presentations/**'
+      - 'scripts/acceptance/render-presentations.py'
+      - '.github/workflows/presentation-acceptance.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  render-pptx:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install independent renderer and bundled typefaces
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libreoffice-impress fontconfig
+          mkdir -p "$HOME/.local/share/fonts/leadprocure"
+          cp docs/presentations/leadprocure-az/v2/fonts/*.ttf "$HOME/.local/share/fonts/leadprocure/"
+          fc-cache -f
+          python3 -m venv "$RUNNER_TEMP/render-venv"
+          "$RUNNER_TEMP/render-venv/bin/pip" install PyMuPDF==1.26.7 Pillow==11.3.0
+      - name: Render actual editable PPTX files
+        run: |
+          mkdir -p "$RUNNER_TEMP/pptx-render"
+          libreoffice --version
+          libreoffice "-env:UserInstallation=file://$RUNNER_TEMP/lo-profile" --headless --convert-to pdf --outdir "$RUNNER_TEMP/pptx-render" \
+            docs/presentations/leadprocure-az/v3/output/Leadprocure_Korporativ_Teqdimat_AZ_v3.pptx \
+            docs/presentations/leadprocure-az/v3/output/Leadprocure_Data_Sheet_AZ.pptx
+          "$RUNNER_TEMP/render-venv/bin/python" scripts/acceptance/render-presentations.py \
+            docs/presentations/leadprocure-az/v3/output "$RUNNER_TEMP/pptx-render"
+      - name: Preserve rendered PDFs, pages and QA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: independent-pptx-render
+          path: ${{ runner.temp }}/pptx-render
