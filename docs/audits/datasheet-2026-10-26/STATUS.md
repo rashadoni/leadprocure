@@ -1,5 +1,13 @@
 # Исполнение LP-A00–LP-A19
 
+## Продолжение — 28 октября 2026
+
+Работа возвращена к Leadprocure: закупки и бюджетный контроль. Исправления новой установки вынесены в draft [PR6](https://github.com/rashadoni/leadprocure/pull/6), поверх PR3, чтобы сохранить лимит независимого ревью400000bytes. Code PR3 tree на2c710bc совпадает с ранее принятым82e323a; история checkpoint commits сохранена.
+
+Новый кандидат устраняет зависимость Compose от недоступных storage images, публичный dev bucket, жёстко заданный app_user password и отсутствие production file-license wiring. Независимое source review: без блокирующих находок. **Fresh production Compose acceptance пока PENDING**, [run40584185358](https://github.com/rashadoni/leadprocure/actions/runs/40584185358), head f5b7e776. Это ещё не PASS и не приёмка существующих volumes или клиентского внедрения. Ранее зафиксированный provisioning NO-GO ниже описывает шаблон до этих исправлений.
+
+Бюджетный claim подтверждён8 API tests в прежнем195 PASS: категория/год/валюта, обязательства утверждённых заявок и изоляция организаций. Превышение предупреждает, но не блокирует согласование. Новой установке дополнительно предстоит повторить этот сценарий через реальные HTTP buyer/approver действия.
+
 ## Актуальный результат — 27 октября 2026
 
 Действующий репозиторий — `rashadoni/leadprocure`. Code PR [#3](https://github.com/rashadoni/leadprocure/pull/3), материалы [#4](https://github.com/rashadoni/leadprocure/pull/4), доказательства [#5](https://github.com/rashadoni/leadprocure/pull/5). Aggregate PR2 закрыт без merge. Production не обновлялся; merge/deploy не разрешены.

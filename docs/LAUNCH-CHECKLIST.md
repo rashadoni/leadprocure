@@ -12,14 +12,18 @@
 - [ ] Резервная копия production проверена отдельным восстановлением. Тестовый dump/restore не заменяет backup реальной базы.
 - [ ] Отдельно разрешены merge и production deployment по [infra/DEPLOY.md](../infra/DEPLOY.md) и [DELIVERY-ARCHITECTURE.md](DELIVERY-ARCHITECTURE.md).
 
-## Fresh bundled installation: пока NO-GO
+## Fresh bundled installation: новый кандидат ожидает CI
+
+Исправления выделены в PR6 (поверх PR3): pinned source-built storage, приватный bucket, configurable empty-volume app role и file-license mount. Source review без blockers, fresh hosted gate40584185358 pending. До фактического PASS свежая установка не принята; client TLS/browser, ARM и существующие volumes остаются отдельными проверками.
+
+Исторический blocker до PR6:
 
 На hosted runner подтверждено, что `minio/minio` / `minio/mc` из Docker Hub недоступны. Quay probes также не дали manifest. Текущие Compose templates используют эти images, поэтому команду fresh `docker compose up --build` нельзя считать рабочим сценарием установки. CI использует закреплённый официальный release binary только как disposable fixture; это не исправление production Compose. До отдельного выбора/проверки поддерживаемого S3-compatible storage установка нового on-prem/демо по bundled stack не принята. Существующие runtime volumes/images не менялись.
 
 ## Конфигурация, которую проверяет оператор
 
 - TLS и реальные `WEB_ORIGIN` / `PUBLIC_API_URL`; `VITE_DEMO_HINT` выключен.
-- Раздельные owner/runtime DB roles: app_user без superuser/BYPASSRLS; пароль должен соответствовать init script до первого старта пустой БД.
+- Раздельные owner/runtime DB roles: app_user без superuser/BYPASSRLS. Новый empty-volume init берёт APP_DB_PASSWORD из env; существующий volume сохраняет прежний пароль.
 - Отдельные JWT secrets и32-byte BID_MASTER_KEY_B64; подписывающий private key лицензии не передаётся клиентскому приложению.
 - **Во всех production modes нужна действительная подписанная лицензия.** Dev fallback действует только вне production. Без лицензии новые операции ограничены; существующие обязательства завершаются по предусмотренным guards.
 - Лицензию устанавливает оператор deployment: public verification key и подписанный file/DB token. SaaS tenant admin не может ставить server license через `/admin/license`; on-prem admin renewal требует настроенного public key. Фактическая установка у клиента остаётся отдельной приёмкой.
