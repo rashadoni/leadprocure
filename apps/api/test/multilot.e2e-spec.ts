@@ -118,4 +118,18 @@ describe('multi-lot RFQ', () => {
     expect(byLot[lot1]).toBe(bid1);
     expect(byLot[lot2]).toBe(bid2);
   });
+  it('lot awards produce separate contract, PO and catalog line snapshots', async () => {
+    const ev=(await http().get(`/events/${eventId}`).set(...bearer(buyer)).expect(200)).body;
+    expect(ev.awards).toHaveLength(2);
+    for(const a of ev.awards){
+      const c=(await http().post(`/contracts/from-award/${a.id}`).set(...bearer(buyer)).expect(201)).body;
+      expect(Number(c.total_minor)).toBe(900000);
+      await http().post(`/contracts/${c.id}/activate`).set(...bearer(buyer)).expect(201);
+      const po=(await http().post(`/contracts/${c.id}/orders`).set(...bearer(buyer)).expect(201)).body;
+      expect(po.items).toHaveLength(1);expect(Number(po.total_minor)).toBe(900000);
+      const cat=(await http().post(`/catalogs/from-contract/${c.id}`).set(...bearer(buyer)).expect(201)).body;
+      expect(cat.items).toHaveLength(1);
+    }
+  });
+
 });

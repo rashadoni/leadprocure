@@ -92,13 +92,14 @@ describe('invoices + 3-way match', () => {
     expect(paid.body.status).toBe('PAID');
   });
 
-  it('Peppol UBL export produces a BIS-3.0-shaped XML with correct totals', async () => {
+  it('generic UBL export produces tax snapshots and correct totals', async () => {
     const list = await http().get('/invoices').set(...bearer(buyer)).expect(200);
     const paid = list.body.find((i: any) => i.status === 'PAID') ?? list.body[0];
     const res = await http().get(`/invoices/${paid.id}/ubl`).set(...bearer(buyer)).expect(200);
     expect(res.headers['content-type']).toContain('application/xml');
     const xml = res.text;
-    expect(xml).toContain('urn:fdc:peppol.eu:2017:poacc:billing:3.0');
+    expect(xml).toContain('urn:oasis:names:specification:ubl:schema:xsd:Invoice-2');
+    expect(xml).not.toContain('peppol.eu');
     expect(xml).toContain(`<cbc:ID>${paid.invoice_no}</cbc:ID>`);
     expect(xml).toContain('<cbc:PayableAmount currencyID="AZN">11800.00</cbc:PayableAmount>'); // 1.18M minor
     expect(xml).toContain('<cbc:TaxAmount currencyID="AZN">1800.00</cbc:TaxAmount>');
@@ -112,5 +113,66 @@ describe('invoices + 3-way match', () => {
     await http().post(`/invoices/from-po/${poId}`).set(...bearer(s2)).send({ items: [{ poItemId, qty: 1, unitPriceMinor: 1 }] }).expect(404);
     const list2 = await http().get('/invoices').set(...bearer(s2)).expect(200);
     expect(list2.body.map((i: any) => i.id)).not.toContain(someId);
+  });
+
+  // Regression: the match used to be a snapshot frozen at submit — an invoice sent
+  // before the goods arrived stayed DISPUTED forever, even once fully received.
+  it('an invoice submitted before the receipt flips DISPUTED → MATCHED when the GRN lands', async () => {
+    const req = await http().post('/requests').set(...bearer(buyer))
+      .send({ title: `Inv pre-GRN ${tag}`, items: [{ name: 'Gadget', qty: 4, estUnitPriceMinor: 50_000 }] }).expect(201);
+    await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approver)).expect(201);
+    const po = await http().post(`/orders/direct/from-request/${req.body.id}`).set(...bearer(buyer))
+      .send({ supplierOrgId: supplierOrg }).expect(201);
+    const po2 = po.body.id as string;
+    const item2 = po.body.items[0].id as string;
+    await http().post(`/orders/${po2}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
+    for (const s of ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED']) {
+      await http().post(`/orders/${po2}/status`).set(...bearer(supplier)).send({ status: s }).expect(201);
+    }
+
+    // invoice BEFORE any receipt → disputed, received 0
+    const inv = await http().post(`/invoices/from-po/${po2}`).set(...bearer(supplier))
+      .send({ items: [{ poItemId: item2, qty: 4, unitPriceMinor: 50_000 }] }).expect(201);
+    expect(inv.body.status).toBe('DISPUTED');
+    expect(Number(inv.body.match.lines[0].received)).toBe(0);
+
+    // the goods arrive → the GRN re-runs the match, no manual override needed
+    await http().post(`/orders/${po2}/receipts`).set(...bearer(buyer)).send({ items: [{ poItemId: item2, qty: 4 }] }).expect(201);
+    const after = await http().get(`/invoices/${inv.body.id}`).set(...bearer(buyer)).expect(200);
+    expect(after.body.status).toBe('MATCHED');
+    expect(after.body.match.ok).toBe(true);
+    expect(Number(after.body.match.lines[0].received)).toBe(4);
+
+    // a MATCHED invoice approves without an override reason
+    const ok = await http().post(`/invoices/${inv.body.id}/approve`).set(...bearer(buyer)).expect(201);
+    expect(ok.body.status).toBe('APPROVED');
+  });
+
+  it('a partial receipt is not enough — the invoice stays DISPUTED until fully billable', async () => {
+    const req = await http().post('/requests').set(...bearer(buyer))
+      .send({ title: `Inv partial ${tag}`, items: [{ name: 'Bolt', qty: 10, estUnitPriceMinor: 1_000 }] }).expect(201);
+    await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approver)).expect(201);
+    const po = await http().post(`/orders/direct/from-request/${req.body.id}`).set(...bearer(buyer))
+      .send({ supplierOrgId: supplierOrg }).expect(201);
+    const po3 = po.body.id as string;
+    const item3 = po.body.items[0].id as string;
+    await http().post(`/orders/${po3}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
+    for (const s of ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED']) {
+      await http().post(`/orders/${po3}/status`).set(...bearer(supplier)).send({ status: s }).expect(201);
+    }
+    const inv = await http().post(`/invoices/from-po/${po3}`).set(...bearer(supplier))
+      .send({ items: [{ poItemId: item3, qty: 10, unitPriceMinor: 1_000 }] }).expect(201);
+    expect(inv.body.status).toBe('DISPUTED');
+
+    await http().post(`/orders/${po3}/receipts`).set(...bearer(buyer)).send({ items: [{ poItemId: item3, qty: 6 }] }).expect(201);
+    let cur = await http().get(`/invoices/${inv.body.id}`).set(...bearer(buyer)).expect(200);
+    expect(cur.body.status).toBe('DISPUTED'); // 10 billed > 6 received
+    expect(Number(cur.body.match.lines[0].received)).toBe(6);
+
+    await http().post(`/orders/${po3}/receipts`).set(...bearer(buyer)).send({ items: [{ poItemId: item3, qty: 4 }] }).expect(201);
+    cur = await http().get(`/invoices/${inv.body.id}`).set(...bearer(buyer)).expect(200);
+    expect(cur.body.status).toBe('MATCHED');
   });
 });

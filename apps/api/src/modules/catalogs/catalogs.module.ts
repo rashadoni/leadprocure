@@ -1,3 +1,5 @@
+import { RequiresNewWork } from '../../common/auth/decorators';
+import { assertSupplierAllowed, uniqueIds, safeMoney, lineMoney, returnedRows } from '../../common/procurement/invariants';
 import {
   BadRequestException,
   Body,
@@ -10,7 +12,7 @@ import {
   Post,
 } from '@nestjs/common';
 import type { AccessTokenPayload } from '@leadprocure/shared';
-import { IsArray, IsInt, IsOptional, IsString, IsUUID, Min, MinLength, ValidateNested } from 'class-validator';
+import { IsArray, IsInt, IsOptional, IsString, IsUUID, Max, Min, MinLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
@@ -26,6 +28,7 @@ export class CatalogsService {
   ) {}
 
   async create(dto: { supplierOrgId: string; title: string; currency?: string }, auth: AccessTokenPayload) {
+    await assertSupplierAllowed(this.rc.manager, auth.org_id, dto.supplierOrgId);
     const rows = await this.rc.manager.query(
       `INSERT INTO catalogs(buyer_org_id, supplier_org_id, title, currency, created_by)
        VALUES ($1,$2,$3,$4,$5) RETURNING id`,
@@ -41,6 +44,8 @@ export class CatalogsService {
     const c = (await m.query(`SELECT * FROM contracts WHERE id = $1`, [contractId]))[0];
     if (!c) throw new NotFoundException('Contract not found');
     if (c.buyer_org_id !== auth.org_id) throw new BadRequestException('Not your contract');
+    await assertSupplierAllowed(m, auth.org_id, c.supplier_org_id);
+    if (c.status !== 'ACTIVE') throw new BadRequestException('Contract must be ACTIVE');
     const cat = (
       await m.query(
         `INSERT INTO catalogs(buyer_org_id, supplier_org_id, contract_id, title, currency, created_by)
@@ -54,7 +59,7 @@ export class CatalogsService {
        FROM contracts c JOIN awards a ON a.id = c.award_id
        JOIN bid_items bi ON bi.bid_id = a.winning_bid_id
        JOIN event_items ei ON ei.id = bi.event_item_id
-       WHERE c.id = $4`,
+       WHERE c.id = $4 AND ei.lot_id=a.lot_id AND a.cancelled_at IS NULL`,
       [cat.id, auth.org_id, c.supplier_org_id, contractId],
     );
     await this.audit.record('CATALOG_CREATED', 'catalog', cat.id, { from_contract: contractId });
@@ -81,10 +86,10 @@ export class CatalogsService {
 
   async activate(catalogId: string, auth: AccessTokenPayload) {
     await this.requireCatalog(catalogId, auth);
-    const rows = await this.rc.manager.query(
+    const rows = returnedRows(await this.rc.manager.query(
       `UPDATE catalogs SET status='ACTIVE', updated_at=now() WHERE id=$1 AND status='DRAFT' RETURNING id`,
       [catalogId],
-    );
+    ));
     if (!rows.length) throw new BadRequestException('Catalog not found or not DRAFT');
     await this.audit.record('CATALOG_ACTIVATED', 'catalog', catalogId, {});
     return this.get(catalogId);
@@ -115,8 +120,10 @@ export class CatalogsService {
   async order(catalogId: string, lines: Array<{ catalogItemId: string; qty: number }>, auth: AccessTokenPayload) {
     const m = this.rc.manager;
     const cat = await this.requireCatalog(catalogId, auth);
+    await assertSupplierAllowed(m, auth.org_id, cat.supplier_org_id);
     if (cat.status !== 'ACTIVE') throw new BadRequestException('Catalog must be ACTIVE');
     if (!lines?.length) throw new BadRequestException('At least one line is required');
+    uniqueIds(lines, 'catalogItemId');
     const items = await m.query(`SELECT * FROM catalog_items WHERE catalog_id = $1`, [catalogId]);
     const byId = new Map<string, any>(items.map((i: any) => [i.id, i]));
 
@@ -127,11 +134,12 @@ export class CatalogsService {
       if (!ci) throw new BadRequestException(`Unknown catalog item ${l.catalogItemId}`);
       if (!(Number(l.qty) > 0)) throw new BadRequestException('qty must be positive');
       if (Number(l.qty) < Number(ci.moq)) throw new BadRequestException(`Below MOQ (${ci.moq}) for ${ci.name}`);
-      const lineTotal = Number(l.qty) * Number(ci.unit_price_minor);
+      const lineTotal = lineMoney(Number(l.qty), Number(ci.unit_price_minor));
       total += lineTotal;
       poLines.push({ ci, qty: Number(l.qty), lineTotal });
     }
 
+    safeMoney(total);
     const n = await m.query(`SELECT next_document_no($1,'PO') AS n`, [auth.org_id]);
     const poNo = `PO-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
     const po = (
@@ -141,6 +149,7 @@ export class CatalogsService {
         [cat.contract_id, auth.org_id, cat.supplier_org_id, poNo, total, cat.currency, auth.sub],
       )
     )[0];
+    await m.query(`UPDATE purchase_orders SET vat_mode=COALESCE((SELECT vat_mode FROM contracts WHERE id=$2),'EXCLUSIVE') WHERE id=$1`,[po.id,cat.contract_id]);
     let line = 1;
     for (const pl of poLines) {
       await m.query(
@@ -174,7 +183,7 @@ class AddCatalogItemDto {
   @IsOptional() @IsString() uom?: string;
   @IsInt() @Min(0) unitPriceMinor!: number;
   @IsOptional() @IsInt() @Min(1) moq?: number;
-  @IsOptional() @IsInt() @Min(0) vatRateBp?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(10000) vatRateBp?: number;
 }
 class CatalogOrderItemDto {
   @IsUUID() catalogItemId!: string;
@@ -200,12 +209,14 @@ export class CatalogsController {
   }
 
   @Post()
+  @RequiresNewWork()
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   create(@Body() body: CreateCatalogDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.catalogs.create(body, auth);
   }
 
   @Post('from-contract/:contractId')
+  @RequiresNewWork()
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   fromContract(@Param('contractId') contractId: string, @CurrentUser() auth: AccessTokenPayload) {
     return this.catalogs.createFromContract(contractId, auth);
@@ -224,6 +235,7 @@ export class CatalogsController {
   }
 
   @Post(':id/order')
+  @RequiresNewWork()
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
   order(@Param('id') id: string, @Body() body: CatalogOrderDto, @CurrentUser() auth: AccessTokenPayload) {
     return this.catalogs.order(id, body.items, auth);

@@ -1,3 +1,4 @@
+import { returnedRows } from '../../common/procurement/invariants';
 import {
   BadRequestException,
   Body,
@@ -36,10 +37,10 @@ export class SettingsService {
   async setRole(userId: string, role: MembershipRole, auth: AccessTokenPayload) {
     if (userId === auth.sub) throw new ForbiddenException('You cannot change your own role');
     if (!MEMBERSHIP_ROLES.includes(role)) throw new BadRequestException('Unknown role');
-    const rows = await this.rc.manager.query(
+    const rows = returnedRows(await this.rc.manager.query(
       `UPDATE memberships SET role = $3 WHERE user_id = $1 AND org_id = $2 RETURNING id`,
       [userId, auth.org_id, role],
-    );
+    ));
     if (!rows.length) throw new BadRequestException('User is not a member of your organization');
     // Bump token_version so the target's old access/refresh tokens die.
     await this.rc.manager.query(

@@ -149,12 +149,12 @@ describe('auth flow (API e2e)', () => {
       .expect(401);
   });
 
-  it('license install rejects garbage token (verify fails, tx rolls back)', async () => {
+  it('a SaaS tenant admin cannot install a server license', async () => {
     await request(app.getHttpServer())
       .post('/admin/license')
       .set('Authorization', `Bearer ${accessToken}`)
       .send({ token: 'not-a-paseto-token' })
-      .expect(500);
+      .expect(403);
   });
 
   it('forgot-password emails a one-time link; reset lets the user log in with the new password', async () => {

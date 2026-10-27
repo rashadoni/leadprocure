@@ -1,3 +1,4 @@
+import { returnedRows } from '../../common/procurement/invariants';
 import {
   Body, ConflictException, Controller, Delete, Get, Injectable, Module, NotFoundException, Param, Post,
 } from '@nestjs/common';
@@ -36,7 +37,7 @@ export class CategoriesService {
   }
 
   async remove(id: string, auth: AccessTokenPayload) {
-    const res = await this.rc.manager.query(`DELETE FROM procurement_categories WHERE id=$1 RETURNING code`, [id]);
+    const res = returnedRows(await this.rc.manager.query(`DELETE FROM procurement_categories WHERE id=$1 RETURNING code`, [id]));
     if (!res[0]) throw new NotFoundException('Category not found');
     await this.audit.record('CATEGORY_DELETED', 'category', id, { code: res[0].code, by_org: auth.org_id });
     return { ok: true };

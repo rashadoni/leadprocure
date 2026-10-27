@@ -31,6 +31,8 @@ import { VerificationModule } from './modules/verification/verification.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
 import { BudgetsModule } from './modules/budgets/budgets.module';
 import { CategoriesModule } from './modules/categories/categories.module';
+import { FollowupsModule } from './modules/followups/followups.module';
+import { ChannelsModule } from './modules/channels/channels.module';
 import { MailModule } from './common/mail/mail.module';
 
 @Module({
@@ -62,6 +64,8 @@ import { MailModule } from './common/mail/mail.module';
     InvoicesModule,
     BudgetsModule,
     CategoriesModule,
+    FollowupsModule,
+    ChannelsModule,
   ],
   controllers: [HealthController],
   providers: [

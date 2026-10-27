@@ -1,3 +1,4 @@
+import { lockEvent, assertSupplierAllowed, safeMoney, lineMoney, returnedRows } from '../../common/procurement/invariants';
 import {
   BadRequestException,
   Injectable,
@@ -39,6 +40,7 @@ export class AuctionService {
     if (!reqRows.length) throw new NotFoundException('Request not found');
     const req = reqRows[0];
     if (req.status !== 'APPROVED') throw new BadRequestException('Request must be APPROVED');
+    if (req.method_resolved === 'DIRECT') throw new BadRequestException('Direct requests cannot create an auction');
     if (!Number.isInteger(dto.startPriceMinor) || dto.startPriceMinor <= 0)
       throw new BadRequestException('startPriceMinor must be a positive integer');
     if (!Number.isInteger(dto.minDecrementMinor) || dto.minDecrementMinor <= 0)
@@ -128,6 +130,7 @@ export class AuctionService {
     );
     if (!locked.length) throw new NotFoundException('Auction not found');
     const ev = locked[0];
+    await assertSupplierAllowed(m, ev.buyer_org_id, auth.org_id);
     if (ev.status !== 'OPEN') throw new BadRequestException('Auction is not open');
     if (new Date(ev.close_at).getTime() <= Date.now()) throw new BadRequestException('Auction deadline has passed');
 
@@ -153,7 +156,7 @@ export class AuctionService {
         throw new BadRequestException('unitPriceMinor must be a non-negative integer');
       if (submitted.has(it.eventItemId)) throw new BadRequestException(`Duplicate line for item ${it.eventItemId}`);
       submitted.add(it.eventItemId);
-      total += qty * it.unitPriceMinor;
+      total = safeMoney(total + lineMoney(qty, it.unitPriceMinor));
     }
     // Responsiveness: an auction bid must price EVERY line item — a partial bid would post an
     // artificially low total and falsely "win" against complete bids.
@@ -179,7 +182,7 @@ export class AuctionService {
       )[0];
 
     if (total > maxAllowed) {
-      await record(false, `must be <= ${maxAllowed}`);
+      // Rejected requests roll back; the accepted ledger intentionally records only committed ticks.
       throw new BadRequestException(`Bid must be at most ${maxAllowed} (best ${best ?? '—'} − decrement)`);
     }
 
@@ -192,6 +195,8 @@ export class AuctionService {
        DO UPDATE SET total_minor=$5, submitted_at=now(), state='OPENED', updated_at=now()`,
       [eventId, auth.org_id, auth.sub, ev.evaluation_currency, total],
     );
+    // Follow-up chains stop on first response (buyer-private row → DEFINER seam).
+    await m.query(`SELECT followup_mark_responded($1, $2)`, [eventId, auth.org_id]);
 
     // Anti-sniping: late bid pushes the deadline out (bounded). Runs through the
     // SECURITY DEFINER seam because the bidder has no UPDATE rights on the event.
@@ -215,12 +220,24 @@ export class AuctionService {
   // Auctions skip the sealed opening ceremony — amounts were public all along.
   async finalize(eventId: string, auth: AccessTokenPayload) {
     const m = this.rc.manager;
+    await lockEvent(m, eventId);
     const rows = await m.query(
       `SELECT * FROM sourcing_events WHERE id=$1 AND buyer_org_id=$2 FOR UPDATE`,
       [eventId, auth.org_id],
     );
     if (!rows.length) throw new NotFoundException('Auction not found');
+    if (rows[0].format !== 'REVERSE') throw new BadRequestException('Not a reverse auction');
+    if (['EVALUATION','AWARDED'].includes(rows[0].status)) return { ok:true, idempotent:true };
     if (rows[0].status !== 'CLOSED') throw new BadRequestException(`Event is ${rows[0].status}; expected CLOSED`);
+    await m.query(`UPDATE sourcing_events SET status='OPENING', updated_at=now() WHERE id=$1`, [eventId]);
+    await m.query(`INSERT INTO bid_items(bid_id,event_item_id,unit_price_minor,line_total_minor)
+      SELECT b.id,ei.id,(item->>'unitPriceMinor')::bigint,
+        ((item->>'unitPriceMinor')::numeric*ei.qty)::bigint
+      FROM bids b JOIN LATERAL (SELECT payload FROM auction_bids ab WHERE ab.event_id=b.event_id
+        AND ab.supplier_org_id=b.supplier_org_id AND ab.accepted ORDER BY ab.created_at DESC,ab.id DESC LIMIT 1) tick ON true
+      CROSS JOIN LATERAL jsonb_array_elements(tick.payload->'items') item
+      JOIN event_items ei ON ei.id=(item->>'eventItemId')::uuid AND ei.event_id=b.event_id
+      WHERE b.event_id=$1 AND b.state='OPENED'`,[eventId]);
     await m.query(`UPDATE sourcing_events SET status='EVALUATION', updated_at=now() WHERE id=$1`, [eventId]);
     await this.audit.record('AUCTION_FINALIZED', 'sourcing_event', eventId, {});
     this.emitter.emit('rt.emit', { room: `event:${eventId}`, event: 'event.status', data: { status: 'EVALUATION' } });
@@ -267,12 +284,12 @@ export class QnaService {
 
   // Publishing an answer discloses it to ALL suppliers who can see the event.
   async answer(eventId: string, qnaId: string, answer: string, auth: AccessTokenPayload) {
-    const rows = await this.rc.manager.query(
+    const rows = returnedRows(await this.rc.manager.query(
       `UPDATE event_qna SET answer=$3, answered_by_user_id=$4, answered_at=now(),
               is_published=true, published_at=now()
        WHERE id=$2 AND event_id=$1 RETURNING id`,
       [eventId, qnaId, answer, auth.sub],
-    );
+    ));
     if (!rows.length) throw new NotFoundException('Question not found');
     await this.audit.record('QNA_ANSWERED', 'event_qna', qnaId, { event_id: eventId });
     return { ok: true };

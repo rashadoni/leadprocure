@@ -17,6 +17,7 @@ export class HealthController {
       status: 'ok',
       deploymentMode: this.cfg.deploymentMode,
       edition: this.entitlements.snapshot().edition,
+      licenseSource: this.entitlements.snapshot().source,
       licenseStatus: this.entitlements.snapshot().status,
     };
   }

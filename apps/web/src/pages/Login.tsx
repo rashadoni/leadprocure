@@ -73,7 +73,11 @@ export default function Login() {
             <a href="#" onClick={(e) => { e.preventDefault(); forgot(); }} className="hint">{t('forgot')}</a>
           </div>
         )}
-        <div className="hint">demo: admin@acme.test / seller@supply-one.test · Passw0rd!</div>
+        {/* Demo credentials are shown only when the build opts in (dev / demo stand) —
+            a production build must never advertise seeded logins. */}
+        {(import.meta.env.DEV || import.meta.env.VITE_DEMO_HINT === '1') && (
+          <div className="hint">demo: admin@acme.test / seller@supply-one.test · Passw0rd!</div>
+        )}
       </form>
     </div>
   );

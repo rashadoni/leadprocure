@@ -92,6 +92,7 @@ services:
       CLAMAV_ENABLED: ${CLAMAV_ENABLED:-false}
       CLAMAV_HOST: clamav
       AI_ORCHESTRATOR_URL: http://ai-orchestrator:8000
+      WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
@@ -106,6 +107,8 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         VITE_API_BASE_URL: ${PUBLIC_API_URL:?set in .env.prod (e.g. https://api.example.com)}
+        # "1" shows seeded demo logins on the login page — demo stands only, never prod.
+        VITE_DEMO_HINT: ${VITE_DEMO_HINT:-}
     restart: unless-stopped
     depends_on:
       - api

@@ -109,8 +109,8 @@ export default function Requests() {
       <div className="card">
         <form onSubmit={create}>
           <div className="row">
-            <div style={{ flex: 2 }}><label>{t('title')}</label>
-              <input value={title} onChange={(e) => setTitle(e.target.value)} required /></div>
+            <div style={{ flex: 2 }}><label htmlFor="request-title">{t('title')}</label>
+              <input id="request-title" value={title} onChange={(e) => setTitle(e.target.value)} required /></div>
             <div style={{ flex: 1 }}><label>{t('category')}</label>
               {/* category drives the method policy, budgets and per-category analytics */}
               <input value={category} onChange={(e) => setCategory(e.target.value)}
@@ -125,12 +125,12 @@ export default function Requests() {
           <h3>{t('items')}</h3>
           {items.map((it, idx) => (
             <div className="row" key={idx}>
-              <div><label>{t('name')}</label>
-                <input value={it.name} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))} /></div>
-              <div><label>{t('qty')}</label>
-                <input type="number" min={1} value={it.qty} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, qty: Number(e.target.value) } : x)))} /></div>
-              <div><label>{t('unit_price')} (AZN)</label>
-                <input type="number" step="0.01" min={0} value={it.price} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, price: e.target.value } : x)))} /></div>
+              <div><label htmlFor={`request-item-${idx}-name`}>{t('name')}</label>
+                <input id={`request-item-${idx}-name`} value={it.name} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))} /></div>
+              <div><label htmlFor={`request-item-${idx}-qty`}>{t('qty')}</label>
+                <input id={`request-item-${idx}-qty`} type="number" min={1} value={it.qty} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, qty: Number(e.target.value) } : x)))} /></div>
+              <div><label htmlFor={`request-item-${idx}-price`}>{t('unit_price')} (AZN)</label>
+                <input id={`request-item-${idx}-price`} type="number" step="0.01" min={0} value={it.price} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, price: e.target.value } : x)))} /></div>
             </div>
           ))}
           <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
@@ -142,7 +142,12 @@ export default function Requests() {
       </div>
       <div className="card">
         <input placeholder={`🔎 ${t('title')}…`} value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} style={{ maxWidth: 320, marginBottom: 6 }} />
-        <div className="hint" style={{ marginBottom: 10 }}>{t('legend_procedures')}</div>
+        <div className="hint" style={{ marginBottom: 10 }}>
+          {t('legend_procedures')}
+          {['BUYER_ADMIN', 'BUYER_APPROVER'].includes(session?.org.role ?? '') && (
+            <> · <a href="/buyer/settings">⚖️ {t('method_policy')}</a></>
+          )}
+        </div>
         <table>
           <thead><tr><th>#</th><th>{t('title')}</th><th>{t('category')}</th><th>{t('date')}</th><th>{t('requester')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('method')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>

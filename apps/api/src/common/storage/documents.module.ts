@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Body,
   Controller,
   Get,
@@ -17,7 +18,7 @@ import { DataSource } from 'typeorm';
 import { PutObjectCommand, GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { ClamavService } from './clamav.service';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 import { IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
 import { CurrentUser, Roles } from '../auth/decorators';
 import type { AccessTokenPayload } from '@leadprocure/shared';
@@ -62,6 +63,7 @@ export class DocumentsService {
 
   async presign(orgId: string, filename: string, mime: string) {
     const storageKey = `${orgId}/${randomUUID()}/${filename.replace(/[^\w.\-]/g, '_')}`;
+    await this.rc.manager.query(`INSERT INTO upload_grants(storage_key,owner_org_id,filename,mime) VALUES ($1,$2,$3,$4)`, [storageKey,orgId,filename,mime]);
     const url = await getSignedUrl(
       this.s3Public,
       new PutObjectCommand({ Bucket: this.bucket, Key: storageKey, ContentType: mime }),
@@ -70,17 +72,54 @@ export class DocumentsService {
     return { uploadUrl: url, storageKey };
   }
 
+  // Consume the issued grant and snapshot bytes to an immutable, non-PUT-signed key.
+  // Replaying the original presigned PUT cannot change a confirmed document.
+  async consumeUpload(orgId: string, dto: { storageKey: string; sha256: string; filename: string }) {
+    const rows = await this.rc.manager.query(
+      `SELECT * FROM upload_grants WHERE storage_key=$1 AND owner_org_id=$2
+       AND consumed_at IS NULL AND expires_at>clock_timestamp() FOR UPDATE`, [dto.storageKey, orgId]);
+    if (!rows.length) throw new BadRequestException('Unknown, expired or consumed upload');
+    const obj = await this.s3.send(new GetObjectCommand({Bucket:this.bucket,Key:dto.storageKey}));
+    const chunks: Buffer[] = []; let size = 0;
+    for await (const chunk of obj.Body as any) {
+      size += chunk.length;
+      if (size > 24 * 1024 * 1024) {
+        (obj.Body as any).destroy?.();
+        throw new BadRequestException('Document exceeds 24 MiB');
+      }
+      chunks.push(Buffer.from(chunk));
+    }
+    const bytes = Buffer.concat(chunks);
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    if (sha256 !== dto.sha256.toLowerCase()) throw new BadRequestException('Document hash mismatch');
+    const storageKey = `${orgId}/confirmed/${randomUUID()}`;
+    await this.s3.send(new PutObjectCommand({Bucket:this.bucket,Key:storageKey,Body:bytes,ContentType:rows[0].mime}));
+    await this.rc.manager.query(`UPDATE upload_grants SET consumed_at=clock_timestamp() WHERE storage_key=$1`,[dto.storageKey]);
+    return { storageKey, sha256, sizeBytes:size, mime:rows[0].mime, filename:rows[0].filename,
+      avStatus:this.cfg.clamavEnabled ? 'PENDING' : 'SKIPPED' };
+  }
+
+  assertStorageOwner(storageKey: string, ownerOrgId: string) {
+    if (!storageKey.startsWith(`${ownerOrgId}/`)) throw new ForbiddenException('Document storage namespace does not match its owner');
+  }
+
+  assertDownloadable(status: string) {
+    if (status !== 'CLEAN' && !(status === 'SKIPPED' && !this.cfg.clamavEnabled))
+      throw new BadRequestException('Document is awaiting a clean antivirus verdict');
+  }
+
   async confirm(
     auth: AccessTokenPayload,
     dto: { storageKey: string; filename: string; mime: string; sizeBytes: number; sha256: string; entityType: string; entityId?: string },
   ) {
-    const avStatus = this.cfg.clamavEnabled ? 'PENDING' : 'SKIPPED';
+    const uploaded = await this.consumeUpload(auth.org_id, dto);
+    const avStatus = uploaded.avStatus;
     const rows = await this.rc.manager.query(
       `INSERT INTO documents(owner_org_id, entity_type, entity_id, storage_key, filename, mime, size_bytes, sha256, av_status, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
       [
-        auth.org_id, dto.entityType, dto.entityId ?? null, dto.storageKey, dto.filename,
-        dto.mime, dto.sizeBytes, dto.sha256, avStatus, auth.sub,
+        auth.org_id, dto.entityType, dto.entityId ?? null, uploaded.storageKey, uploaded.filename,
+        uploaded.mime, uploaded.sizeBytes, uploaded.sha256, avStatus, auth.sub,
       ],
     );
     await this.audit.record('DOCUMENT_UPLOADED', 'document', rows[0].id, {
@@ -104,9 +143,10 @@ export class DocumentsService {
   }
 
   async downloadUrl(id: string) {
-    const rows = await this.rc.manager.query(`SELECT storage_key, av_status FROM documents WHERE id=$1`, [id]);
+    const rows = await this.rc.manager.query(`SELECT storage_key, av_status, owner_org_id FROM documents WHERE id=$1`, [id]);
     if (!rows.length) return { url: null };
-    if (rows[0].av_status === 'INFECTED') throw new BadRequestException('File is blocked by the antivirus scan');
+    this.assertStorageOwner(rows[0].storage_key, rows[0].owner_org_id);
+    this.assertDownloadable(rows[0].av_status);
     const url = await getSignedUrl(
       this.s3Public,
       new GetObjectCommand({ Bucket: this.bucket, Key: rows[0].storage_key }),
@@ -139,11 +179,12 @@ export class DocumentsService {
     )[0];
     if (!bid) throw new NotFoundException('Bid not found');
     if (bid.supplier_org_id !== auth.org_id) throw new BadRequestException('Not your bid');
-    const avStatus = this.cfg.clamavEnabled ? 'PENDING' : 'SKIPPED';
+    const uploaded = await this.consumeUpload(auth.org_id, dto);
+    const avStatus = uploaded.avStatus;
     const rows = await m.query(
       `INSERT INTO bid_documents(bid_id, buyer_org_id, supplier_org_id, storage_key, filename, mime, size_bytes, sha256, av_status, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-      [bidId, bid.buyer_org_id, auth.org_id, dto.storageKey, dto.filename, dto.mime, dto.sizeBytes, dto.sha256, avStatus, auth.sub],
+      [bidId, bid.buyer_org_id, auth.org_id, uploaded.storageKey, uploaded.filename, uploaded.mime, uploaded.sizeBytes, uploaded.sha256, avStatus, auth.sub],
     );
     await this.audit.record('DOCUMENT_UPLOADED', 'bid_document', rows[0].id, { bid_id: bidId, sha256: dto.sha256 });
     return { id: rows[0].id, avStatus };
@@ -159,14 +200,16 @@ export class DocumentsService {
   }
 
   // Generic signed GET for any storage key (used by verification docs etc.).
-  async signedGetUrl(storageKey: string) {
+  async signedGetUrl(storageKey: string, ownerOrgId: string) {
+    this.assertStorageOwner(storageKey, ownerOrgId);
     return getSignedUrl(this.s3Public, new GetObjectCommand({ Bucket: this.bucket, Key: storageKey }), { expiresIn: 900 });
   }
 
   async bidDocDownloadUrl(id: string) {
-    const rows = await this.rc.manager.query(`SELECT storage_key, av_status FROM bid_documents WHERE id=$1`, [id]);
+    const rows = await this.rc.manager.query(`SELECT storage_key, av_status, supplier_org_id AS owner_org_id FROM bid_documents WHERE id=$1`, [id]);
     if (!rows.length) return { url: null };
-    if (rows[0].av_status === 'INFECTED') throw new BadRequestException('File is blocked by the antivirus scan');
+    this.assertStorageOwner(rows[0].storage_key, rows[0].owner_org_id);
+    this.assertDownloadable(rows[0].av_status);
     const url = await getSignedUrl(
       this.s3Public,
       new GetObjectCommand({ Bucket: this.bucket, Key: rows[0].storage_key }),

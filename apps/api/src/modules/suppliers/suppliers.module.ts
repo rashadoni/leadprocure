@@ -1,6 +1,7 @@
+import { returnedRows } from '../../common/procurement/invariants';
 import { Body, Controller, Get, Injectable, Module, NotFoundException, Param, Post } from '@nestjs/common';
 import type { AccessTokenPayload } from '@leadprocure/shared';
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
@@ -88,10 +89,13 @@ export class SuppliersService {
   }
 
   async setStatus(relationshipId: string, status: 'APPROVED' | 'BLOCKED') {
-    const rows = await this.rc.manager.query(
+    const rel=(await this.rc.manager.query(`SELECT buyer_org_id,supplier_org_id FROM supplier_relationships WHERE id=$1`,[relationshipId]))[0];
+    if (!rel) throw new NotFoundException('Relationship not found');
+    await this.rc.manager.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,85))`,[`${rel.buyer_org_id}:${rel.supplier_org_id}`]);
+    const rows = returnedRows(await this.rc.manager.query(
       `UPDATE supplier_relationships SET status = $2, updated_at = now() WHERE id = $1 RETURNING id, status`,
       [relationshipId, status],
-    );
+    ));
     if (!rows.length) throw new NotFoundException('Relationship not found');
     await this.audit.record(
       status === 'APPROVED' ? 'SUPPLIER_APPROVED' : 'SUPPLIER_BLOCKED',
@@ -108,7 +112,7 @@ class SetRelStatusDto {
 }
 class AddScoreDto {
   @IsIn(['OTIF', 'QUALITY', 'COMMS']) metric!: 'OTIF' | 'QUALITY' | 'COMMS';
-  @IsInt() @Min(0) score!: number;
+  @IsInt() @Min(0) @Max(100) score!: number;
   @IsOptional() @IsString() note?: string;
   @IsOptional() @IsUUID() sourcePoId?: string;
 }
