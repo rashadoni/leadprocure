@@ -1,0 +1,35 @@
+{
+  "document": "Leadprocure_Data_Sheet_AZ.pdf",
+  "editablePowerPoint": "Leadprocure_Data_Sheet_AZ.pptx",
+  "powerPointPages": 2,
+  "pageCount": 2,
+  "requiredPageCount": 2,
+  "pageSize": "A4 portrait",
+  "pageSizesPt": [
+    [
+      595.28,
+      841.89
+    ],
+    [
+      595.28,
+      841.89
+    ]
+  ],
+  "displayFont": "Barlow Condensed",
+  "bodyFont": "IBM Plex Sans",
+  "minimumBodyFontPt": 10.25,
+  "minimumConditionFontPt": 9.0,
+  "minimumFooterFontPt": 8.5,
+  "capabilities": 10,
+  "layoutIssues": [],
+  "missingText": [],
+  "replacementCharacterPresent": false,
+  "sourceCopyPreserved": true,
+  "page1GridTopPt": 272.0,
+  "page1CapabilityRowHeightPt": 104.2,
+  "page2ConditionsBottomPt": 712.6,
+  "page2PilotBottomPt": 792,
+  "visualReview": "PASS: all local PDF pages and contact sheets reviewed; no clipping or missing Azerbaijani glyphs",
+  "pdfBytes": 67115,
+  "native_pptx_render": "NOT RUN for v3: native PowerPoint/Google Slides rendering unavailable in this pass"
+}

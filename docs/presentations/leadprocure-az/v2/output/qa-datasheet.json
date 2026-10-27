@@ -1,0 +1,36 @@
+{
+  "document": "Leadprocure_Data_Sheet_AZ.pdf",
+  "editablePowerPoint": "Leadprocure_Data_Sheet_AZ.pptx",
+  "powerPointPages": 2,
+  "pageCount": 2,
+  "requiredPageCount": 2,
+  "pageSize": "A4 portrait",
+  "pageSizesPt": [
+    [
+      595.28,
+      841.89
+    ],
+    [
+      595.28,
+      841.89
+    ]
+  ],
+  "displayFont": "Barlow Condensed",
+  "bodyFont": "IBM Plex Sans",
+  "minimumBodyFontPt": 10.25,
+  "minimumConditionFontPt": 9.0,
+  "minimumFooterFontPt": 8.5,
+  "capabilities": 10,
+  "layoutIssues": [],
+  "missingText": [],
+  "replacementCharacterPresent": false,
+  "sourceCopyPreserved": true,
+  "page1GridTopPt": 272.0,
+  "page1CapabilityRowHeightPt": 104.2,
+  "page2ConditionsBottomPt": 701.0,
+  "page2PilotBottomPt": 792,
+  "visualReview": "PDF layout retained from reviewed version; native PowerPoint desktop render not run.",
+  "docx": "NOT RUN: python-docx is unavailable; no dependency installation requested. Editable Markdown source supplied.",
+  "pdfBytes": 67123,
+  "powerPointValidation": "PASS: two A4 portrait slides; all text editable; exact text parity with PDF; no raster page screenshots."
+}
