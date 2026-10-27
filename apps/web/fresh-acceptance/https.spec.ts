@@ -63,10 +63,19 @@ test('real HTTPS login, secure refresh across reloads, browser CORS and private 
   }, { api });
   expect(blocked).toBe(true);
   await blockedPage.close();
+  const beforeLogout = (await context.cookies(api)).find(c => c.name === 'lp_refresh');
+  expect(beforeLogout).toBeDefined();
   await page.getByRole('link', { name: 'Log out', exact: true }).click();
   await page.waitForURL(/\/login$/);
   expect((await context.cookies(api)).some(c => c.name === 'lp_refresh')).toBe(false);
   await page.goto('/buyer/budgets'); await page.waitForURL(/\/login$/);
+  // Replaying this same synthetic session's genuine cookie must fail server-side,
+  // independently of the controller/client clearing their local state.
+  await context.addCookies([beforeLogout!]);
+  const revoked = await page.evaluate(async ({ api }) =>
+    (await fetch(`${api}/auth/refresh`, { method: 'POST', credentials: 'include' })).status, { api });
+  expect(revoked).toBe(401);
+  await context.clearCookies();
   writeFileSync(process.env.FRESH_BROWSER_EVIDENCE_FILE!, JSON.stringify({
     status: 'PASS', trustedTestCA: true, productionBuild: true, actualUILogin: true,
     secureHttpOnlyCookie: true, reloadRefreshes: 3, allowedCors: true,

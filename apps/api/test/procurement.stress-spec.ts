@@ -110,15 +110,60 @@ describe('bounded concurrent procurement acceptance', () => {
     }
     expect(Number((await db.query('SELECT count(*) n FROM auction_bids WHERE event_id=$1', [ev.id])).rows[0].n)).toBe(ROUNDS);
     await db.query("UPDATE sourcing_events SET close_at=clock_timestamp()-interval '1 second' WHERE id=$1", [ev.id]);
-    const late = Array.from({ length: CONCURRENCY }, () => http().post(`/events/${ev.id}/auction/bids`).set(auth(supplier))
-      .send({ items: [{ eventItemId: itemId, unitPriceMinor: 1 }], idempotencyKey: randomUUID() }));
-    const close = Array.from({ length: CONCURRENCY }, () => db.query('SELECT * FROM close_due_events()'));
-    const responses = await Promise.all(late);
-    await Promise.all(close);
+    const closers = Array.from({ length: CONCURRENCY }, () => new Client({
+      connectionString: process.env.DATABASE_OWNER_URL, connectionTimeoutMillis: 10_000,
+    }));
+    const connections = closers.map(c => c.connect());
+    let responses: request.Response[] = [];
+    let release: Promise<unknown> | undefined;
+    try {
+      await Promise.all(connections);
+      const pids = await Promise.all(closers.map(async c => Number((await c.query('SELECT pg_backend_pid() pid')).rows[0].pid)));
+      await db.query('BEGIN');
+      await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,42)), pg_advisory_xact_lock(hashtextextended($2,99))',
+        [ev.id, `${ev.id}:stress-gate`]);
+      // .then starts Supertest immediately; distinct DB clients wait on a shared
+      // start barrier while the real HTTP bids wait on the event lock.
+      const late = Array.from({ length: CONCURRENCY }, () => http().post(`/events/${ev.id}/auction/bids`).set(auth(supplier))
+        .send({ items: [{ eventItemId: itemId, unitPriceMinor: 1 }], idempotencyKey: randomUUID() }).then(r => r));
+      const close = closers.map(async c => {
+        await c.query('SELECT pg_advisory_xact_lock_shared(hashtextextended($1,99))', [`${ev.id}:stress-gate`]);
+        return c.query('SELECT * FROM close_due_events()');
+      });
+      const all = Promise.all([Promise.all(late), Promise.all(close)]);
+      release = all; // always drain outstanding work before closing its connections
+      const deadline = Date.now() + 10_000;
+      let observed = false;
+      while (Date.now() < deadline) {
+        await db.query('SELECT pg_stat_clear_snapshot()');
+        const waiting = (await db.query(`SELECT
+          count(*) FILTER (WHERE pid=ANY($1::int[])) closers,
+          count(*) FILTER (WHERE usename='app_user' AND query LIKE '%pg_advisory_xact_lock(hashtextextended%') bids
+          FROM pg_stat_activity WHERE wait_event_type='Lock' AND wait_event='advisory'`, [pids])).rows[0];
+        if (Number(waiting.closers) === CONCURRENCY && Number(waiting.bids) >= CONCURRENCY) { observed = true; break; }
+        await new Promise(r => setTimeout(r, 20));
+      }
+      await db.query('COMMIT');
+      [responses] = await all;
+      expect(observed).toBe(true);
+    } finally {
+      await db.query('ROLLBACK'); // also releases barriers on any failed assertion
+      try {
+        await Promise.allSettled(connections);
+        if (release) await Promise.allSettled([release]);
+      } finally {
+        await Promise.all(closers.map(c => c.end()));
+      }
+    }
+    // try-lock schedulers may legitimately skip an event while a bidder holds
+    // its lock. One subsequent pass must close it, and never create two audits.
+    await db.query('SELECT * FROM close_due_events()');
     expect(responses.every(r => r.status === 400)).toBe(true);
     expect((await db.query('SELECT status FROM sourcing_events WHERE id=$1', [ev.id])).rows[0].status).toBe('CLOSED');
     expect(Number((await db.query('SELECT count(*) n FROM auction_bids WHERE event_id=$1', [ev.id])).rows[0].n)).toBe(ROUNDS);
+    expect(Number((await db.query("SELECT count(*) n FROM audit_events WHERE action='EVENT_CLOSED' AND entity_id=$1", [ev.id])).rows[0].n)).toBe(1);
     results.push({ scenario: 'auction-idempotency-and-close', contestedRequests: ROUNDS * CONCURRENCY + CONCURRENCY,
-      committedTicks: ROUNDS, lateAccepted: 0, concurrentCloseCalls: CONCURRENCY, elapsedMs: Date.now() - started });
+      committedTicks: ROUNDS, lateAccepted: 0, independentCloserConnections: CONCURRENCY,
+      observedBlockedBidsAndClosers: true, closeAuditCount: 1, elapsedMs: Date.now() - started });
   }, 90_000);
 });
