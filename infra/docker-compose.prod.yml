@@ -92,6 +92,7 @@ services:
       CLAMAV_ENABLED: ${CLAMAV_ENABLED:-false}
       CLAMAV_HOST: clamav
       AI_ORCHESTRATOR_URL: http://ai-orchestrator:8000
+      WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}

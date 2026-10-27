@@ -1,5 +1,7 @@
+import {createHmac,timingSafeEqual} from 'crypto';
+import type {Request} from 'express';
 import {
-  BadRequestException, Body, Controller, Delete, Get, Injectable, Logger, Module, Param, Post, Put, Query,
+  BadRequestException, HttpCode, UnauthorizedException, ServiceUnavailableException, RawBodyRequest, Req, Body, Controller, Delete, Get, Injectable, Logger, Module, Param, Post, Put, Query,
 } from '@nestjs/common';
 import { IsBoolean, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { DataSource } from 'typeorm';
@@ -49,6 +51,7 @@ export async function sendEmailVia(cfg: any, to: string, subject: string, text: 
     host: cfg.host,
     port: Number(cfg.port),
     secure: Number(cfg.port) === 465,
+    connectionTimeout: 15000, greetingTimeout: 10000, socketTimeout: 30000,
     auth: cfg.user ? { user: cfg.user, pass: cfg.password } : undefined,
   });
   await transport.sendMail({ from: cfg.from, to, subject, text, html: `<pre>${text}</pre>` });
@@ -70,6 +73,7 @@ export async function sendWhatsappVia(cfg: any, to: string, text: string): Promi
     : { messaging_product: 'whatsapp', to: phone, type: 'text', text: { body: text, preview_url: false } };
   const res = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${cfg.phoneNumberId}/messages`, {
     method: 'POST',
+    signal: AbortSignal.timeout(30000),
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.accessToken ?? ''}` },
     body: JSON.stringify(body),
   });
@@ -258,7 +262,7 @@ export class ChannelsController {
 // Public Meta webhook: GET is the one-time verify handshake (echo hub.challenge when the
 // token matches any org's config); POST delivers message-status callbacks (sent →
 // delivered → read / failed) which we map to the follow-up log by wamid. No auth guard —
-// authenticity is the shared verify token; the status update only touches our own rows.
+// POST authenticity requires the Meta app HMAC over the original body, independently of the GET handshake.
 @Controller('channels/whatsapp/webhook')
 export class WhatsappWebhookController {
   private readonly logger = new Logger('WhatsappWebhook');
@@ -278,12 +282,19 @@ export class WhatsappWebhookController {
 
   @Public()
   @Post()
-  async receive(@Body() body: any) {
+  @HttpCode(200)
+  async receive(@Body() body: any, @Req() req: RawBodyRequest<Request>) {
+    const secret=process.env.WHATSAPP_APP_SECRET;
+    if (!secret) throw new ServiceUnavailableException('Meta webhook signing is not configured');
+    const signature=req.get('x-hub-signature-256') ?? '';
+    if (!req.rawBody || !/^sha256=[0-9a-f]{64}$/i.test(signature)) throw new UnauthorizedException('Invalid webhook signature');
+    const expected=createHmac('sha256',secret).update(req.rawBody).digest();
+    if (!timingSafeEqual(expected,Buffer.from(signature.slice(7),'hex'))) throw new UnauthorizedException('Invalid webhook signature');
     try {
       const statuses = body?.entry?.[0]?.changes?.[0]?.value?.statuses;
       if (Array.isArray(statuses)) {
         for (const s of statuses) {
-          if (s?.id && s?.status) {
+          if (s?.id && ['sent','delivered','read','failed'].includes(s?.status)) {
             await this.ds.query(`SELECT followup_msg_set_status($1, $2)`, [s.id, s.status])
               .catch((e) => this.logger.warn(`status update failed: ${e?.message}`));
           }

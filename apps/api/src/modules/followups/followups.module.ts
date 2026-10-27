@@ -56,6 +56,7 @@ export class HttpWhatsAppProvider extends WhatsAppProvider {
   async send(to: string, text: string): Promise<void> {
     const res = await fetch(this.url, {
       method: 'POST',
+      signal: AbortSignal.timeout(30000),
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.token}` },
       body: JSON.stringify({ from: this.from, to, body: text }),
     });
@@ -192,10 +193,17 @@ export class FollowupsScheduler {
     private readonly cfg: AppConfig,
   ) {}
 
+  private ticking = false;
   @Cron(CronExpression.EVERY_MINUTE)
   async tick(): Promise<number> {
-    const due: any[] = await this.ds.query(`SELECT * FROM followup_claim_outbox()`);
-    for (const job of due) {
+    if (this.ticking) return 0;
+    this.ticking = true;
+    let count = 0;
+    try {
+    for (let i=0;i<50;i++) {
+      const [job] = await this.ds.query(`SELECT * FROM followup_claim_outbox()`);
+      if (!job) break;
+      count++;
       const w=job.work;
       const finish = (status:string,detail?:string,provider?:string) => this.ds.query(
         `SELECT followup_finish_outbox($1,$2,$3,$4)`,[job.id,status,detail ?? null,provider ?? null]);
@@ -228,8 +236,9 @@ export class FollowupsScheduler {
         await finish(dispatched ? 'UNKNOWN':'FAILED',String(e?.message ?? 'Delivery failed').slice(0,300));
       }
     }
-    if (due.length) this.logger.log(`follow-ups: advanced ${due.length} chain step(s)`);
-    return due.length;
+    if (count) this.logger.log(`follow-ups: advanced ${count} chain step(s)`);
+    return count;
+    } finally { this.ticking = false; }
   }
 }
 

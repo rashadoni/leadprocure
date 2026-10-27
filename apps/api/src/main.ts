@@ -11,7 +11,7 @@ import { AppModule } from './app.module';
 import { AppConfig } from './common/config/config.service';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   const cfg = app.get(AppConfig);
   app.use(helmet());
   app.use(cookieParser());

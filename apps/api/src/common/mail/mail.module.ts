@@ -37,6 +37,7 @@ export class SmtpMailProvider extends MailProvider {
       host: cfg.smtpHost,
       port: cfg.smtpPort,
       secure: cfg.smtpPort === 465,
+      connectionTimeout: 15000, greetingTimeout: 10000, socketTimeout: 30000,
       auth: cfg.smtpUser ? { user: cfg.smtpUser, pass: cfg.smtpPass } : undefined,
     });
   }
