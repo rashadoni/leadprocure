@@ -38,7 +38,9 @@ for name, expected_pages in specs:
             missing = expected - tokens(text)
             coverage = 1 - sum(missing.values()) / max(1, sum(expected.values()))
             fonts, overflow = set(), []
-            for block in page.get_text('dict')['blocks']:
+            # Default extraction clips to the page, concealing overflow. Inspect
+            # all text geometry while retaining visible-only text for coverage.
+            for block in page.get_text('dict', clip=fitz.INFINITE_RECT())['blocks']:
                 for line in block.get('lines', []):
                     for span in line['spans']:
                         if not span['text'].strip():
