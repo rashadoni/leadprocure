@@ -8,6 +8,7 @@ fixture_dir="$RUNNER_TEMP/leadprocure-fresh-$GITHUB_RUN_ID"
 project="leadprocure-acceptance-$GITHUB_RUN_ID"
 mkdir -m 700 "$fixture_dir" "$fixture_dir/license" "$fixture_dir/evidence"
 export FRESH_FIXTURE_DIR="$fixture_dir"
+bash "$task_root/scripts/acceptance/fresh-tls.sh"
 python3 <<'PY'
 import json, os, secrets
 from pathlib import Path
@@ -18,8 +19,8 @@ env={
  'DEPLOYMENT_MODE':'on_prem_isolated', 'JWT_ACCESS_SECRET':secrets.token_hex(48),
  'JWT_REFRESH_SECRET':secrets.token_hex(48), 'BID_MASTER_KEY_B64':__import__('base64').b64encode(secrets.token_bytes(32)).decode(),
  'S3_ACCESS_KEY':'isolated-install', 'S3_SECRET_KEY':secrets.token_hex(32), 'S3_BUCKET':'leadprocure-install-test',
- 'WEB_ORIGIN':'http://127.0.0.1:39380', 'PUBLIC_API_URL':'http://127.0.0.1:39300',
- 'S3_PUBLIC_URL':'http://127.0.0.1:39000', 'CLAMAV_ENABLED':'true', 'LICENSE_DIR':str(p/'license'),
+ 'WEB_ORIGIN':'https://app.leadprocure.test:39443', 'PUBLIC_API_URL':'https://api.leadprocure.test:39443',
+ 'S3_PUBLIC_URL':'https://s3.leadprocure.test:39443', 'CLAMAV_ENABLED':'true', 'LICENSE_DIR':str(p/'license'),
 }
 (p/'fixture.env').write_text(''.join(f'{k}={v}\n' for k,v in env.items()))
 # !override removes the template's host-wide ports. Never bind this fixture publicly.
@@ -32,6 +33,13 @@ env={
     ports: !override ["127.0.0.1:39300:3000"]
   web:
     ports: !override ["127.0.0.1:39380:80"]
+  tls-proxy:
+    image: nginx:alpine
+    depends_on: [api, web, minio]
+    ports: ["127.0.0.1:39443:443"]
+    volumes:
+      - "'''+str(p/'tls')+''':/test-tls:ro"
+      - "'''+str(p/'tls/nginx.conf')+''':/etc/nginx/nginx.conf:ro"
 ''')
 PY
 compose=(docker compose --project-name "$project" --env-file "$fixture_dir/fixture.env"
@@ -42,7 +50,8 @@ cleanup() {
   "${compose[@]}" logs --no-color --tail 300 > "$fixture_dir/evidence/compose.log" 2>&1 || true
   # Explicit project + non-external, project-scoped volumes only; hosted runner guard above.
   "${compose[@]}" down --volumes --remove-orphans > /dev/null 2>&1 || true
-  rm -f "$fixture_dir/license/leadprocure.license" "$fixture_dir/license-fixture.json" "$fixture_dir/fixture.env"
+  rm -f "$fixture_dir/license/leadprocure.license" "$fixture_dir/license-fixture.json" "$fixture_dir/fixture.env" "$fixture_dir/browser-account.json"
+  rm -f "$fixture_dir/tls/ca.key" "$fixture_dir/tls/server.key"
   exit "$result"
 }
 trap cleanup EXIT
@@ -78,8 +87,15 @@ for attempt in $(seq 1 120); do
   if curl -fsS http://127.0.0.1:39300/health > "$fixture_dir/evidence/signed-license.json"; then break; fi
   sleep 2
 done
-FRESH_EVIDENCE_FILE="$fixture_dir/evidence/http-acceptance.json" \
+curl -fsS --cacert "$fixture_dir/tls/ca.crt" https://api.leadprocure.test:39443/health > /dev/null
+NODE_EXTRA_CA_CERTS="$fixture_dir/tls/ca.crt" \
+  FRESH_BROWSER_ACCOUNT_FILE="$fixture_dir/browser-account.json" \
+  FRESH_EVIDENCE_FILE="$fixture_dir/evidence/http-acceptance.json" \
   node "$task_root/scripts/acceptance/fresh-install-check.cjs"
+FRESH_BROWSER_ACCOUNT_FILE="$fixture_dir/browser-account.json" \
+  FRESH_BROWSER_RESULTS_DIR="$fixture_dir/evidence/browser-results" \
+  FRESH_BROWSER_EVIDENCE_FILE="$fixture_dir/evidence/https-browser.json" \
+  pnpm --filter web exec playwright test --config fresh-acceptance/playwright.config.ts
 # Verify the actual fresh-init runtime role and no-context default-deny at DB level.
 "${compose[@]}" exec -T postgres sh -c 'PGPASSWORD="$APP_DB_PASSWORD" psql -h 127.0.0.1 -U app_user -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -At' <<'SQL' > "$fixture_dir/evidence/role-isolation.txt"
 SELECT CASE WHEN NOT rolsuper AND NOT rolbypassrls AND NOT rolcreaterole AND NOT rolcreatedb THEN 'app_role_restricted=PASS' ELSE 'FAIL' END FROM pg_roles WHERE rolname=current_user;
