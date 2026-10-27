@@ -11,3 +11,9 @@
 | P2: waiting jobs получают UNKNOWN до отправки | Batch50 с lease5min и медленный первый provider | Claim1 непосредственно перед dispatch, tick overlap guard, bounded HTTP/SMTP; regression проверяет pending jobs | Исходная находка закрыта по коду |
 
 Reviewer не обнаружил новых блокирующих дефектов в этих corrections. Тяжёлые проверки им не выполнялись. Автоматический GitHub Agent review был зелёным через fallback при Anthropic API400; его нельзя выдавать за фактическое ревью. Независимый разбор выше выполнен отдельно. Полный hosted gate должен пройти на фактическом конечном SHA.
+
+## Дополнительное независимое ревью материалов и runbook
+
+Тот же отдельный reviewer проверил PR4/PR5 и corrections через b552496: SHA256 v2/v3 совпали, native-text PPTX13/2 доступны, блокирующего расхождения в v3 claims не найдено. Найдены unsafe default demo reset target и устаревшие production/cloud-license утверждения в LAUNCH checklist. Исправления: явный isolated target, disposable labels API/DB, DB leadprocure_demo, app_user DB URL, общая сеть и проверенные literal127.0.0.1 Docker HostIp/HostPort; reset failure останавливает reseed/recording; SQL передаётся отдельными argv. 4 guard tests PASS. Checklist требует signed license для любого production и явно отмечает fresh Compose NO-GO. Reviewer подтвердил закрытие этих находок по исходникам; reset/production команды не выполнялись.
+
+После source review hosted acceptance run40518660742 на code82e323a завершился PASS:195 API/9 browser/full build/schema/upgrade/restore. Он не заменяет перечисленную в STATUS.md внешнюю/on-prem приёмку. Автоматический agent-review fallback по-прежнему не считается независимым разбором.

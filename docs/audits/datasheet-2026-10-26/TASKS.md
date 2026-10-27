@@ -171,3 +171,7 @@
 ## Обновление исполнения — 27 октября 2026
 
 Исходные критерии выше сохранены. Реализованные изменения, доказательства и незакрытые gates перечислены в [STATUS.md](STATUS.md); утверждения материалов — в [CLAIMS.md](CLAIMS.md). LP-A19 не закрыта: GitHub Actions возвращает startup_failure до создания jobs. Полный build/API/browser gate — NOT RUN. Внешние SMTP/Meta подключения отсутствуют по ответу пользователя. Это не отменяет проведённые 39 targeted checks и не заменяет полную приёмку.
+
+## Обновление после hosted acceptance — 27 октября 2026
+
+Предыдущий blocker startup_failure/NOT RUN выше **superseded**: действующий rashadoni/leadprocure, run40518660742, code82e323a — PASS (195 API, 9 browser, full build, official schemas, upgrade/restore). Исходные 20 критериев сохранены. LP-A19 частично открыта: fresh bundled Compose provisioning NO-GO из-за upstream MinIO images; реальный клиентский on-prem и SMTP/Meta внешняя доставка NOT RUN (подключений нет). Это не разрешение merge/deploy. Актуальная сводка и точные границы — STATUS.md/CLAIMS.md.
