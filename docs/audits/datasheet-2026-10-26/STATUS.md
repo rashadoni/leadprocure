@@ -47,3 +47,7 @@ Production не обновлялся. Push ветки, снятие архиви
 ## Последняя контрольная точка
 
 Commit `dff5b79` отправлен в feature branch; PR #10 остаётся draft. Новые push/PR runs [40407106728](https://github.com/rashadrahimov/leadprocure/actions/runs/40407106728) и [40407114230](https://github.com/rashadrahimov/leadprocure/actions/runs/40407114230) также `startup_failure`. Временные task-labelled PostgreSQL/MinIO/upgrade containers и internal network удалены после сохранения доказательств. Следующий шаг — восстановить hosted runner или использовать предусмотренный host contract ephemeral worker и выполнить полный gate.
+
+## Повторная диагностика по запросу пользователя — 27 октября
+
+Отказ подтверждён на последнем commit542ee10; ручной rerun403. В историческом public diagnostic run того же аккаунта найден явный billing lock, однако текущий billing state недоступен через имеющийся API. Проверены альтернативы: Codespaces (недостаточно доступа), Azure DevOps (disabled LeadDrive definitions, pools/queues401), Mac worker (маршрут отсутствует). В аккаунте rashadoni найден успешный Leadprocure Actions run; предложен отдельный PRIVATE task repo, согласие на передачу ветки между аккаунтами запрошено. Подробности и подготовленный следующий шаг: [CI-OPTIONS.md](CI-OPTIONS.md). До разрешения source transfer не выполняется, LP-A19 остаётся открытой.
