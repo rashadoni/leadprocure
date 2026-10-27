@@ -332,3 +332,10 @@
 - User answered «Давай, объединяй PR» to the concrete request naming Leadprocure PR3/4/5/6 and subsequent combined-main verification. Main merge is now authorized for these4 prepared changes; production deployment is explicitly not included.
 - Resume from all4 ready/green PRs. Reconfirmed worktree/branch/origin rashadoni/leadprocure; fetched main680f0ae844e5a8298a102924993dc3ad0cbb65a3. No dirty paths before this journal append. Use expected head SHA for merge and preserve all feature checkpoints; no branch deletion/force push/production mutation.
 - Planned sequence: core3, retarget dependent6 onto main after3, then installer6/materials4/evidence5 when mergeable/green; verify resulting combined main in hosted CI. Repository context production route remains unverified; no production action performed.
+
+## 2026-10-28 — all four authorized PRs merged; combined-main gate running
+
+- Connected GitHub plugin merge call returned403 Resource not accessible by integration. Continued with already-authorized gh authenticated as rashadoni; no policy/admin bypass and every merge checked the exact expected head SHA.
+- PR3 merged2b59c3c296eda44d042075bcd9712d59d91c3255. Retargeted dependent PR6 to main and merged3c14c0144dbade555028be01ed9855800fe8a910. PR4 mergedc5649c6349a3c08682e2b314b5756e266b665c68. PR5 merged974a31b05703279d7f36c72a153d42b5bbd321a4. All remain in history; branches not intentionally deleted.
+- Final combined main974a31b fetched. Application/infra/shared/services/acceptance scripts/workflows/material snapshots match this integration worktree (no source diff in checked scope). Continuing immediately with hosted final-main acceptance + independent PPTX render. Only obsolete runs on the three known intermediate merge SHAs may be cancelled, not unrelated work.
+- Production/runtime untouched; owner authorization covered merges and main CI only. Precise current point: four merges complete, final-main verification pending. Next: inspect actual gate evidence on974a31b and record outcome.
