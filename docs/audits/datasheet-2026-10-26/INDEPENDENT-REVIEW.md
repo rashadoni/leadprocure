@@ -17,3 +17,19 @@ Reviewer не обнаружил новых блокирующих дефект�
 Тот же отдельный reviewer проверил PR4/PR5 и corrections через b552496: SHA256 v2/v3 совпали, native-text PPTX13/2 доступны, блокирующего расхождения в v3 claims не найдено. Найдены unsafe default demo reset target и устаревшие production/cloud-license утверждения в LAUNCH checklist. Исправления: явный isolated target, disposable labels API/DB, DB leadprocure_demo, app_user DB URL, общая сеть и проверенные literal127.0.0.1 Docker HostIp/HostPort; reset failure останавливает reseed/recording; SQL передаётся отдельными argv. 4 guard tests PASS. Checklist требует signed license для любого production и явно отмечает fresh Compose NO-GO. Reviewer подтвердил закрытие этих находок по исходникам; reset/production команды не выполнялись.
 
 После source review hosted acceptance run40518660742 на code82e323a завершился PASS:195 API/9 browser/full build/schema/upgrade/restore. Он не заменяет перечисленную в STATUS.md внешнюю/on-prem приёмку. Автоматический agent-review fallback по-прежнему не считается независимым разбором.
+
+## 2026-10-28 — fresh installation candidate, independent source review
+
+A separate agent reviewed the new storage Dockerfile/bootstrap, Compose dependency
+and license wiring, PostgreSQL empty-volume role script, hosted-only fixture
+containment, HTTP expectations and revised deployment runbook. No blocking source
+findings. Scope: read-only review; no heavy execution on Contabo. Hosted image
+build/fresh production Compose gate remains pending. Fresh-stack browser CORS,
+HTTPS secure-cookie refresh, ARM, existing-volume upgrades and real commercial
+client licensing are not established by this source review or HTTP fixture.
+
+Hosted follow-through: run40584185358 on f5b7e776 completed successfully. Both
+full acceptance (195 API,9 browser,build,schemas,upgrade/restore) and actual fresh
+production Compose (source-built storage/API/web/AI, signed file license,
+budget/approver/RLS/private storage/real ClamAV) passed. Evidence does not remove
+the explicitly listed client/TLS/ARM/existing-volume/external-provider limits.

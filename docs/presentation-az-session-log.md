@@ -237,3 +237,40 @@
 - Не закрытые внешние границы: fresh bundled Compose NO-GO из-за upstream MinIO images; реальный on-prem/SMTP/Meta NOT RUN; внешний LLM/ERP/bank/ASAN/Peppol не выданы за готовые интеграции. Merge/deploy не выполнялись и не разрешены.
 - Пользователь сообщил новую проблему LeadDrive: аптечный список показывает total1143, доступно только100; работа изолирована в /mnt/HC_Volume_106454338/codex-alt-data/worktrees/leaddrive-zeytun-pharmacies-pagination-20261027, branch codex/zeytun-pharmacies-pagination, PR rashadoni/leaddrive-v2#1141. Исходный Leadprocure worktree/ветка/все checkpoint commits сохранены.
 - Точка продолжения Leadprocure: code hosted acceptance пройден; следующий независимый блок — исправление fresh-install provisioning и отдельная изолированная приёмка; внешние sends после появления подключений. Аудит всех20 нельзя объявлять полностью принятым.
+
+## 2026-10-27 — повторное уточнение владельца GitHub
+
+- Пользователь повторно подтвердил: действующий владелец — rashadoni; rashadrahimov давно не используется. Это коррекция маршрутизации, не разрешение merge/deploy.
+- Проверены текущие origins: Leadprocure = https://github.com/rashadoni/leadprocure.git; LeadDrive = https://github.com/rashadoni/leaddrive-v2.git. Текущие PR Leadprocure3 и LeadDrive1141 существуют в rashadoni.
+- Раннее обращение к retired Leadprocure account было ошибкой агента: использованы устаревшие origin/host map. Новые обращения или изменения в retired account в этом продолжении не выполнялись. История сохранена; текущие указания владельца и project AGENTS supersede старые routing записи.
+- Последнее действие: read-only проверка origins/веток/PR и запись коррекции. LeadDrive остаётся перед merge1141, ожидает отдельное подтверждение публикации; Leadprocure hosted gate PASS, installation/external acceptance limits сохранены.
+
+## 2026-10-28 — user corrects task context (Asia/Baku)
+
+- User: «причем тут список аптек у тебя же бюджетирование и закуп». The primary task in this thread is Leadprocure: procurement and budget controls, Azerbaijani presentation/data sheet and deep verification of LP-A00–LP-A19. The detour into LeadDrive pharmacies was a context-routing mistake; do not treat it as the main objective or continue that project here.
+- Preserve the detour's factual history rather than erase it: LeadDrive PR1141 was separately confirmed, merged and deployed; evidence remains in its own worktree journal. No rollback or further LeadDrive changes requested.
+- Resume original worktree/branch codex/leadprocure-client-presentation-az, origin https://github.com/rashadoni/leadprocure.git. Existing uncommitted owner-correction journal entry preserved.
+- Saved Leadprocure gate: code82e323a, run40518660742 PASS (195 API/9 browser/full build/schemas/upgrade/restore). Remaining: fresh bundled Compose storage provisioning; actual client installation; external SMTP/Meta NOT RUN because user confirmed no connections. Work now focuses on those original audit gaps and budget/procurement evidence. LeadDrive publication approval does not authorize Leadprocure merge/deploy.
+
+## 2026-10-28 — fresh-install candidate, budget/procurement scope
+
+- Prepared fresh-install fixes: pinned upstream storage source builds (archived snapshots, no vendor support claim); authenticated, private bucket bootstrap that fails on error; configurable empty-volume app role; read-only operator license directory/public key; no issuer private key in deployment context. Existing runtime/volumes unchanged.
+- Replaced stale deployment instructions (hardcoded DB password, demo seed in prod, unreviewed pull/build) with explicit configuration, isolated build worker acceptance and separately authorized release prerequisites. amd64 is the target; ARM and existing-volume storage upgrades remain NOT RUN.
+- Added GitHub-hosted-only fresh production Compose gate: missing-license restriction, ephemeral signed-file license, real buyer/approver actions, over-budget warning with APPROVED result, cross-org isolation, private presigned uploads/downloads, real clean/EICAR asynchronous scans, runtime DB role and no-context RLS.
+- Targeted checks PASS: shell/Node syntax, both Compose configurations, git diff whitespace. Resources inspected before checks: ~11GiB available RAM, 102GiB free disk, memory pressure0. Heavy builds not run on Contabo. Hosted fresh-install gate pending; prior 195 API/9 browser PASS remains evidence for earlier code82e323a, not this new installer.
+- Independent reviewer requested for this concrete implementation per AGENTS. Push/CI already authorized; no Leadprocure merge/deploy authorized.
+
+## 2026-10-28 — installer isolated for bounded review
+
+- Integration implementation checkpoint6a8893d. Product PR3's combined diff reached404283bytes and correctly failed the unchanged400000byte review guard. No cap was increased or bypassed. Stale candidate CI40584090650 cancelled to avoid duplicate heavy work.
+- Split installer into draft PR6, base codex/leadprocure-audit-controls, head f5b7e776709ef8506b7e9635ae52f9bc41bbf71f. PR3 now has the original accepted source tree at2c710bc52e779987c94894e89da450f8dfe452bf; checkpoint history preserved with normal forward commits, no force push. PR6 attached to chat.
+- PR6 https://github.com/rashadoni/leadprocure/pull/6; hosted run40584185358 pending. Independent source reviewer found no blocking installer defects; no fresh runtime PASS claimed. Budget claim now explicitly links the8 budgets tests within prior195 PASS and distinguishes soft warnings from blocking or standalone financial planning.
+
+## 2026-10-28 — fresh production installation and complete hosted repeat PASS
+
+- rashadoni/leadprocure run40584185358, codef5b7e776709ef8506b7e9635ae52f9bc41bbf71f: both jobs success. Full acceptance23 suites195 API,9 native Chromium, typecheck/full build, official UBL/OCDS schemas, baseline0027 upgrade/rollback/idempotency and dump/restore PASS (35migrations,9invoices,47RLS tables). PR3 source-identical2c710bc also passed run40584164366.
+- Fresh production Compose actually built all4 source images on hosted amd64 runner and booted empty volumes. Missing license: source missing/status expired_restricted. Read-only mounted ephemeral signed file: source file/status valid. Ephemeral issuer private key never left signing process. No production connection/volume used.
+- Real HTTP buyer/approver budget flow PASS: self-approval403, second approver APPROVED with over-budget warning, commitments/remaining and foreign-org isolation. Storage: presigned PUT/GET PASS, unsigned403, foreign download URL null; real clean/EICAR worker verdicts CLEAN/INFECTED and infected download denied. Fresh app_user non-superuser/non-BYPASSRLS; no-context budgets0. Web served actual built SPA.
+- Job evidence downloaded /tmp/leadprocure-40584185358-fresh-evidence; local logs /tmp/leadprocure-40584185358-acceptance.log and /tmp/leadprocure-40584185358-fresh-install.log. Sanitized durable facts added docs/audits/datasheet-2026-10-26/ACCEPTANCE-2026-10-28.json. STATUS now has a current20-task matrix; earlier failures/provisioning NO-GO preserved as historical/superseded. CLAIMS/TASKS/LAUNCH/review evidence updated.
+- No new application changes after successful gate. v3 materials unchanged because their reviewed conditional claims remain accurate. LP-A19 technical isolated acceptance passed; actual client/commercial license and SMTP/Meta delivery remain NOT RUN (no configured connections), alongside fresh HTTPS/browser, ARM, existing-volume upgrade, native PPTX rendering and full load stress. Production preflight/real backup/release require separate authorization. No merge/deploy performed.
+- Precise stopping point after publication of reviewable PR/evidence updates: code and fresh installer verified in CI, all20 tasks recorded with boundaries; before owner release decision and external/client acceptance. Next: separately authorized review/merge/release preparation, external delivery only when configured test connections exist.
