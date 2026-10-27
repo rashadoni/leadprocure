@@ -14,7 +14,8 @@
 
 import { createRequire } from 'module';
 import { createHash } from 'crypto';
-import { execSync } from 'child_process';
+import { execSync,execFileSync } from 'child_process';
+import {assertDemoTarget} from './demo-target.mjs';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync, renameSync } from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
@@ -239,6 +240,7 @@ const BTN = {
   bids: { ru: 'Ставки', az: 'Təkliflər', en: 'Bids' },
 };
 const API_URL = process.env.DEMO_API ?? 'http://localhost:3000';
+if (process.env.RESEED) assertDemoTarget(process.env,API_URL);
 
 // ---------------- scenes: {ru,az,en} narration + camera action ----------------
 const SECTIONS = {
@@ -619,10 +621,10 @@ async function login(ctx, email) {
     if (process.env.RESEED) {
       console.log(`  reseeding demo data (${lang})…`);
       try {
-        execSync(`node ${join(ROOT, 'scripts/demo-fill.mjs')} ${API_URL}`, {
+        execFileSync(process.execPath,[join(ROOT,'scripts/demo-fill.mjs'),API_URL], {
           env: { ...process.env, DEMO_RESET: '1', DEMO_LANG: lang }, stdio: 'pipe',
         });
-      } catch (e) { console.log(`  ! reseed failed: ${e.message.split('\n')[0]}`); }
+      } catch { throw new Error('Disposable demo reseed failed; recording stopped'); }
     }
     // 1) narrate every scene in this language, measure durations
     for (const key of todo) {
