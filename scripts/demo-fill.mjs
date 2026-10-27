@@ -10,14 +10,16 @@
 //   + бюджеты, каталог с заказом, верификация, Q&A
 //
 // Usage:  node scripts/demo-fill.mjs [API_URL]
-//   API_URL default http://localhost:3000
-//   DEMO_PG_CONTAINER (default leadprocure-prod-postgres-1) — used only to nudge the
-//   story-A deadline via `docker exec psql`; if unavailable, story A stays OPEN.
+//   API_URL must be the explicit disposable http://127.0.0.1:<published-port>.
+//   Requires DEMO_ISOLATED=1, explicit DEMO_PG_CONTAINER and DEMO_API_CONTAINER,
+//   both labelled leadprocure.disposable=true. DB must be leadprocure_demo.
+//   API_URL must match the API port bound specifically on127.0.0.1.
 
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
+import {assertDemoTarget} from './demo-target.mjs';
 
 const API = process.argv[2] ?? 'http://localhost:3000';
-const PG = process.env.DEMO_PG_CONTAINER ?? 'leadprocure-prod-postgres-1';
+const {pg:PG,dbName:DB} = assertDemoTarget(process.env,API);
 const PASS = 'Passw0rd!';
 const DAY = 24 * 3600_000;
 const LANG = process.env.DEMO_LANG ?? 'ru'; // seed the story content in this language
@@ -79,16 +81,9 @@ const T = TXT[LANG] ?? TXT.ru;
 // Wipe the story data (keeping orgs/users/policies) so each language re-seeds cleanly.
 // Runs as the DB owner via the PG container — bypasses RLS; audit_events is left intact.
 function resetStory() {
-  try {
-    execSync(
-      `docker exec ${PG} psql -U leadprocure_owner -d leadprocure -c ` +
-      `"TRUNCATE procurement_requests, budgets, catalogs, supplier_verification_cases, notifications, document_counters, procurement_categories RESTART IDENTITY CASCADE;"`,
-      { stdio: 'pipe' },
-    );
-    console.log(`✓ story data reset (lang=${LANG})`);
-  } catch (e) {
-    console.log(`  ! reset failed (${e.message.split('\n')[0]})`);
-  }
+  execFileSync('docker',['exec',PG,'psql','-U','leadprocure_owner','-d',DB,'-v','ON_ERROR_STOP=1','-c',
+    'TRUNCATE procurement_requests, budgets, catalogs, supplier_verification_cases, notifications, document_counters, procurement_categories RESTART IDENTITY CASCADE;'],{stdio:'pipe'});
+  console.log(`✓ disposable story data reset (lang=${LANG})`);
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -119,10 +114,9 @@ const login = async (email) => (await post('/auth/login', undefined, { email, pa
 
 function nudgeClose(eventId) {
   try {
-    execSync(
-      `docker exec ${PG} psql -U leadprocure_owner -d leadprocure -c "UPDATE sourcing_events SET close_at = now() - interval '1 second' WHERE id='${eventId}'; SELECT * FROM close_due_events();"`,
-      { stdio: 'pipe' },
-    );
+    if (!/^[0-9a-f-]{36}$/i.test(eventId)) throw new Error('Invalid event ID');
+    execFileSync('docker',['exec',PG,'psql','-U','leadprocure_owner','-d',DB,'-v','ON_ERROR_STOP=1','-c',
+      `UPDATE sourcing_events SET close_at = now() - interval '1 second' WHERE id='${eventId}'; SELECT * FROM close_due_events();`],{stdio:'pipe'});
     return true;
   } catch (e) {
     console.log(`  ! deadline nudge failed (${e.message.split('\n')[0]}) — tender stays OPEN`);

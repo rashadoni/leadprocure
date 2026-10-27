@@ -1,73 +1,35 @@
-# Боевой запуск — чек-лист
+# Приёмка и отдельно разрешённый выпуск
 
-Состояние на 2026-07-12: код готов к продакшену (аудит пройден, 172 e2e зелёные),
-**ждём сервер и домен**. Полная процедура деплоя — в [infra/DEPLOY.md](../infra/DEPLOY.md);
-этот файл — что осталось сделать и в каком порядке.
+Обновлено 27 октября 2026. Это кандидат после аудита, **не разрешение на production**. Действующий репозиторий — `rashadoni/leadprocure`. Код: PR3; материалы: PR4; доказательства: PR5. Итог приёмки — в [STATUS.md](audits/datasheet-2026-10-26/STATUS.md).
 
-## 1. Инфраструктура (решения владельца)
+Историческая запись от12 июля о готовности к production и172 тестах superseded текущим аудитом. Действующий runtime уже существует на Contabo: `/home/rashad/projects/Leadprocure/infra`, Compose project `leadprocure-prod`. Его dirty checkout нельзя сбрасывать или заменять.
 
-- [ ] **VPS** (amd64, ≥4 GB RAM, Docker + docker compose). На arm64 ClamAV недоступен —
-      см. DEPLOY.md §4.
-- [ ] **Домен** + 2 поддомена: `app.<домен>` (SPA) и `api.<домен>` (API).
-- [ ] **TLS-прокси** (Caddy — проще всего: 2 строки на поддомен, авто-Let's Encrypt;
-      либо nginx/Traefik) → `app → :8080`, `api → :3000`.
-- [ ] (позже, опционально) **SMTP** — до тех пор письма идут в лог API (console provider).
-      Включение = заполнить `SMTP_*` в `.env.prod` и перезапустить api. Пересборка не нужна.
-- [ ] (позже, опционально) **WhatsApp-шлюз** для автонапоминаний: `WHATSAPP_API_URL`,
-      `WHATSAPP_TOKEN`, `WHATSAPP_FROM` в env api. Без них шаг WhatsApp логируется как
-      SKIPPED, цепочки продолжают работать по e-mail.
+## Перед решением о выпуске
 
-## 2. Секреты (на сервере, один раз)
+- [ ] Полный hosted build/API/browser/schema/upgrade/restore gate пройден на конечном code SHA.
+- [ ] Независимое ревью выполнено по существу; зелёный fallback при сбое API не считается ревью.
+- [ ] Выполнен read-only preflight `scripts/acceptance/preflight-readonly.sql`; исторические дубли согласованы без удаления финансовых данных.
+- [ ] Резервная копия production проверена отдельным восстановлением. Тестовый dump/restore не заменяет backup реальной базы.
+- [ ] Отдельно разрешены merge и production deployment по [infra/DEPLOY.md](../infra/DEPLOY.md) и [DELIVERY-ARCHITECTURE.md](DELIVERY-ARCHITECTURE.md).
 
-```bash
-cd infra && cp .env.prod.example .env.prod
-openssl rand -base64 48   # → JWT_ACCESS_SECRET
-openssl rand -base64 48   # → JWT_REFRESH_SECRET
-openssl rand -base64 32   # → BID_MASTER_KEY_B64  (в идеале — из KMS)
-openssl rand -base64 24   # → POSTGRES_OWNER_PASSWORD
-openssl rand -base64 24   # → APP_DB_PASSWORD     (см. ниже!)
-openssl rand -base64 24   # → S3_SECRET_KEY
-```
+## Fresh bundled installation: пока NO-GO
 
-- [ ] `APP_DB_PASSWORD` должен совпадать с паролем `app_user` в
-      `infra/postgres/init/01-roles.sql` — **поменять в обоих местах ДО первого старта**
-      (init-скрипт выполняется только на пустом volume).
-- [ ] `WEB_ORIGIN=https://app.<домен>`, `PUBLIC_API_URL=https://api.<домен>`.
-- [ ] `VITE_DEMO_HINT` — **не задавать** (демо-логины на странице входа показываются
-      только при `=1`; это для демо-стендов).
-- [ ] `CLAMAV_ENABLED=true` (amd64).
-- [ ] Лицензия: для cloud-режима не нужна (dev-fallback = enterprise). Для on-prem
-      клиента: `DEPLOYMENT_MODE=on_prem_isolated`, `LICENSE_PUBLIC_KEY_B64`,
-      `pnpm license:gen` → `POST /admin/license`.
+На hosted runner подтверждено, что `minio/minio` / `minio/mc` из Docker Hub недоступны. Quay probes также не дали manifest. Текущие Compose templates используют эти images, поэтому команду fresh `docker compose up --build` нельзя считать рабочим сценарием установки. CI использует закреплённый официальный release binary только как disposable fixture; это не исправление production Compose. До отдельного выбора/проверки поддерживаемого S3-compatible storage установка нового on-prem/демо по bundled stack не принята. Существующие runtime volumes/images не менялись.
 
-## 3. Запуск
+## Конфигурация, которую проверяет оператор
 
-```bash
-docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
-```
+- TLS и реальные `WEB_ORIGIN` / `PUBLIC_API_URL`; `VITE_DEMO_HINT` выключен.
+- Раздельные owner/runtime DB roles: app_user без superuser/BYPASSRLS; пароль должен соответствовать init script до первого старта пустой БД.
+- Отдельные JWT secrets и32-byte BID_MASTER_KEY_B64; подписывающий private key лицензии не передаётся клиентскому приложению.
+- **Во всех production modes нужна действительная подписанная лицензия.** Dev fallback действует только вне production. Без лицензии новые операции ограничены; существующие обязательства завершаются по предусмотренным guards.
+- Лицензию устанавливает оператор deployment: public verification key и подписанный file/DB token. SaaS tenant admin не может ставить server license через `/admin/license`; on-prem admin renewal требует настроенного public key. Фактическая установка у клиента остаётся отдельной приёмкой.
+- Реальный ClamAV включён и доступен; конкретный hosted EICAR результат должен быть указан в STATUS.
+- Не запускать seed/demo reset в production. Demo filler теперь требует явно изолированные API/DB containers, disposable labels и совпадение маршрутов.
 
-- [ ] **Не** запускать `seed` на боевом стенде (демо-организации с паролем `Passw0rd!`).
-      Первый клиент регистрируется через «Регистрация» на странице входа.
-- [ ] Smoke: `curl https://api.<домен>/health` → `{"status":"ok"}`; открыть
-      `https://app.<домен>`, зарегистрировать организацию, создать заявку.
-- [ ] Проверить: refresh-cookie ставится (Secure), CORS пропускает только `WEB_ORIGIN`,
-      на логине НЕТ подсказки с демо-паролями.
+## Внешняя доставка
 
-## 4. Эксплуатация
+Пользователь подтвердил отсутствие тестовых SMTP/Meta подключений. Их реальная доставка — NOT RUN. Console provider не даёт доказательства SENT: outbox показывает NOT_CONFIGURED; неопределённая отправка — UNKNOWN с ручной сверкой, без слепого повтора. Для Meta POST callback нужен отдельный `WHATSAPP_APP_SECRET` и HMAC по raw body; GET verify token его не заменяет.
 
-- [ ] **Бэкапы БД** (cron на сервере, ежедневно + перед каждым обновлением):
-      `docker compose -f docker-compose.prod.yml exec postgres pg_dump -U leadprocure_owner leadprocure | gzip > backup-$(date +%F).sql.gz`
-- [ ] Обновления: `git pull && docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build`
-      (миграции forward-only, применяются на старте api).
-- [ ] Node 20 → 22 в Dockerfile'ах api/web — до 2027 (требование AWS SDK v3);
-      прогнать полный e2e после бампа.
-- [ ] Мониторинг: как минимум uptime-чек на `/health` + алерт.
+## После отдельно разрешённого обновления
 
-## Уже сделано в коде (не требует действий)
-
-- HTTPS-only refresh-cookie, helmet, CORS-allowlist, rate-limit (300/мин, логин 10/мин),
-  RLS + DEFINER-швы, запечатанные ставки AES-256-GCM, DTO-валидация, пагинация.
-- Демо-подсказка логина скрыта в прод-сборках (гейт `VITE_DEMO_HINT`).
-- 3-way match пересчитывается при приёмке (счёт, поданный до GRN, больше не виснет
-  в DISPUTED навсегда).
-- Автонапоминания поставщикам (email/WhatsApp) со стопом по первой ставке.
+Проверить health вместе с license status/source, доступ двух организаций и ролей, создание новой операции при действующей лицензии, sealed amounts до opening, скачивание только разрешённых документов, refresh cookie/CORS и отсутствие demo credentials. Статус PAID — учётный статус, не банковский перевод; CSV — не live ERP; dev signature — не ASAN.
