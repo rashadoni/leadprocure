@@ -7,6 +7,7 @@ import { test, expect, Page } from '@playwright/test';
  */
 
 async function login(page: Page, email: string): Promise<void> {
+  await page.addInitScript(()=>localStorage.setItem('lp_lang','en'));
   await page.goto('/login');
   await page.fill('input[type=email]', email);
   await page.fill('input[type=password]', 'Passw0rd!');
@@ -47,13 +48,13 @@ test.describe('buyer panel', () => {
   test('creating a draft request works through the UI', async ({ page }) => {
     await page.goto('/buyer/requests');
     const title = `PW smoke ${Date.now()}`;
-    await page.fill('form > input', title);
-    await page.fill('.row > div:nth-child(1) input', 'Playwright item');
-    await page.fill('.row > div:nth-child(2) input', '2');
-    await page.fill('.row > div:nth-child(3) input', '10');
+    await page.getByLabel('Title',{exact:true}).fill(title);
+    await page.getByLabel('Name',{exact:true}).fill('Playwright item');
+    await page.getByLabel('Qty',{exact:true}).fill('2');
+    await page.getByLabel('Unit price (AZN)',{exact:true}).fill('10');
     await page.click('form button.btn:not(.ghost):not([type=button])');
     await expect(page.locator(`tr:has-text("${title}")`)).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator(`tr:has-text("${title}")`).locator('.badge')).toContainText('DRAFT');
+    await expect(page.locator(`tr:has-text("${title}")`).locator('.badge')).toContainText('Draft');
   });
 });
 

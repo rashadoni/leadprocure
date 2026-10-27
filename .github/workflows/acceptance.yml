@@ -87,14 +87,23 @@ jobs:
           python3 -m pip install lxml jsonschema
           python3 scripts/acceptance/validate_exports.py "$AUDIT_EXPORT_DIR"
       - run: pnpm build
-      - name: Native browser acceptance on disposable stack
+      - name: Seed disposable browser fixtures
+        timeout-minutes: 2
+        run: pnpm --filter api seed
+      - name: Install native Chromium
+        timeout-minutes: 8
+        run: pnpm --filter web exec playwright install --with-deps chromium
+      - name: Start disposable API and web servers
+        timeout-minutes: 2
         run: |
-          pnpm --filter api seed
-          pnpm --filter web exec playwright install --with-deps chromium
           node apps/api/dist/main.js > /tmp/leadprocure-api.log 2>&1 &
           pnpm --filter web exec vite preview --host 127.0.0.1 --port 5173 > /tmp/leadprocure-web.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://localhost:3000/health && curl -fsS http://localhost:5173 && break || sleep 1; done
-          pnpm --filter web test:ui --workers=1
+          curl -fsS http://localhost:3000/health
+          curl -fsS http://localhost:5173
+      - name: Native browser acceptance on disposable stack
+        timeout-minutes: 10
+        run: pnpm --filter web test:ui --workers=1 --max-failures=1
       - name: Preserve acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4
