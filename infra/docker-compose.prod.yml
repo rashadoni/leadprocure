@@ -12,6 +12,7 @@ services:
       POSTGRES_USER: ${POSTGRES_OWNER_USER:-leadprocure_owner}
       POSTGRES_PASSWORD: ${POSTGRES_OWNER_PASSWORD:?set in .env.prod}
       POSTGRES_DB: ${POSTGRES_DB:-leadprocure}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set in .env.prod before first boot}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
@@ -22,7 +23,9 @@ services:
       retries: 20
 
   minio:
-    image: minio/minio:latest
+    image: leadprocure-object-storage:source-7aac2a2
+    build: ./storage
+    pull_policy: build
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -38,21 +41,30 @@ services:
       - minio:/data
 
   createbuckets:
-    image: minio/mc:latest
+    image: leadprocure-object-storage:source-7aac2a2
+    pull_policy: never
     depends_on:
-      - minio
-    entrypoint: >
-      /bin/sh -c "
-      until mc alias set local http://minio:9000 ${S3_ACCESS_KEY} ${S3_SECRET_KEY}; do sleep 1; done;
-      mc mb -p local/${S3_BUCKET:-leadprocure} || true;
-      echo done"
+      minio:
+        condition: service_healthy
+    environment:
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET:-leadprocure}
+    entrypoint: ["/usr/local/bin/bootstrap-bucket.sh"]
     restart: "no"
 
   clamav:
-    image: clamav/clamav-debian:latest  # multi-arch (arm64 incl.); clamav/clamav lacks arm64
+    image: clamav/clamav:stable  # amd64 acceptance; other architectures require their own gate
     restart: unless-stopped
     volumes:
       - clamav:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdscan", "--ping=1"]
+      start_period: 90s
+      interval: 10s
+      timeout: 5s
+      retries: 30
 
   ai-orchestrator:
     build:
@@ -71,10 +83,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      createbuckets:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       API_PORT: 3000
       DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-cloud_multi_tenant}
+      LICENSE_PUBLIC_KEY_B64: ${LICENSE_PUBLIC_KEY_B64:-}
+      LICENSE_FILE: /run/leadprocure-license/leadprocure.license
       DATABASE_OWNER_URL: postgres://${POSTGRES_OWNER_USER:-leadprocure_owner}:${POSTGRES_OWNER_PASSWORD}@postgres:5432/${POSTGRES_DB:-leadprocure}
       DATABASE_URL: postgres://app_user:${APP_DB_PASSWORD:?set in .env.prod}@postgres:5432/${POSTGRES_DB:-leadprocure}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set in .env.prod}
@@ -100,6 +116,13 @@ services:
       MAIL_FROM: ${MAIL_FROM:-Leadprocure <no-reply@leadprocure.local>}
     ports:
       - "3000:3000"
+    volumes:
+      - type: bind
+        source: ${LICENSE_DIR:-./license}
+        target: /run/leadprocure-license
+        read_only: true
+        bind:
+          create_host_path: false
 
   web:
     build:
