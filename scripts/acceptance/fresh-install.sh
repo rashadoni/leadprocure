@@ -40,6 +40,31 @@ env={
     volumes:
       - "'''+str(p/'tls')+''':/test-tls:ro"
       - "'''+str(p/'tls/nginx.conf')+''':/etc/nginx/nginx.conf:ro"
+  legacy-storage:
+    profiles: [storage-upgrade]
+    image: leadprocure-object-storage:source-7aac2a2
+    pull_policy: never
+    entrypoint: [/legacy/minio]
+    command: [server, /data]
+    environment:
+      MINIO_ROOT_USER: legacy-fixture-access
+      MINIO_ROOT_PASSWORD: legacy-fixture-secret-never-production
+    ports: ["127.0.0.1:39500:9000"]
+    volumes:
+      - legacy-upgrade:/data
+      - "'''+str(p/'legacy-minio')+''':/legacy/minio:ro"
+  upgraded-storage:
+    profiles: [storage-upgrade]
+    image: leadprocure-object-storage:source-7aac2a2
+    pull_policy: never
+    command: [server, /data]
+    environment:
+      MINIO_ROOT_USER: legacy-fixture-access
+      MINIO_ROOT_PASSWORD: legacy-fixture-secret-never-production
+    ports: ["127.0.0.1:39500:9000"]
+    volumes: [legacy-upgrade:/data]
+volumes:
+  legacy-upgrade:
 ''')
 PY
 compose=(docker compose --project-name "$project" --env-file "$fixture_dir/fixture.env"
@@ -108,3 +133,16 @@ s=(Path(os.environ['FRESH_FIXTURE_DIR'])/'evidence/role-isolation.txt').read_tex
 assert s==['app_role_restricted=PASS','no_context_budget_rows=0'], s
 print('Fresh database role and no-context RLS: PASS')
 PY
+# Model an existing legacy volume separately; never touch an operator volume.
+curl -fL --retry 3 --connect-timeout 15 -o "$fixture_dir/legacy-minio" \
+  https://github.com/minio/minio/releases/download/RELEASE.2025-09-07T16-13-09Z/minio.linux-amd64.RELEASE.2025-09-07T16-13-09Z
+echo "7c5bd8512c6e966455b1d198209358b2d191c77a83ab377c4073281065fb855f  $fixture_dir/legacy-minio" | sha256sum -c -
+chmod 755 "$fixture_dir/legacy-minio"
+"${compose[@]}" up -d --no-build --wait --wait-timeout 120 legacy-storage
+STORAGE_UPGRADE_BASELINE="$fixture_dir/evidence/storage-upgrade-baseline.json" \
+  node "$task_root/scripts/acceptance/storage-upgrade.cjs" seed
+"${compose[@]}" stop legacy-storage
+"${compose[@]}" up -d --no-build --wait --wait-timeout 120 upgraded-storage
+STORAGE_UPGRADE_BASELINE="$fixture_dir/evidence/storage-upgrade-baseline.json" \
+  STORAGE_UPGRADE_EVIDENCE="$fixture_dir/evidence/storage-upgrade.json" \
+  node "$task_root/scripts/acceptance/storage-upgrade.cjs" verify
