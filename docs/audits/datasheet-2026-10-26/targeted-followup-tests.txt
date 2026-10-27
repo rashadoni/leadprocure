@@ -1,0 +1,28 @@
+(node:1) Warning: NodeVersionSupportWarning: The AWS SDK for JavaScript (v3)
+versions published after the first week of January 2027
+will require node >=22. You are running node v20.20.2.
+
+To continue receiving updates to AWS services, bug fixes,
+and security updates please upgrade to node >=22.
+
+More information can be found at: https://a.co/c895JFp
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS test/followups.e2e-spec.ts (23.872 s)
+  outreach follow-ups (API e2e)
+    ✓ org plan: default is returned until the buyer saves one; steps are validated (83 ms)
+    ✓ enroll: creates ACTIVE chains for invited suppliers with the first step scheduled (313 ms)
+    ✓ RLS: a foreign buyer sees no enrollments for the event (21 ms)
+    ✓ tick: a due chain sends the step (logged) and schedules the next one (57 ms)
+    ✓ bid submit stops the chain instantly (RESPONDED), and the ticker never revives it (70 ms)
+    ✓ chain exhausts after the last step (WhatsApp SKIPPED without a phone, still logged) (18 ms)
+    ✓ stop endpoint halts an ACTIVE chain; event leaving the bidding stage closes the rest (205 ms)
+    ✓ supplier tokens cannot manage follow-ups (9 ms)
+    ✓ an unconfigured console channel does not create SENT evidence (188 ms)
+    ✓ expired delivery leases become UNKNOWN and require an authorized explanation before requeue (201 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       10 passed, 10 total
+Snapshots:   0 total
+Time:        24.44 s
+Ran all test suites within paths "test/followups.e2e-spec.ts".
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

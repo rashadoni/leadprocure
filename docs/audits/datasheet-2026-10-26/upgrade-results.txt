@@ -1,0 +1,9 @@
+query failed: ALTER TABLE purchase_orders ADD COLUMN vat_mode text NOT NULL DEFAULT 'EXCLUSIVE'
+      CHECK(vat_mode IN ('EXCLUSIVE','INCLUSIVE'));
+      UPDATE purchase_orders p SET vat_mode=c.vat_mode::text FROM contracts c WHERE c.id=p.contract_id;
+      ALTER TABLE invoice_items ADD COLUMN vat_rate_bp int, ADD COLUMN vat_minor bigint, ADD COLUMN gross_minor bigint;
+      CREATE UNIQUE INDEX invoice_item_once ON invoice_items(invoice_id,po_item_id);
+      CREATE UNIQUE INDEX evaluation_criterion_once ON evaluation_scores(evaluation_id,bid_id,criterion);
+error: error: could not create unique index "invoice_item_once"
+Migration "AuditFinancialInvariants1720000000029" failed, error: could not create unique index "invoice_item_once"
+PASS: baseline 0027 → rejected invalid data → transaction rollback → reconciled fixture → current schema; financial history preserved
