@@ -189,3 +189,15 @@ ACCEPTANCE-2026-10-28.json. LP-A19 выполнена по изолирован�
 но остаётся частично открытой по внешней/клиентской приёмке. Real SMTP/Meta,
 реальный клиент/commercial license, TLS/browser, ARM, existing-volume storage
 upgrade и production preflight/backup не выданы за PASS. Merge/deploy не было.
+
+## Непрерывное продолжение — 28 октября2026
+
+Сразу после предыдущей приёмки выполнены следующие доступные gates:
+HTTPS/CORS/Secure refresh/logout на production build;296 contended HTTP calls с8
+параллельными запросами,8 отдельными closer clients и наблюдаемым overlap;
+моделируемый legacy storage upgrade с4 версиями; actual LibreOffice и native
+Google Slides render всех13+2 PPTX страниц. Run40590876331/codee0cd658 и render
+run40590502221 PASS. Текущие точные доказательства — EXTENDED JSON/STATUS.
+Real SMTP/Meta/client/production объекты не симулированы как принятые;
+Microsoft PowerPoint desktop session отсутствует. Следующая доставка требует
+отдельное «давай» для merge согласно AGENTS; разрешение push/CI сохранено.
