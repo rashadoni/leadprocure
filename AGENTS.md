@@ -1,5 +1,14 @@
 # AGENTS.md — Leadprocure (handoff for Codex)
 
+## Repository routing — owner correction, 2026-10-27
+
+The active repository is **rashadoni/leadprocure**, origin
+`https://github.com/rashadoni/leadprocure.git`. The owner explicitly retired
+rashadrahimov for this project. Old host maps, remotes and audit CI records using
+that account are stale; do not use them as a fallback. Preserve this task's
+checkpoint history. Main changes require the existing PR/review process;
+production deployment still requires separate task authorization.
+
 ## Порядок доставки — `docs/DELIVERY-ARCHITECTURE.md`
 
 Этот документ главнее всего остального в том, что касается пути изменения до

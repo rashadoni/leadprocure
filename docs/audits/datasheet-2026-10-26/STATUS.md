@@ -1,6 +1,6 @@
 # Исполнение LP-A00–LP-A19
 
-**Актуальный маршрут по уточнению владельца:** `rashadoni/leadprocure`, PR #2. Старый account rashadrahimov и прежние выводы об отсутствии рабочего CI superseded. Run40455265322 в правильном репозитории создал runner/job и выполняет hosted acceptance. Итоговый результат ещё ожидается. Исторические сведения ниже сохранены.
+**Актуально:** `rashadoni/leadprocure`. Code PR [#3](https://github.com/rashadoni/leadprocure/pull/3), materials PR [#4](https://github.com/rashadoni/leadprocure/pull/4). Aggregate PR2 закрыт без merge после разделения для review cap. Codebcfc322 ожидает hosted run40456574853 attempt2. До этого: первый полный API run184 PASS/5 FAIL (стенд ClamAV и старое auth expectation), исправлено и повторяется; независимое ревью нашло3 дефекта, все исправлены и повторно подтверждены по коду. LFS108 objects восстановлены. Исторические сведения ниже сохранены; прежний account и вывод «нет рабочего CI» superseded.
 
 Обновлено 27 октября 2026, время пользователя Asia/Baku. Рабочая ветка `codex/leadprocure-client-presentation-az`, draft PR [#2](https://github.com/rashadoni/leadprocure/pull/2). Это текущий статус исправлений; исходный REPORT.md остаётся историческим отчётом аудита.
 
