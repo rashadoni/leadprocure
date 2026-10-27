@@ -339,3 +339,8 @@
 - PR3 merged2b59c3c296eda44d042075bcd9712d59d91c3255. Retargeted dependent PR6 to main and merged3c14c0144dbade555028be01ed9855800fe8a910. PR4 mergedc5649c6349a3c08682e2b314b5756e266b665c68. PR5 merged974a31b05703279d7f36c72a153d42b5bbd321a4. All remain in history; branches not intentionally deleted.
 - Final combined main974a31b fetched. Application/infra/shared/services/acceptance scripts/workflows/material snapshots match this integration worktree (no source diff in checked scope). Continuing immediately with hosted final-main acceptance + independent PPTX render. Only obsolete runs on the three known intermediate merge SHAs may be cancelled, not unrelated work.
 - Production/runtime untouched; owner authorization covered merges and main CI only. Precise current point: four merges complete, final-main verification pending. Next: inspect actual gate evidence on974a31b and record outcome.
+
+## 2026-10-28 — precise merged snapshot reconciliation
+
+- Correction to prior broad snapshot sentence: the initial diff also included69 historical v1/concept/screenshot paths intentionally excluded from PR4, so “no source diff in checked scope” was too broad. Exact recheck of apps/infra/packages/services/acceptance scripts/workflows/.dockerignore/.gitignore/.gitattributes/demo scripts and delivered v2/v3 materials is empty. Legacy v1 files stay in original integration history/worktree; they were not substituted for delivered v3 or added to main.
+- Final-main run40593765052 is for974a31b. Cancel requests limited to three obsolete intermediate merge runs40593645082/40593722893/40593755056. Separate presentation workflow dispatched on final main. No gate on final main cancelled or weakened.
