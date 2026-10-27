@@ -7,6 +7,33 @@ on:
 permissions:
   contents: read
 jobs:
+  fresh-install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install native browser and local test certificate tools
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter web exec playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libnss3-tools
+      - name: Fresh production Compose on disposable hosted worker
+        run: bash scripts/acceptance/fresh-install.sh
+      - name: Preserve fresh-install evidence (no credentials or license tokens)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fresh-install-evidence
+          path: ${{ runner.temp }}/leadprocure-fresh-${{ github.run_id }}/evidence
   acceptance:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -82,6 +109,11 @@ jobs:
         run: |
           mkdir -p "$AUDIT_EXPORT_DIR"
           pnpm --filter api test:e2e
+      - name: Bounded procurement contention (12 rounds, 8 concurrent requests)
+        env:
+          LEADPROCURE_STRESS_ISOLATED: '1'
+          STRESS_EVIDENCE_FILE: /tmp/leadprocure-audit-exports/procurement-stress.json
+        run: pnpm --filter api exec jest --config test/jest-e2e.json --runInBand --testRegex 'procurement.stress-spec.ts$'
       - name: Official export schemas
         run: |
           python3 -m pip install lxml jsonschema
