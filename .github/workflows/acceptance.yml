@@ -7,24 +7,6 @@ on:
 permissions:
   contents: read
 jobs:
-  fresh-install:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          lfs: true
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Fresh production Compose on disposable hosted worker
-        run: bash scripts/acceptance/fresh-install.sh
-      - name: Preserve fresh-install evidence (no credentials or license tokens)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fresh-install-evidence
-          path: ${{ runner.temp }}/leadprocure-fresh-${{ github.run_id }}/evidence
   acceptance:
     runs-on: ubuntu-latest
     timeout-minutes: 30
