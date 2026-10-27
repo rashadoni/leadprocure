@@ -36,6 +36,11 @@ const pause = ms => new Promise(r => setTimeout(r, ms));
   const budget = await call('/budgets', 'POST', { name: `IT ${tag}`, category: 'IT',
     periodYear: new Date().getUTCFullYear(), amountMinor: 50_000 }, buyer, 201);
   assert.ok(budget.id);
+  if (process.env.FRESH_BROWSER_ACCOUNT_FILE) {
+    writeFileSync(process.env.FRESH_BROWSER_ACCOUNT_FILE, JSON.stringify({
+      email: `buyer-a-${tag}@acceptance.invalid`, password, budgetName: `IT ${tag}`,
+    }), { mode: 0o600 });
+  }
   const req = await call('/requests', 'POST', { title: `Procurement ${tag}`, category: 'IT',
     items: [{ name: 'Equipment', qty: 1, estUnitPriceMinor: 120_000 }] }, buyer, 201);
   await call(`/requests/${req.id}/submit`, 'POST', undefined, buyer, 201);
