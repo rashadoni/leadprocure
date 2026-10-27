@@ -33,3 +33,20 @@ full acceptance (195 API,9 browser,build,schemas,upgrade/restore) and actual fre
 production Compose (source-built storage/API/web/AI, signed file license,
 budget/approver/RLS/private storage/real ClamAV) passed. Evidence does not remove
 the explicitly listed client/TLS/ARM/existing-volume/external-provider limits.
+
+## 2026-10-28 — extended gate review and corrections
+
+Independent reviewer found two evidence gaps in the new tests: closers serialized
+on one pg.Client and lazy HTTP requests; client cookie deletion did not prove
+server logout revocation. Fixed with8 distinct closer connections, observed DB
+barrier overlap and1 close audit, plus genuine same-session cookie replay401.
+Cleanup was additionally corrected so failed parallel work cannot skip closing
+its connections. Re-review: no remaining material blockers.
+
+Renderer review found default PyMuPDF clipping hid out-of-page text; geometry
+now uses INFINITE_RECT. Corrected hosted render40590502221 PASS. Modeled legacy
+storage upgrade source review: no material blockers; actual hosted40590876331
+PASS,4 versions/checksums/metadata/private reads preserved. Full195 API +3 stress
++9 ordinary UI +1 production HTTPS UI PASS. Native Google Slides13+2 pages also
+passed text/bounds and complete visual review; desktop PowerPoint unavailable.
+Automated green fallback still is not substituted for these substantive reviews.

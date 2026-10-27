@@ -1,5 +1,25 @@
 # Исполнение LP-A00–LP-A19
 
+## Дополнительная приёмка — 28 октября 2026 (Asia/Baku)
+
+По указанию пользователя работа продолжена сразу после каждого блока. **Полный расширенный gate PASS:** [run40590876331](https://github.com/rashadoni/leadprocure/actions/runs/40590876331), code `e0cd658f7c9454e523205795fa68aa40f87bcef0`.195 API +3 отдельные contention tests +9 обычных Chromium scenarios; fresh production Compose, typecheck/build/schemas/upgrade/restore PASS. Отдельный настоящий HTTPS Chromium scenario также PASS. Доказательства: [ACCEPTANCE-2026-10-28-EXTENDED.json](ACCEPTANCE-2026-10-28-EXTENDED.json).
+
+| Прежнее ограничение | Теперь подтверждено |
+|---|---|
+| Fresh production HTTPS/CORS/cookie | PASS: доверенный тестовый CA, реальный UI login, Secure/HttpOnly cookie,3 reload refreshes, разрешённый/чужой origin, browser signed S3 PUT. Повтор genuine cookie после UI logout →401 |
+| Только2 одновременных запроса | PASS:296 contended HTTP requests,12 rounds×8 для receipt/invoice/auction +8 late bids;8 независимых closer connections и8 bids наблюдались заблокированными перед общим release;1 close audit,0 лишних количеств/резервирований/ledger ticks |
+| Storage upgrade совсем не проверен | PASS на **моделируемом** старом томе2025-09-07 → pinned source snapshot:4 версии, SHA256/metadata/version IDs/latest/private access сохранены. Это не реальный production volume |
+| PPTX не открыт отдельным офисным движком | LibreOffice native PPTX import/render PASS:15 страниц,100% текста, нужные шрифты,0 out-of-page text; визуальный осмотр PASS. [run40590502221](https://github.com/rashadoni/leadprocure/actions/runs/40590502221) |
+| Google Slides rendering NOT RUN | Теперь PASS: импортированы отдельные QA copies,13+2 native pages экспортированы Google и просмотрены все15 PNG;100% текста,0 overflow/missing glyphs. Исходные PPTX не изменены |
+
+Google QA копии остаются приватными в существующей папке ChatGPT; прежние презентации не заменены. Проверенные ID: `1C72O2VYTsR2U3QgOJ1xQc-smJRH3LS92moqeTCCkjVY` и `15nusO2GExn32LxbqWyJX_xKBgEXqK_al02M9-0TIz-A`. Данные их содержимого синтетические/маркетинговые, пользовательские procurement records не переносились. A4 notes typography warnings reviewed as intentional existing small print;0 structural errors. Это совместимость Google Slides, не desktop Microsoft PowerPoint.
+
+Оставшиеся границы: реальные SMTP/Meta отсутствуют; нет клиентского приёмочного окружения/commercial license; production preflight/real backup/real-volume update требуют отдельного решения; ARM и capacity/SLA не входят в проверенный amd64 contention scope. Подключённых desktop PowerPoint sessions нет. External LLM/ERP/bank/ASAN/Peppol не превращены в готовые интеграции.
+
+Все доступные изолированные технические gates выполнены; открытая часть LP-A19 относится к внешней/клиентской приёмке. Следующий шаг доставки — review/merge подготовленных PR по отдельному «давай» владельца из AGENTS.md; production deploy отдельно не разрешён. Повторять успешные gates без изменения кода/обнаруженного отказа не требуется.
+
+### Предыдущий итог этой даты (сохранён; дополнительные ограничения superseded выше)
+
 ## Актуальный результат — 28 октября 2026 (Asia/Baku)
 
 Leadprocure: закупки и бюджетный контроль. Действующий репозиторий `rashadoni/leadprocure`; [code PR3](https://github.com/rashadoni/leadprocure/pull/3), [установка PR6](https://github.com/rashadoni/leadprocure/pull/6) поверх PR3, [материалы PR4](https://github.com/rashadoni/leadprocure/pull/4), [доказательства PR5](https://github.com/rashadoni/leadprocure/pull/5). Main/runtime не изменялись; merge/deploy не разрешены. История checkpoints сохранена; PR6 выделен для соблюдения неизменённого review cap400000bytes.

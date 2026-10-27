@@ -1,0 +1,472 @@
+{
+  "client_date": "2026-10-28",
+  "timezone": "Asia/Baku",
+  "repository": "rashadoni/leadprocure",
+  "code_sha": "e0cd658f7c9454e523205795fa68aa40f87bcef0",
+  "run": "https://github.com/rashadoni/leadprocure/actions/runs/40590876331",
+  "full_regression": {
+    "api_suites": 23,
+    "api_tests": 195,
+    "additional_contention_tests": 3,
+    "ordinary_browser_tests": 9,
+    "typecheck": "PASS",
+    "full_build": "PASS",
+    "official_export_schemas": "PASS",
+    "upgrade_and_restore": "PASS"
+  },
+  "fresh_production_http": {
+    "status": "PASS",
+    "productionMode": true,
+    "signedFileLicense": true,
+    "separateApprover": true,
+    "budgetWarningStillApproves": true,
+    "budgetIsolation": true,
+    "privateStorage": true,
+    "presignedPutGet": true,
+    "realClamavCleanAndEicar": true,
+    "foreignDocumentDenied": true,
+    "webServed": true
+  },
+  "fresh_https_browser": {
+    "status": "PASS",
+    "trustedTestCA": true,
+    "productionBuild": true,
+    "actualUILogin": true,
+    "secureHttpOnlyCookie": true,
+    "reloadRefreshes": 3,
+    "allowedCors": true,
+    "deniedForeignOrigin": true,
+    "httpsStorageBrowserPut": true,
+    "logoutRevokesSession": true,
+    "publicCertificateOrClientDeployment": false
+  },
+  "bounded_contention": {
+    "status": "PASS",
+    "rounds": 12,
+    "concurrency": 8,
+    "scenarios": [
+      {
+        "scenario": "receipts",
+        "contestedRequests": 96,
+        "accepted": 12,
+        "overReceived": 0,
+        "elapsedMs": 630
+      },
+      {
+        "scenario": "invoice-reservation",
+        "contestedRequests": 96,
+        "matched": 12,
+        "duplicateReservations": 0,
+        "elapsedMs": 1056
+      },
+      {
+        "scenario": "auction-idempotency-and-close",
+        "contestedRequests": 104,
+        "committedTicks": 12,
+        "lateAccepted": 0,
+        "independentCloserConnections": 8,
+        "observedBlockedBidsAndClosers": true,
+        "closeAuditCount": 1,
+        "elapsedMs": 786
+      }
+    ],
+    "productionCapacityOrSla": false
+  },
+  "modeled_storage_upgrade": {
+    "status": "PASS",
+    "modeledLegacyRelease": "RELEASE.2025-09-07T16-13-09Z",
+    "sourceSnapshot": "7aac2a2c5b7c882e68c1ce017d8256be2feea27f",
+    "versionsPreserved": 4,
+    "checksumsAndMetadataPreserved": true,
+    "latestVersionPreserved": true,
+    "anonymousReadDenied": true,
+    "actualProductionVolume": false
+  },
+  "libreoffice": {
+    "run": "https://github.com/rashadoni/leadprocure/actions/runs/40590502221",
+    "code_sha": "4ed5bff5cfd18e42d59b1700f735a76039a72e24",
+    "qa": {
+      "renderer": "LibreOffice Impress (independent PPTX render)",
+      "status": "PASS",
+      "checks": [
+        {
+          "file": "Leadprocure_Korporativ_Teqdimat_AZ_v3",
+          "page": 1,
+          "textCoverage": 1.0,
+          "missingTokens": {},
+          "outOfPageText": [],
+          "fonts": [
+            "BarlowCondensed-Bold",
+            "IBMPlexSans-Regular"
+          ],
+          "replacementCharacter": false
+        },
+        {
+          "file": "Leadprocure_Korporativ_Teqdimat_AZ_v3",
+          "page": 2,
+          "textCoverage": 1.0,
+          "missingTokens": {},
+          "outOfPageText": [],
+          "fonts": [
+            "BarlowCondensed-Bold",
+            "IBMPlexSans-Bold",
+            "IBMPlexSans-Regular"
+          ],
+          "replacementCharacter": false
+        },
+        {
+          "file": "Leadprocure_Korporativ_Teqdimat_AZ_v3",
+          "page": 3,
+          "textCoverage": 1.0,
+          "missingTokens": {},
+          "outOfPageText": [],
+          "fonts": [
+            "BarlowCondensed-Bold",
+            "IBMPlexSans-Bold",
+            "IBMPlexSans-Regular"
+          ],
+          "replacementCharacter": false
+        },
+        {
+          "file": "Leadprocure_Korporativ_Teqdimat_AZ_v3",
+          "page": 4,
+          "textCoverage": 1.0,
+          "missingTokens": {},
+          "outOfPageText": [],
+          "fonts": [
+            "BarlowCondensed-Bold",
+            "IBMPlexSans-Bold",
+            "IBMPlexSans-Regular"
+          ],
+          "replacementCharacter": false
+        },
+        {
+          "file": "Leadprocure_Korporativ_Teqdimat_AZ_v3",
+          "page": 5,
+          "textCoverage": 1.0,
+          "missingTokens": {},
+          "outOfPageText": [],
+          "fonts": [
+            "BarlowCondensed-Bold",
+            "IBMPlexSans-Bold",
+            "IBMPlexSans-Regular"
+          ],
+          "replacementCharacter": false
+        },
+        {
+          "file": "Leadprocure_Korporativ_Teqdimat_AZ_v3",
+          "page": 6,
+          "textCoverage": 1.0,
+          "missingTokens": {},
+          "outOfPageText": [],
+          "fonts": [
+            "BarlowCondensed-Bold",
+            "IBMPlexSans-Bold",
+            "IBMPlexSans-Regular"
+          ],
+          "replacementCharacter": false
+        },
+        {
+          "file": "Leadprocure_Korporativ_Teqdimat_AZ_v3",
+          "page": 7,
+          "textCoverage": 1.0,
+          "missingTokens": {},
+          "outOfPageText": [],
+          "fonts": [
+            "BarlowCondensed-Bold",
+            "IBMPlexSans-Bold",
+            "IBMPlexSans-Regular"
+          ],
+          "replacementCharacter": false
+        },
+        {
+          "file": "Leadprocure_Korporativ_Teqdimat_AZ_v3",
+          "page": 8,
+          "textCoverage": 1.0,
+          "missingTokens": {},
+          "outOfPageText": [],
+          "fonts": [
+            "BarlowCondensed-Bold",
+            "IBMPlexSans-Bold",
+            "IBMPlexSans-Regular"
+          ],
+          "replacementCharacter": false
+        },
+        {
+          "file": "Leadprocure_Korporativ_Teqdimat_AZ_v3",
+          "page": 9,
+          "textCoverage": 1.0,
+          "missingTokens": {},
+          "outOfPageText": [],
+          "fonts": [
+            "BarlowCondensed-Bold",
+            "IBMPlexSans-Bold",
+            "IBMPlexSans-Regular"
+          ],
+          "replacementCharacter": false
+        },
+        {
+          "file": "Leadprocure_Korporativ_Teqdimat_AZ_v3",
+          "page": 10,
+          "textCoverage": 1.0,
+          "missingTokens": {},
+          "outOfPageText": [],
+          "fonts": [
+            "BarlowCondensed-Bold",
+            "IBMPlexSans-Bold",
+            "IBMPlexSans-Regular"
+          ],
+          "replacementCharacter": false
+        },
+        {
+          "file": "Leadprocure_Korporativ_Teqdimat_AZ_v3",
+          "page": 11,
+          "textCoverage": 1.0,
+          "missingTokens": {},
+          "outOfPageText": [],
+          "fonts": [
+            "BarlowCondensed-Bold",
+            "IBMPlexSans-Bold",
+            "IBMPlexSans-Regular"
+          ],
+          "replacementCharacter": false
+        },
+        {
+          "file": "Leadprocure_Korporativ_Teqdimat_AZ_v3",
+          "page": 12,
+          "textCoverage": 1.0,
+          "missingTokens": {},
+          "outOfPageText": [],
+          "fonts": [
+            "BarlowCondensed-Bold",
+            "IBMPlexSans-Bold",
+            "IBMPlexSans-Regular"
+          ],
+          "replacementCharacter": false
+        },
+        {
+          "file": "Leadprocure_Korporativ_Teqdimat_AZ_v3",
+          "page": 13,
+          "textCoverage": 1.0,
+          "missingTokens": {},
+          "outOfPageText": [],
+          "fonts": [
+            "BarlowCondensed-Bold",
+            "IBMPlexSans-Bold",
+            "IBMPlexSans-Regular"
+          ],
+          "replacementCharacter": false
+        },
+        {
+          "file": "Leadprocure_Data_Sheet_AZ",
+          "page": 1,
+          "textCoverage": 1.0,
+          "missingTokens": {},
+          "outOfPageText": [],
+          "fonts": [
+            "BarlowCondensed-Bold",
+            "IBMPlexSans-Regular"
+          ],
+          "replacementCharacter": false
+        },
+        {
+          "file": "Leadprocure_Data_Sheet_AZ",
+          "page": 2,
+          "textCoverage": 1.0,
+          "missingTokens": {},
+          "outOfPageText": [],
+          "fonts": [
+            "BarlowCondensed-Bold",
+            "IBMPlexSans-Regular"
+          ],
+          "replacementCharacter": false
+        }
+      ],
+      "problems": [],
+      "nativeMicrosoftPowerPointOrGoogleSlides": "NOT RUN",
+      "humanVisualReview": "PASS: all3 contact sheets and both full data-sheet pages inspected; all15 corrected-render PNG hashes match reviewed output"
+    }
+  },
+  "google_slides": {
+    "engine": "Native Google Slides import and PDF export",
+    "status": "PASS",
+    "visualReview": "PASS: every exported page inspected",
+    "powerPointDesktop": "NOT RUN",
+    "copies": [
+      {
+        "id": "1C72O2VYTsR2U3QgOJ1xQc-smJRH3LS92moqeTCCkjVY",
+        "pages": [
+          {
+            "page": 1,
+            "textCoverage": 1.0,
+            "outOfPageText": 0,
+            "fonts": [
+              "BarlowCondensed-Bold",
+              "IBMPlexSans-Regular"
+            ]
+          },
+          {
+            "page": 2,
+            "textCoverage": 1.0,
+            "outOfPageText": 0,
+            "fonts": [
+              "BarlowCondensed-Bold",
+              "IBMPlexSans-Bold",
+              "IBMPlexSans-Regular"
+            ]
+          },
+          {
+            "page": 3,
+            "textCoverage": 1.0,
+            "outOfPageText": 0,
+            "fonts": [
+              "BarlowCondensed-Bold",
+              "IBMPlexSans-Bold",
+              "IBMPlexSans-Regular"
+            ]
+          },
+          {
+            "page": 4,
+            "textCoverage": 1.0,
+            "outOfPageText": 0,
+            "fonts": [
+              "BarlowCondensed-Bold",
+              "IBMPlexSans-Bold",
+              "IBMPlexSans-Regular"
+            ]
+          },
+          {
+            "page": 5,
+            "textCoverage": 1.0,
+            "outOfPageText": 0,
+            "fonts": [
+              "BarlowCondensed-Bold",
+              "IBMPlexSans-Bold",
+              "IBMPlexSans-Regular"
+            ]
+          },
+          {
+            "page": 6,
+            "textCoverage": 1.0,
+            "outOfPageText": 0,
+            "fonts": [
+              "BarlowCondensed-Bold",
+              "IBMPlexSans-Bold",
+              "IBMPlexSans-Regular"
+            ]
+          },
+          {
+            "page": 7,
+            "textCoverage": 1.0,
+            "outOfPageText": 0,
+            "fonts": [
+              "BarlowCondensed-Bold",
+              "IBMPlexSans-Bold",
+              "IBMPlexSans-Regular"
+            ]
+          },
+          {
+            "page": 8,
+            "textCoverage": 1.0,
+            "outOfPageText": 0,
+            "fonts": [
+              "BarlowCondensed-Bold",
+              "IBMPlexSans-Bold",
+              "IBMPlexSans-Regular"
+            ]
+          },
+          {
+            "page": 9,
+            "textCoverage": 1.0,
+            "outOfPageText": 0,
+            "fonts": [
+              "BarlowCondensed-Bold",
+              "IBMPlexSans-Bold",
+              "IBMPlexSans-Regular"
+            ]
+          },
+          {
+            "page": 10,
+            "textCoverage": 1.0,
+            "outOfPageText": 0,
+            "fonts": [
+              "BarlowCondensed-Bold",
+              "IBMPlexSans-Bold",
+              "IBMPlexSans-Regular"
+            ]
+          },
+          {
+            "page": 11,
+            "textCoverage": 1.0,
+            "outOfPageText": 0,
+            "fonts": [
+              "BarlowCondensed-Bold",
+              "IBMPlexSans-Bold",
+              "IBMPlexSans-Regular"
+            ]
+          },
+          {
+            "page": 12,
+            "textCoverage": 1.0,
+            "outOfPageText": 0,
+            "fonts": [
+              "BarlowCondensed-Bold",
+              "IBMPlexSans-Bold",
+              "IBMPlexSans-Regular"
+            ]
+          },
+          {
+            "page": 13,
+            "textCoverage": 1.0,
+            "outOfPageText": 0,
+            "fonts": [
+              "BarlowCondensed-Bold",
+              "IBMPlexSans-Bold",
+              "IBMPlexSans-Regular"
+            ]
+          }
+        ],
+        "qaOnly": true,
+        "sourcePptxSha256": "820d686e8a7e934b580216728b990e6625deac6a4b4e0fca2147a439655f6418",
+        "exportedPdfSha256": "814dd9573bebfd16a9553dc6bd96b472b84bd979d86587dc6c9c8a5a105cdcd8"
+      },
+      {
+        "id": "15nusO2GExn32LxbqWyJX_xKBgEXqK_al02M9-0TIz-A",
+        "pages": [
+          {
+            "page": 1,
+            "textCoverage": 1.0,
+            "outOfPageText": 0,
+            "fonts": [
+              "BarlowCondensed-Bold",
+              "IBMPlexSans-Regular"
+            ]
+          },
+          {
+            "page": 2,
+            "textCoverage": 1.0,
+            "outOfPageText": 0,
+            "fonts": [
+              "BarlowCondensed-Bold",
+              "IBMPlexSans-Regular"
+            ]
+          }
+        ],
+        "qaOnly": true,
+        "sourcePptxSha256": "4f5bf3ffb42922fff3714a48cff47809dcfe93b5cac5efbdd0853c93dbcb42ba",
+        "exportedPdfSha256": "2ef605fef94e0aa41ed61c30726795f435cc8c88e8e6036703b83c7166c8704a"
+      }
+    ]
+  },
+  "not_run": [
+    "Real SMTP/Meta delivery: user confirmed no configured test connections",
+    "Actual client/commercial license and public TLS domain: no client acceptance environment",
+    "Actual production-volume upgrade, preflight and backup: separate production release decision required",
+    "ARM: current supported acceptance target is amd64",
+    "Capacity/SLA stress: bounded financial-concurrency gate is not a capacity benchmark",
+    "Microsoft PowerPoint desktop: no connected PowerPoint document-control session",
+    "External LLM/live ERP/bank/ASAN/Peppol: not established integrations"
+  ],
+  "main_merge": "NOT PERFORMED",
+  "production_deployment": "NOT PERFORMED"
+}

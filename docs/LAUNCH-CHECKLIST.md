@@ -6,7 +6,7 @@
 
 ## Перед решением о выпуске
 
-- [x] Hosted build/API/browser/schema/upgrade/restore/fresh gate пройден на code f5b7e776, run40584185358. Если code SHA изменится при интеграции, нужен gate нового кандидата.
+- [x] Hosted build/API/browser/schema/upgrade/restore/fresh gate пройден на code e0cd658, run40590876331. Если code SHA изменится при интеграции, нужен gate нового кандидата.
 - [x] Независимое ревью выполнено по существу; зелёный fallback при сбое API не считается ревью.
 - [ ] Выполнен read-only preflight `scripts/acceptance/preflight-readonly.sql`; исторические дубли согласованы без удаления финансовых данных.
 - [ ] Резервная копия production проверена отдельным восстановлением. Тестовый dump/restore не заменяет backup реальной базы.
@@ -14,7 +14,7 @@
 
 ## Fresh bundled installation: PASS в изолированном amd64 CI
 
-Исправления выделены в PR6 (поверх PR3): pinned source-built storage, приватный bucket, configurable empty-volume app role и file-license mount. Source review без blockers; fresh hosted gate40584185358 **PASS** на пустых volumes. Реально проверены restricted/valid license, budget warning/second approver, private signed storage, ClamAV clean/EICAR, runtime DB role и no-context RLS. Client TLS/browser, ARM, коммерческая лицензия и существующие volumes остаются отдельными проверками. Архивированный upstream snapshot не даёт vendor maintenance/SLA.
+Исправления выделены в PR6 (поверх PR3): pinned source-built storage, приватный bucket, configurable empty-volume app role и file-license mount. Source review без blockers; fresh hosted gate40584185358 **PASS** на пустых volumes. Реально проверены restricted/valid license, budget warning/second approver, private signed storage, ClamAV clean/EICAR, runtime DB role и no-context RLS. Fresh HTTPS/browser с доверенным test CA PASS; modeled2025 legacy volume upgrade PASS (4 object versions/hash/metadata/private access). Client public TLS/actual volume, ARM и коммерческая лицензия остаются отдельными проверками. Архивированный upstream snapshot не даёт vendor maintenance/SLA.
 
 Исторический blocker до PR6:
 
@@ -37,3 +37,7 @@
 ## После отдельно разрешённого обновления
 
 Проверить health вместе с license status/source, доступ двух организаций и ролей, создание новой операции при действующей лицензии, sealed amounts до opening, скачивание только разрешённых документов, refresh cookie/CORS и отсутствие demo credentials. Статус PAID — учётный статус, не банковский перевод; CSV — не live ERP; dev signature — не ASAN.
+
+## Дополнительные gates — 28 октября2026
+
+Run40590876331:195 API +3 bounded contention +9 обычных UI +1 fresh HTTPS UI PASS.296 contended HTTP requests, реальные8 closer connections и1 close audit. Материалы: независимый LibreOffice render40590502221 и native Google Slides13+2 pages, автоматическая/визуальная QA PASS. Desktop PowerPoint sessions отсутствуют; это не его приёмка. Production gate перед выпуском остаётся отдельным.
