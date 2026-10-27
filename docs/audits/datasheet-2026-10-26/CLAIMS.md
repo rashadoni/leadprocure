@@ -1,6 +1,6 @@
 # Утверждения материалов v3: границы подтверждения
 
-Дата: 27 октября 2026. Проверяется кандидат в feature branch, production не обновлён. «Verified» относится к перечисленным целевым сценариям, не означает полный релизный PASS. Полный hosted gate прошёл на code82e323a: run40518660742 (195 API + 9 browser tests, build, schemas, upgrade/restore). Полная приёмка и оставшиеся ограничения описаны в STATUS.md.
+Дата: 28 октября 2026 (Asia/Baku). Проверяется кандидат в feature branch, production не обновлён. «Verified» относится к перечисленным целевым сценариям, не означает полный релизный PASS. Актуальный hosted run40584185358 на code f5b7e776:195 API +9 browser tests, build, schemas, upgrade/restore и **fresh production Compose PASS**. Факты сохранены в ACCEPTANCE-2026-10-28.json; полная приёмка и оставшиеся ограничения — STATUS.md.
 
 | Утверждение | Статус | Доказательство / граница |
 |---|---|---|
@@ -14,11 +14,11 @@
 | UBL 2.1 | Verified структура примеров | Два реальных export XML прошли OASIS XSD; unit mapping; Peppol BIS/network — not verified/not implemented |
 | OCDS 1.1.5 | Verified структура примера | Canonical JSON schema; cancelled award; downstream consumer NOT RUN |
 | Расходы и экономия | Verified в targeted сценариях | Валюта выбирается отдельно, активные awarded lots, net basis, дата создания PO; автоматический FX не обещается |
-| Бюджет и обязательства по закупкам | Verified в API regression suite | 8 budgets tests входят в 195 PASS: категория/год/валюта, обязательства согласованных заявок, изоляция покупателей; превышение даёт предупреждение и **не блокирует** согласование. Это бюджетный контроль закупок, не самостоятельная система финансового планирования |
+| Бюджет и обязательства по закупкам | Verified API +fresh production HTTP | 8 budgets tests входят в195 PASS; fresh HTTP подтверждает отдельного approver, обязательства/остаток и изоляцию покупателей. Категория/год/валюта; превышение предупреждает и **не блокирует** согласование. Это бюджетный контроль закупок, не самостоятельная система финансового планирования |
 | Файлы / KYC документы | Verified в проверенных сценариях | Реальные MinIO и ClamAV/EICAR PASS, grant ownership, immutable snapshot, namespace rejection |
 | BLOCKED поставщик | Verified проверенные действия | Invitation, bid, catalog HTTP; общий guard для новых договоров/PO; старые обязательства не прекращаются |
 | Email/Meta follow-up | Conditional | Outbox/recovery/NOT_CONFIGURED/UNKNOWN и signed webhook tests PASS; реальные подключения отсутствуют, внешняя доставка NOT RUN |
-| Лицензируемое размещение | Verified signed controls / conditional installation | PASETO controls, upgrade и backup/restore PASS; приёмка клиентского on-prem NOT RUN, fresh bundled Compose NO-GO из-за недоступных MinIO images |
+| Лицензируемое размещение | Verified signed controls +fresh isolated installation / conditional client rollout | Production Compose реально собран/запущен на пустых volumes: missing-license restricted, signed file valid; upgrade и disposable backup/restore PASS. Реальный клиент, коммерческая лицензия, TLS/browser и existing-volume storage upgrade NOT RUN. Archived storage snapshot не vendor SLA |
 | AZ/RU/EN | Verified для проверенных экранов | Web build и native browser analytics для трёх языков PASS; это не исчерпывающий редакторский аудит всех строк |
 | ERP, банк, ASAN İmza | Not verified / не заявляется как интеграция | CSV не live ERP; статус PAID не платёж; dev signature не ASAN |
 

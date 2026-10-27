@@ -175,3 +175,17 @@
 ## Обновление после hosted acceptance — 27 октября 2026
 
 Предыдущий blocker startup_failure/NOT RUN выше **superseded**: действующий rashadoni/leadprocure, run40518660742, code82e323a — PASS (195 API, 9 browser, full build, official schemas, upgrade/restore). Исходные 20 критериев сохранены. LP-A19 частично открыта: fresh bundled Compose provisioning NO-GO из-за upstream MinIO images; реальный клиентский on-prem и SMTP/Meta внешняя доставка NOT RUN (подключений нет). Это не разрешение merge/deploy. Актуальная сводка и точные границы — STATUS.md/CLAIMS.md.
+
+## Обновление после fresh-install acceptance — 28 октября 2026 (Asia/Baku)
+
+Provisioning NO-GO выше superseded для проверенного нового стенда: PR6, code
+f5b7e776, run40584185358 — оба jobs PASS. Полный повтор195 API/9 browser,
+build/schemas/upgrade/restore; fresh production Compose с реально собранными
+images, private bucket, empty-volume runtime role и signed file license PASS.
+Дополнительный HTTP сценарий подтвердил бюджетное предупреждение с APPROVED,
+отдельного согласующего, изоляцию организаций и real ClamAV clean/EICAR.
+Текущая матрица всех20 задач — в STATUS.md; sanitized evidence —
+ACCEPTANCE-2026-10-28.json. LP-A19 выполнена по изолированной технической приёмке,
+но остаётся частично открытой по внешней/клиентской приёмке. Real SMTP/Meta,
+реальный клиент/commercial license, TLS/browser, ARM, existing-volume storage
+upgrade и production preflight/backup не выданы за PASS. Merge/deploy не было.

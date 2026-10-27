@@ -27,3 +27,9 @@ findings. Scope: read-only review; no heavy execution on Contabo. Hosted image
 build/fresh production Compose gate remains pending. Fresh-stack browser CORS,
 HTTPS secure-cookie refresh, ARM, existing-volume upgrades and real commercial
 client licensing are not established by this source review or HTTP fixture.
+
+Hosted follow-through: run40584185358 on f5b7e776 completed successfully. Both
+full acceptance (195 API,9 browser,build,schemas,upgrade/restore) and actual fresh
+production Compose (source-built storage/API/web/AI, signed file license,
+budget/approver/RLS/private storage/real ClamAV) passed. Evidence does not remove
+the explicitly listed client/TLS/ARM/existing-volume/external-provider limits.

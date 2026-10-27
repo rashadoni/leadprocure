@@ -1,0 +1,63 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "client_date": "2026-10-28",
+  "timezone": "Asia/Baku",
+  "run": "https://github.com/rashadoni/leadprocure/actions/runs/40584185358",
+  "code_sha": "f5b7e776709ef8506b7e9635ae52f9bc41bbf71f",
+  "runner": "GitHub-hosted ubuntu amd64",
+  "api_suites": 23,
+  "api_passed": 195,
+  "browser_passed": 9,
+  "typecheck": "PASS",
+  "full_build": "PASS",
+  "export_schemas": "PASS: OASIS UBL2.1 (2 examples), OCDS1.1.5",
+  "upgrade": "PASS: baseline0027, duplicate rollback, reconciled fixture, idempotency",
+  "restore": {
+    "migrations": 35,
+    "invoices": 9,
+    "rls_tables": 47
+  },
+  "fresh_production_compose": {
+    "status": "PASS",
+    "productionMode": true,
+    "signedFileLicense": true,
+    "separateApprover": true,
+    "budgetWarningStillApproves": true,
+    "budgetIsolation": true,
+    "privateStorage": true,
+    "presignedPutGet": true,
+    "realClamavCleanAndEicar": true,
+    "foreignDocumentDenied": true,
+    "webServed": true
+  },
+  "health_without_license": {
+    "status": "ok",
+    "deploymentMode": "on_prem_isolated",
+    "edition": "enterprise",
+    "licenseSource": "missing",
+    "licenseStatus": "expired_restricted"
+  },
+  "health_with_signed_file_license": {
+    "status": "ok",
+    "deploymentMode": "on_prem_isolated",
+    "edition": "enterprise",
+    "licenseSource": "file",
+    "licenseStatus": "valid"
+  },
+  "database": [
+    "app_role_restricted=PASS",
+    "no_context_budget_rows=0"
+  ],
+  "not_run": [
+    "Real SMTP/Meta delivery: user confirmed no configured test connections",
+    "Real client installation/commercial license: no client acceptance environment",
+    "Existing-volume storage upgrade and production backup/preflight: no production release authorization",
+    "Fresh-stack HTTPS browser CORS/refresh cookies: loopback HTTP fixture only",
+    "ARM: amd64 runner only",
+    "Full concurrency/load stress: targeted concurrent HTTP checks only",
+    "Native PowerPoint/Slides rendering: PDF/local structure QA only",
+    "External LLM, live ERP/bank/ASAN/Peppol: not established integrations"
+  ],
+  "merge": "NOT PERFORMED",
+  "production_deployment": "NOT PERFORMED"
+}

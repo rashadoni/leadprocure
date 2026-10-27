@@ -1,14 +1,54 @@
 # Исполнение LP-A00–LP-A19
 
-## Продолжение — 28 октября 2026
+## Актуальный результат — 28 октября 2026 (Asia/Baku)
 
-Работа возвращена к Leadprocure: закупки и бюджетный контроль. Исправления новой установки вынесены в draft [PR6](https://github.com/rashadoni/leadprocure/pull/6), поверх PR3, чтобы сохранить лимит независимого ревью400000bytes. Code PR3 tree на2c710bc совпадает с ранее принятым82e323a; история checkpoint commits сохранена.
+Leadprocure: закупки и бюджетный контроль. Действующий репозиторий `rashadoni/leadprocure`; [code PR3](https://github.com/rashadoni/leadprocure/pull/3), [установка PR6](https://github.com/rashadoni/leadprocure/pull/6) поверх PR3, [материалы PR4](https://github.com/rashadoni/leadprocure/pull/4), [доказательства PR5](https://github.com/rashadoni/leadprocure/pull/5). Main/runtime не изменялись; merge/deploy не разрешены. История checkpoints сохранена; PR6 выделен для соблюдения неизменённого review cap400000bytes.
 
-Новый кандидат устраняет зависимость Compose от недоступных storage images, публичный dev bucket, жёстко заданный app_user password и отсутствие production file-license wiring. Независимое source review: без блокирующих находок. **Fresh production Compose acceptance пока PENDING**, [run40584185358](https://github.com/rashadoni/leadprocure/actions/runs/40584185358), head f5b7e776. Это ещё не PASS и не приёмка существующих volumes или клиентского внедрения. Ранее зафиксированный provisioning NO-GO ниже описывает шаблон до этих исправлений.
+**Оба job PASS:** [run40584185358](https://github.com/rashadoni/leadprocure/actions/runs/40584185358), конечный installer/code SHA `f5b7e776709ef8506b7e9635ae52f9bc41bbf71f`. Проверено на GitHub-hosted amd64 worker, не на Contabo. Sanitized evidence: [ACCEPTANCE-2026-10-28.json](ACCEPTANCE-2026-10-28.json).
 
-Бюджетный claim подтверждён8 API tests в прежнем195 PASS: категория/год/валюта, обязательства утверждённых заявок и изоляция организаций. Превышение предупреждает, но не блокирует согласование. Новой установке дополнительно предстоит повторить этот сценарий через реальные HTTP buyer/approver действия.
+- Полный regression: **23 suites / 195 API PASS; 9/9 native Chromium PASS**, API typecheck, full build, OASIS UBL2.1 (2 exports), OCDS1.1.5, upgrade0027/rollback/idempotency PASS. Dump/restore:35 migrations,9 invoices,47 RLS tables.
+- **Fresh production Compose PASS на пустых volumes:** реально собраны storage/API/web/AI images. NODE_ENV=production, on_prem_isolated: без лицензии source=missing/status=expired_restricted; с ephemeral подписанным file token source=file/status=valid.
+- Реальные buyer/approver HTTP действия: собственную заявку согласовать нельзя; второй сотрудник согласовывает. Превышение бюджета даёт предупреждение, но статус остаётся APPROVED. Обязательства и остаток рассчитаны; чужой покупатель видит0 budgets.
+- Private storage PASS: presigned PUT/GET работают, unsigned GET403; чужая организация не получает download URL; реальные clean/EICAR verdicts CLEAN/INFECTED и запрет заражённого download. Новый DB app_user ограничен, без контекста0 budgets.
+- Независимое source review исправлений/установки завершено без открытых blockers. Automatic fallback не считается этим review. PPTX/PDF v3 проверены ранее:13 слайдов +2 страницы, native text/структура, PDF QA/SHA256 PASS; copy соответствует проверенным границам, бюджет не назван жёстким блокирующим лимитом.
 
-## Актуальный результат — 27 октября 2026
+### Актуальная матрица всех20 задач
+
+PASS ниже относится к реализованным проверенным сценариям указанного кандидата, а не ко всем возможным нагрузкам или коммерческим подключениям.
+
+| Задача | Текущий результат | Граница |
+|---|---|---|
+| LP-A00 стенд | PASS: disposable hosted API/DB/storage, guards, upgrade/restore | Рабочий runtime не использован |
+| LP-A01 файлы | PASS: grants, immutable snapshot/hash, namespace/RLS, real AV и private fresh storage | Клиентская storage policy отдельно |
+| LP-A02 количества | PASS: locks/dedup invoice, GRN, amendment; concurrent HTTP regressions | Полный нагрузочный stress NOT RUN |
+| LP-A03 лоты | PASS: lot-scoped downstream и cancelled-award guards | Проверенные multi-lot fixtures |
+| LP-A04 auction downstream | PASS: принятые строки ставки до PO/GRN/invoice в full suite | Реальные проверенные API цепочки |
+| LP-A05 winner | PASS: серверный best/lot guard | Тестовые tie/worse-bid сценарии |
+| LP-A06 evaluation | PASS: полный уникальный набор критериев, актуальная оценка и award guards | Полный stress NOT RUN |
+| LP-A07 экран оценки | PASS: native Chromium custom criteria/re-evaluation | Проверенный UI сценарий |
+| LP-A08 валюта/объём | PASS: mixed currency rejected, scope lot, money guards | Автоматический FX не обещается |
+| LP-A09 НДС | PASS: integer net/tax/gross и snapshot regressions | Старые документы/сложные сочетания отдельно |
+| LP-A10 UBL | PASS: реальные snapshots и2 official XSD examples | Peppol network/profile не реализованы |
+| LP-A11 BLOCKED | PASS: guard новых действий и endpoint regressions | Старые обязательства продолжаются |
+| LP-A12 AI | PASS: heuristic edge cases, validation/fallback, localized rationale | Реальный внешний LLM NOT RUN |
+| LP-A13 аналитика | PASS: lot/currency/net/date, browser AZ/RU/EN | Бюджет:8 tests +fresh HTTP; warning, не hard stop |
+| LP-A14 OCDS | PASS: cancelled/reaward/value/supplier, canonical schema | Downstream consumer NOT RUN |
+| LP-A15 TypeORM | PASS: returned rows/count и audit IDs | Реальный PostgreSQL regression |
+| LP-A16 лицензии | PASS: signed controls/time/renewal иfresh file mount | Коммерческий клиентский license lifecycle NOT RUN |
+| LP-A17 доставка | PASS: durable outbox, UNKNOWN/NOT_CONFIGURED, signed callbacks | **Real SMTP/Meta NOT RUN: подключений нет** |
+| LP-A18 дедлайны | PASS: authoritative deadline/advisory lock regressions | Полный concurrency/load stress NOT RUN |
+| LP-A19 итог | PASS: изолированные build/API/browser/languages/schema/upgrade/restore/fresh installation и материалы; **PARTIAL по внешней приёмке** | Не объявлять все20 полностью принятыми для production |
+
+### Что остаётся NOT RUN и почему
+
+- Real SMTP/Meta delivery: пользователь подтвердил отсутствие подключений. Client installation/commercial license: нет отдельного клиентского приёмочного окружения.
+- HTTPS refresh cookies/CORS в свежем production browser, ARM и existing-volume storage upgrade: текущий fixture — loopback HTTP/amd64/пустые volumes. Старые9 browser tests — другой изолированный стенд.
+- Full load stress и native PowerPoint/Slides rendering: выполнены targeted concurrency tests и PDF/структурный QA, не эти отдельные gates.
+- Production preflight, реальный backup/restore и deployment: отдельного разрешения нет. External LLM/ERP/bank/ASAN/Peppol не заявляются как работающие интеграции.
+
+Provisioning blocker снят для **проверенной свежей установки**; archived storage snapshot не означает vendor maintenance/SLA и не доказывает upgrade старого MinIO volume. Поддерживаемое клиентское размещение требует отдельного решения по storage maintenance и фактической внешней приёмки. Следующая точка — решение владельца о review/release кандидата; внешние sends после появления настроенных подключений. Техническую изолированную приёмку повторять без новых изменений/отказов не требуется.
+
+## Исторический результат — 27 октября 2026, SUPERSEDED дополнением выше
 
 Действующий репозиторий — `rashadoni/leadprocure`. Code PR [#3](https://github.com/rashadoni/leadprocure/pull/3), материалы [#4](https://github.com/rashadoni/leadprocure/pull/4), доказательства [#5](https://github.com/rashadoni/leadprocure/pull/5). Aggregate PR2 закрыт без merge. Production не обновлялся; merge/deploy не разрешены.
 

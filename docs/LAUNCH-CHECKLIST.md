@@ -1,20 +1,20 @@
 # Приёмка и отдельно разрешённый выпуск
 
-Обновлено 27 октября 2026. Это кандидат после аудита, **не разрешение на production**. Действующий репозиторий — `rashadoni/leadprocure`. Код: PR3; материалы: PR4; доказательства: PR5. Итог приёмки — в [STATUS.md](audits/datasheet-2026-10-26/STATUS.md).
+Обновлено 28 октября 2026 (Asia/Baku). Это кандидат после аудита, **не разрешение на production**. Действующий репозиторий — `rashadoni/leadprocure`. Код: PR3; установка: PR6 поверх PR3; материалы: PR4; доказательства: PR5. Итог приёмки — в [STATUS.md](audits/datasheet-2026-10-26/STATUS.md).
 
 Историческая запись от12 июля о готовности к production и172 тестах superseded текущим аудитом. Действующий runtime уже существует на Contabo: `/home/rashad/projects/Leadprocure/infra`, Compose project `leadprocure-prod`. Его dirty checkout нельзя сбрасывать или заменять.
 
 ## Перед решением о выпуске
 
-- [ ] Полный hosted build/API/browser/schema/upgrade/restore gate пройден на конечном code SHA.
-- [ ] Независимое ревью выполнено по существу; зелёный fallback при сбое API не считается ревью.
+- [x] Hosted build/API/browser/schema/upgrade/restore/fresh gate пройден на code f5b7e776, run40584185358. Если code SHA изменится при интеграции, нужен gate нового кандидата.
+- [x] Независимое ревью выполнено по существу; зелёный fallback при сбое API не считается ревью.
 - [ ] Выполнен read-only preflight `scripts/acceptance/preflight-readonly.sql`; исторические дубли согласованы без удаления финансовых данных.
 - [ ] Резервная копия production проверена отдельным восстановлением. Тестовый dump/restore не заменяет backup реальной базы.
 - [ ] Отдельно разрешены merge и production deployment по [infra/DEPLOY.md](../infra/DEPLOY.md) и [DELIVERY-ARCHITECTURE.md](DELIVERY-ARCHITECTURE.md).
 
-## Fresh bundled installation: новый кандидат ожидает CI
+## Fresh bundled installation: PASS в изолированном amd64 CI
 
-Исправления выделены в PR6 (поверх PR3): pinned source-built storage, приватный bucket, configurable empty-volume app role и file-license mount. Source review без blockers, fresh hosted gate40584185358 pending. До фактического PASS свежая установка не принята; client TLS/browser, ARM и существующие volumes остаются отдельными проверками.
+Исправления выделены в PR6 (поверх PR3): pinned source-built storage, приватный bucket, configurable empty-volume app role и file-license mount. Source review без blockers; fresh hosted gate40584185358 **PASS** на пустых volumes. Реально проверены restricted/valid license, budget warning/second approver, private signed storage, ClamAV clean/EICAR, runtime DB role и no-context RLS. Client TLS/browser, ARM, коммерческая лицензия и существующие volumes остаются отдельными проверками. Архивированный upstream snapshot не даёт vendor maintenance/SLA.
 
 Исторический blocker до PR6:
 
