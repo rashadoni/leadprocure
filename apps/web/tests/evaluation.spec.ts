@@ -107,11 +107,11 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
     expect(Number(po.total_minor)).toBe(total);
   }
   // The same UI change must preserve reverse-auction price ranking (LP-A04/A05).
-  const auctionReq = await call('/requests', { title: `Browser auction ${tag}`, items: [{ name: 'Auction item', qty: 10, estUnitPriceMinor: 10000 }] }, buyer.accessToken);
+  const auctionReq = await call('/requests', { title: `Browser auction ${tag}`, vatMode: 'INCLUSIVE', items: [{ name: 'Auction item', qty: 10, estUnitPriceMinor: 10000 }] }, buyer.accessToken);
   await call(`/requests/${auctionReq.id}/submit`, {}, buyer.accessToken);
   await call(`/requests/${auctionReq.id}/approve`, {}, approver.accessToken);
-  const auction = await call(`/events/reverse/from-request/${auctionReq.id}`, { closeAt: new Date(Date.now() + 3600000).toISOString(), visibility: 'PUBLIC', startPriceMinor: 100000, minDecrementMinor: 1000 }, buyer.accessToken);
-  await call(`/events/${auction.id}/publish`, {}, buyer.accessToken);
+  const auctionCreated = await call(`/events/reverse/from-request/${auctionReq.id}`, { closeAt: new Date(Date.now() + 3600000).toISOString(), visibility: 'PUBLIC', startPriceMinor: 100000, minDecrementMinor: 1000 }, buyer.accessToken);
+  const auction = await call(`/events/${auctionCreated.id}/publish`, {}, buyer.accessToken);
   for (const [supplier, price] of [[s1, 9000], [s2, 8000]] as const) {
     await call(`/events/${auction.id}/auction/bids`, { items: [{ eventItemId: auction.items[0].id, unitPriceMinor: price }] }, supplier.accessToken);
   }
@@ -140,7 +140,8 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
   expect(auctionPo.items).toHaveLength(1);
   expect(Number(auctionPo.items[0].unit_price_minor)).toBe(8000);
   expect(Number(auctionPo.total_minor)).toBe(80000);
-  for (const status of ['CONFIRMED', 'SHIPPED', 'DELIVERED']) {
+  await call(`/orders/${auctionPo.id}/status`, { status: 'ISSUED' }, buyer.accessToken);
+  for (const status of ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED']) {
     await call(`/orders/${auctionPo.id}/status`, { status }, s2.accessToken);
   }
   await call(`/orders/${auctionPo.id}/receipts`, { items: [{ poItemId: auctionPo.items[0].id, qty: 10 }] }, buyer.accessToken);
