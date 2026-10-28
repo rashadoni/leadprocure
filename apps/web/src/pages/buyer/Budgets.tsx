@@ -47,7 +47,7 @@ const empty = {
 export default function Budgets() {
   const { t } = useI18n();
   const { session } = useAuth();
-  const isAdmin = session?.org.role === 'BUYER_ADMIN';
+  const canManagePlans = ['BUYER_ADMIN', 'BUYER_FINANCE'].includes(session?.org.role ?? '');
   const [rows, setRows] = useState<Budget[]>([]);
   const [form, setForm] = useState({ ...empty });
   const [editId, setEditId] = useState<string | null>(null);
@@ -230,7 +230,7 @@ export default function Budgets() {
   return (
     <>
       <h1>{t('budgets')}</h1>
-      {isAdmin && (
+      {canManagePlans && (
         <div className="card">
           <form onSubmit={submit} className="row" style={{ alignItems: 'flex-end' }}>
             <div><label>{t('name')}</label>
@@ -290,7 +290,7 @@ export default function Budgets() {
         <div className="hint" style={{ marginBottom: 14 }}>
           {t('bud_thresholds')}: {t('bud_warn_pct')} {policy.warnPct}% ·{' '}
           {t('bud_block_pct')} {policy.blockPct == null ? t('bud_block_off') : `${policy.blockPct}%`}
-          {isAdmin && <> · <Link to="/buyer/settings">{t('bud_thresholds_edit')}</Link></>}
+          {canManagePlans && <> · <Link to="/buyer/settings">{t('bud_thresholds_edit')}</Link></>}
         </div>
       )}
 
@@ -360,7 +360,7 @@ export default function Budgets() {
           </select>
           <button className="btn ghost small" onClick={exportCsv}>⤓ CSV</button>
           <button className="btn ghost small" data-tip={t('bud_1c_tip')} onClick={export1c}>📤 {t('bud_1c')}</button>
-          {isAdmin && (
+          {canManagePlans && (
             <>
               {/* Bulk entry: thirty department budgets through a one-row form is what pushes
                   finance back into a spreadsheet. Everything lands as a draft. */}
@@ -384,7 +384,7 @@ export default function Budgets() {
           <thead><tr>
             <th>{t('name')}</th><th>{t('status')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('period')}</th>
             <th>{t('amount')}</th><th>{t('committed')}</th><th>{t('actual')}</th><th>{t('remaining')}</th>
-            <th style={{ width: 180 }}>{t('utilization')}</th>{isAdmin && <th>{t('actions')}</th>}
+            <th style={{ width: 180 }}>{t('utilization')}</th>{canManagePlans && <th>{t('actions')}</th>}
           </tr></thead>
           <tbody>
             {rows.map((b) => {
@@ -411,7 +411,7 @@ export default function Budgets() {
                     </div>
                     <span className="hint">{b.utilizationPct}%{over ? ` · ${t('budget_over')}` : ''}</span>
                   </td>
-                  {isAdmin && (
+                  {canManagePlans && (
                     <td>
                       {b.status === 'DRAFT' && (
                         <>
@@ -446,7 +446,7 @@ export default function Budgets() {
                 </tr>
                 {docs[b.id] && (
                   <tr>
-                    <td colSpan={isAdmin ? 11 : 10} style={{ background: 'rgba(4,120,87,0.04)' }}>
+                    <td colSpan={canManagePlans ? 11 : 10} style={{ background: 'rgba(4,120,87,0.04)' }}>
                       <b>{t('drill_title')}</b>
                       {docs[b.id].length === 0 && <div className="hint">—</div>}
                       {docs[b.id].length > 0 && (
@@ -474,7 +474,7 @@ export default function Budgets() {
                 )}
                 {history[b.id] && (
                   <tr>
-                    <td colSpan={isAdmin ? 11 : 10} style={{ background: 'rgba(79,140,255,0.05)' }}>
+                    <td colSpan={canManagePlans ? 11 : 10} style={{ background: 'rgba(79,140,255,0.05)' }}>
                       <b>{t('bud_history')}</b>
                       <table style={{ margin: '6px 0' }}>
                         <thead><tr>
@@ -504,7 +504,7 @@ export default function Budgets() {
                   const balanced = totalBp === 10000;
                   return (
                     <tr>
-                      <td colSpan={isAdmin ? 11 : 10} style={{ background: 'rgba(234,179,8,0.06)' }}>
+                      <td colSpan={canManagePlans ? 11 : 10} style={{ background: 'rgba(234,179,8,0.06)' }}>
                         <b>{t('bud_phasing')}</b>
                         <div className="hint" style={{ margin: '4px 0 8px' }}>{t('bud_phasing_hint')}</div>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -513,7 +513,7 @@ export default function Budgets() {
                               <div className="hint">{m.month}</div>
                               <input type="number" step="0.01" min="0" max="100" style={{ width: 92 }}
                                 value={String(m.shareBp / 100)}
-                                disabled={!isAdmin || b.status === 'CLOSED'}
+                                disabled={!canManagePlans || b.status === 'CLOSED'}
                                 onChange={(e) => setShare(b.id, m.month, e.target.value)} />
                               <div className="hint">{fmtMoney(m.amountMinor, b.currency)}</div>
                             </div>
@@ -523,7 +523,7 @@ export default function Budgets() {
                           <span className={balanced ? 'hint' : 'error'}>
                             {t('bud_phasing_total')}: {(totalBp / 100).toFixed(2)}%
                           </span>
-                          {isAdmin && b.status !== 'CLOSED' && (
+                          {canManagePlans && b.status !== 'CLOSED' && (
                             <>
                               <button className="btn small" disabled={!balanced}
                                 onClick={() => savePhasing(b.id, ph.months)}>{t('save')}</button>
@@ -542,7 +542,7 @@ export default function Budgets() {
                 </Fragment>
               );
             })}
-            {rows.length === 0 && <tr><td colSpan={isAdmin ? 11 : 10} className="hint">—</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={canManagePlans ? 11 : 10} className="hint">—</td></tr>}
           </tbody>
         </table>
       </div>

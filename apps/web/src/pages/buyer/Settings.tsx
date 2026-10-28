@@ -22,6 +22,7 @@ export default function Settings() {
   const [policyDraft, setPolicyDraft] = useState<{ warnPct: string; blockPct: string; allowOverride: boolean } | null>(null);
   const [policySaved, setPolicySaved] = useState(false);
   const isAdmin = session?.org.role === 'BUYER_ADMIN';
+  const canManageBudgetPolicy = isAdmin || session?.org.role === 'BUYER_FINANCE';
 
   // Method-policy editor (value bands → procurement method).
   const [mpEditing, setMpEditing] = useState(false);
@@ -318,19 +319,19 @@ export default function Settings() {
           <div className="hint" style={{ marginBottom: 12 }}>{t('bud_thresholds_hint')}</div>
           <div className="row" style={{ alignItems: 'flex-end', maxWidth: 880 }}>
             <div><label>{t('bud_warn_label')}</label>
-              <input type="number" min={1} max={1000} disabled={!isAdmin} value={policyDraft.warnPct}
+              <input type="number" min={1} max={1000} disabled={!canManageBudgetPolicy} value={policyDraft.warnPct}
                 onChange={(e) => setPolicyDraft({ ...policyDraft, warnPct: e.target.value })} /></div>
             <div><label>{t('bud_block_label')}</label>
-              <input type="number" min={1} max={1000} disabled={!isAdmin} placeholder={t('bud_block_off')}
+              <input type="number" min={1} max={1000} disabled={!canManageBudgetPolicy} placeholder={t('bud_block_off')}
                 value={policyDraft.blockPct}
                 onChange={(e) => setPolicyDraft({ ...policyDraft, blockPct: e.target.value })} /></div>
             <div><label>{t('bud_override_label')}</label>
-              <select disabled={!isAdmin} value={policyDraft.allowOverride ? '1' : '0'}
+              <select disabled={!canManageBudgetPolicy} value={policyDraft.allowOverride ? '1' : '0'}
                 onChange={(e) => setPolicyDraft({ ...policyDraft, allowOverride: e.target.value === '1' })}>
                 <option value="1">{t('yes')}</option>
                 <option value="0">{t('no')}</option>
               </select></div>
-            {isAdmin && (
+            {canManageBudgetPolicy && (
               <div style={{ flex: '0 0 auto' }}>
                 <button className="btn" disabled={!policyDirty} onClick={savePolicy}>{t('save')}</button>
               </div>

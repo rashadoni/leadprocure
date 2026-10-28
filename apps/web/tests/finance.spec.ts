@@ -28,4 +28,11 @@ test('finance sees and completes its assigned approval step without procurement 
   await row.getByRole('button', { name: /Confirm approval/ }).click();
   await expect(row.locator('.badge')).toHaveClass(/APPROVED/);
   await expect(row.getByRole('button')).toHaveCount(0);
+  await page.goto('/buyer/budgets');
+  const planForm = page.locator('form');
+  await expect(planForm).toBeVisible();
+  await planForm.locator('input').first().fill(`Finance plan ${tag}`);
+  await planForm.locator('input[step="0.01"]').fill('100.01');
+  await planForm.getByRole('button', { name: 'Create', exact: true }).click();
+  await expect(page.locator('tr').filter({ hasText: `Finance plan ${tag}` })).toBeVisible();
 });

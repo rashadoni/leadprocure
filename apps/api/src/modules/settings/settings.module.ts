@@ -115,7 +115,7 @@ export class SettingsController {
   constructor(private readonly settings: SettingsService) {}
 
   @Get('users')
-  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER', 'BUYER_FINANCE')
   users(@CurrentUser() auth: AccessTokenPayload) {
     return this.settings.users(auth.org_id);
   }

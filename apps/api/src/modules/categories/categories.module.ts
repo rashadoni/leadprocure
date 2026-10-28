@@ -60,7 +60,7 @@ export class CategoriesController {
   constructor(private readonly categories: CategoriesService) {}
 
   @Get()
-  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER', 'BUYER_FINANCE')
   list() {
     return this.categories.list();
   }
