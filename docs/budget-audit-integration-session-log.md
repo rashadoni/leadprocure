@@ -26,3 +26,8 @@ Created dedicated codex/leadprocure-budget-audit-integration worktree from main9
 ## 2026-10-28 — native browser found omitted finance routing
 
 - b1d304a run40651791356:25 suites/283 API tests and3 contention tests, upgrade schemas and full build PASS; native browser finance scenario found actual route authorization omission: main.tsx hard-coded buyer role list still excluded finance, causing Home/Requests redirect cycle and empty section. Corrected route access only for finance dashboard/requests/budgets/analytics/settings; finance sidebar hides unavailable procurement pages. API authorization remains unchanged. No test bypass or token injection. Current-source gate requires a new SHA.
+
+## 2026-10-28 — final source frozen for complete acceptance
+
+- Final source72b448c; independent routing rereview found no blockers. Final hosted run40652348096 active. Cancelled only this task's known obsolete2a9d28c40652015154 andb1d304a40651791356 to avoid repeating heavy source builds after the route fix; successful main gates untouched. Earlier stages remain historical evidence, not final acceptance.
+- Preparing three bounded review parts: API/migrations/shared/integration fixtures; buyer UI+native browser; existing runtime guide assets/scripts/routing documentation. No review cap increased, main remains974a31b. Production unmodified/not authorized; signed operator license and protected backup are still concrete release prerequisites.
