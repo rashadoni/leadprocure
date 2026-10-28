@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, fmtDate, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
@@ -27,8 +28,17 @@ export default function Contracts() {
   };
   useEffect(load, [cPage, oPage]);
 
-  const act = async (fn: () => Promise<unknown>) => {
-    try { await fn(); load(); } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  // Every action here succeeds silently, and two of them put their result on a DIFFERENT
+  // screen — a catalog lands in Catalogs, a new PO lands paginated at the bottom. Nothing on
+  // the row changes, so a working button reads as a dead one. `note` says what happened, and
+  // links to wherever the result went.
+  const [note, setNote] = useState<{ text: string; to?: string; toLabel?: string } | null>(null);
+  const act = async (fn: () => Promise<any>, done?: (res: any) => { text: string; to?: string; toLabel?: string }) => {
+    try {
+      const res = await fn();
+      load();
+      setNote(done ? done(res) : null);
+    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
   // PO amendment (change order): buyer proposes new qty/price per line + reason.
@@ -56,7 +66,7 @@ export default function Contracts() {
       })
       .filter(Boolean);
     if (!items.length) { alert('—'); return; }
-    await act(() => api.post(`/orders/${amendFor}/amendments`, { reason: amendReason, items }));
+    await act(() => api.post(`/orders/${amendFor}/amendments`, { reason: amendReason, items }), () => ({ text: t('note_amend_sent') }));
     setAmendFor(null);
   };
 
@@ -67,12 +77,19 @@ export default function Contracts() {
       .filter((s: any) => Number(s.received) < Number(s.ordered))
       .map((s: any) => ({ poItemId: s.po_item_id, qty: Number(s.ordered) - Number(s.received) }));
     if (!remaining.length) { alert('Nothing left to receive'); return; }
-    await act(() => api.post(`/orders/${poId}/receipts`, { items: remaining }));
+    await act(() => api.post(`/orders/${poId}/receipts`, { items: remaining }), () => ({ text: t('note_received') }));
   };
 
   return (
     <>
       <h1>{t('contracts')}</h1>
+      {note && (
+        <div className="card note-ok">
+          ✓ {note.text}
+          {note.to && <> · <Link to={note.to}>{note.toLabel} →</Link></>}
+          <button className="btn small ghost" style={{ float: 'right' }} onClick={() => setNote(null)}>✕</button>
+        </div>
+      )}
       <div className="card">
         <table>
           <thead><tr><th>#</th><th>{t('title')}</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th>{t('validity')}</th><th>{t('total')}</th><th>{t('drawn')}</th><th>{t('status')}</th><th>PO</th><th>{t('actions')}</th></tr></thead>
@@ -94,12 +111,12 @@ export default function Contracts() {
                 <td>{c.po_count}</td>
                 <td>
                   {isBuyerSide && c.status === 'DRAFT' && (
-                    <button className="btn small" data-tip={t('tip_activate')} onClick={() => act(() => api.post(`/contracts/${c.id}/activate`))}>{t('activate')}</button>
+                    <button className="btn small" data-tip={t('tip_activate')} onClick={() => act(() => api.post(`/contracts/${c.id}/activate`), () => ({ text: t('note_activated') }))}>{t('activate')}</button>
                   )}{' '}
                   {isBuyerSide && c.status === 'ACTIVE' && (
                     <>
-                      <button className="btn small" data-tip={t('tip_create_po')} onClick={() => act(() => api.post(`/contracts/${c.id}/orders`))}>{t('create_po')}</button>{' '}
-                      <button className="btn small ghost" data-tip={t('tip_catalog_from')} onClick={() => act(() => api.post(`/catalogs/from-contract/${c.id}`))}>📖 {t('catalogs')}</button>
+                      <button className="btn small" data-tip={t('tip_create_po')} onClick={() => act(() => api.post(`/contracts/${c.id}/orders`), (r) => ({ text: `${t('note_po_made')}: ${r.data.po_no}` }))}>{t('create_po')}</button>{' '}
+                      <button className="btn small ghost" data-tip={t('tip_catalog_from')} onClick={() => act(() => api.post(`/catalogs/from-contract/${c.id}`), () => ({ text: t('note_catalog_made'), to: '/buyer/catalogs', toLabel: t('catalogs') }))}>📖 {t('catalogs')}</button>
                     </>
                   )}
                 </td>

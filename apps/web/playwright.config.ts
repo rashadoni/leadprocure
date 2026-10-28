@@ -3,6 +3,8 @@ import { defineConfig } from '@playwright/test';
 // UI smoke over the real stack. Expects the API (:3000) and the web dev server (:5173)
 // to be running against the seeded dev database:
 //   pnpm --filter api start:dev   &   pnpm --filter web dev
+// BASE_URL points the same suite at a deployed stand instead:
+//   BASE_URL=http://<host>:<port> npx playwright test
 export default defineConfig({
   testDir: './tests',
   // Generous: the Vite dev server compiles each route on first visit, so a run that
@@ -10,7 +12,7 @@ export default defineConfig({
   timeout: 90_000,
   retries: 1,
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: process.env.BASE_URL ?? 'http://localhost:5173',
     headless: true,
     viewport: { width: 1280, height: 900 },
   },
