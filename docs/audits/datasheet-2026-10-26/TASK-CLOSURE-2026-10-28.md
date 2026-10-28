@@ -1,5 +1,9 @@
 # LP-A00–LP-A19: criteria, evidence and remaining work
 
+## Criterion-level correction after owner challenge
+
+Earlier blanket completeness statements below are qualified: broad regression PASS does not independently establish every original acceptance criterion. Current work reopens explicit missing evidence for A03(cancel/create both orders,8contract retries), A06(re-evaluate/award and disqualify/award both orders) and A11(existing catalog blocked-order plus accepted-obligation completion). Dedicated actual HTTP/PostgreSQL tests are implemented, hosted acceptance pending. This does not claim a new product defect or erase earlier passing scenarios. External SMTP/Meta is not presented as the only possible unfinished work.
+
 Owner correction: focus on these original20 tasks. No optional release-engineering,
 license issuance or duplicate backup project is included. Original criteria remain
 in TASKS.md. PASS below means isolated technical acceptance, not live production.
