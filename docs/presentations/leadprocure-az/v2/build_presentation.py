@@ -369,7 +369,7 @@ for x,n,first,last in [(72,'01','Təsdiqlənmiş tələb','Büdcə öhdəliyi'),
     d.arrow(x+250,424,x+250,466,MID,2)
     d.text(last,x+173,492,316,35,font='Display',max_lines=1)
 d.rect(72,591,1136,61,BLACK)
-d.text('Limit aşımı xəbərdarlıq yaradır; təsdiqi bloklamır.',96,609,1088,24,WHITE)
+d.text(CONTENT[10].get('budgetPolicySummary', 'Limit aşımı xəbərdarlıq yaradır; təsdiqi bloklamır.'),96,609,1088,24,WHITE)
 d.end()
 
 # 12 — Executive recap through three questions, with no invented KPIs.

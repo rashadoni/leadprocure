@@ -12,3 +12,5 @@ LEADPROCURE_MATERIAL_ROOT="$PWD/docs/presentations/leadprocure-az/v3" PYTHONPATH
 ```
 
 Fonts və üz qabığı əvvəlki v2 resurslarından istifadə olunur. Canlı ERP, bank ödənişi, ASAN/Peppol qoşulması və faktiki xarici göndəriş təsdiqlənmiş kimi təqdim edilmir.
+
+28 oktyabr yeniləməsi (LP-A19): büdcə mətnləri şöbə/dövr planları, sazlanan bloklama həddi və maliyyə roluna uyğunlaşdırılıb. Dəyişmiş PPTX/PDF üçün əvvəlki native render nəticəsi tətbiq edilmir; yeni hosted render tələb olunur. Dizayn dəyişdirilməyib.

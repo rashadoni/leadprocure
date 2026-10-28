@@ -10,6 +10,5 @@
     "Body": "IBMPlexSans-Regular.ttf",
     "BodyBold": "IBMPlexSans-Bold.ttf"
   },
-  "native_pptx_render": "NOT RUN for v3: native PowerPoint/Google Slides rendering unavailable in this pass",
-  "visualReview": "PASS: all local PDF pages and contact sheets reviewed; no clipping or missing Azerbaijani glyphs"
+  "native_pptx_render": "pending"
 }

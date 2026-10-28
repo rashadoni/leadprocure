@@ -1,0 +1,40 @@
+# LP-A00–LP-A19: criteria, evidence and remaining work
+
+Owner correction: focus on these original20 tasks. No optional release-engineering,
+license issuance or duplicate backup project is included. Original criteria remain
+in TASKS.md. PASS below means isolated technical acceptance, not live production.
+
+Accepted baseline: main0a27fb026618422f852a857bd9ee39e23a441bd2,
+[run40666138522](https://github.com/rashadoni/leadprocure/actions/runs/40666138522),
+both jobs SUCCESS:25 suites/283 API,3 contention,10 native browser,1 fresh HTTPS;
+build/schema validation/both migration histories/restore PASS. No completed gate
+is rerun without a material change. Current candidate changes need their own gate.
+
+| Task | Technical evidence in repository | Current disposition |
+|---|---|---|
+| A00 isolated acceptance | scripts/acceptance/assert-isolated.cjs; .github/workflows/acceptance.yml; dual-history upgrade and backup-restore scripts | Baseline PASS; only disposable fixtures used |
+| A01 files | audit-regressions, clamav, verification, rls-acl API suites | Baseline PASS: foreign grants/namespace, immutable snapshots, real clean/EICAR. Earlier read-only runtime namespace mismatches0; no automatic deletion |
+| A02 quantities/concurrency | audit-regressions, invoices, amendments; procurement.stress-spec | Baseline PASS: duplicate lines, aggregate billing, contended invoices/GRN, shared order locks |
+| A03 lot boundaries | multilot, integrity; evaluation browser scenario | Baseline PASS: lot-scoped contract/PO/catalog, cancelled award rejected, per-award UI |
+| A04 auction downstream | auction-flow; procurement.stress-spec | Baseline PASS: accepted tick lines through contract/order/receipt/invoice; idempotency |
+| A05 auction winner | auction-flow; sourcing service guards | Baseline PASS: server-best eligible bid/lot, deterministic price order; client cannot override |
+| A06 complete evaluation | integrity, audit-regressions; evaluation browser scenario | Baseline PASS: locked criteria, complete unique scores/current evaluation, event serialization |
+| A07 evaluation UI | apps/web/tests/evaluation.spec.ts | Baseline PASS: custom criteria/re-evaluation show current result |
+| A08 currency/volume | audit-regressions, multilot; common/procurement/invariants.ts | Baseline PASS: reject unsupported mixed currency, lot-equivalent comparison, safe money bounds. Automatic FX is not claimed |
+| A09 VAT | audit-regressions; invoices tax snapshots | Baseline inclusive18/zero/exclusive arithmetic PASS. Current candidate adds real mixed0/18 invoice chains for BOTH modes; pending hosted gate. Historical invoices are not recalculated |
+| A10 UBL | scripts/acceptance/validate_exports.py; audit-regressions exports | Baseline two exports pass official UBL2.1 XSD. Current candidate requires four including mixed-rate modes; pending gate. Peppol network not claimed |
+| A11 blocked supplier | audit-regressions; assertSupplierAllowed shared guard | Baseline PASS: new procurement denied while existing obligations continue |
+| A12 AI edge values | audit-regressions; common/ai response validation/fallback | Baseline PASS: finite scores/zero price/same-day delivery/lot/currency and AZ explanation; external live LLM NOT RUN |
+| A13 financial analytics | analytics, budgets, budget-integration; language/finance browser scenarios | Baseline API/net/currency/active awards/budget controls PASS. Current candidate fixes stale filter response and31st-day month overflow; three new native scenarios pending |
+| A14 OCDS | audit-regressions; validate_exports canonical1.1.5 | Baseline PASS: cancelled/re-award values/party/status, pre-opening restrictions. Downstream consumer NOT RUN |
+| A15 UPDATE RETURNING | audit-regressions, followups, budget-integration; returnedRows helper | Baseline PostgreSQL/TypeORM PASS including stop/audit IDs and missing membership |
+| A16 license lifecycle | audit-license; fresh-install signed file scenario | Baseline real signature/controlled clock/grace/restriction/renewal PASS. Installing an operator license is not an unfinished code feature |
+| A17 truthful delivery | followups, mail, audit-webhook; durable outbox | Baseline states/recovery/reconcile/HMAC PASS. Owner confirmed SMTP/Meta connections absent: actual delivery explicitly NOT RUN, not simulated PASS |
+| A18 deadlines | audit-regressions, auction-flow, procurement.stress-spec | Baseline PASS: server time/late withdraw/close serialization, no late accepted bids. Rejected transaction attempts are not falsely claimed as committed domain audit |
+| A19 combined acceptance/materials | full hosted gate; render-presentations; v3 content/PPTX/PDF/notes; CLAIMS.md | Baseline gates PASS. Current candidate synchronizes obsolete budget policy/finance role in all formats and fixes current claims; changed PPTX requires new independent render and visual review |
+
+Current implementation order: LP-A13 correction and browser checks → mixed VAT
+criteria A09/A10 → synchronize A19 materials/claims → independent review plus
+hosted regression/render → report actual outcomes for all20. Do not turn external
+dependencies into new unsanctioned features. Owner merge approval is separate once
+new visible changes are concrete and reviewed; deployment is outside this phase.

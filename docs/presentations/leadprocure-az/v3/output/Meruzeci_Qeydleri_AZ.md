@@ -64,9 +64,9 @@ Mənbələr: apps/api/src/modules/invoices/invoices.module.ts:32–84,214–220,
 
 ## 11. Büdcə öhdəliyi ilə faktiki xərc ayrı görünür
 
-Büdcə istifadəsi kateqoriya, il və valyuta üzrə uyğun təsdiqlənmiş tələblərdən hesablanır. Bu göstərici bank hesabındakı qalıq və ya ödənilmiş məbləğ deyil. Xərc analitikası isə qəbul edilmiş PO-lara əsaslanır; aylar, kateqoriyalar, əsas təchizatçılar və qaimə statusları üzrə baxış verir. Büdcə aşımı xəbərdarlıq yaradır, təsdiqi avtomatik bloklamır. Müştəriyə bu fərqi açıq izah edin: platforma qərar üçün görünürlük verir və mövcud qaydaları tətbiq edir; maliyyə siyasətinin bütün sərt bloklama tələblərinin artıq hazır olduğunu vəd etmir. Xərclər valyutalar üzrə ayrılır; aylıq qrafik sifarişin yaradılma tarixinə görə qurulur. Analitika ləğv olunmuş nəticələri daxil etmir.
+Büdcələr AZN ilə şöbə, kateqoriya və dövr üzrə planlaşdırılır; planın təsdiqi, reviziyası və dövrün bağlanması dəstəklənir. Tələblər, sifarişlər və qaimələr plan və faktiki göstəricilərlə əlaqələndirilir. Bu göstəricilər bank hesabındakı qalıq deyil. Standart qaydada büdcə aşımı xəbərdarlıq yaradır; təşkilat bloklama həddi sazlayıbsa, uyğun aşım təsdiqi dayandırır. Administratorun istisnası səbəblə əsaslandırılır. Maliyyə əməkdaşı yalnız ona təyin edilmiş maliyyə təsdiq addımını yerinə yetirir. Xərc analitikası qəbul edilmiş PO-lara əsaslanır; xərclər valyutalar üzrə ayrılır, aylıq qrafik sifarişin yaradılma tarixinə görə qurulur. Ləğv edilmiş nəticələr qənaət hesablamasına daxil edilmir. Bunları bank ödənişi və ya avtomatik valyuta konvertasiyası kimi təqdim etməyin.
 
-Mənbələr: apps/api/src/modules/budgets/budgets.module.ts:30–63,114–137; apps/api/src/modules/dashboard/dashboard.module.ts:86–147
+Mənbələr: apps/api/src/modules/budgets/budgets.module.ts; apps/api/src/modules/requests/requests.module.ts; apps/api/src/modules/dashboard/dashboard.module.ts; apps/api/test/budget-integration.e2e-spec.ts
 
 ## 12. Bir proses. Üç rəhbərlik baxışı.
 

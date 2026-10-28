@@ -1,6 +1,6 @@
 # Утверждения материалов v3: границы подтверждения
 
-Дата: 28 октября 2026 (Asia/Baku). Проверяется кандидат в feature branch, production не обновлён. «Verified» относится к перечисленным целевым сценариям, не означает полный релизный PASS. Актуальный hosted run40590876331 на code e0cd658:195 API +3 contention tests +9 обычных browser tests, отдельный fresh production HTTPS Chromium scenario, build/schemas/upgrade/restore/fresh installation и modeled storage upgrade PASS. LibreOffice/Google Slides rendering PASS. Факты сохранены в ACCEPTANCE-2026-10-28-EXTENDED.json; полная приёмка и оставшиеся ограничения — STATUS.md.
+Дата: 28 октября 2026 (Asia/Baku). Проверенный main `0a27fb026618422f852a857bd9ee39e23a441bd2`: [run40666138522](https://github.com/rashadoni/leadprocure/actions/runs/40666138522),283 API +3 contention +10 native browser +1 fresh HTTPS, build/schemas/обе истории миграций/restore/fresh installation PASS. Production не обновлён. Новые уточнения LP-A09/A10/A13/A19 в текущей ветке требуют собственной приёмки; старый PASS не выдаётся за проверку этих изменений. Актуальные критерии всех20 задач — [TASK-CLOSURE-2026-10-28.md](TASK-CLOSURE-2026-10-28.md).
 
 | Утверждение | Статус | Доказательство / граница |
 |---|---|---|
@@ -14,7 +14,7 @@
 | UBL 2.1 | Verified структура примеров | Два реальных export XML прошли OASIS XSD; unit mapping; Peppol BIS/network — not verified/not implemented |
 | OCDS 1.1.5 | Verified структура примера | Canonical JSON schema; cancelled award; downstream consumer NOT RUN |
 | Расходы и экономия | Verified в targeted сценариях | Валюта выбирается отдельно, активные awarded lots, net basis, дата создания PO; автоматический FX не обещается |
-| Бюджет и обязательства по закупкам | Verified API +fresh production HTTP | 8 budgets tests входят в195 PASS; fresh HTTP подтверждает отдельного approver, обязательства/остаток и изоляцию покупателей. Категория/год/валюта; превышение предупреждает и **не блокирует** согласование. Это бюджетный контроль закупок, не самостоятельная система финансового планирования |
+| Бюджет и обязательства по закупкам | Verified API/native finance UI | Планы в AZN: подразделения/категории/периоды, lifecycle/ревизии/закрытый snapshot, phasing/plan-fact/YoY. По умолчанию превышение предупреждает; настроенный порог блокирует, исключение администратора требует причины. Department scope, exact zero/one-minor limits, competing approvals и назначенный finance step проверены. Это не банковская система и не автоматический FX |
 | Файлы / KYC документы | Verified в проверенных сценариях | Реальные MinIO и ClamAV/EICAR PASS, grant ownership, immutable snapshot, namespace rejection |
 | BLOCKED поставщик | Verified проверенные действия | Invitation, bid, catalog HTTP; общий guard для новых договоров/PO; старые обязательства не прекращаются |
 | Email/Meta follow-up | Conditional | Outbox/recovery/NOT_CONFIGURED/UNKNOWN и signed webhook tests PASS; реальные подключения отсутствуют, внешняя доставка NOT RUN |
@@ -22,6 +22,9 @@
 | AZ/RU/EN | Verified для проверенных экранов | Web build и native browser analytics для трёх языков PASS; это не исчерпывающий редакторский аудит всех строк |
 | ERP, банк, ASAN İmza | Not verified / не заявляется как интеграция | CSV не live ERP; статус PAID не платёж; dev signature не ASAN |
 
-Материалы: `docs/presentations/leadprocure-az/v3/output/`. Все оставшиеся ограничения сохранены явно; полный hosted gate PASS не отменяет provisioning/external limitations и отдельную авторизацию merge/deployment.
+Материалы: `docs/presentations/leadprocure-az/v3/output/`. Все оставшиеся ограничения сохранены явно; полный hosted gate PASS не отменяет внешние/клиентские ограничения и отдельную авторизацию merge/deployment.
 
 Дополнительная совместимость материалов: actual PPTX→LibreOffice и PPTX→native Google Slides→PDF,13+2 страницы;100% текста/шрифты/границы и визуальный осмотр PASS. Desktop Microsoft PowerPoint NOT RUN: подключённой сессии нет. Исходные PPTX и claims не изменены.
+
+
+Уточнение LP-A19: текущие материалы обновляются под принятую бюджетную модель: настраиваемая блокировка, AZN/подразделения/периоды и финансовая роль. Новый native PPTX render ожидается; прежний render не подтверждает изменённые файлы.

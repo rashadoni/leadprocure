@@ -4,6 +4,8 @@ type Lang = 'az' | 'ru' | 'en';
 
 const dict: Record<Lang, Record<string, string>> = {
   az: {
+    analytics_from: 'Başlanğıc ayı', analytics_to: 'Son ay',
+    analytics_load_error: 'Analitikanı yükləmək mümkün olmadı.', analytics_retry: 'Yenidən yoxla',
     currency: "Valyuta",
     delivery_UNKNOWN: "Çatdırılma nəticəsi məlum deyil",
     delivery_FAILED: "Uğursuz cəhd",
@@ -207,6 +209,8 @@ const dict: Record<Lang, Record<string, string>> = {
     chain_active: 'Aktiv', chain_p0_desc: 'İstənilən təsdiqləyən bir kliklə təsdiqləyir — kiçik komandalar üçün.',
   },
   ru: {
+    analytics_from: 'Начальный месяц', analytics_to: 'Конечный месяц',
+    analytics_load_error: 'Не удалось загрузить аналитику.', analytics_retry: 'Повторить',
     currency: "Валюта",
     delivery_UNKNOWN: "Результат отправки неизвестен",
     delivery_FAILED: "Неудачная попытка",
@@ -410,6 +414,8 @@ const dict: Record<Lang, Record<string, string>> = {
     chain_active: 'Активна', chain_p0_desc: 'Любой согласующий утверждает в один клик — для маленьких команд.',
   },
   en: {
+    analytics_from: 'From month', analytics_to: 'To month',
+    analytics_load_error: 'Could not load analytics.', analytics_retry: 'Retry',
     currency: "Currency",
     delivery_UNKNOWN: "Delivery outcome unknown",
     delivery_FAILED: "Failed attempt",

@@ -89,6 +89,28 @@ describe('datasheet audit: files, financial boundaries and concurrency', () => {
     expect(xml).toContain('unitCode="KGM"');expect(xml).toContain('<cbc:Percent>0</cbc:Percent>');expect(xml).not.toContain('<cbc:Percent>18</cbc:Percent>');
     if(process.env.AUDIT_EXPORT_DIR)writeFileSync(`${process.env.AUDIT_EXPORT_DIR}/zero.xml`,xml);
   });
+  for (const mode of ['INCLUSIVE', 'EXCLUSIVE']) {
+    it(`preserves mixed 0/18 percent VAT through receipt, invoice and UBL (${mode})`, async () => {
+      const price = mode === 'INCLUSIVE' ? 11800 : 10000;
+      const { p, i } = await po(1, price, mode, 1800);
+      const second = (await db.query(`INSERT INTO purchase_order_items
+        (po_id,buyer_org_id,supplier_org_id,line_no,name,qty,uom,unit_price_minor,line_total_minor,vat_rate_bp)
+        VALUES($1,$2,$3,2,'Zero VAT item',2,'pcs',5000,10000,0) RETURNING id`, [p,buyer.org.id,supplier.org.id])).rows[0].id;
+      await db.query(`UPDATE purchase_orders SET total_minor=$2 WHERE id=$1`, [p,price+10000]);
+      await http().post(`/orders/${p}/receipts`).set(...auth(buyer))
+        .send({ items: [{ poItemId:i,qty:1 },{ poItemId:second,qty:2 }] }).expect(201);
+      const inv = (await http().post(`/invoices/from-po/${p}`).set(...auth(supplier))
+        .send({ items: [{ poItemId:i,qty:1,unitPriceMinor:price },{ poItemId:second,qty:2,unitPriceMinor:5000 }] }).expect(201)).body;
+      expect([Number(inv.net_minor),Number(inv.vat_minor),Number(inv.gross_minor)]).toEqual([20000,1800,21800]);
+      const xml = (await http().get(`/invoices/${inv.id}/ubl`).set(...auth(buyer)).expect(200)).text;
+      expect(xml.match(/<cac:TaxSubtotal>/g)).toHaveLength(2);
+      expect(xml).toContain('<cbc:Percent>0</cbc:Percent>');
+      expect(xml).toContain('<cbc:Percent>18</cbc:Percent>');
+      expect(xml).toContain('>200.00</cbc:TaxExclusiveAmount>');
+      expect(xml).toContain('>218.00</cbc:PayableAmount>');
+      if(process.env.AUDIT_EXPORT_DIR)writeFileSync(`${process.env.AUDIT_EXPORT_DIR}/mixed-${mode.toLowerCase()}.xml`,xml);
+    });
+  }
   it('disputed overbilling cannot displace a matched invoice when the final receipt arrives',async()=>{
     const {p,i}=await po(20);
     await http().post(`/orders/${p}/receipts`).set(...auth(buyer)).send({items:[{poItemId:i,qty:10}]}).expect(201);
