@@ -1,6 +1,6 @@
 # Утверждения материалов v3: границы подтверждения
 
-Дата: 28 октября 2026 (Asia/Baku). Проверенный main `0a27fb026618422f852a857bd9ee39e23a441bd2`: [run40666138522](https://github.com/rashadoni/leadprocure/actions/runs/40666138522),283 API +3 contention +10 native browser +1 fresh HTTPS, build/schemas/обе истории миграций/restore/fresh installation PASS. Production не обновлён. Новые уточнения LP-A09/A10/A13/A19 в текущей ветке требуют собственной приёмки; старый PASS не выдаётся за проверку этих изменений. Актуальные критерии всех20 задач — [TASK-CLOSURE-2026-10-28.md](TASK-CLOSURE-2026-10-28.md).
+Дата: 28 октября 2026 (Asia/Baku). Проверенный main `0a27fb026618422f852a857bd9ee39e23a441bd2`: [run40666138522](https://github.com/rashadoni/leadprocure/actions/runs/40666138522),283 API +3 contention +10 native browser +1 fresh HTTPS, build/schemas/обе истории миграций/restore/fresh installation PASS. Production не обновлён. Уточнения LP-A09/A10/A13/A19 в кандидате7f52131 прошли собственный run40698739534:285API/3contention/13browser/1fresh HTTPS; новый PPTX render40698739541 PASS(15страниц/100%текста). Кандидат ещё не объединён; это отдельное доказательство от baseline. Актуальные критерии всех20 задач — [TASK-CLOSURE-2026-10-28.md](TASK-CLOSURE-2026-10-28.md).
 
 | Утверждение | Статус | Доказательство / граница |
 |---|---|---|
@@ -11,7 +11,7 @@
 | AI помогает сравнить предложения | Verified heuristic / conditional external | Нули, lot, currency, AZ объяснение PASS; реальные LLM ответы не испытывались; решение принимает человек |
 | Сверка PO/GRN/invoice и контроль количеств | Verified в targeted сценариях | 296 contended HTTP calls с8 параллельными запросами на batch: invoice/GRN/auction/close PASS; это не capacity benchmark; PAID — статус учёта, не банковский перевод |
 | НДС INCLUSIVE/EXCLUSIVE и 0% | Verified для проверенных примеров | Integer calculations + HTTP + snapshot exports; старый invoice без snapshot не экспортируется как заведомо корректный |
-| UBL 2.1 | Verified структура примеров | Два реальных export XML прошли OASIS XSD; unit mapping; Peppol BIS/network — not verified/not implemented |
+| UBL 2.1 | Verified структура примеров | Четыре реальных export XML(включая смешанные0/18% для обоих режимов) прошли OASIS XSD; unit mapping; Peppol BIS/network — not verified/not implemented |
 | OCDS 1.1.5 | Verified структура примера | Canonical JSON schema; cancelled award; downstream consumer NOT RUN |
 | Расходы и экономия | Verified в targeted сценариях | Валюта выбирается отдельно, активные awarded lots, net basis, дата создания PO; автоматический FX не обещается |
 | Бюджет и обязательства по закупкам | Verified API/native finance UI | Планы в AZN: подразделения/категории/периоды, lifecycle/ревизии/закрытый snapshot, phasing/plan-fact/YoY. По умолчанию превышение предупреждает; настроенный порог блокирует, исключение администратора требует причины. Department scope, exact zero/one-minor limits, competing approvals и назначенный finance step проверены. Это не банковская система и не автоматический FX |
@@ -27,4 +27,4 @@
 Дополнительная совместимость материалов: actual PPTX→LibreOffice и PPTX→native Google Slides→PDF,13+2 страницы;100% текста/шрифты/границы и визуальный осмотр PASS. Desktop Microsoft PowerPoint NOT RUN: подключённой сессии нет. Исходные PPTX и claims не изменены.
 
 
-Уточнение LP-A19: текущие материалы обновляются под принятую бюджетную модель: настраиваемая блокировка, AZN/подразделения/периоды и финансовая роль. Новый native PPTX render ожидается; прежний render не подтверждает изменённые файлы.
+Уточнение LP-A19: текущие материалы обновляются под принятую бюджетную модель: настраиваемая блокировка, AZN/подразделения/периоды и финансовая роль. Новый native PPTX render40698739541 PASS; изменённые страницы проверены визуально. Прежний Google Slides render не выдан за проверку изменённых файлов.

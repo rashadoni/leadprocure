@@ -1,0 +1,54 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/11",
+  "head": "7f521313507dd72551d3a15b2ede50896f4d4165",
+  "originalTasks": [
+    "LP-A09",
+    "LP-A10",
+    "LP-A13",
+    "LP-A19"
+  ],
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/40698739534",
+  "status": "PASS",
+  "apiSuites": 25,
+  "apiTests": 285,
+  "contentionTests": 3,
+  "nativeBrowserScenarios": 13,
+  "freshHttpsBrowserScenarios": 1,
+  "ublExports": [
+    "inclusive.xml",
+    "zero.xml",
+    "mixed-inclusive.xml",
+    "mixed-exclusive.xml"
+  ],
+  "schemas": "OASIS UBL2.1 XSD and OCDS1.1.5 PASS",
+  "restoredRlsTables": 51,
+  "newNativeChecks": [
+    "latest currency response wins",
+    "31st-day month presets",
+    "localized failure and retry; stale CSV disabled"
+  ],
+  "independentPptxRun": "https://github.com/rashadoni/leadprocure/actions/runs/40698739541",
+  "pptxPages": 15,
+  "minTextCoverage": 1.0,
+  "renderProblems": [],
+  "visuallyReviewedChangedPages": [
+    "presentation11",
+    "datasheet1",
+    "datasheet2"
+  ],
+  "independentCodexReview": "no blockers after checksum and single-login rereview",
+  "automatedReview": "fallback Anthropic400 insufficient credits; no semantic review",
+  "productionChanged": false,
+  "mergeAuthorized": false,
+  "notRun": [
+    "actual SMTP/Meta delivery(no connections)",
+    "external live LLM",
+    "desktop Microsoft PowerPoint",
+    "actual client/production rollout"
+  ],
+  "rawEvidence": [
+    "/tmp/leadprocure-original-tasks-7f52131.log",
+    "/tmp/leadprocure-lpa19-native-render/render-qa.json"
+  ]
+}

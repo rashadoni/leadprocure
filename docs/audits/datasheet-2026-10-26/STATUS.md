@@ -166,3 +166,8 @@ Commit `dff5b79` отправлен в feature branch; PR #10 остаётся d
 ## Повторная диагностика по запросу пользователя — 27 октября
 
 Отказ подтверждён на последнем commit542ee10; ручной rerun403. В историческом public diagnostic run того же аккаунта найден явный billing lock, однако текущий billing state недоступен через имеющийся API. Проверены альтернативы: Codespaces (недостаточно доступа), Azure DevOps (disabled LeadDrive definitions, pools/queues401), Mac worker (маршрут отсутствует). В аккаунте rashadoni найден успешный Leadprocure Actions run; предложен отдельный PRIVATE task repo, согласие на передачу ветки между аккаунтами запрошено. Подробности и подготовленный следующий шаг: [CI-OPTIONS.md](CI-OPTIONS.md). До разрешения source transfer не выполняется, LP-A19 остаётся открытой.
+
+
+## Приёмка остатка исходных20 задач — 28 октября2026
+
+PR11, candidate7f52131:285API/3contention/13native browser/1freshHTTPS, обе миграционные истории/build/4UBL+OCDS/restore/fresh signed-file license/private storage/real AV PASS(run40698739534). Independent PPTX render40698739541 PASS:15страниц/100%текста/0layout problems; изменённые страницы просмотрены. Закрыты дополнительные пробелы A09/A10 mixed VAT, A13 stale filters/month31/retry и A19 budget policy/material synchronization. Независимый Codex reviewer после исправлений блокеров не нашёл; GitHub review зелёный только fallback Anthropic400 insufficient credits, не semantic review. PR не объединён, production не менялся. SMTP/Meta NOT RUN из-за отсутствия подключений.
