@@ -222,7 +222,7 @@ export default function Requests() {
                   {r.status === 'DRAFT' && !isFinance && <button className="btn small" data-tip={t('tip_submit')} onClick={() => act(r.id, 'submit')}>{t('submit')}</button>}{' '}
                   {r.status === 'SUBMITTED' && (canApprove || (isFinance && r.current_role === 'BUYER_FINANCE')) && (
                     <>
-                      <button className="btn small" data-tip={t('tip_approve')} onClick={() => approveGuard(r.id)}>
+                      <button className="btn small" aria-label={preview[r.id] ? t('confirm_approve') : t('approve')} data-tip={t('tip_approve')} onClick={() => approveGuard(r.id)}>
                         {preview[r.id] ? `✔ ${t('confirm_approve')}` : t('approve')}
                       </button>{' '}
                       <button className="btn small ghost" data-tip={t('tip_reject')} onClick={() => act(r.id, 'reject')}>{t('reject')}</button>
