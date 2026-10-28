@@ -20,7 +20,6 @@ jobs:
     timeout-minutes: 40
     env:
       PUBLIC_API_URL: ${{ inputs.public_api_url || 'http://75.119.156.234:3100' }}
-      RELEASE_OUTPUT_DIR: ${{ runner.temp }}/leadprocure-release
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,13 +30,15 @@ jobs:
       - name: Verify artifact rejection cases
         run: node --test scripts/release/manifest.test.cjs
       - name: Build and package images without production access
+        env:
+          RELEASE_OUTPUT_DIR: ${{ runner.temp }}/leadprocure-release
         run: bash scripts/release/build-images.sh
       - name: Retain private downloadable release package
         uses: actions/upload-artifact@v4
         with:
           name: leadprocure-release-${{ github.sha }}
           path: |
-            ${{ env.RELEASE_OUTPUT_DIR }}/manifest.json
-            ${{ env.RELEASE_OUTPUT_DIR }}/leadprocure-images.tar.gz
+            ${{ runner.temp }}/leadprocure-release/manifest.json
+            ${{ runner.temp }}/leadprocure-release/leadprocure-images.tar.gz
           if-no-files-found: error
           retention-days: 7
