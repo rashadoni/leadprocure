@@ -171,3 +171,8 @@ Commit `dff5b79` отправлен в feature branch; PR #10 остаётся d
 ## Приёмка остатка исходных20 задач — 28 октября2026
 
 PR11, candidate7f52131:285API/3contention/13native browser/1freshHTTPS, обе миграционные истории/build/4UBL+OCDS/restore/fresh signed-file license/private storage/real AV PASS(run40698739534). Independent PPTX render40698739541 PASS:15страниц/100%текста/0layout problems; изменённые страницы просмотрены. Закрыты дополнительные пробелы A09/A10 mixed VAT, A13 stale filters/month31/retry и A19 budget policy/material synchronization. Независимый Codex reviewer после исправлений блокеров не нашёл; GitHub review зелёный только fallback Anthropic400 insufficient credits, не semantic review. PR не объединён, production не менялся. SMTP/Meta NOT RUN из-за отсутствия подключений.
+
+
+## Итог исходных20 задач после разрешённого PR11 — 28 октября2026
+
+PR11 объединён в main `e3e5dbcdcd39dbea67fe0ef3953dfc97b65ddb44`; точное дерево совпадает с проверенным кандидатом7f52131. Полная приёмка [40700763083](https://github.com/rashadoni/leadprocure/actions/runs/40700763083) PASS:285API/3contention/13native browser/1freshHTTPS,4UBL+OCDS/build/обе миграционные истории/restore/fresh private storage+real AV. Материалы не изменились после принятого независимого рендера15страниц40698739541; контрольные суммы совпадают. LP-A09/A10/A13/A19 дополнительные технические пробелы закрыты. Текущая матрица — TASK-CLOSURE-2026-10-28.md; доказательство — ORIGINAL-TASKS-MAIN-ACCEPTANCE-2026-10-28.json. Production не изменён. Реальная SMTP/Meta доставка NOT RUN: подключений нет. Подготовка релиза, установка лицензии и отдельные backup-проекты не подменяют исходные20 задач и сейчас не выполняются.

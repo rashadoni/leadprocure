@@ -40,4 +40,9 @@ dependencies into new unsanctioned features. Owner merge approval is separate on
 new visible changes are concrete and reviewed; deployment is outside this phase.
 
 
-Completed candidate: LP-A09/A10 mixed-rate exports, A13 filter/date/retry and A19 material synchronization PASS. PR11 is prepared for owner merge decision. SMTP/Meta live delivery remains explicitly NOT RUN because no connections exist; external LLM, actual client rollout and desktop Microsoft PowerPoint remain outside verified scope. No optional release work is being substituted for these task criteria.
+Completed candidate: LP-A09/A10 mixed-rate exports, A13 filter/date/retry and A19 material synchronization PASS. PR11 merged by explicit owner approval; exact main e3e5dbcdcd39dbea67fe0ef3953dfc97b65ddb44 passed run40700763083. The reviewed and merged trees are identical(4ade0fb97e8fbcb53322691994c63d53d5c70db2). SMTP/Meta live delivery remains explicitly NOT RUN because no connections exist; external LLM, actual client rollout and desktop Microsoft PowerPoint remain outside verified scope. No optional release work is being substituted for these task criteria.
+
+
+## Final merged-main outcome
+
+PR11 MERGED. Run40700763083: both jobs SUCCESS,285API/3contention/13native browser/1freshHTTPS,4UBL/OCDS/both migrations/build/restore PASS. The changed material files have the exact same hashes as independently rendered15pages; no redundant render was run. All20 technical-task evidence rows are now reconciled; external delivery/client/production limits above remain explicit. See ORIGINAL-TASKS-MAIN-ACCEPTANCE-2026-10-28.json. Next original-task action is actual A17/A19 external delivery acceptance when test connections/recipients exist, not an unrelated release project.
