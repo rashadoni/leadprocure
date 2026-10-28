@@ -50,3 +50,8 @@ Completed candidate: LP-A09/A10 mixed-rate exports, A13 filter/date/retry and A1
 ## Final merged-main outcome
 
 PR11 MERGED. Run40700763083: both jobs SUCCESS,285API/3contention/13native browser/1freshHTTPS,4UBL/OCDS/both migrations/build/restore PASS. The changed material files have the exact same hashes as independently rendered15pages; no redundant render was run. All20 technical-task evidence rows are now reconciled; external delivery/client/production limits above remain explicit. See ORIGINAL-TASKS-MAIN-ACCEPTANCE-2026-10-28.json. Next original-task action is actual A17/A19 external delivery acceptance when test connections/recipients exist, not an unrelated release project.
+
+
+## Explicit criteria verified after correction
+
+Candidatece090a1 / PR12, run40706846700 BOTH jobs PASS:26suites/293API,3contention,13native browser/1freshHTTPS, build/schemas/both migrations/restore/fresh signedlicense/private storage/real AV. Seven new queued decision tests prove A03 retries/cancel-create and A06 re-evaluate/award/disqualify schedules; the eighth new test proves A11 existing-catalog blocking with completion of old obligations. Actual independent reviewer found no blockers. Business source unchanged: these cases confirmed existing safeguards rather than a newly claimed feature fix. This closes those evidence gaps, not every conceivable behavior. See CRITERION-ACCEPTANCE-2026-10-28.json.
