@@ -51,3 +51,9 @@ Created dedicated codex/leadprocure-budget-audit-integration worktree from main9
 
 - User answered «Давай, объединяй PR7–9» to the concrete question naming preserved runtime budgeting, exact limits/scope, finance browser and guide preservation, with283API+3contention+10UI/fresh/dual-upgrade evidence. Permission is merge plus final-main verification only; production is explicitly excluded.
 - Resume from ready/green exact heads7=6551e6c16a95b14c23d5d3b6ad2eeef3b5bdc820,8=5b7b54141da23b51f356ee9b7a2ca53693bf51b1,9=ba78b8c86a9680cf07437a8e9b3643045c59ada8. Merge7, retarget8/main and merge, retarget9/main and merge; use expected heads, no admin/force or deletion. Then verify exact final main on hosted CI. Runtime route remains mixed; no production action.
+
+## 2026-10-28 — all three newly authorized PRs merged
+
+- Exact-head regular merge commits, no admin/force/bypass/branch deletion: PR7→494226be618df952434dc210f47c769fbddf0099; retarget8/main then PR8→ebc078863843cebd71359361a82afd5e4987a105; retarget9/main then PR9→11c351bb7b82209fb2a25d27b69a3f9ac9cb82d8. All MERGED. Origin remains rashadoni/leadprocure.
+- Final fetched main11c351b tree21154b8b2d99bc7ce9c322b232bef339da2c6712 exactly equals accepted final candidateba78b8c tree. Delivered v3 PPTX/PDF source unchanged from previously main974a31b; no repeat office render without a material artifact change. Hosted final-main full acceptance still required for merged SHA.
+- Cancelled only known obsolete intermediate-main runs40654768729(494226b) and40654807523(ebc0788), preserving final-main gate and prior passing evidence. Production/runtime entirely unchanged, no release permission inferred from merge. Current point: three authorized merges complete; exact final-main CI pending. Next: collect outcome/artifacts and update durable proof. Real operator license, protected real backup and reconciled mixed Compose route remain prerequisites for any later deployment decision.
