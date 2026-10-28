@@ -83,19 +83,27 @@ export type OrganizationStatus = (typeof ORGANIZATION_STATUSES)[number];
 export const MEMBERSHIP_ROLES = [
   'BUYER_ADMIN',
   'BUYER_APPROVER',
+  // Finance controller: owns the budget side (plans, thresholds, closing a period) and can
+  // be named as a step in an approval chain, but runs none of procurement itself.
+  'BUYER_FINANCE',
   'BUYER_USER',
   'SUPPLIER_USER',
 ] as const;
 export type MembershipRole = (typeof MEMBERSHIP_ROLES)[number];
 
-export const BUYER_ROLES: MembershipRole[] = ['BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER'];
+export const BUYER_ROLES: MembershipRole[] = ['BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_FINANCE', 'BUYER_USER'];
+
+// Who may act on the budget side at all: the plan, its thresholds and closing a period.
+export const BUDGET_ROLES: MembershipRole[] = ['BUYER_ADMIN', 'BUYER_FINANCE'];
 
 // ---------------- Suppliers ----------------
 export const SUPPLIER_RELATIONSHIP_STATUSES = ['INVITED', 'APPROVED', 'BLOCKED'] as const;
 export type SupplierRelationshipStatus = (typeof SUPPLIER_RELATIONSHIP_STATUSES)[number];
 
 // ---------------- Procurement requests ----------------
-export const REQUEST_STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'] as const;
+// CANCELLED is terminal for an APPROVED request that will never be ordered — it releases
+// the budget commitment the approval was holding.
+export const REQUEST_STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED', 'CANCELLED'] as const;
 export type RequestStatus = (typeof REQUEST_STATUSES)[number];
 
 export const PROCUREMENT_METHODS = ['DIRECT', 'RFQ', 'OPEN_TENDER'] as const;
@@ -157,6 +165,13 @@ export const PO_SUPPLIER_TRANSITIONS: Record<string, PoStatus> = {
 export const PO_BUYER_NEXT: Record<string, PoStatus[]> = {
   DRAFT: ['ISSUED', 'CANCELLED'], ISSUED: ['CANCELLED'], DELIVERED: ['ACCEPTED', 'REJECTED'],
 };
+
+// ---------------- Budgets ----------------
+// A budget is a document with a life of its own: drafted, submitted for approval, put in
+// force, and finally closed when the period is signed off. Only APPROVED and CLOSED
+// budgets hold money — a draft plan must never absorb real commitments.
+export const BUDGET_STATUSES = ['DRAFT', 'PENDING', 'APPROVED', 'CLOSED'] as const;
+export type BudgetStatus = (typeof BUDGET_STATUSES)[number];
 
 // ---------------- Money ----------------
 // Money is always integer minor units (e.g. qəpik for AZN) + ISO 4217 code. Never float.
@@ -230,6 +245,23 @@ export const AUDIT_ACTIONS = [
   'CHANNEL_SAVED',
   'CHANNEL_REMOVED',
   'CHANNEL_TEST_SENT',
+  'DEPARTMENT_CREATED',
+  'DEPARTMENT_UPDATED',
+  'DEPARTMENT_DELETED',
+  'MEMBER_DEPARTMENT_SET',
+  'REQUEST_CANCELLED',
+  'BUDGET_POLICY_UPDATED',
+  'BUDGET_BLOCK_OVERRIDDEN',
+  'BUDGET_ROLLED_OVER',
+  'BUDGETS_IMPORTED',
+  'BUDGET_SUBMITTED',
+  'BUDGET_RECALLED',
+  'BUDGET_APPROVED',
+  'BUDGET_REJECTED',
+  'BUDGET_CLOSED',
+  'BUDGET_REOPENED',
+  'BUDGET_PHASING_SET',
+  'BUDGET_PHASING_CLEARED',
 ] as const;
 
 // ---------------- Invoices (P2P) ----------------

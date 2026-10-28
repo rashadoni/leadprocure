@@ -46,6 +46,18 @@ export class CatalogsService {
     if (c.buyer_org_id !== auth.org_id) throw new BadRequestException('Not your contract');
     await assertSupplierAllowed(m, auth.org_id, c.supplier_org_id);
     if (c.status !== 'ACTIVE') throw new BadRequestException('Contract must be ACTIVE');
+    // A contract has one price list, and the button that calls this gives no visible result
+    // on the page it lives on — so a reader who clicks again because "nothing happened" used
+    // to end up with a second identical draft. An existing DRAFT for this contract is
+    // returned instead. An ACTIVE or archived one is left alone: re-issuing a price list
+    // after the previous one went live is a real thing to want.
+    const existing = (
+      await m.query(
+        `SELECT id FROM catalogs WHERE contract_id = $1 AND status = 'DRAFT' ORDER BY created_at LIMIT 1`,
+        [contractId],
+      )
+    )[0];
+    if (existing) return this.get(existing.id);
     const cat = (
       await m.query(
         `INSERT INTO catalogs(buyer_org_id, supplier_org_id, contract_id, title, currency, created_by)
@@ -117,7 +129,12 @@ export class CatalogsService {
   }
 
   // Instant re-order from an active catalog — becomes a PO (no tender), MOQ enforced.
-  async order(catalogId: string, lines: Array<{ catalogItemId: string; qty: number }>, auth: AccessTokenPayload) {
+  async order(
+    catalogId: string,
+    lines: Array<{ catalogItemId: string; qty: number }>,
+    auth: AccessTokenPayload,
+    departmentId?: string,
+  ) {
     const m = this.rc.manager;
     const cat = await this.requireCatalog(catalogId, auth);
     await assertSupplierAllowed(m, auth.org_id, cat.supplier_org_id);
@@ -140,13 +157,30 @@ export class CatalogsService {
     }
 
     safeMoney(total);
+    // Which cost centre this call-off is charged to: an explicit pick, else the buyer's
+    // home department. Without one the spend lands in the "outside every budget" report.
+    let dep: string | null = departmentId ?? null;
+    if (dep) {
+      const found = await m.query(`SELECT id, is_active FROM departments WHERE id = $1`, [dep]);
+      if (!found.length) throw new BadRequestException('Unknown department');
+      if (!found[0].is_active) throw new BadRequestException('Department is inactive');
+    } else {
+      dep = (
+        await m.query(
+          `SELECT department_id FROM memberships WHERE user_id = $1 AND org_id = $2 AND department_id IS NOT NULL LIMIT 1`,
+          [auth.sub, auth.org_id],
+        )
+      )[0]?.department_id ?? null;
+    }
+
     const n = await m.query(`SELECT next_document_no($1,'PO') AS n`, [auth.org_id]);
     const poNo = `PO-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
     const po = (
       await m.query(
-        `INSERT INTO purchase_orders(contract_id, buyer_org_id, supplier_org_id, po_no, status, total_minor, currency, created_by)
-         VALUES ($1,$2,$3,$4,'DRAFT',$5,$6,$7) RETURNING id`,
-        [cat.contract_id, auth.org_id, cat.supplier_org_id, poNo, total, cat.currency, auth.sub],
+        `INSERT INTO purchase_orders(contract_id, buyer_org_id, supplier_org_id, po_no, status, total_minor,
+           currency, created_by, department_id)
+         VALUES ($1,$2,$3,$4,'DRAFT',$5,$6,$7,$8) RETURNING id`,
+        [cat.contract_id, auth.org_id, cat.supplier_org_id, poNo, total, cat.currency, auth.sub, dep],
       )
     )[0];
     await m.query(`UPDATE purchase_orders SET vat_mode=COALESCE((SELECT vat_mode FROM contracts WHERE id=$2),'EXCLUSIVE') WHERE id=$1`,[po.id,cat.contract_id]);
@@ -191,6 +225,9 @@ class CatalogOrderItemDto {
 }
 class CatalogOrderDto {
   @IsArray() @ValidateNested({ each: true }) @Type(() => CatalogOrderItemDto) items!: CatalogOrderItemDto[];
+  // A catalog call-off skips the request stage, so it is the only chance to say whose
+  // budget it comes out of. Omitted → the ordering user's home department.
+  @IsOptional() @IsUUID() departmentId?: string;
 }
 
 @Controller('catalogs')
@@ -238,7 +275,7 @@ export class CatalogsController {
   @RequiresNewWork()
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
   order(@Param('id') id: string, @Body() body: CatalogOrderDto, @CurrentUser() auth: AccessTokenPayload) {
-    return this.catalogs.order(id, body.items, auth);
+    return this.catalogs.order(id, body.items, auth, body.departmentId);
   }
 }
 
