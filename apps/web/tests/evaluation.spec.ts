@@ -80,11 +80,11 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
   await expect(groupB.getByRole('button', { name: /Browser audit s1/ })).toBeEnabled();
   const aiCard = page.locator('.card').filter({ has: page.getByRole('heading', { name: /AI recommendation/ }) });
   await page.getByRole('combobox', { name: 'Lots', exact: true }).selectOption(lotB.id);
-  await aiCard.getByRole('button', { name: 'Analyze', exact: true }).click();
+  await aiCard.getByRole('button', { name: /^Analyze\b/ }).click();
   const aiRow = aiCard.locator('tr').filter({ hasText: 'Browser audit s1' });
-  await expect(aiRow.getByRole('button', { name: 'Award winner', exact: true })).toBeVisible();
+  await expect(aiRow.getByRole('button', { name: /^Award winner\b/ })).toBeVisible();
   // Choose the non-top bid on the second lot with the required written justification.
-  await awardThrough(aiRow.getByRole('button', { name: 'Award winner', exact: true }), 'Distinct delivery requirement for lot B');
+  await awardThrough(aiRow.getByRole('button', { name: /^Award winner\b/ }), 'Distinct delivery requirement for lot B');
   await expect(groupB.locator('.badge.AWARDED')).toBeVisible();
   const detail = await call(`/events/${event.id}`, undefined, buyer.accessToken, 'get', 200);
   expect(detail.awards.filter((a: any) => !a.cancelled_at).map((a: any) => [a.lot_id, a.winning_bid_id, a.evaluation_id])).toEqual(expect.arrayContaining([
@@ -97,7 +97,7 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
   for (const [lot, supplier, total, itemName] of [[lotA, s2, 9500, 'Item A'], [lotB, s1, 15000, 'Item B']] as const) {
     await page.goto(`/buyer/events/${event.id}`);
     const response = page.waitForResponse(r => r.url().includes('/contracts/from-award/') && r.request().method() === 'POST');
-    await page.getByRole('button', { name: `Create contract · ${lot.title}`, exact: true }).click();
+    await page.getByRole('button', { name: `Create contract · ${lot.title}` }).click();
     const r = await response; expect(r.status(), await r.text()).toBe(201);
     const contract = await r.json();
     await page.waitForURL('**/buyer/contracts');
@@ -123,7 +123,7 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
   } finally { await clock.end(); }
   await page.goto(`/buyer/events/${auction.id}`);
   const finalized = page.waitForResponse(r => r.url().endsWith(`/events/${auction.id}/auction/finalize`) && r.request().method() === 'POST');
-  await page.getByRole('button', { name: 'Finalize', exact: true }).click();
+  await page.getByRole('button', { name: /^Finalize\b/ }).click();
   expect((await finalized).status()).toBe(201);
   const auctionLot = page.getByRole('group', { name: auction.lots[0].title, exact: true });
   await expect(auctionLot.getByRole('button').first()).toHaveText(/Browser audit s2.*⭐/);
@@ -131,7 +131,7 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
   await expect(page.getByRole('button', { name: 'Score', exact: true })).toHaveCount(0);
   await awardThrough(auctionLot.getByRole('button', { name: /Browser audit s2/ }), 'Best accepted auction price', auction.id);
   const auctionContractResponse = page.waitForResponse(r => r.url().includes('/contracts/from-award/') && r.request().method() === 'POST');
-  await page.getByRole('button', { name: `Create contract · ${auction.lots[0].title}`, exact: true }).click();
+  await page.getByRole('button', { name: `Create contract · ${auction.lots[0].title}` }).click();
   const auctionContract = await (await auctionContractResponse).json();
   await page.waitForURL('**/buyer/contracts');
   expect(auctionContract.supplier_org_id).toBe(s2.org.id);
