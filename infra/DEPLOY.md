@@ -35,7 +35,8 @@ Create the operator-owned `LICENSE_DIR` and put `leadprocure.license` there. The
 directory is mounted read-only into the API and must already exist. **Never ship
 the issuer's private key.** Missing/invalid licenses produce restricted health
 status; no development fallback is available in production. Commercial client
-licensing and renewal remain separate acceptance steps. See `license/README.md`.
+licensing and renewal remain separate acceptance steps. See `infra/license/README.md`
+from the repository root.
 
 Set HTTPS `WEB_ORIGIN`, `PUBLIC_API_URL` and `S3_PUBLIC_URL` to addresses reachable
 by the browser. SigV4 binds the storage host: rewriting a signed URL breaks it.
@@ -91,6 +92,12 @@ digests. Preserve volumes, DB role passwords and the bid encryption key. Migrati
 are forward-only; application rollback alone may not reverse a schema change.
 Never run an unreviewed `git pull && up --build` against the dirty runtime checkout.
 Reconcile the release route and get owner authorization before any mutation.
+
+The opt-in hosted API/web packaging workflow and checksum verification are
+documented in `scripts/release/README.md`. It publishes downloadable image archives,
+not registry digests, and does not deploy. Existing operator backups may be used
+once coverage, freshness and recovery suitability are verified; this does not
+require creating a duplicate backup system.
 
 After release, verify health **and license source/status**, role/organization
 isolation, procurement approval and sealed-bid visibility, document access/AV,
