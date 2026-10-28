@@ -33,6 +33,7 @@ export default function Requests() {
   useEffect(() => { api.get('/categories').then((r) => setCats(r.data.map((c: any) => c.code))).catch(() => {}); }, []);
   useEffect(() => { api.get('/departments').then((r) => setDeps(r.data)).catch(() => {}); }, []);
   const canApprove = ['BUYER_ADMIN', 'BUYER_APPROVER'].includes(session?.org.role ?? '');
+  const isFinance = session?.org.role === 'BUYER_FINANCE';
   const isAdmin = session?.org.role === 'BUYER_ADMIN';
 
   const load = () => api.get('/requests', { params: { ...(q ? { q } : {}), ...(depFilter ? { departmentId: depFilter } : {}), page, pageSize: PAGE_SIZE } })
@@ -141,7 +142,7 @@ export default function Requests() {
   return (
     <>
       <h1>{t('requests')}</h1>
-      <div className="card">
+      {!isFinance && <div className="card">
         <form onSubmit={create}>
           <div className="row">
             <div style={{ flex: 2 }}><label htmlFor="request-title">{t('title')}</label>
@@ -182,7 +183,7 @@ export default function Requests() {
           </div>
           {err && <div className="error">{err}</div>}
         </form>
-      </div>
+      </div>}
       <div className="card">
         <div style={{ display: 'flex', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
           <input placeholder={`🔎 ${t('title')}…`} value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} style={{ maxWidth: 320 }} />
@@ -218,8 +219,8 @@ export default function Requests() {
                 </td>
                 <td>{r.method_resolved ?? '—'}</td>
                 <td>
-                  {r.status === 'DRAFT' && <button className="btn small" data-tip={t('tip_submit')} onClick={() => act(r.id, 'submit')}>{t('submit')}</button>}{' '}
-                  {r.status === 'SUBMITTED' && canApprove && (
+                  {r.status === 'DRAFT' && !isFinance && <button className="btn small" data-tip={t('tip_submit')} onClick={() => act(r.id, 'submit')}>{t('submit')}</button>}{' '}
+                  {r.status === 'SUBMITTED' && (canApprove || (isFinance && r.current_role === 'BUYER_FINANCE')) && (
                     <>
                       <button className="btn small" data-tip={t('tip_approve')} onClick={() => approveGuard(r.id)}>
                         {preview[r.id] ? `✔ ${t('confirm_approve')}` : t('approve')}

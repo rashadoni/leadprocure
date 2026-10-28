@@ -98,7 +98,8 @@ describe('runtime budget and procurement audit integration', () => {
     let blocked = 0;
     let settled: PromiseSettledResult<any>[] = [];
     try {
-      for (let i = 0; i < 100; i++) {
+      for (let i = 0; i < 150; i++) {
+        await owner.query('SELECT pg_stat_clear_snapshot()');
         const r = await owner.query("SELECT count(*)::int AS n FROM pg_stat_activity WHERE wait_event='advisory' AND query LIKE '%hashtextextended($1,85)%'");
         blocked = r.rows[0].n; if (blocked >= 2) break;
         await new Promise(resolve => setTimeout(resolve, 20));

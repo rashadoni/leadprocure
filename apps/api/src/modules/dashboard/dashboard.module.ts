@@ -194,7 +194,7 @@ export class DashboardService {
           JOIN bid_items bi ON bi.bid_id=b.id
           JOIN event_items ei ON ei.id=bi.event_item_id AND ei.lot_id=a.lot_id
           WHERE e.evaluation_currency=$3 AND b.currency=$3
-            AND a.created_at >= $1::date AND a.created_at < ($2::date + interval '1 month')
+            AND a.awarded_at >= $1::date AND a.awarded_at < ($2::date + interval '1 month')
           GROUP BY e.id
         )
         SELECT COALESCE(sum(est), 0)::bigint AS estimated, COALESCE(sum(awd), 0)::bigint AS awarded,
