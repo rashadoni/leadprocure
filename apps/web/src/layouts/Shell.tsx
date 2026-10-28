@@ -8,6 +8,7 @@ export default function Shell() {
   const { t, lang, setLang } = useI18n();
   const nav = useNavigate();
   if (!session) return null;
+  const isFinance = session.org.role === 'BUYER_FINANCE';
   const isBuyer = session.org.kind === 'BUYER' || session.org.kind === 'BOTH';
 
   return (
@@ -18,15 +19,15 @@ export default function Shell() {
           <>
             <NavLink to="/buyer/dashboard">{t('dashboard')}</NavLink>
             <NavLink to="/buyer/requests">{t('requests')}</NavLink>
-            <NavLink to="/buyer/events">{t('events')}</NavLink>
-            <NavLink to="/buyer/contracts">{t('contracts')}</NavLink>
-            <NavLink to="/buyer/invoices">{t('invoices')}</NavLink>
-            <NavLink to="/buyer/catalogs">{t('catalogs')}</NavLink>
+            {!isFinance && <NavLink to="/buyer/events">{t('events')}</NavLink>}
+            {!isFinance && <NavLink to="/buyer/contracts">{t('contracts')}</NavLink>}
+            {!isFinance && <NavLink to="/buyer/invoices">{t('invoices')}</NavLink>}
+            {!isFinance && <NavLink to="/buyer/catalogs">{t('catalogs')}</NavLink>}
             <NavLink to="/buyer/budgets">{t('budgets')}</NavLink>
             <NavLink to="/buyer/analytics">{t('analytics')}</NavLink>
-            <NavLink to="/buyer/logistics">{t('logistics')}</NavLink>
-            <NavLink to="/buyer/suppliers">{t('suppliers')}</NavLink>
-            <NavLink to="/buyer/verification">{t('verification')}</NavLink>
+            {!isFinance && <NavLink to="/buyer/logistics">{t('logistics')}</NavLink>}
+            {!isFinance && <NavLink to="/buyer/suppliers">{t('suppliers')}</NavLink>}
+            {!isFinance && <NavLink to="/buyer/verification">{t('verification')}</NavLink>}
             <NavLink to="/buyer/settings">{t('settings')}</NavLink>
           </>
         ) : (
@@ -59,9 +60,10 @@ export default function Shell() {
         </div>
       </aside>
       <main className="main">
+        {/* In the flow, ABOVE the section content — a floating overlay covered the page */}
+        <Guide />
         <Outlet />
       </main>
-      <Guide />
     </div>
   );
 }

@@ -13,8 +13,16 @@ export default function Settings() {
   const [approvals, setApprovals] = useState<any[]>([]);
   const [cats, setCats] = useState<any[]>([]);
   const [newCat, setNewCat] = useState({ code: '', name: '' });
+  const [deps, setDeps] = useState<any[]>([]);
+  const [newDep, setNewDep] = useState({ code: '', name: '', parentId: '' });
   const [nu, setNu] = useState({ email: '', fullName: '', password: '', role: 'BUYER_USER' });
+  // Budget thresholds are an organisation-wide RULE about approvals, which is what this
+  // page is for — they used to sit on the Budgets screen, in the way of the numbers.
+  const [policy, setPolicy] = useState<{ warnPct: number; blockPct: number | null; allowOverride: boolean } | null>(null);
+  const [policyDraft, setPolicyDraft] = useState<{ warnPct: string; blockPct: string; allowOverride: boolean } | null>(null);
+  const [policySaved, setPolicySaved] = useState(false);
   const isAdmin = session?.org.role === 'BUYER_ADMIN';
+  const canManageBudgetPolicy = isAdmin || session?.org.role === 'BUYER_FINANCE';
 
   // Method-policy editor (value bands → procurement method).
   const [mpEditing, setMpEditing] = useState(false);
@@ -28,6 +36,15 @@ export default function Settings() {
     api.get('/requests/method-policies').then((r) => setPolicies(r.data));
     api.get('/requests/approval-policies').then((r) => setApprovals(r.data));
     api.get('/categories').then((r) => setCats(r.data)).catch(() => {});
+    api.get('/departments').then((r) => setDeps(r.data)).catch(() => {});
+    api.get('/budgets/policy').then((r) => {
+      setPolicy(r.data);
+      setPolicyDraft({
+        warnPct: String(r.data.warnPct),
+        blockPct: r.data.blockPct == null ? '' : String(r.data.blockPct),
+        allowOverride: r.data.allowOverride,
+      });
+    }).catch(() => {});
   };
   useEffect(load, []);
 
@@ -53,13 +70,20 @@ export default function Settings() {
   const CHAIN_PRESETS: Record<string, { label: string; policies: any[] }> = {
     p0: { label: t('chain_p0'), policies: [] },
     p1: { label: t('chain_p1'), policies: [{ minAmountMinor: 0, maxAmountMinor: null, steps: [{ order: 1, role: 'BUYER_APPROVER' }] }] },
+    // Finance in the chain: over the threshold, the controller signs before the spend is
+    // allowed. approval_steps already checks the acting user's role, so naming the finance
+    // role here is all it takes.
+    p3: { label: t('chain_p3'), policies: [
+      { minAmountMinor: 0, maxAmountMinor: 5_000_000, steps: [{ order: 1, role: 'BUYER_APPROVER' }] },
+      { minAmountMinor: 5_000_000, maxAmountMinor: null, steps: [{ order: 1, role: 'BUYER_APPROVER' }, { order: 2, role: 'BUYER_FINANCE' }] },
+    ] },
     p2: { label: t('chain_p2'), policies: [
       { minAmountMinor: 0, maxAmountMinor: 5_000_000, steps: [{ order: 1, role: 'BUYER_APPROVER' }] },
       { minAmountMinor: 5_000_000, maxAmountMinor: null, steps: [{ order: 1, role: 'BUYER_APPROVER' }, { order: 2, role: 'BUYER_ADMIN' }] },
     ] },
   };
   const setChain = (key: string) => run(() => api.put('/requests/approval-policies', { policies: CHAIN_PRESETS[key].policies }));
-  const ROLE_ICO: Record<string, string> = { BUYER_ADMIN: '👑', BUYER_APPROVER: '🖊', BUYER_USER: '👤' };
+  const ROLE_ICO: Record<string, string> = { BUYER_ADMIN: '👑', BUYER_APPROVER: '🖊', BUYER_FINANCE: '💰', BUYER_USER: '👤' };
   // Which preset matches the currently saved chain (normalize camel/snake + ordering).
   const chainSig = (list: any[]) => JSON.stringify(
     (list ?? [])
@@ -72,6 +96,27 @@ export default function Settings() {
   );
   const activeChainKey = Object.entries(CHAIN_PRESETS).find(([, pr]) => chainSig(pr.policies) === chainSig(approvals))?.[0];
 
+  // Explicit save. These fields can stop spending across the company; saving them on blur,
+  // the way they behaved before, was far too quiet for what they do.
+  const savePolicy = async () => {
+    if (!policyDraft) return;
+    try {
+      const { data } = await api.put('/budgets/policy', {
+        warnPct: Number(policyDraft.warnPct),
+        blockPct: policyDraft.blockPct === '' ? null : Number(policyDraft.blockPct),
+        allowOverride: policyDraft.allowOverride,
+      });
+      setPolicy(data);
+      setPolicySaved(true);
+      setTimeout(() => setPolicySaved(false), 2500);
+    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  };
+  const policyDirty = !!policy && !!policyDraft && (
+    Number(policyDraft.warnPct) !== policy.warnPct
+    || (policyDraft.blockPct === '' ? null : Number(policyDraft.blockPct)) !== policy.blockPct
+    || policyDraft.allowOverride !== policy.allowOverride
+  );
+
   const addUser = (e: FormEvent) => {
     e.preventDefault();
     run(() => api.post('/settings/users', nu)).then(() => setNu({ email: '', fullName: '', password: '', role: 'BUYER_USER' }));
@@ -83,7 +128,7 @@ export default function Settings() {
       <div className="card">
         <h3>{t('users')}</h3>
         <table>
-          <thead><tr><th>{t('email')}</th><th>{t('name')}</th><th>{t('role')}</th></tr></thead>
+          <thead><tr><th>{t('email')}</th><th>{t('name')}</th><th>{t('role')}</th><th>{t('department')}</th></tr></thead>
           <tbody>
             {users.map((u) => (
               <tr key={u.id}>
@@ -97,6 +142,20 @@ export default function Settings() {
                     </select>
                   ) : (
                     <span className="badge INVITED">{roleLabel(u.role)}</span>
+                  )}
+                </td>
+                <td>
+                  {/* home department = the default on this user's requests */}
+                  {isAdmin ? (
+                    <select value={u.department_id ?? ''}
+                      onChange={(e) => run(() => api.post(`/settings/users/${u.id}/department`, { departmentId: e.target.value || null }))}>
+                      <option value="">—</option>
+                      {deps.filter((d) => d.is_active || d.id === u.department_id).map((d) => (
+                        <option key={d.id} value={d.id}>{d.code}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="hint">{u.department_code ?? '—'}</span>
                   )}
                 </td>
               </tr>
@@ -144,6 +203,148 @@ export default function Settings() {
       </div>
 
       <div className="card">
+        <h3>{t('dep_hdr')}</h3>
+        <div className="hint" style={{ marginBottom: 10 }}>{t('dep_hint')}</div>
+        <table>
+          <thead><tr>
+            <th>{t('dep_code')}</th><th>{t('name')}</th><th>{t('dep_parent')}</th>
+            <th>{t('dep_usage')}</th><th>{t('status')}</th>{isAdmin && <th>{t('actions')}</th>}
+          </tr></thead>
+          <tbody>
+            {deps.length === 0 && <tr><td colSpan={isAdmin ? 6 : 5} className="hint">—</td></tr>}
+            {deps.map((d) => (
+              <tr key={d.id}>
+                <td>{d.code}</td>
+                <td>{d.name || '—'}</td>
+                <td className="hint">{d.parent_code ?? '—'}</td>
+                <td className="hint">{d.usage_count}</td>
+                <td>{d.is_active ? <span className="badge APPROVED">{t('dep_active')}</span> : <span className="badge INVITED">{t('dep_inactive')}</span>}</td>
+                {isAdmin && (
+                  <td>
+                    {/* retiring beats deleting: a department carrying spend must keep its history */}
+                    <button className="btn small ghost" data-tip={d.is_active ? t('dep_deactivate') : t('dep_activate')}
+                      onClick={() => run(() => api.put(`/departments/${d.id}`, { code: d.code, name: d.name ?? undefined, parentId: d.parent_id ?? undefined, isActive: !d.is_active }))}>
+                      {d.is_active ? '⏸' : '▶'}
+                    </button>{' '}
+                    <button className="btn small ghost" data-tip={t('tip_delete')} disabled={d.usage_count > 0}
+                      onClick={() => run(() => api.delete(`/departments/${d.id}`))}>🗑</button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {isAdmin && (
+          <form className="row" style={{ maxWidth: 760, marginTop: 12 }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!newDep.code.trim()) return;
+              run(() => api.post('/departments', {
+                code: newDep.code.trim(),
+                ...(newDep.name.trim() ? { name: newDep.name.trim() } : {}),
+                ...(newDep.parentId ? { parentId: newDep.parentId } : {}),
+              })).then(() => setNewDep({ code: '', name: '', parentId: '' }));
+            }}>
+            <div><label>{t('dep_code')}</label><input value={newDep.code} onChange={(e) => setNewDep({ ...newDep, code: e.target.value })} placeholder="IT" /></div>
+            <div><label>{t('name')}</label><input value={newDep.name} onChange={(e) => setNewDep({ ...newDep, name: e.target.value })} /></div>
+            <div><label>{t('dep_parent')}</label>
+              <select value={newDep.parentId} onChange={(e) => setNewDep({ ...newDep, parentId: e.target.value })}>
+                <option value="">—</option>
+                {deps.map((d) => <option key={d.id} value={d.id}>{d.code}</option>)}
+              </select></div>
+            <button className="btn">+</button>
+          </form>
+        )}
+
+        {isAdmin && mpEditing && (
+          <div style={{ marginTop: 8 }}>
+            <table>
+              <thead><tr><th>{t('category')}</th><th>{t('from')} (AZN)</th><th>{t('to')} (AZN)</th><th>{t('method')}</th><th /></tr></thead>
+              <tbody>
+                {mpDraft.map((d, i) => (
+                  <tr key={i}>
+                    <td>
+                      <input list="mp-cats" value={d.category} style={{ width: 130 }} placeholder="*"
+                        onChange={(e) => setMpDraft(mpDraft.map((x, j) => j === i ? { ...x, category: e.target.value || '*' } : x))} />
+                    </td>
+                    <td>
+                      <input type="number" min={0} value={d.minAzn} style={{ width: 110 }}
+                        onChange={(e) => setMpDraft(mpDraft.map((x, j) => j === i ? { ...x, minAzn: Number(e.target.value) } : x))} />
+                    </td>
+                    <td>
+                      <input type="number" min={0} value={d.maxAzn} style={{ width: 110 }} placeholder="∞"
+                        onChange={(e) => setMpDraft(mpDraft.map((x, j) => j === i ? { ...x, maxAzn: e.target.value } : x))} />
+                    </td>
+                    <td>
+                      <select value={d.method}
+                        onChange={(e) => setMpDraft(mpDraft.map((x, j) => j === i ? { ...x, method: e.target.value } : x))}>
+                        <option value="DIRECT">{MP_ICO.DIRECT} {mLabel('DIRECT')}</option>
+                        <option value="RFQ">{MP_ICO.RFQ} {mLabel('RFQ')}</option>
+                        <option value="OPEN_TENDER">{MP_ICO.OPEN_TENDER} {mLabel('OPEN_TENDER')}</option>
+                      </select>
+                    </td>
+                    <td><button className="btn small ghost" onClick={() => setMpDraft(mpDraft.filter((_, j) => j !== i))}>✕</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <datalist id="mp-cats">
+              <option value="*" />
+              {cats.map((c: any) => <option key={c.code} value={c.code} />)}
+            </datalist>
+            <button className="btn small ghost" onClick={() => {
+              const last = mpDraft[mpDraft.length - 1];
+              setMpDraft([...mpDraft, { category: last?.category ?? '*', minAzn: Number(last?.maxAzn) || 0, maxAzn: '', method: 'RFQ' }]);
+            }}>{t('mp_add_band')}</button>
+            <button className="btn small" style={{ marginLeft: 6 }} disabled={!mpDraft.length}
+              onClick={() => run(async () => {
+                await api.put('/requests/method-policies', {
+                  policies: mpDraft.map((d) => ({
+                    category: d.category.trim() || '*',
+                    minAmountMinor: Math.round(Number(d.minAzn) * 100),
+                    maxAmountMinor: d.maxAzn === '' ? null : Math.round(Number(d.maxAzn) * 100),
+                    method: d.method,
+                  })),
+                });
+                setMpEditing(false);
+              })}>{t('followups_save')}</button>
+            <button className="btn small ghost" onClick={() => setMpEditing(false)}>{t('followups_cancel')}</button>
+          </div>
+        )}
+      </div>
+
+      {policyDraft && (
+        <div className="card">
+          <h3>{t('bud_thresholds')}</h3>
+          <div className="hint" style={{ marginBottom: 12 }}>{t('bud_thresholds_hint')}</div>
+          <div className="row" style={{ alignItems: 'flex-end', maxWidth: 880 }}>
+            <div><label>{t('bud_warn_label')}</label>
+              <input type="number" min={1} max={1000} disabled={!canManageBudgetPolicy} value={policyDraft.warnPct}
+                onChange={(e) => setPolicyDraft({ ...policyDraft, warnPct: e.target.value })} /></div>
+            <div><label>{t('bud_block_label')}</label>
+              <input type="number" min={1} max={1000} disabled={!canManageBudgetPolicy} placeholder={t('bud_block_off')}
+                value={policyDraft.blockPct}
+                onChange={(e) => setPolicyDraft({ ...policyDraft, blockPct: e.target.value })} /></div>
+            <div><label>{t('bud_override_label')}</label>
+              <select disabled={!canManageBudgetPolicy} value={policyDraft.allowOverride ? '1' : '0'}
+                onChange={(e) => setPolicyDraft({ ...policyDraft, allowOverride: e.target.value === '1' })}>
+                <option value="1">{t('yes')}</option>
+                <option value="0">{t('no')}</option>
+              </select></div>
+            {canManageBudgetPolicy && (
+              <div style={{ flex: '0 0 auto' }}>
+                <button className="btn" disabled={!policyDirty} onClick={savePolicy}>{t('save')}</button>
+              </div>
+            )}
+          </div>
+          <div className="hint" style={{ marginTop: 10 }}>
+            {policyDraft.blockPct === '' ? t('bud_block_off_hint') : t('bud_block_on_hint')}
+            {policySaved && <b style={{ color: 'var(--ok)', marginLeft: 8 }}>✓ {t('saved')}</b>}
+          </div>
+        </div>
+      )}
+
+      <div className="card">
         <h3>⚖️ {t('method_policy')}</h3>
         <p className="hint" style={{ marginTop: 2 }}>{t('method_policy_desc')}</p>
 
@@ -158,9 +359,9 @@ export default function Settings() {
             <div className="hint" style={{ marginBottom: 4 }}>
               {cat === '*' ? `🌍 ${t('mp_all_categories')}` : `🏷 ${cat}`}
             </div>
-            <div style={{ display: 'flex', borderRadius: 10, overflow: 'hidden', border: '1px solid #e2e6ea' }}>
+            <div className="mp-scale" style={{ display: 'flex', borderRadius: 10, overflow: 'hidden', border: '1px solid #e2e6ea' }}>
               {(bands as any[]).sort((a, b) => Number(a.min_amount_minor) - Number(b.min_amount_minor)).map((p) => (
-                <div key={p.id} style={{
+                <div key={p.id} className="mp-band" style={{
                   flex: 1, padding: '8px 12px', borderRight: '2px solid #fff',
                   background: MP_COLOR[p.method] ?? '#f5f5f5',
                 }}>
