@@ -17,6 +17,7 @@
 
 import { execFileSync } from 'child_process';
 import {assertDemoTarget} from './demo-target.mjs';
+import { createHash } from 'crypto';
 
 const API = process.argv[2] ?? 'http://localhost:3000';
 const {pg:PG,dbName:DB} = assertDemoTarget(process.env,API);
@@ -38,9 +39,23 @@ const TXT = {
     houseReq: 'Хозтовары для офиса', houseItem: 'Бумага А4, пачка',
     amendReason: 'Увеличиваем объём: открылся второй офис',
     budgetAll: 'Общий бюджет', budgetIT: 'IT-бюджет',
-    catNames: { IT: 'ИТ и техника', OFFICE: 'Офис и хозтовары', CONSTRUCTION: 'Строительство и ремонт', FUEL: 'Топливо', LOGISTICS: 'Логистика и склад' },
+    catNames: { IT: 'ИТ и техника', OFFICE: 'Офис и хозтовары', CONSTRUCTION: 'Строительство и ремонт', FUEL: 'Топливо', LOGISTICS: 'Логистика и склад' , TRAINING: 'Обучение' },
     catTitle: 'Офисные расходники — Supply One', catItem1: 'Бумага А4 80г', catItem2: 'Тонер HP 26A', uomReam: 'пачка', uomPcs: 'шт',
     qnaQ: 'Допускается ли поставка кресел партиями по 10 штук?', qnaA: 'Да, партиями допускается, полный объём — до конца месяца.',
+    depCenter: 'Головной офис', depIt: 'Информационные технологии', depOps: 'Операции',
+    invOkReq: 'Картриджи для офисных принтеров', invOkItem: 'Картридж лазерный',
+    invBadReq: 'Резервные диски для серверов', invBadItem: 'Диск SSD 480 ГБ',
+    invPayReq: 'Стеллажи для склада', invPayItem: 'Стеллаж металлический',
+    shipCustoms: 'Ожидает таможенного оформления', shipException: 'Повреждение упаковки, составлен акт',
+    verOk: 'ИНН и банковские реквизиты сверены, лицензия действует до конца года.',
+    liveRfqReq: 'Ноутбуки и мониторы для отдела продаж', liveRfqEv: 'Тендер: ноутбуки и мониторы',
+    liveRfqItem1: 'Ноутбук 14", 16 ГБ', liveRfqItem2: 'Монитор 27"',
+    liveAucReq: 'Офисная бумага, годовой объём', liveAucEv: 'Аукцион: офисная бумага', liveAucItem: 'Бумага А4, пачка',
+    budgetItDept: 'Бюджет отдела IT', budgetOpsQ: 'Операции — квартал', budgetOffice: 'Офисное снабжение',
+    budgetTraining: 'Обучение',
+    catRows: [['Ручка шариковая, синяя', 'шт', 120, 50], ['Папка-регистратор 75 мм', 'шт', 480, 10], ['Степлер №24', 'шт', 850, 5], ['Скрепки 28 мм, 100 шт', 'уп', 95, 20], ['Маркер для доски', 'шт', 210, 10], ['Блок для записей 90×90', 'шт', 340, 10], ['Клейкая лента 48 мм', 'шт', 190, 12], ['Файл-вкладыш А4, 100 шт', 'уп', 720, 5]],
+    lastYearIt: 'Ноутбуки (прошлый год)', lastYearOps: 'Хозтовары (прошлый год)', lastYearFuel: 'Топливо (прошлый год)',
+    budgetOpsYear: 'Операции — год', budgetOfficeQ: 'Офисное снабжение', budgetNextYear: 'Головной офис',
     justification: 'Лучшее соотношение цена/срок по взвешенной оценке',
   },
   az: {
@@ -54,9 +69,23 @@ const TXT = {
     houseReq: 'Ofis üçün təsərrüfat malları', houseItem: 'A4 kağız, top',
     amendReason: 'Həcmi artırırıq: ikinci ofis açıldı',
     budgetAll: 'Ümumi büdcə', budgetIT: 'IT büdcəsi',
-    catNames: { IT: 'İT və texnika', OFFICE: 'Ofis və təsərrüfat', CONSTRUCTION: 'Tikinti və təmir', FUEL: 'Yanacaq', LOGISTICS: 'Logistika və anbar' },
+    catNames: { IT: 'İT və texnika', OFFICE: 'Ofis və təsərrüfat', CONSTRUCTION: 'Tikinti və təmir', FUEL: 'Yanacaq', LOGISTICS: 'Logistika və anbar' , TRAINING: 'Təlim' },
     catTitle: 'Ofis sərfiyyatı — Supply One', catItem1: 'A4 kağız 80q', catItem2: 'Toner HP 26A', uomReam: 'top', uomPcs: 'ədəd',
     qnaQ: 'Kresloları 10 ədədlik partiyalarla çatdırmaq olarmı?', qnaA: 'Bəli, partiyalarla olar, tam həcm — ay sonuna qədər.',
+    depCenter: 'Baş ofis', depIt: 'İnformasiya texnologiyaları', depOps: 'Əməliyyat',
+    invOkReq: 'Ofis printerləri üçün kartriclər', invOkItem: 'Lazer kartric',
+    invBadReq: 'Serverlər üçün ehtiyat disklər', invBadItem: 'SSD disk 480 GB',
+    invPayReq: 'Anbar üçün rəf sistemi', invPayItem: 'Metal rəf',
+    shipCustoms: 'Gömrük rəsmiləşdirilməsi gözlənilir', shipException: 'Qablaşdırma zədəsi, akt tərtib edildi',
+    verOk: 'VÖEN və bank rekvizitləri yoxlanıldı, lisenziya ilin sonuna qədər etibarlıdır.',
+    liveRfqReq: 'Satış şöbəsi üçün noutbuk və monitorlar', liveRfqEv: 'Tender: noutbuk və monitorlar',
+    liveRfqItem1: 'Noutbuk 14 düym, 16 GB', liveRfqItem2: 'Monitor 27 düym',
+    liveAucReq: 'Ofis kağızı, illik həcm', liveAucEv: 'Auksion: ofis kağızı', liveAucItem: 'A4 kağız, top',
+    budgetItDept: 'IT şöbəsi', budgetOpsQ: 'OPS rüblük', budgetOffice: 'Ofis təchizatı',
+    budgetTraining: 'Tədris',
+    catRows: [['Diyircəkli qələm, mavi', 'ədəd', 120, 50], ['Registrator qovluğu 75 mm', 'ədəd', 480, 10], ['Stepler №24', 'ədəd', 850, 5], ['Sancaq 28 mm, 100 ədəd', 'paket', 95, 20], ['Lövhə üçün marker', 'ədəd', 210, 10], ['Qeyd bloku 90×90', 'ədəd', 340, 10], ['Yapışqan lent 48 mm', 'ədəd', 190, 12], ['A4 fayl, 100 ədəd', 'paket', 720, 5]],
+    lastYearIt: 'Noutbuklar (keçən il)', lastYearOps: 'Təsərrüfat malları (keçən il)', lastYearFuel: 'Yanacaq (keçən il)',
+    budgetOpsYear: 'OPS illik', budgetOfficeQ: 'Ofis təchizatı', budgetNextYear: 'Baş ofis',
     justification: 'Çəkili qiymətləndirmə üzrə ən yaxşı qiymət/müddət nisbəti',
   },
   en: {
@@ -70,9 +99,23 @@ const TXT = {
     houseReq: 'Office household supplies', houseItem: 'A4 paper, ream',
     amendReason: 'Increasing volume: a second office opened',
     budgetAll: 'Overall budget', budgetIT: 'IT budget',
-    catNames: { IT: 'IT & hardware', OFFICE: 'Office & supplies', CONSTRUCTION: 'Construction & repair', FUEL: 'Fuel', LOGISTICS: 'Logistics & warehouse' },
+    catNames: { IT: 'IT & hardware', OFFICE: 'Office & supplies', CONSTRUCTION: 'Construction & repair', FUEL: 'Fuel', LOGISTICS: 'Logistics & warehouse' , TRAINING: 'Training' },
     catTitle: 'Office consumables — Supply One', catItem1: 'A4 paper 80g', catItem2: 'Toner HP 26A', uomReam: 'ream', uomPcs: 'pcs',
     qnaQ: 'May the chairs be delivered in batches of 10?', qnaA: 'Yes, batches are allowed; the full volume by month-end.',
+    depCenter: 'Head office', depIt: 'Information technology', depOps: 'Operations',
+    invOkReq: 'Toner cartridges for office printers', invOkItem: 'Laser cartridge',
+    invBadReq: 'Spare disks for the servers', invBadItem: 'SSD disk 480 GB',
+    invPayReq: 'Warehouse racking', invPayItem: 'Steel rack',
+    shipCustoms: 'Waiting for customs clearance', shipException: 'Packaging damaged, a report was filed',
+    verOk: 'Tax ID and bank details checked; the licence is valid to the year end.',
+    liveRfqReq: 'Laptops and monitors for the sales team', liveRfqEv: 'Tender: laptops and monitors',
+    liveRfqItem1: 'Laptop 14", 16 GB', liveRfqItem2: 'Monitor 27"',
+    liveAucReq: 'Office paper, annual volume', liveAucEv: 'Auction: office paper', liveAucItem: 'A4 paper, ream',
+    budgetItDept: 'IT department budget', budgetOpsQ: 'Operations — quarter', budgetOffice: 'Office supplies',
+    budgetTraining: 'Training',
+    catRows: [['Ballpoint pen, blue', 'pcs', 120, 50], ['Lever arch file 75 mm', 'pcs', 480, 10], ['Stapler no. 24', 'pcs', 850, 5], ['Paper clips 28 mm, 100', 'pack', 95, 20], ['Whiteboard marker', 'pcs', 210, 10], ['Sticky notes 90×90', 'pcs', 340, 10], ['Packing tape 48 mm', 'pcs', 190, 12], ['A4 punched pockets, 100', 'pack', 720, 5]],
+    lastYearIt: 'Laptops (last year)', lastYearOps: 'Household goods (last year)', lastYearFuel: 'Fuel (last year)',
+    budgetOpsYear: 'Operations — year', budgetOfficeQ: 'Office supplies', budgetNextYear: 'Head office',
     justification: 'Best price / lead-time ratio by the weighted score',
   },
 };
@@ -175,8 +218,8 @@ const log = (s) => console.log(s);
   });
   log('✓ suppliers approved, method + single-step approval policy set');
 
-  const mkApprovedRequest = async (title, category, items) => {
-    const r = await post('/requests', buyer, { title, category, items });
+  const mkApprovedRequest = async (title, category, items, departmentId) => {
+    const r = await post('/requests', buyer, { title, category, items, departmentId });
     await post(`/requests/${r.id}/submit`, buyer);
     await post(`/requests/${r.id}/approve`, approver);
     return r.id;
@@ -188,11 +231,232 @@ const log = (s) => console.log(s);
     return ev.id;
   };
 
+  // ---------- Отделы (места возникновения затрат) ----------
+  // Дерево, а не плоский список: МЦ собирает своих детей в сводке бюджета.
+  const depIds = {};
+  for (const [code, name, parent] of [['MƏRKƏZ', T.depCenter, null], ['IT', T.depIt, 'MƏRKƏZ'], ['OPS', T.depOps, 'MƏRKƏZ']]) {
+    await postIdempotent('/departments', buyer, { code, name, parentId: parent ? depIds[parent] : null });
+    depIds[code] = (await get('/departments', buyer)).find((d) => d.code === code).id;
+  }
+  log('✓ отделы: MƏRKƏZ → IT, OPS');
+
+  // ---------- G. Счета: три исхода трёхстороннего сопоставления ----------
+  // Счёт сверяется с заказом (цена) и с приёмкой (количество). Демо показывает все три
+  // исхода сразу, иначе на экране виден только счастливый путь.
+  const storyG = async () => {
+    // Прямой заказ → выпуск → доставка → приёмка. Держим суммы ниже порога прямого
+    // заказа (500 AZN), иначе политика метода уведёт заявку в тендер.
+    const deliver = async (title, category, depCode, item, qty, priceMinor, receiveQty) => {
+      const reqId = await mkApprovedRequest(title, category, [{ name: item, qty, estUnitPriceMinor: priceMinor }], depIds[depCode]);
+      const po = await post(`/orders/direct/from-request/${reqId}`, buyer, { supplierOrgId: org1 });
+      await post(`/orders/${po.id}/status`, buyer, { status: 'ISSUED' });
+      for (const st of ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED']) await post(`/orders/${po.id}/status`, sup1, { status: st });
+      const det = await get(`/orders/${po.id}`, buyer);
+      await post(`/orders/${po.id}/receipts`, buyer, { items: [{ poItemId: det.items[0].id, qty: receiveQty }] });
+      return { poId: po.id, itemId: det.items[0].id };
+    };
+
+    // G1 — совпало, ждёт решения закупщика.
+    const g1 = await deliver(T.invOkReq, 'OFFICE', 'OPS', T.invOkItem, 6, 4_500, 6);
+    await post(`/invoices/from-po/${g1.poId}`, sup1, { items: [{ poItemId: g1.itemId, qty: 6, unitPriceMinor: 4_500 }] });
+
+    // G2 — поставщик выставил больше, чем приняли, и дороже заказа: расхождение.
+    const g2 = await deliver(T.invBadReq, 'IT', 'IT', T.invBadItem, 8, 5_500, 5);
+    await post(`/invoices/from-po/${g2.poId}`, sup1, { items: [{ poItemId: g2.itemId, qty: 8, unitPriceMinor: 6_200 }] });
+
+    // G3 — совпало и утверждено, ждёт оплаты.
+    const g3 = await deliver(T.invPayReq, 'OFFICE', 'OPS', T.invPayItem, 4, 9_000, 4);
+    const inv3 = await post(`/invoices/from-po/${g3.poId}`, sup1, { items: [{ poItemId: g3.itemId, qty: 4, unitPriceMinor: 9_000 }] });
+    await post(`/invoices/${inv3.id}/approve`, buyer);
+
+    log('✓ G: счета — совпал (ждёт решения), расхождение по цене и количеству, утверждён к оплате');
+  };
+  // DEMO_ONLY=G досыпает только счета на уже живой стенд, не переигрывая истории A–F.
+  if (process.env.DEMO_ONLY === 'G') { await storyG(); log('\nDone (только счета).'); return; }
+
+  // ---------- H. Доставки: доска в разных состояниях ----------
+  // Идемпотентно: отправка навешивается только на заказы, у которых её ещё нет, —
+  // так блок можно доливать на живой стенд, не плодя дублей.
+  const storyH = async () => {
+    const shipped = new Set((await get('/logistics', buyer)).map((s) => s.po_id));
+    const poPage = await get('/orders', buyer);
+    const orders = (Array.isArray(poPage) ? poPage : poPage.items ?? []).filter((o) => !shipped.has(o.id) && o.status !== 'DRAFT');
+    const plan = [
+      { status: 'CUSTOMS', carrier: 'Global Cargo', from: 'İstanbul', to: 'Bakı', days: 3, note: T.shipCustoms },
+      { status: 'EXCEPTION', carrier: 'Baku Express', from: 'Bakı', to: 'Gəncə', days: 1, note: T.shipException },
+      { status: 'DELIVERED', carrier: 'AzərPost', from: 'Bakı', to: 'Xırdalan', days: -1, note: null },
+      { status: 'PICKED_UP', carrier: 'Baku Express', from: 'Sumqayıt', to: 'Bakı', days: 5, note: null },
+    ];
+    let n = 0;
+    for (const o of orders.slice(0, plan.length)) {
+      const s = plan[n++];
+      await post(`/logistics/po/${o.id}/shipment`, sup1, {
+        carrier: s.carrier, trackingNo: `AZ${60_000_000 + n}`, origin: s.from, destination: s.to,
+        eta: new Date(Date.now() + s.days * DAY).toISOString(),
+      });
+      // История, а не один статус: проигрываем маршрут до нужного состояния. Таможня и
+      // происшествие случаются в пути, поэтому идут после отправки и погрузки.
+      const CHAIN = ['PICKED_UP', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED'];
+      const at = CHAIN.indexOf(s.status);
+      const steps = at >= 0 ? CHAIN.slice(0, at + 1) : [...CHAIN.slice(0, 2), s.status];
+      for (const step of steps) {
+        const last = step === s.status;
+        await post(`/logistics/po/${o.id}/events`, sup1, {
+          status: step, location: last ? s.to : s.from, note: last && s.note ? s.note : undefined,
+        });
+      }
+    }
+    log(`✓ H: доска доставок — ${n} отправк(и) в пути, на таможне, с происшествием и доставленная`);
+  };
+  if (process.env.DEMO_ONLY === 'H') { await storyH(); log('\nDone (только доставки).'); return; }
+
+  // ---------- I. Верификация: досье поставщика с настоящими документами ----------
+  // Документы кладутся в хранилище через presign + PUT, как это делает браузер, — иначе
+  // на экране остаётся пустой кейс, и раздел нечего показывать.
+  const storyI = async () => {
+    const pdf = (title) => Buffer.from(
+      `%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n` +
+      `3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 120]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n` +
+      `4 0 obj<</Length 60>>stream\nBT /F1 14 Tf 20 60 Td (${title}) Tj ET\nendstream endobj\n` +
+      `5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n`,
+    );
+    const upload = async (caseId, token, docType, filename) => {
+      const body = pdf(`${docType} — demo document`);
+      const { uploadUrl, storageKey } = await post('/verification/presign', token, { filename, mime: 'application/pdf' });
+      const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'content-type': 'application/pdf' }, body });
+      if (!put.ok) throw new Error(`upload ${filename} → ${put.status}`);
+      await post(`/verification/cases/${caseId}/documents`, token, {
+        docType, storageKey, filename, sha256: createHash('sha256').update(body).digest('hex'),
+      });
+    };
+    const caseFor = async (orgId) => {
+      const open = (await get('/verification/cases', buyer)).find((c) => c.supplier_org_id === orgId);
+      return open ?? await post('/verification/cases', buyer, { supplierOrgId: orgId });
+    };
+
+    // Baku Metal: досье собрано, решение за закупщиком.
+    const c2 = await caseFor(org2);
+    if (!c2.doc_count) {
+      for (const [type, file] of [['VOEN', 'voen-baku-metal.pdf'], ['LICENSE', 'lisenziya.pdf'], ['BANK', 'bank-rekvizitleri.pdf']]) {
+        await upload(c2.id, sup2, type, file);
+      }
+    }
+    // Supply One: досье проверено и принято — с письменным заключением.
+    const c1 = await caseFor(org1);
+    if (!c1.doc_count) {
+      for (const [type, file] of [['VOEN', 'voen-supply-one.pdf'], ['INSURANCE', 'sigorta.pdf']]) {
+        await upload(c1.id, sup1, type, file);
+      }
+    }
+    // Решение переписывается всегда: при пересеве на другом языке заключение должно
+    // говорить на языке стенда, а не остаться от прошлого прогона.
+    await post(`/verification/cases/${c1.id}/decide`, buyer, { status: 'APPROVED', notes: T.verOk });
+    log('✓ I: верификация — досье Baku Metal ждёт решения, Supply One проверен и принят');
+  };
+  if (process.env.DEMO_ONLY === 'I') { await storyI(); log('\nDone (только верификация).'); return; }
+
+  // ---------- J. Живые процедуры: тендер и аукцион с будущим дедлайном ----------
+  // Стенд живёт неделями, а сроки в историях B и D истекают — и раздел поставщика
+  // остаётся без единой открытой процедуры. Здесь всегда есть та, на которую можно
+  // подать ставку прямо сейчас.
+  const storyJ = async () => {
+    const evPage = await get('/events', buyer);
+    const events = Array.isArray(evPage) ? evPage : evPage.items ?? [];
+    const liveOf = (title) => events.find((e) => e.title === title && e.status === 'OPEN');
+
+    if (!liveOf(T.liveRfqEv)) {
+      const req = await mkApprovedRequest(T.liveRfqReq, 'IT', [
+        { name: T.liveRfqItem1, qty: 12, estUnitPriceMinor: 180_000 },
+        { name: T.liveRfqItem2, qty: 12, estUnitPriceMinor: 42_000 },
+      ], depIds.IT);
+      const ev = await mkEvent(req, T.liveRfqEv, 'RFQ', new Date(Date.now() + 8 * DAY).toISOString());
+      // Одна ставка от второго поставщика: в списке видно, что участие уже есть,
+      // но суммы до вскрытия закрыты — именно это и показывает гайд.
+      const items = (await get(`/events/${ev}`, sup2)).items;
+      await post(`/events/${ev}/bid`, sup2, {
+        items: items.map((i, n) => ({ eventItemId: i.id, unitPriceMinor: n === 0 ? 174_000 : 39_500 })),
+      });
+    }
+
+    if (!liveOf(T.liveAucEv)) {
+      const reqA = await mkApprovedRequest(T.liveAucReq, 'OFFICE', [
+        { name: T.liveAucItem, qty: 4000, estUnitPriceMinor: 620 },
+      ], depIds.OPS);
+      const ev = await post(`/events/reverse/from-request/${reqA}`, buyer, {
+        title: T.liveAucEv,
+        closeAt: new Date(Date.now() + 4 * DAY).toISOString(),
+        visibility: 'INVITED',
+        startPriceMinor: 2_480_000,
+        minDecrementMinor: 20_000,
+      });
+      for (const org of [org1, org2]) await post(`/events/${ev.id}/invite`, buyer, { supplierOrgId: org });
+      await post(`/events/${ev.id}/publish`, buyer);
+      // Конкурент уже сбил цену — иначе панели аукциона нечего показывать.
+      const items = (await get(`/events/${ev.id}`, sup2)).items;
+      await post(`/events/${ev.id}/auction/bids`, sup2, { items: [{ eventItemId: items[0].id, unitPriceMinor: 598 }] });
+    }
+    log('✓ J: открыты живые тендер и аукцион, у конкурента уже есть ставка');
+  };
+  if (process.env.DEMO_ONLY === 'J') { await storyJ(); log('\nDone (только живые процедуры).'); return; }
+
+  // ---------- K. Прошлый год: база для сравнения ----------
+  // Отчёт «год к году» без прошлого года показывает пустоту. Заказы создаются теми же
+  // потоками, что и всё остальное, и только потом сдвигаются на год назад — датой в БД,
+  // потому что через API прошлое не выписать.
+  const storyK = async () => {
+    const rows = [
+      { title: T.lastYearIt, category: 'IT', dep: 'IT', qty: 12, price: 150_000 },
+      { title: T.lastYearOps, category: 'OFFICE', dep: 'OPS', qty: 200, price: 1_200 },
+      { title: T.lastYearFuel, category: 'FUEL', dep: 'OPS', qty: 3000, price: 90 },
+    ];
+    // Прошлогодние объёмы выше порога прямого заказа, а разыгрывать три тендера ради
+    // истории незачем: политика на время блока снимается и тут же возвращается.
+    await put('/requests/method-policies', buyer, {
+      policies: [{ category: '*', minAmountMinor: 0, maxAmountMinor: null, method: 'DIRECT' }],
+    });
+    const made = [];
+    for (const r of rows) {
+      const reqId = await mkApprovedRequest(r.title, r.category, [
+        { name: r.title, qty: r.qty, estUnitPriceMinor: r.price },
+      ], depIds[r.dep]);
+      const po = await post(`/orders/direct/from-request/${reqId}`, buyer, { supplierOrgId: org1 });
+      await post(`/orders/${po.id}/status`, buyer, { status: 'ISSUED' });
+      for (const st of ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED']) {
+        await post(`/orders/${po.id}/status`, sup1, { status: st });
+      }
+      const det = await get(`/orders/${po.id}`, buyer);
+      await post(`/orders/${po.id}/receipts`, buyer, { items: [{ poItemId: det.items[0].id, qty: r.qty }] });
+      made.push(po.id);
+    }
+    await put('/requests/method-policies', buyer, {
+      policies: [
+        { category: '*', minAmountMinor: 0, maxAmountMinor: 50_000, method: 'DIRECT' },
+        { category: '*', minAmountMinor: 50_000, maxAmountMinor: null, method: 'RFQ' },
+      ],
+    });
+    // Сдвиг в прошлое: заказ, заявка и приёмка вместе, иначе аналитика и бюджеты разойдутся.
+    const ids = made.map((id) => `'${id}'`).join(',');
+    try {
+      if (!made.every(id => /^[0-9a-f-]{36}$/i.test(id))) throw new Error('Invalid fixture id');
+      execFileSync('docker', ['exec', PG, 'psql', '-U', 'leadprocure_owner', '-d', DB,
+        '-v', 'ON_ERROR_STOP=1', '-c',
+        `UPDATE purchase_orders SET created_at = created_at - interval '1 year', updated_at = updated_at - interval '1 year' WHERE id IN (${ids});
+         UPDATE procurement_requests SET created_at = created_at - interval '1 year', approved_at = approved_at - interval '1 year'
+           WHERE id IN (SELECT request_id FROM purchase_orders WHERE id IN (${ids}));
+         UPDATE goods_receipts SET created_at = created_at - interval '1 year' WHERE po_id IN (${ids});`],
+        { stdio: 'pipe' });
+      log('✓ K: история прошлого года — есть с чем сравнивать в аналитике');
+    } catch (e) {
+      log(`  ! K: сдвиг в прошлое не удался (${e.message.split('\n')[0]}) — сравнение год к году будет пустым`);
+    }
+  };
+  if (process.env.DEMO_ONLY === 'K') { await storyK(); log('\nDone (только прошлый год).'); return; }
+
   // ---------- A. Полный цикл до оплаты ----------
   const reqA = await mkApprovedRequest(T.srvReq, 'IT', [
     { name: T.srvItem1, qty: 4, estUnitPriceMinor: 1_200_000 },
     { name: T.srvItem2, qty: 2, estUnitPriceMinor: 450_000 },
-  ]);
+  ], depIds.IT);
   const evA = await mkEvent(reqA, T.srvEv, 'RFQ', new Date(Date.now() + 3600_000).toISOString());
   const evAdet = await get(`/events/${evA}`, sup1);
   const itemsA = evAdet.items;
@@ -245,7 +509,7 @@ const log = (s) => console.log(s);
   const reqB = await mkApprovedRequest(T.furnReq, 'OFFICE', [
     { name: T.furnItem1, qty: 25, estUnitPriceMinor: 28_000 },
     { name: T.furnItem2, qty: 25, estUnitPriceMinor: 35_000 },
-  ]);
+  ], depIds.OPS);
   const evB = await mkEvent(reqB, T.furnEv, 'RFQ', new Date(Date.now() + 7 * DAY).toISOString());
   const itemsB = (await get(`/events/${evB}`, sup1)).items;
   await post(`/events/${evB}/bid`, sup1, {
@@ -261,7 +525,7 @@ const log = (s) => console.log(s);
   // ---------- C. RFI ----------
   const reqC = await mkApprovedRequest(T.logiReq, 'LOGISTICS', [
     { name: T.logiItem, qty: 1, estUnitPriceMinor: 10_000_000 },
-  ]);
+  ], depIds.OPS);
   const evC = await mkEvent(reqC, T.logiEv, 'RFI', new Date(Date.now() + 7 * DAY).toISOString());
   await post(`/events/${evC}/bid`, sup2, {
     proposalText: T.logiProposal,
@@ -271,7 +535,7 @@ const log = (s) => console.log(s);
   // ---------- D. Реверс-аукцион ----------
   const reqD = await mkApprovedRequest(T.fuelReq, 'FUEL', [
     { name: T.fuelItem, qty: 20000, estUnitPriceMinor: 160 },
-  ]);
+  ], depIds.OPS);
   const evD = await post(`/events/reverse/from-request/${reqD}`, buyer, {
     title: T.fuelEv,
     closeAt: new Date(Date.now() + 7 * DAY).toISOString(),
@@ -300,7 +564,7 @@ const log = (s) => console.log(s);
   // ---------- F. Прямой заказ с ожидающей поправкой ----------
   const reqF = await mkApprovedRequest(T.houseReq, 'OFFICE', [
     { name: T.houseItem, qty: 40, estUnitPriceMinor: 700 },
-  ]);
+  ], depIds.OPS);
   const poF = await post(`/orders/direct/from-request/${reqF}`, buyer, { supplierOrgId: org1 });
   await post(`/orders/${poF.id}/status`, buyer, { status: 'ISSUED' });
   await post(`/orders/${poF.id}/amendments`, buyer, {
@@ -309,16 +573,66 @@ const log = (s) => console.log(s);
   });
   log('✓ F: прямой заказ выпущен, поправка ждёт решения поставщика');
 
+  await storyG();
+  await storyH();
+  await storyI();
+  await storyJ();
+  await storyK();
+
   // ---------- Бюджеты ----------
+  // DEMO_ONLY=BUD переигрывает только этот блок.
+  // Бюджет здесь — документ, а не строка: черновик → на утверждение → утверждён. Считает
+  // расход только утверждённый, поэтому сид обязан довести его до конца, иначе раздел
+  // выглядит живым, а цифры в нём нулевые. Утверждает другой человек: своё не подписывают.
   const year = new Date().getFullYear();
-  await postIdempotent('/budgets', buyer, { name: `${T.budgetAll} ${year}`, category: '*', periodYear: year, amountMinor: 20_000_000 });
-  await postIdempotent('/budgets', buyer, { name: `${T.budgetIT} ${year}`, category: 'IT', periodYear: year, amountMinor: 8_000_000 });
-  log('✓ бюджеты созданы (использование посчитается из утверждённых заявок)');
+  const quarter = Math.floor(new Date().getMonth() / 3) + 1;
+  // Суммы подобраны под реальный расход историй A–K: раздел должен показывать работающий
+  // план, а не 700% освоения. Заявка выбирает ОДИН бюджет по специфичности
+  // (отдел+статья → отдел → статья → вся организация), поэтому бюджет только по статье
+  // ничего не поймает, пока у отдела есть свой — такие в сид не кладём.
+  const budgets = [
+    // общий потолок: ловит то, что не покрыто ничем более точным (например, заказ по каталогу)
+    { name: `${T.budgetAll} ${year}`, category: '*', amountMinor: 4_000_000, approve: true },
+    // IT: около 85% освоения — здоровый рабочий бюджет
+    { name: `${T.budgetItDept} ${year}`, category: '*', departmentId: depIds.IT, amountMinor: 9_500_000, approve: true },
+    // OPS: около 91% — отдел у самой границы, ровно тот случай, ради которого раздел и нужен
+    { name: `${T.budgetOpsYear} ${year}`, category: '*', departmentId: depIds.OPS, amountMinor: 19_000_000, approve: true },
+    // отдел+статья на квартал: и специфичность, и квартальный период в одном примере
+    { name: `${T.budgetOfficeQ} Q${quarter}`, category: 'OFFICE', departmentId: depIds.OPS, periodType: 'QUARTER', periodQuarter: quarter, amountMinor: 200_000, approve: true },
+    // Два черновика — чтобы на экране был виден и сам жизненный цикл документа.
+    { name: `${T.budgetTraining} ${year}`, category: 'TRAINING', amountMinor: 420_000, approve: false },
+    { name: `${T.budgetNextYear} ${year + 1}`, category: '*', departmentId: depIds['MƏRKƏZ'], periodYear: year + 1, amountMinor: 30_000_000, approve: false },
+  ];
+  for (const b of budgets) {
+    const { approve, ...dto } = b;
+    const made = await postIdempotent('/budgets', buyer, { periodYear: year, ...dto });
+    if (made && approve) {
+      await post(`/budgets/${made.id}/submit`, buyer);
+      await post(`/budgets/${made.id}/approve`, approver);
+    }
+  }
+  // Сезонность на одном годовом бюджете: без неё раздел разбивки выглядит пустой формой,
+  // а темп освоения везде считается по календарю. Закупки техники смещены к концу года.
+  // именно бюджет ОТДЕЛА: тогда сезонность видна в строке отдела, а не только в итоге
+  const itYear = (await get('/budgets', buyer)).find((b) => b.name === `${T.budgetItDept} ${year}`);
+  if (itYear) {
+    const shares = [400, 400, 600, 600, 600, 600, 800, 800, 1000, 1400, 1600, 1200]; // = 10000
+    await put(`/budgets/${itYear.id}/phasing`, buyer, {
+      months: shares.map((shareBp, i) => ({ month: `${year}-${String(i + 1).padStart(2, '0')}`, shareBp })),
+    });
+  }
+  log(`✓ бюджеты: ${budgets.filter((b) => b.approve).length} утверждённых (из них по отделам — 3), 2 черновика, у бюджета IT — разбивка по месяцам`);
+  if (process.env.DEMO_ONLY === 'BUD') { log('\nDone (только бюджеты).'); return; }
 
   // ---------- Каталог + мгновенный заказ ----------
   const cat = await post('/catalogs', buyer, { supplierOrgId: org1, title: T.catTitle });
   await post(`/catalogs/${cat.id}/items`, buyer, { name: T.catItem1, uom: T.uomReam, unitPriceMinor: 650, moq: 10 });
   await post(`/catalogs/${cat.id}/items`, buyer, { name: T.catItem2, uom: T.uomPcs, unitPriceMinor: 9_500, moq: 1 });
+  // A price list of two lines is not a price list: the page has nothing to scroll and reads
+  // as an empty section. Ten lines is the smallest set that looks like a real catalogue.
+  for (const [name, uom, unitPriceMinor, moq] of T.catRows) {
+    await post(`/catalogs/${cat.id}/items`, buyer, { name, uom, unitPriceMinor, moq });
+  }
   await post(`/catalogs/${cat.id}/activate`, buyer);
   const catDet = await get(`/catalogs/${cat.id}`, buyer);
   await post(`/catalogs/${cat.id}/order`, buyer, { items: [{ catalogItemId: catDet.items[0].id, qty: 20 }] });

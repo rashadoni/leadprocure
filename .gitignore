@@ -24,3 +24,4 @@ apps/web/.playwright/
 # ad-hoc TTS/preview samples (not source)
 *-az-sample.*
 buyer-requests-az-gemini.mp4
+scripts/.tts-cache/
