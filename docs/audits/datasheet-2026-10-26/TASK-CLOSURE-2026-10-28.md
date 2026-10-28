@@ -69,3 +69,13 @@ PR12 merged into main1b25692 and exact-main293API/3contention/13browser/fresh ga
 ## PR13 merged-main verification
 
 Owner explicitly approved PR13; normal exact-head merge produced main90414698629dea5c69e70dfeeb2a3762fa93be14. Reviewed and merged trees match. Run40764184136 BOTH jobs SUCCESS:294API/3contention/13native browser/1freshHTTPS; build, exports, migrations, restore and fresh signed-license/private-storage/AV PASS. See OCDS-EARLY-DISCLOSURE-MAIN-ACCEPTANCE-2026-10-29.json. Production unchanged.
+
+
+## LP-A19 budget approval messages and current policy
+
+Candidatee6ec993 / PR14, full run40765408662 BOTH jobs SUCCESS:294API/3contention/14native browser/1freshHTTPS and build/typecheck/schemas/migrations/restore/fresh AV-private storage PASS. Requests no longer treats any403+cached wouldBlock as permission to override. Only explicit current server budget code+canOverride can prompt; disabled policy/self-approval show AZ/RU/EN reasons. Real browser zero-budget/current-policy/override/SoD checks and existing API rollback assertions pass. Separate independent review no blockers. See BUDGET-DIALOG-ACCEPTANCE-2026-10-29.json. Ready for separate owner merge approval; main and production not changed by PR14 yet. This bounded finding qualifies earlier broad LP-A19 completeness statements; other evidence remains valid.
+
+
+## PR14 exact-main acceptance
+
+Owner explicitly approved PR14 («давай»). Normal exact-head merge produced main1a8b099fa8c111a71954b96cd0b5291741113a10, same full tree as independently reviewed e6ec993. Final-main run40766710334 BOTH jobs SUCCESS:26suites/294API,3contention,14native Chromium/1freshHTTPS, build/typecheck/4UBL+OCDS/both applied migrations/restore51RLS/fresh signedfile-private storage-real AV PASS. See BUDGET-DIALOG-MAIN-ACCEPTANCE-2026-10-29.json. The bounded LP-A19 budget approval correction is merged and verified; no production or material changes in this phase. Earlier limits (unconfigured external SMTP/Meta, external liveLLM, actual client rollout and desktop PowerPoint) are not silently converted to PASS; no blanket all20 production acceptance.

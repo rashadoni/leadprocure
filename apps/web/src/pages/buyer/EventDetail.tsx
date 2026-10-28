@@ -116,7 +116,11 @@ export default function EventDetail() {
 
   if (!ev) return <div className="center">…</div>;
   const lot = ev.lots?.[0];
-  const awardedBidId = ev.awards?.find((a: any) => !a.cancelled_at)?.winning_bid_id;
+  const activeAwards = (ev.awards ?? []).filter((a: any) => !a.cancelled_at);
+  const winningBidIds = new Set(activeAwards.map((a: any) => a.winning_bid_id));
+  const selectedAiLotId = aiLot || lot?.id;
+  const aiLotAwarded = activeAwards.some((a: any) => a.lot_id === selectedAiLotId);
+  const isReverse = ev.type === 'AUCTION' || ev.format === 'REVERSE';
   const isRfi = ev.type === 'RFI';
   const canAi = ['EVALUATION', 'AWARDED'].includes(ev.status) && !isRfi;
 
@@ -379,10 +383,15 @@ export default function EventDetail() {
             const awarded = (ev.awards ?? []).find((a: any) => a.lot_id === l.id && !a.cancelled_at);
             const totals = (ev.lot_bid_totals ?? [])
               .filter((t2: any) => t2.lot_id === l.id)
-              .filter((t2: any) => (ev.bids ?? []).find((b: any) => b.id === t2.bid_id)?.state !== 'DISQUALIFIED')
-              .sort((a: any, b: any) => Number(a.total_minor) - Number(b.total_minor));
+              .filter((t2: any) => (ev.bids ?? []).find((b: any) => b.id === t2.bid_id)?.state === 'OPENED')
+              .sort((a: any, b: any) => (isReverse ? 0 : (weightedByBid.get(b.bid_id) ?? -1) - (weightedByBid.get(a.bid_id) ?? -1))
+                || Number(a.total_minor) - Number(b.total_minor));
+            // A price winner is meaningful for a reverse auction. Sealed offers use the
+            // current formal evaluation; do not suggest a winner before scoring or on a tie.
+            const topScore = totals.length ? weightedByBid.get(totals[0].bid_id) : undefined;
+            const uniqueScoreLeader = topScore !== undefined && totals.filter((t2: any) => weightedByBid.get(t2.bid_id) === topScore).length === 1;
             return (
-              <div key={l.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+              <div key={l.id} role="group" aria-label={l.title} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
                 <b>{l.title}</b>{' '}
                 {awarded && (
                   <>
@@ -396,9 +405,10 @@ export default function EventDetail() {
                     {totals.map((t2: any, idx: number) => {
                       const bid = (ev.bids ?? []).find((b: any) => b.id === t2.bid_id);
                       return (
-                        <button key={t2.bid_id} className={`btn small ${idx === 0 ? '' : 'ghost'}`}
+                        <button key={t2.bid_id} className={`btn small ${idx === 0 && (isReverse || uniqueScoreLeader) ? '' : 'ghost'}`}
+                          disabled={!isReverse && !weightedByBid.has(t2.bid_id)}
                           data-tip={t('tip_award_bid')} onClick={() => awardBid(l.id, t2.bid_id)}>
-                          {bid?.supplier_name} · {fmtMoney(t2.total_minor, ev.evaluation_currency)}{idx === 0 ? ' ⭐' : ''}
+                          {bid?.supplier_name} · {fmtMoney(t2.total_minor, ev.evaluation_currency)}{idx === 0 && (isReverse || uniqueScoreLeader) ? ' ⭐' : ''}
                         </button>
                       );
                     })}
@@ -416,9 +426,9 @@ export default function EventDetail() {
           <thead><tr><th>{t('supplier_org')}</th><th>{t('status')}</th><th>{t('total')}</th><th>{t('delivery_days')}</th><th>{t('score')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
             {(ev.bids ?? []).map((b: any) => (
-              <tr key={b.id} style={awardedBidId === b.id ? { outline: '1px solid var(--ok)' } : undefined}>
+              <tr key={b.id} style={winningBidIds.has(b.id) ? { outline: '1px solid var(--ok)' } : undefined}>
                 <td>
-                  {b.supplier_name}{awardedBidId === b.id ? ' 🏆' : ''}
+                  {b.supplier_name}{winningBidIds.has(b.id) ? ' 🏆' : ''}
                   {b.proposal_text && (
                     <div className="hint" style={{ whiteSpace: 'pre-wrap', maxWidth: 420, marginTop: 4 }}>
                       📝 {b.proposal_text}
@@ -431,15 +441,15 @@ export default function EventDetail() {
                 <td>{ev.amounts_visible ? (b.delivery_days ?? '—') : '🔒'}</td>
                 <td>{weightedByBid.has(b.id) ? weightedByBid.get(b.id)!.toFixed(1) : '—'}</td>
                 <td>
-                  {ev.status === 'EVALUATION' && ev.format !== 'REVERSE' && !isRfi && b.state === 'OPENED' && (
+                  {ev.status === 'EVALUATION' && !isReverse && !isRfi && b.state === 'OPENED' && (
                     <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                      {(ev.evaluation_criteria ?? []).map((c: any) => <label key={c.key}>
+                      {!activeAwards.length && (ev.evaluation_criteria ?? []).map((c: any) => <label key={c.key}>
                         {c.key} · {c.weight}%
                         <input style={{width:64}} type="number" min={0} max={100} required
                           value={scores[b.id]?.[c.key] ?? ''}
                           onChange={e => setScores({...scores,[b.id]:{...scores[b.id],[c.key]:e.target.value === '' ? NaN : Number(e.target.value)}})} />
                       </label>)}
-                      <button className="btn small ghost" data-tip={t('disqualify')} onClick={() => disqualify(b.id)}>⛔</button>
+                      {!winningBidIds.has(b.id) && <button className="btn small ghost" data-tip={t('disqualify')} onClick={() => disqualify(b.id)}>⛔</button>}
                     </span>
                   )}
                   {b.state === 'DISQUALIFIED' && b.disqualified_reason && (
@@ -450,7 +460,7 @@ export default function EventDetail() {
             ))}
           </tbody>
         </table>
-        {ev.status === 'EVALUATION' && ev.format !== 'REVERSE' && !isRfi && (ev.bids ?? []).some((b: any) => b.state === 'OPENED') && (
+        {ev.status === 'EVALUATION' && !activeAwards.length && !isReverse && !isRfi && (ev.bids ?? []).some((b: any) => b.state === 'OPENED') && (
           <div style={{ marginTop: 12 }}>
             <button className="btn ghost" aria-label={t('score')} data-tip={t('tip_score')} onClick={doEvaluate}>{t('score')}</button>
           </div>
@@ -482,8 +492,8 @@ export default function EventDetail() {
                       <td>{r.reliabilityScore}</td>
                       <td><b>{r.weightedTotal}</b></td>
                       <td>
-                        {ev.status === 'EVALUATION' && !awardedBidId && lot && (
-                          <button className="btn small" data-tip={t('tip_award_bid')} onClick={() => awardBid(aiLot || lot.id, r.bidId)}>{t('award')}</button>
+                        {ev.status === 'EVALUATION' && !aiLotAwarded && selectedAiLotId && (
+                          <button className="btn small" data-tip={t('tip_award_bid')} onClick={() => awardBid(selectedAiLotId, r.bidId)}>{t('award')}</button>
                         )}
                       </td>
                     </tr>

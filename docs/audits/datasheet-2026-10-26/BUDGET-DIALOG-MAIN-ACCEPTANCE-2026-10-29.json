@@ -1,0 +1,33 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/14",
+  "head": "e6ec993713e52dc9c8b2c39debcf2e536cdf2fd1",
+  "originalCriterion": "LP-A19 significant UI messages AZ/RU/EN; budget approval policy correctness",
+  "status": "PASS",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/40766710334",
+  "apiSuites": 26,
+  "apiTests": 294,
+  "contentionTests": 3,
+  "nativeBrowserScenarios": 14,
+  "freshHttpsBrowserScenarios": 1,
+  "newScenario": [
+    "approved zero-limit budget; disabled override gives localized alert in AZ/RU/EN and request remains SUBMITTED",
+    "policy disabled after preview prevents prompt; re-enabled policy allows audited approval with written reason",
+    "self-approval403 never offers budget override despite actual blocking impact"
+  ],
+  "apiAssertions": [
+    "approver canOverride=false",
+    "permitted admin canOverride=true",
+    "disabled admin canOverride=false; reason also rejected; approval rolled back"
+  ],
+  "independentReview": "separate budget_dialog_review confirmed exact e6ec993 vs origin/main, no blockers",
+  "automaticAgentReview": "40765408691 fallback Anthropic400 insufficient credits; not semantic review",
+  "rawLog": "/tmp/leadprocure-budget-dialog-main-1a8b099.log",
+  "productionChanged": false,
+  "materialsChanged": false,
+  "mergeStatus": "MERGED",
+  "qualification": "Explicit LP-A19 correction verified in isolated environment; not exhaustive all20 or production acceptance. External SMTP/Meta not run: connections absent.",
+  "mergeCommit": "1a8b099fa8c111a71954b96cd0b5291741113a10",
+  "mergeAuthorization": "Owner explicitly answered давай to PR14 merge question",
+  "reviewedAndMergedSourceTreesEqual": true
+}
