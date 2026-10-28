@@ -656,7 +656,8 @@ describe('budgets & commitment control (API e2e)', () => {
       .send({ title: `Blocked ${tag}`, category: 'BLOCKED', items: [{ name: 'x', qty: 1, estUnitPriceMinor: 120_000 }] })
       .expect(201);
     await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyerA)).expect(201);
-    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approverA)).expect(403);
+    const blocked = await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approverA)).expect(403);
+    expect(blocked.body).toMatchObject({ code: 'BUDGET_LIMIT_EXCEEDED', canOverride: false });
 
     // the whole approval was rolled back, not half-applied
     const after = (await http().get(`/requests/${req.body.id}`).set(...bearer(buyerA)).expect(200)).body;
@@ -677,6 +678,9 @@ describe('budgets & commitment control (API e2e)', () => {
     await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approverA))
       .send({ budgetOverrideReason: 'urgent' }).expect(403);
 
+    const blocked = await http().post(`/requests/${req.body.id}/approve`).set(...bearer(buyerA)).expect(403);
+    expect(blocked.body).toMatchObject({ code: 'BUDGET_LIMIT_EXCEEDED', canOverride: true });
+
     const done = await http().post(`/requests/${req.body.id}/approve`).set(...bearer(buyerA))
       .send({ budgetOverrideReason: 'urgent safety purchase, CFO agreed' }).expect(201);
     expect(done.body.status).toBe('APPROVED');
@@ -695,8 +699,14 @@ describe('budgets & commitment control (API e2e)', () => {
       .send({ title: `NoOverride ${tag}`, category: 'BLOCKED', items: [{ name: 'x', qty: 1, estUnitPriceMinor: 60_000 }] })
       .expect(201);
     await http().post(`/requests/${req.body.id}/submit`).set(...bearer(approverA)).expect(201);
-    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(buyerA))
+    const blocked = await http().post(`/requests/${req.body.id}/approve`).set(...bearer(buyerA)).expect(403);
+    expect(blocked.body).toMatchObject({ code: 'BUDGET_LIMIT_EXCEEDED', canOverride: false });
+    const denied = await http().post(`/requests/${req.body.id}/approve`).set(...bearer(buyerA))
       .send({ budgetOverrideReason: 'please' }).expect(403);
+    expect(denied.body).toMatchObject({ code: 'BUDGET_OVERRIDE_FORBIDDEN', canOverride: false });
+    const after = (await http().get(`/requests/${req.body.id}`).set(...bearer(buyerA)).expect(200)).body;
+    expect(after.status).toBe('SUBMITTED');
+    expect(after.approved_at).toBeNull();
 
     // back to the default so the remaining specs see unblocked behaviour
     await http().put('/budgets/policy').set(...bearer(buyerA))

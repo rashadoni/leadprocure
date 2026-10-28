@@ -486,18 +486,20 @@ export class BudgetsService {
     const impact = await this.impactFor(requestId);
     if (impact && impact.wouldBlock) {
       if (!overrideReason) {
-        throw new ForbiddenException(
-          `Budget "${impact.budgetName}"${impact.departmentCode ? ` (${impact.departmentCode})` : ''} ` +
+        throw new ForbiddenException({
+          statusCode: 403, error: 'Forbidden', code: 'BUDGET_LIMIT_EXCEEDED',
+          canOverride: policy.allowOverride && auth.role === 'BUYER_ADMIN',
+          message: `Budget "${impact.budgetName}"${impact.departmentCode ? ` (${impact.departmentCode})` : ''} ` +
           (impact.amountMinor === 0 ? 'has a zero limit and positive projected spend. ' :
           `would exceed the ${impact.blockPct}% block threshold for ${impact.periodLabel} (${impact.projectedUsedMinor} minor units). `) +
           (policy.allowOverride ? 'An admin may approve with a written override reason.' : 'Overrides are disabled for this organization.'),
-        );
+        });
       }
       if (!policy.allowOverride) {
-        throw new ForbiddenException('Budget overrides are disabled for this organization');
+        throw new ForbiddenException({ statusCode: 403, error: 'Forbidden', code: 'BUDGET_OVERRIDE_FORBIDDEN', canOverride: false, message: 'Budget overrides are disabled for this organization' });
       }
       if (auth.role !== 'BUYER_ADMIN') {
-        throw new ForbiddenException('Only a BUYER_ADMIN may override a budget block');
+        throw new ForbiddenException({ statusCode: 403, error: 'Forbidden', code: 'BUDGET_OVERRIDE_FORBIDDEN', canOverride: false, message: 'Only a BUYER_ADMIN may override a budget block' });
       }
       await this.audit.record('BUDGET_BLOCK_OVERRIDDEN', 'budget', impact.budgetId, {
         request_id: requestId, projected_pct: impact.projectedPct, block_pct: impact.blockPct,
