@@ -27,16 +27,16 @@ export default function SupplierEvent() {
         .map((i: any) => ({ eventItemId: i.id, unitPriceMinor: Math.round(Number(prices[i.id]) * 100) }));
       if (ev.format === 'REVERSE') {
         const res = await api.post(`/events/${id}/auction/bids`, { items });
-        setMsg(`OK · ${fmtMoney(res.data.total_minor, ev.evaluation_currency)}${res.data.extended ? ' · ⏱ +ext' : ''}`);
+        setMsg(`${t('bid_received')} · ${fmtMoney(res.data.total_minor, ev.evaluation_currency)}${res.data.extended ? ` · ⏱ ${t('auction_extended')}` : ''}`);
       } else if (ev.type === 'RFI') {
         const res = await api.post(`/events/${id}/bid`, { proposalText });
-        setMsg(`OK · sha256 ${res.data.payload_sha256.slice(0, 16)}…`);
+        setMsg(`${t('bid_received')} · sha256 ${res.data.payload_sha256.slice(0, 16)}…`);
       } else {
         const res = await api.post(`/events/${id}/bid`, {
           items, deliveryDays: Number(deliveryDays),
           ...(ev.type === 'RFP' ? { proposalText } : {}),
         });
-        setMsg(`OK · sha256 ${res.data.payload_sha256.slice(0, 16)}…`);
+        setMsg(`${t('bid_received')} · sha256 ${res.data.payload_sha256.slice(0, 16)}…`);
       }
       load();
     } catch (e: any) { setMsg(e.response?.data?.message?.toString() ?? 'Error'); }
@@ -77,7 +77,12 @@ export default function SupplierEvent() {
         {ev.my_bid && (
           <div style={{ marginTop: 8 }}>
             {t('my_bid')}: <Badge status={ev.my_bid.state} />{' '}
-            {ev.my_bid.payload && <>· {fmtMoney(ev.my_bid.payload.total_minor, ev.my_bid.payload.currency)}</>}
+            {ev.type !== 'RFI' && ev.my_bid.payload && <>· {fmtMoney(ev.my_bid.payload.total_minor, ev.my_bid.payload.currency)}</>}
+            {ev.my_bid.payload?.proposal_text && (
+              <div role="note" aria-label={ev.type === 'RFI' ? t('response_text') : t('proposal_text')} style={{ whiteSpace: 'pre-wrap', marginTop: 8 }}>
+                {ev.my_bid.payload.proposal_text}
+              </div>
+            )}
             {ev.my_bid.state === 'SUBMITTED' && ev.status === 'OPEN' && (
               <> · <button className="btn small ghost" onClick={withdraw}>{t('withdraw')}</button></>
             )}
@@ -100,7 +105,7 @@ export default function SupplierEvent() {
         {ev.type !== 'RFI' && (
           <table>
             {/* no buyer estimate here — publishing it to bidders anchors their prices */}
-            <thead><tr><th>{t('name')}</th><th>{t('qty')}</th><th>{t('unit_price')} (AZN)</th></tr></thead>
+            <thead><tr><th>{t('name')}</th><th>{t('qty')}</th><th>{t('unit_price')} ({ev.evaluation_currency})</th></tr></thead>
             <tbody>
               {ev.items.map((i: any) => (
                 <tr key={i.id}>
@@ -118,8 +123,8 @@ export default function SupplierEvent() {
         )}
         {(ev.type === 'RFP' || ev.type === 'RFI') && (
           <div style={{ marginTop: 10 }}>
-            <label>{ev.type === 'RFI' ? t('response_text') : t('proposal_text')}</label>
-            <textarea rows={5} style={{ width: '100%' }} value={proposalText}
+            <label htmlFor="supplier-proposal">{ev.type === 'RFI' ? t('response_text') : t('proposal_text')}</label>
+            <textarea id="supplier-proposal" rows={5} style={{ width: '100%' }} value={proposalText}
               disabled={ev.status !== 'OPEN'}
               onChange={(e) => setProposalText(e.target.value)} />
           </div>

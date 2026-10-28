@@ -1,10 +1,11 @@
 import { test, expect, type Locator } from '@playwright/test';
 import { createRequire } from 'node:module';
+import { verifyRfiRfp } from './helpers/rfx';
 const apiRequire = createRequire(new URL('../../api/package.json', import.meta.url));
 
 // Real fixtures/API/auth/RLS. Keep one browser login for the entire scenario:
 // the production login limiter remains enabled in acceptance.
-test('current formal ranking and each lot survive re-evaluation and partial awards', async ({ page, request }) => {
+test('current formal ranking and each lot survive re-evaluation and partial awards', async ({ page, request, browser }) => {
   apiRequire('../../scripts/acceptance/assert-isolated.cjs')();
   const base = 'http://localhost:3000', tag = Date.now().toString(36), password = 'Audit-only-password123';
   const call = async (path: string, body: any, token?: string, method = 'post', status = 201) => {
@@ -148,5 +149,7 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
   const auctionInvoice = await call(`/invoices/from-po/${auctionPo.id}`, { items: [{ poItemId: auctionPo.items[0].id, qty: 10, unitPriceMinor: 8000 }] }, s2.accessToken);
   expect(auctionInvoice.status).toBe('MATCHED');
   expect(Number(auctionInvoice.gross_minor)).toBe(80000);
+
+  await verifyRfiRfp({ browser, buyerPage: page, call, buyerToken: buyer.accessToken, approverToken: approver.accessToken, foreignSupplierToken: s1.accessToken, tag });
 
 });
