@@ -79,3 +79,10 @@ Candidatee6ec993 / PR14, full run40765408662 BOTH jobs SUCCESS:294API/3contentio
 ## PR14 exact-main acceptance
 
 Owner explicitly approved PR14 («давай»). Normal exact-head merge produced main1a8b099fa8c111a71954b96cd0b5291741113a10, same full tree as independently reviewed e6ec993. Final-main run40766710334 BOTH jobs SUCCESS:26suites/294API,3contention,14native Chromium/1freshHTTPS, build/typecheck/4UBL+OCDS/both applied migrations/restore51RLS/fresh signedfile-private storage-real AV PASS. See BUDGET-DIALOG-MAIN-ACCEPTANCE-2026-10-29.json. The bounded LP-A19 budget approval correction is merged and verified; no production or material changes in this phase. Earlier limits (unconfigured external SMTP/Meta, external liveLLM, actual client rollout and desktop PowerPoint) are not silently converted to PASS; no blanket all20 production acceptance.
+
+
+## LP-A07/A03 ranking and remaining-lot UI; LP-A04/A05 native auction
+
+Owner correction29October: SMTP/Meta is the final task; earlier external-delivery-first next actions are superseded. Continue available original procurement/budget criteria first.
+
+PR15 candidate7ee3c55 / run40770949640 BOTH jobs SUCCESS:26suites/294API,3contention,14native browser tests (expanded existing actual authenticated scenario),1freshHTTPS, fullbuild/typecheck/4UBL+OCDS/both migrations/restore51RLS/fresh signedfile-private storage-realAV PASS. Formal award UI now follows current scores, not cheapest price; unscored/tied bids do not imply a unique leader. Active winners and AI actions are per lot; scoring locks after partial award, valid disqualification stays. Native fixture proves62/68 re-evaluation, two winners, per-lot contracts/POs, and reverse auction price→native finalize/award/contract→PO/status/GRN/MATCHED invoice preserving80000minor. Separate reviewers found no remaining blockers. Superseded browser selector failure was corrected using actual tooltip-expanded accessible names; no timeout or assertion weakening. See LOT-RANKING-ACCEPTANCE-2026-10-29.json. Before separate owner merge approval; main1a8b099/production unchanged. This is bounded criterion closure, not a blanket all20/live acceptance claim.
