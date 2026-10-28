@@ -61,3 +61,8 @@ Production не обновлялся. Проверки ниже выполнен
 Нет SMTP/Meta test connections и отдельного клиентского commercial/public-TLS окружения. ARM, capacity/SLA benchmark, реальный production storage upgrade, live ERP/банк/ASAN/Peppol не приняты. PAID — учётная отметка, CSV — файловый обмен, dev signature — не ASAN.
 
 Полные сборки, browser E2E и source-built container images выполнялись только на hosted ephemeral workers. На persistent Contabo — редактирование, чтение runtime и небольшие последовательные проверки.
+
+
+## Итог исходных20 задач после разрешённого PR11 — 28 октября2026
+
+PR11 объединён в main `e3e5dbcdcd39dbea67fe0ef3953dfc97b65ddb44`; точное дерево совпадает с проверенным кандидатом7f52131. Полная приёмка [40700763083](https://github.com/rashadoni/leadprocure/actions/runs/40700763083) PASS:285API/3contention/13native browser/1freshHTTPS,4UBL+OCDS/build/обе миграционные истории/restore/fresh private storage+real AV. Материалы не изменились после принятого независимого рендера15страниц40698739541; контрольные суммы совпадают. LP-A09/A10/A13/A19 дополнительные технические пробелы закрыты. Текущая матрица — TASK-CLOSURE-2026-10-28.md; доказательство — ORIGINAL-TASKS-MAIN-ACCEPTANCE-2026-10-28.json. Production не изменён. Реальная SMTP/Meta доставка NOT RUN: подключений нет. Подготовка релиза, установка лицензии и отдельные backup-проекты не подменяют исходные20 задач и сейчас не выполняются.

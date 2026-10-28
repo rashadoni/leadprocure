@@ -1,0 +1,57 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/11",
+  "mergeAuthorized": "Давай, объединяй PR11",
+  "mergeCommit": "e3e5dbcdcd39dbea67fe0ef3953dfc97b65ddb44",
+  "reviewedHead": "7f521313507dd72551d3a15b2ede50896f4d4165",
+  "identicalSourceTree": "4ade0fb97e8fbcb53322691994c63d53d5c70db2",
+  "mainAcceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/40700763083",
+  "status": "PASS",
+  "jobs": {
+    "acceptance": 122859624008,
+    "fresh-install": 122859624309
+  },
+  "apiSuites": 25,
+  "apiTests": 285,
+  "contentionTests": 3,
+  "nativeBrowserScenarios": 13,
+  "freshHttpsBrowserScenarios": 1,
+  "ublExports": [
+    "inclusive.xml",
+    "zero.xml",
+    "mixed-inclusive.xml",
+    "mixed-exclusive.xml"
+  ],
+  "officialUblAndOcdsSchemas": "PASS",
+  "bothMigrationBaselines": "PASS",
+  "restoredRlsTables": 51,
+  "freshSignedLicensePrivateStorageRealClamav": "PASS",
+  "modeledLegacyStorageVersions": 4,
+  "materialRendering": {
+    "run": "https://github.com/rashadoni/leadprocure/actions/runs/40698739541",
+    "pages": 15,
+    "minTextCoverage": 1.0,
+    "problems": [],
+    "unchangedHashesSinceRender": true,
+    "visuallyReviewedChangedPages": [
+      "presentation11",
+      "datasheet1",
+      "datasheet2"
+    ]
+  },
+  "originalTaskFocus": "LP-A00–LP-A19; no optional release/license/backup work",
+  "newlyClosedTechnicalGaps": [
+    "LP-A09 mixed-rate invoice snapshots",
+    "LP-A10 four real UBL schema examples",
+    "LP-A13 stale response/date31/recoverable localized load error",
+    "LP-A19 synchronized budgets policy/finance role in PPTX/PDF/notes/claims"
+  ],
+  "externalLimits": {
+    "SMTP/Meta actual delivery": "NOT RUN: owner confirms no configured connections",
+    "live external LLM": "NOT RUN",
+    "desktop Microsoft PowerPoint": "NOT RUN",
+    "actual client/production rollout": "NOT RUN"
+  },
+  "productionChanged": false,
+  "rawLog": "/tmp/leadprocure-original-tasks-main-e3e5dbc.log"
+}

@@ -16,7 +16,7 @@ describe('catalogs + instant re-order', () => {
   const bearer = (t: string) => ['Authorization', `Bearer ${t}`] as [string, string];
 
   let buyer: string, buyer2: string, supplier: string, supplierOrg: string;
-  let catalogId: string, itemId: string;
+  let catalogId: string, itemId: string, existingOrderId: string;
 
   beforeAll(async () => {
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -57,6 +57,7 @@ describe('catalogs + instant re-order', () => {
       .send({ items: [{ catalogItemId: itemId, qty: 5 }] }).expect(400); // below MOQ 10
     const po = await http().post(`/catalogs/${catalogId}/order`).set(...bearer(buyer))
       .send({ items: [{ catalogItemId: itemId, qty: 10 }] }).expect(201);
+    existingOrderId = po.body.id;
     expect(Number(po.body.total_minor)).toBe(500_000); // 10 × 50k
     // the PO reached the supplier
     const supOrders = await http().get('/orders').set(...bearer(supplier)).expect(200);
@@ -73,5 +74,34 @@ describe('catalogs + instant re-order', () => {
 
   it('a supplier cannot create or modify a catalog', async () => {
     await http().post('/catalogs').set(...bearer(supplier)).send({ supplierOrgId: supplierOrg, title: 'x' }).expect(403);
+  });
+
+  it('LP-A11 blocks new orders from an existing catalog while accepted obligations complete', async () => {
+    await http().post(`/orders/${existingOrderId}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
+    await http().post(`/orders/${existingOrderId}/status`).set(...bearer(supplier)).send({ status: 'CONFIRMED' }).expect(201);
+    await http().post(`/suppliers/${supplierOrg}/invite`).set(...bearer(buyer)).expect(201);
+    const relationships = (await http().get('/suppliers').set(...bearer(buyer)).expect(200)).body;
+    const relationshipId = relationships.find((r: any) => r.supplier_org_id === supplierOrg).id;
+    await http().post(`/suppliers/relationships/${relationshipId}/status`).set(...bearer(buyer))
+      .send({ status: 'BLOCKED' }).expect(201);
+    const before = (await http().get('/orders').set(...bearer(buyer)).expect(200)).body.items.map((p: any) => p.id);
+    await http().post(`/catalogs/${catalogId}/order`).set(...bearer(buyer))
+      .send({ items: [{ catalogItemId: itemId, qty: 10 }] }).expect(403);
+    const after = (await http().get('/orders').set(...bearer(buyer)).expect(200)).body.items.map((p: any) => p.id);
+    expect(after.sort()).toEqual(before.sort());
+
+    for (const status of ['PACKED', 'SHIPPED', 'DELIVERED']) {
+      await http().post(`/orders/${existingOrderId}/status`).set(...bearer(supplier)).send({ status }).expect(201);
+    }
+    const order = (await http().get(`/orders/${existingOrderId}`).set(...bearer(buyer)).expect(200)).body;
+    await http().post(`/orders/${existingOrderId}/receipts`).set(...bearer(buyer))
+      .send({ items: [{ poItemId: order.items[0].id, qty: 10 }] }).expect(201);
+    expect((await http().get(`/orders/${existingOrderId}`).set(...bearer(buyer)).expect(200)).body.status).toBe('ACCEPTED');
+
+    // This is a supplier restriction, not a broken/inactive catalog.
+    await http().post(`/suppliers/relationships/${relationshipId}/status`).set(...bearer(buyer))
+      .send({ status: 'APPROVED' }).expect(201);
+    await http().post(`/catalogs/${catalogId}/order`).set(...bearer(buyer))
+      .send({ items: [{ catalogItemId: itemId, qty: 10 }] }).expect(201);
   });
 });
