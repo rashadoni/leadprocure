@@ -44,6 +44,7 @@ function NotFound() {
 }
 
 const BUYER = ['BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER'];
+const FINANCE_READ = [...BUYER, 'BUYER_FINANCE'];
 const SUPPLIER = ['SUPPLIER_USER'];
 
 const router = createBrowserRouter([
@@ -55,12 +56,12 @@ const router = createBrowserRouter([
     element: <Protected><Shell /></Protected>,
     errorElement: <NotFound />,
     children: [
-      { path: '/buyer/dashboard', element: <Protected roles={BUYER}><Dashboard /></Protected> },
-      { path: '/buyer/settings', element: <Protected roles={BUYER}><Settings /></Protected> },
+      { path: '/buyer/dashboard', element: <Protected roles={FINANCE_READ}><Dashboard /></Protected> },
+      { path: '/buyer/settings', element: <Protected roles={FINANCE_READ}><Settings /></Protected> },
       { path: '/buyer/logistics', element: <Protected roles={BUYER}><Logistics /></Protected> },
       { path: '/buyer/catalogs', element: <Protected roles={BUYER}><Catalogs /></Protected> },
-      { path: '/buyer/budgets', element: <Protected roles={BUYER}><Budgets /></Protected> },
-      { path: '/buyer/analytics', element: <Protected roles={BUYER}><Analytics /></Protected> },
+      { path: '/buyer/budgets', element: <Protected roles={FINANCE_READ}><Budgets /></Protected> },
+      { path: '/buyer/analytics', element: <Protected roles={FINANCE_READ}><Analytics /></Protected> },
       { path: '/supplier/catalogs', element: <Protected roles={SUPPLIER}><Catalogs /></Protected> },
       { path: '/buyer/verification', element: <Protected roles={BUYER}><Verification /></Protected> },
       { path: '/supplier/verification', element: <Protected roles={SUPPLIER}><Verification /></Protected> },
@@ -69,7 +70,7 @@ const router = createBrowserRouter([
       { path: '/buyer/contracts', element: <Protected roles={BUYER}><Contracts /></Protected> },
       { path: '/supplier/orders', element: <Protected roles={SUPPLIER}><Orders /></Protected> },
       { path: '/supplier/contracts', element: <Protected roles={SUPPLIER}><Contracts /></Protected> },
-      { path: '/buyer/requests', element: <Protected roles={BUYER}><Requests /></Protected> },
+      { path: '/buyer/requests', element: <Protected roles={FINANCE_READ}><Requests /></Protected> },
       { path: '/buyer/events', element: <Protected roles={BUYER}><Events /></Protected> },
       { path: '/buyer/events/:id', element: <Protected roles={BUYER}><EventDetail /></Protected> },
       { path: '/buyer/suppliers', element: <Protected roles={BUYER}><Suppliers /></Protected> },

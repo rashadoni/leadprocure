@@ -22,3 +22,7 @@ Created dedicated codex/leadprocure-budget-audit-integration worktree from main9
 ## 2026-10-28 — finance browser completion
 
 - Extended finance compatibility to actual browser controls: finance can manage plans and threshold policy in UI, read same-org settings/category/department lookups already available to ordinary buyer users, and act on its assigned request step. User administration/procurement creation remain admin/buyer gated. Native finance scenario also creates a draft plan for100.01AZN via UI. API remains authorization authority. Read-only scope bypass fixes do not grant ordinary users new financial privileges.
+
+## 2026-10-28 — native browser found omitted finance routing
+
+- b1d304a run40651791356:25 suites/283 API tests and3 contention tests, upgrade schemas and full build PASS; native browser finance scenario found actual route authorization omission: main.tsx hard-coded buyer role list still excluded finance, causing Home/Requests redirect cycle and empty section. Corrected route access only for finance dashboard/requests/budgets/analytics/settings; finance sidebar hides unavailable procurement pages. API authorization remains unchanged. No test bypass or token injection. Current-source gate requires a new SHA.
