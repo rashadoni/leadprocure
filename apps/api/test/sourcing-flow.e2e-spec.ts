@@ -176,6 +176,34 @@ describe('sealed RFQ end-to-end flow', () => {
     expect(res.body.bid_items).toHaveLength(0);
   });
 
+  it('LP-A14 OCDS export does not disclose sealed bids before opening', async () => {
+    const exported = await http().get(`/events/${eventId}/ocds`)
+      .set('Authorization', `Bearer ${buyerToken}`).expect(200);
+    const release = exported.body.releases[0];
+    expect(release.tender.status).toBe('active');
+    expect(release.awards).toEqual([]);
+    expect(release.tender).not.toHaveProperty('value');
+    expect(JSON.stringify(exported.body)).not.toContain(bidId);
+    const privateKeys = new Set(['bids', 'bid_items', 'total_minor', 'unit_price_minor',
+      'line_total_minor', 'ciphertext', 'wrapped_key', 'proposal_text']);
+    const check = (value: unknown) => {
+      // The fixture bid is100×55000 minor units. Check both currency-unit and
+      // minor-unit forms, even if a leak were renamed to a generic "amount" key.
+      if (typeof value === 'number' || typeof value === 'string') {
+        expect([550, 55000, 5500000]).not.toContain(Number(value));
+        return;
+      }
+      if (!value || typeof value !== 'object') return;
+      for (const [key, child] of Object.entries(value)) {
+        expect(privateKeys.has(key)).toBe(false);
+        check(child);
+      }
+    };
+    check(exported.body);
+    await http().get(`/events/${eventId}/ocds`)
+      .set('Authorization', `Bearer ${supplier2Token}`).expect(404);
+  });
+
   it('opening before the deadline is refused', async () => {
     await http().post(`/events/${eventId}/open`).set('Authorization', `Bearer ${buyerToken}`).expect(400);
   });

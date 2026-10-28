@@ -55,3 +55,7 @@ PR11 MERGED. Run40700763083: both jobs SUCCESS,285API/3contention/13native brows
 ## Explicit criteria verified after correction
 
 Candidatece090a1 / PR12, run40706846700 BOTH jobs PASS:26suites/293API,3contention,13native browser/1freshHTTPS, build/schemas/both migrations/restore/fresh signedlicense/private storage/real AV. Seven new queued decision tests prove A03 retries/cancel-create and A06 re-evaluate/award/disqualify schedules; the eighth new test proves A11 existing-catalog blocking with completion of old obligations. Actual independent reviewer found no blockers. Business source unchanged: these cases confirmed existing safeguards rather than a newly claimed feature fix. This closes those evidence gaps, not every conceivable behavior. See CRITERION-ACCEPTANCE-2026-10-28.json.
+
+## LP-A14 explicit negative endpoint check
+
+29October: add standalone authenticated OCDS export check before opening. Existing detail secrecy and post-award export results do not independently prove this exact criterion. Assert no bid identifier/prices/payload, empty awards and no tender value; uninvited supplier404. Independent static review no blockers; new hosted outcome pending. No product bug or new feature claimed.
