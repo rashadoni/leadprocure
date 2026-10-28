@@ -1,0 +1,33 @@
+# Leadprocure — reconciliation of runtime budgeting and procurement audit
+
+## 2026-10-28 — continuation from authorized four-PR delivery
+
+Parent journal: docs/presentation-az-session-log.md in codex/leadprocure-client-presentation-az; checkpoint d61d0b5. PR3/4/5/6 merged with owner approval; main974a31b full acceptance and PPTX rendering PASS (40593765052/40593880674). Production NOT authorized.
+
+Read-only runtime check found app branch claude/budget-workflow400f861,40 applied budget migrations, no budgets.period_year; main uses that removed column and would break budget/request approval. Preserve both checkout histories and all runtime data. Production labels mix canonical and budget-worktree infra directories.0 duplicate invoice/evaluation rows,0 namespace mismatches,5 invoice lines for tax review,0 installed license rows. No production mutation performed.
+
+Created dedicated codex/leadprocure-budget-audit-integration worktree from main974a31b; merging existing runtime source400f861. Resolve actual module/UI conflicts preserving advanced budgeting and procurement audit controls. Keep existing applied migration identities/content; overlapping timestamp histories require explicit fresh + budget0039-to-combined + audit0034-to-combined upgrade acceptance on hosted worker. No full build/E2E on Contabo. Independent compatibility reviewer assigned per AGENTS. Next: resolve source, adapt targeted integration fixtures, independent review, CI; any new main merge/deploy remains separately gated.
+
+## 2026-10-28 — combined candidate and independent defects corrected
+
+- Initial merged source41ea19b pushed to rashadoni, acceptance40650528104 failed at checkout because runtime guide LFS objects were absent from active repository, before application build/tests. No test failure attributed to product. Read only runtime guide files/git LFS cache, verified35 unique objects against committed SHA256/size (129443507bytes), uploaded exact objects to active rashadoni LFS. Runtime files untouched. Excluded imported TTS cache from candidate tree with a normal forward commit/ignore; history and runtime copies preserved.
+- Independent reviewer confirmed main-vs-runtime incompatibility and then found concrete merge/runtime defects: accidental supplier dashboard parameter; finance chain role gate; by-ID budget scope; DRAFT shadowing active block; concurrent requests racing budget block; finance alternate omitted from self-approval; financial department deletion; TypeORM RETURNING shapes; cleanup outside try. Corrected these in candidate. Requests and plan mutations now serialize per buyer organization; finance may act only on an explicitly assigned FINANCE step. Existing apply-on-production permissions unchanged.
+- Added focused API integration scenarios for by-ID department scope, finance two-step chain plus least privilege, two approvals observed blocked behind shared lock then exact one acceptance, DRAFT shadowing, preserved financial department and missing-membership update. Both original migration file sets hashed against exact main974a31b/runtime400f861 identities; hosted gate creates separate synthetic databases for each, verifies old history and plan preservation plus idempotent combined upgrade. Current main PASS remains separate evidence; new candidate not accepted until its own gates pass.
+
+## 2026-10-28 — first integrated gate feedback and corrections
+
+- Run40651180050 on4da1c5b successfully checked both applied-history upgrades, unchanged migration hashes, API typecheck and282 API tests:268passed/14failed.13 failures were one merged analytics SQL field (awards has awarded_at, not created_at);1 concurrency observation saw cached pg_stat snapshot inside observer transaction. Corrected actual SQL and cleared observation snapshots; no assertions weakened. Fresh build found3 duplicate currency i18n keys after semantic merge; removed redundant identical standalone declarations.
+- Reviewer then verified additional exact limit and privacy fixes: zero amount/one-minor-unit threshold comparison uses BigInt separately from rounded display, and impact enforces budget scope. Added regression fixtures. Finance UI exposes only current_role FINANCE decisions, hides procurement creation/submission; new Playwright normal login/assigned-step confirmation test. Final static rereview df25826 found no additional blockers in these corrections. Full new-SHA acceptance remains pending; historical main PASS not reused as candidate proof.
+
+## 2026-10-28 — finance browser completion
+
+- Extended finance compatibility to actual browser controls: finance can manage plans and threshold policy in UI, read same-org settings/category/department lookups already available to ordinary buyer users, and act on its assigned request step. User administration/procurement creation remain admin/buyer gated. Native finance scenario also creates a draft plan for100.01AZN via UI. API remains authorization authority. Read-only scope bypass fixes do not grant ordinary users new financial privileges.
+
+## 2026-10-28 — native browser found omitted finance routing
+
+- b1d304a run40651791356:25 suites/283 API tests and3 contention tests, upgrade schemas and full build PASS; native browser finance scenario found actual route authorization omission: main.tsx hard-coded buyer role list still excluded finance, causing Home/Requests redirect cycle and empty section. Corrected route access only for finance dashboard/requests/budgets/analytics/settings; finance sidebar hides unavailable procurement pages. API authorization remains unchanged. No test bypass or token injection. Current-source gate requires a new SHA.
+
+## 2026-10-28 — final source frozen for complete acceptance
+
+- Final source72b448c; independent routing rereview found no blockers. Final hosted run40652348096 active. Cancelled only this task's known obsolete2a9d28c40652015154 andb1d304a40651791356 to avoid repeating heavy source builds after the route fix; successful main gates untouched. Earlier stages remain historical evidence, not final acceptance.
+- Preparing three bounded review parts: API/migrations/shared/integration fixtures; buyer UI+native browser; existing runtime guide assets/scripts/routing documentation. No review cap increased, main remains974a31b. Production unmodified/not authorized; signed operator license and protected backup are still concrete release prerequisites.

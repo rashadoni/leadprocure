@@ -439,6 +439,25 @@ describe('sealed RFQ end-to-end flow', () => {
     expect(notes.body.some((n: any) => n.type === 'DIRECT_ORDER_CREATED')).toBe(true);
   });
 
+  // The button that calls this sits on a page where nothing visibly changes, so a reader
+  // who clicks twice used to end up with two identical price lists. Contracts have been
+  // idempotent from the start; catalogs now match.
+  it('a second catalog-from-contract returns the same draft instead of a duplicate', async () => {
+    const first = await http()
+      .post(`/catalogs/from-contract/${contractId}`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .expect(201);
+    const again = await http()
+      .post(`/catalogs/from-contract/${contractId}`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .expect(201);
+    expect(again.body.id).toBe(first.body.id);
+    expect(again.body.items).toHaveLength(first.body.items.length);
+
+    const all = await http().get('/catalogs').set('Authorization', `Bearer ${buyerToken}`).expect(200);
+    expect(all.body.filter((c: any) => c.contract_id === contractId)).toHaveLength(1);
+  });
+
   it('audit hash-chain for the buyer org is intact and linked', async () => {
     await db.query(`SELECT set_config('app.org_id', $1, false), set_config('app.role','BUYER_ADMIN', false)`, [buyerOrgId]);
     const rows = (

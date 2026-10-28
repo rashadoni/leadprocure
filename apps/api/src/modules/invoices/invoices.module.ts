@@ -40,7 +40,7 @@ export class InvoicesService {
     const m = this.rc.manager;
     await lockOrder(m, poId);
     uniqueIds(dto.items ?? [], 'poItemId');
-    const po = (await m.query(`SELECT id, buyer_org_id, supplier_org_id, currency, vat_mode FROM purchase_orders WHERE id = $1`, [poId]))[0];
+    const po = (await m.query(`SELECT id, buyer_org_id, supplier_org_id, currency, vat_mode, department_id FROM purchase_orders WHERE id = $1`, [poId]))[0];
     if (!po) throw new NotFoundException('Order not found');
     if (po.supplier_org_id !== auth.org_id) throw new BadRequestException('Only the awarded supplier invoices this order');
     if (!dto.items?.length) throw new BadRequestException('At least one line is required');
@@ -93,10 +93,12 @@ export class InvoicesService {
     const invoiceNo = `INV-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
     const inv = (
       await m.query(
-        `INSERT INTO invoices(buyer_org_id, supplier_org_id, po_id, invoice_no, currency, net_minor, vat_minor, gross_minor, status, match, due_date, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+        `INSERT INTO invoices(buyer_org_id, supplier_org_id, po_id, invoice_no, currency, net_minor, vat_minor, gross_minor, status, match, due_date, created_by, department_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
         [po.buyer_org_id, auth.org_id, poId, invoiceNo, po.currency, net, vat, gross, status,
-         JSON.stringify({ ok: allOk, lines: matchLines }), dto.dueDate ?? null, auth.sub],
+         JSON.stringify({ ok: allOk, lines: matchLines }), dto.dueDate ?? null, auth.sub,
+         // inherited from the PO so paid-spend reporting survives the PO being re-scoped
+         po.department_id ?? null],
       )
     )[0];
     for (const it of dto.items) {
