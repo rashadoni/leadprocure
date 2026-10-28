@@ -1,0 +1,154 @@
+{
+  "date": "2026-10-28",
+  "timezone": "Asia/Baku",
+  "repository": "rashadoni/leadprocure",
+  "accepted_combined_head": "ba78b8c86a9680cf07437a8e9b3643045c59ada8",
+  "run": "https://github.com/rashadoni/leadprocure/actions/runs/40653616859",
+  "status": "PASS",
+  "pr_heads": {
+    "7": "6551e6c16a95b14c23d5d3b6ad2eeef3b5bdc820",
+    "8": "5b7b54141da23b51f356ee9b7a2ca53693bf51b1",
+    "9": "ba78b8c86a9680cf07437a8e9b3643045c59ada8"
+  },
+  "api_suites": 25,
+  "api_tests": 283,
+  "contention_tests": 3,
+  "ordinary_native_chromium_scenarios": 10,
+  "fresh_https_chromium_scenarios": 1,
+  "typecheck_build_ubl_ocds_baseline_upgrade_restore": "PASS",
+  "restored_migrations": 47,
+  "restored_rls_tables": 51,
+  "migration_histories": {
+    "status": "PASS",
+    "syntheticDataOnly": true,
+    "results": [
+      {
+        "baseline": "audit_main",
+        "sha": "974a31b05703279d7f36c72a153d42b5bbd321a4",
+        "originalMigrations": 35,
+        "addedMigrations": 12,
+        "totalMigrations": 47,
+        "appliedHistoryUnchanged": true,
+        "budgetPreserved": true,
+        "secondRunEmpty": true
+      },
+      {
+        "baseline": "budget_runtime",
+        "sha": "400f8616eceb02c8b56993a41adafc99aba70474",
+        "originalMigrations": 40,
+        "addedMigrations": 7,
+        "totalMigrations": 47,
+        "appliedHistoryUnchanged": true,
+        "budgetPreserved": true,
+        "secondRunEmpty": true
+      }
+    ]
+  },
+  "fresh": {
+    "missing-license": {
+      "status": "ok",
+      "deploymentMode": "on_prem_isolated",
+      "edition": "enterprise",
+      "licenseSource": "missing",
+      "licenseStatus": "expired_restricted"
+    },
+    "signed-license": {
+      "status": "ok",
+      "deploymentMode": "on_prem_isolated",
+      "edition": "enterprise",
+      "licenseSource": "file",
+      "licenseStatus": "valid"
+    },
+    "http-acceptance": {
+      "status": "PASS",
+      "productionMode": true,
+      "signedFileLicense": true,
+      "separateApprover": true,
+      "budgetWarningStillApproves": true,
+      "budgetIsolation": true,
+      "privateStorage": true,
+      "presignedPutGet": true,
+      "realClamavCleanAndEicar": true,
+      "foreignDocumentDenied": true,
+      "webServed": true
+    },
+    "https-browser": {
+      "status": "PASS",
+      "trustedTestCA": true,
+      "productionBuild": true,
+      "actualUILogin": true,
+      "secureHttpOnlyCookie": true,
+      "reloadRefreshes": 3,
+      "allowedCors": true,
+      "deniedForeignOrigin": true,
+      "httpsStorageBrowserPut": true,
+      "logoutRevokesSession": true,
+      "publicCertificateOrClientDeployment": false
+    },
+    "storage-upgrade": {
+      "status": "PASS",
+      "modeledLegacyRelease": "RELEASE.2025-09-07T16-13-09Z",
+      "sourceSnapshot": "7aac2a2c5b7c882e68c1ce017d8256be2feea27f",
+      "versionsPreserved": 4,
+      "checksumsAndMetadataPreserved": true,
+      "latestVersionPreserved": true,
+      "anonymousReadDenied": true,
+      "actualProductionVolume": false
+    }
+  },
+  "contention": {
+    "status": "PASS",
+    "rounds": 12,
+    "concurrency": 8,
+    "scenarios": [
+      {
+        "scenario": "receipts",
+        "contestedRequests": 96,
+        "accepted": 12,
+        "overReceived": 0,
+        "elapsedMs": 541
+      },
+      {
+        "scenario": "invoice-reservation",
+        "contestedRequests": 96,
+        "matched": 12,
+        "duplicateReservations": 0,
+        "elapsedMs": 826
+      },
+      {
+        "scenario": "auction-idempotency-and-close",
+        "contestedRequests": 104,
+        "committedTicks": 12,
+        "lateAccepted": 0,
+        "independentCloserConnections": 8,
+        "observedBlockedBidsAndClosers": true,
+        "closeAuditCount": 1,
+        "elapsedMs": 653
+      }
+    ],
+    "productionCapacityOrSla": false
+  },
+  "independent_review": {
+    "reviewer": "separate Codex agent budget_runtime_compatibility_review",
+    "author_separate": true,
+    "concrete_findings_corrected": true,
+    "runtime_guides_assets": "36 AZ assets and17 route keys verified against LFS pointer/SHA256/size; no missing pair",
+    "obsolete_public_target_probe": "removed with forward commit",
+    "full_editorial_rerecording": "NOT PERFORMED"
+  },
+  "github_agent_review": {
+    "checks": "green fallback",
+    "actual_anthropic_review": "NOT PERFORMED; provider400 insufficient credit balance",
+    "not_substituted_for_independent_codex_review": true
+  },
+  "original_four_prs": "3/4/5/6 merged into main974a31b with explicit owner approval; final main acceptance40593765052 and PPTX40593880674 PASS",
+  "new_main_merge": "NOT PERFORMED; PR7/8/9 require owner decision",
+  "production": "UNCHANGED; no deployment permission; mixed Compose route/signed operator license/protected real backup require preparation",
+  "external_not_run": [
+    "SMTP/Meta no configured connections",
+    "Actual client public TLS/commercial license environment absent",
+    "Actual production volume upgrade and real backup/restore",
+    "ARM and capacity/SLA",
+    "Desktop Microsoft PowerPoint session absent"
+  ]
+}

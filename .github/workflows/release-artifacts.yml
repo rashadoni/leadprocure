@@ -1,0 +1,44 @@
+name: Package API and web release images
+on:
+  workflow_dispatch:
+    inputs:
+      public_api_url:
+        description: Browser-reachable API URL baked into web
+        required: true
+        default: http://75.119.156.234:3100
+  pull_request:
+    paths:
+      - .github/workflows/release-artifacts.yml
+      - scripts/release/**
+      - apps/api/Dockerfile
+      - apps/web/Dockerfile
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      PUBLIC_API_URL: ${{ inputs.public_api_url || 'http://75.119.156.234:3100' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verify artifact rejection cases
+        run: node --test scripts/release/manifest.test.cjs
+      - name: Build and package images without production access
+        env:
+          RELEASE_OUTPUT_DIR: ${{ runner.temp }}/leadprocure-release
+        run: bash scripts/release/build-images.sh
+      - name: Retain private downloadable release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: leadprocure-release-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/leadprocure-release/manifest.json
+            ${{ runner.temp }}/leadprocure-release/leadprocure-images.tar.gz
+          if-no-files-found: error
+          retention-days: 7
