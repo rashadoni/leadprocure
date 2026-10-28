@@ -82,9 +82,9 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
   await page.getByRole('combobox', { name: 'Lots', exact: true }).selectOption(lotB.id);
   await aiCard.getByRole('button', { name: 'Analyze', exact: true }).click();
   const aiRow = aiCard.locator('tr').filter({ hasText: 'Browser audit s1' });
-  await expect(aiRow.getByRole('button', { name: 'Award', exact: true })).toBeVisible();
+  await expect(aiRow.getByRole('button', { name: 'Award winner', exact: true })).toBeVisible();
   // Choose the non-top bid on the second lot with the required written justification.
-  await awardThrough(aiRow.getByRole('button', { name: 'Award', exact: true }), 'Distinct delivery requirement for lot B');
+  await awardThrough(aiRow.getByRole('button', { name: 'Award winner', exact: true }), 'Distinct delivery requirement for lot B');
   await expect(groupB.locator('.badge.AWARDED')).toBeVisible();
   const detail = await call(`/events/${event.id}`, undefined, buyer.accessToken, 'get', 200);
   expect(detail.awards.filter((a: any) => !a.cancelled_at).map((a: any) => [a.lot_id, a.winning_bid_id, a.evaluation_id])).toEqual(expect.arrayContaining([
