@@ -24,14 +24,14 @@ const all = entries.flatMap(e => e.classes);
     for (const [label, baseline] of Object.entries(baselines)) {
       const database = `leadprocure_${label}_upgrade_test_${randomUUID().slice(0, 8)}`;
       assert.match(database, /^leadprocure_[a-z_]+_test_[0-9a-f]{8}$/);
+      for (const [file, hash] of Object.entries(baseline.files)) {
+        assert.equal(entries.find(e => e.relative === file)?.hash, hash, `Applied migration changed: ${label} ${file}`);
+      }
       // This exact database is newly created by this process, then removed in finally.
       await admin.query(`CREATE DATABASE "${database}"`);
       const url = new URL(process.env.DATABASE_OWNER_URL); url.pathname = `/${database}`;
       const options = { ...source.options, url: url.href, logging: ['error'] };
       const previous = entries.filter(e => baseline.files[e.relative]).flatMap(e => e.classes);
-      for (const [file, hash] of Object.entries(baseline.files)) {
-        assert.equal(entries.find(e => e.relative === file)?.hash, hash, `Applied migration changed: ${label} ${file}`);
-      }
       let ds;
       try {
         ds = new DataSource({ ...options, migrations: previous });

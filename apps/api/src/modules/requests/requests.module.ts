@@ -202,6 +202,7 @@ export class RequestsService {
   // trusted) and resolves the procurement method from the buyer's value-band policy.
   async approve(id: string, auth: AccessTokenPayload, budgetOverrideReason?: string) {
     const m = this.rc.manager;
+    await m.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,85))`, [auth.org_id]);
     await m.query(`SELECT id FROM procurement_requests WHERE id=$1 FOR UPDATE`, [id]);
     const req = await this.requireStatus(id, ['SUBMITTED']);
 
@@ -217,6 +218,9 @@ export class RequestsService {
       `SELECT * FROM approval_steps WHERE request_id=$1 AND status='SUBMITTED' ORDER BY step_no`,
       [id],
     );
+    if (auth.role === 'BUYER_FINANCE' && pending[0]?.approver_role !== 'BUYER_FINANCE') {
+      throw new ForbiddenException('Finance may only act on an explicitly assigned finance step');
+    }
     if (pending.length) {
       const current = pending[0];
       if (auth.role !== current.approver_role && auth.role !== 'BUYER_ADMIN') {
@@ -272,6 +276,9 @@ export class RequestsService {
       `SELECT * FROM approval_steps WHERE request_id=$1 AND status='SUBMITTED' ORDER BY step_no`,
       [id],
     );
+    if (auth.role === 'BUYER_FINANCE' && pending[0]?.approver_role !== 'BUYER_FINANCE') {
+      throw new ForbiddenException('Finance may only act on an explicitly assigned finance step');
+    }
     if (pending.length) {
       const current = pending[0];
       if (auth.role !== current.approver_role && auth.role !== 'BUYER_ADMIN') {
@@ -401,7 +408,7 @@ export class RequestsService {
 export class RequestsController {
   constructor(private readonly requests: RequestsService) {}
 
-  @Get() @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  @Get() @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER', 'BUYER_FINANCE')
   list(
     @Query('q') q?: string,
     @Query('page') page?: string,
@@ -411,7 +418,7 @@ export class RequestsController {
     return this.requests.list(q, parsePaging(page, pageSize), departmentId || undefined);
   }
 
-  @Get('method-policies') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  @Get('method-policies') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER', 'BUYER_FINANCE')
   policies() { return this.requests.getPolicies(); }
 
   @Put('method-policies') @Roles('BUYER_ADMIN')
@@ -419,7 +426,7 @@ export class RequestsController {
     return this.requests.replacePolicies(auth.org_id, (body.policies as any[]) ?? []);
   }
 
-  @Get('approval-policies') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  @Get('approval-policies') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER', 'BUYER_FINANCE')
   approvalPolicies() { return this.requests.getApprovalPolicies(); }
 
   @Put('approval-policies') @Roles('BUYER_ADMIN')
@@ -427,7 +434,7 @@ export class RequestsController {
     return this.requests.replaceApprovalPolicies(auth.org_id, (body.policies as any[]) ?? []);
   }
 
-  @Get(':id') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  @Get(':id') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER', 'BUYER_FINANCE')
   get(@Param('id') id: string) { return this.requests.get(id); }
 
   @Post()
@@ -444,7 +451,7 @@ export class RequestsController {
   @Post(':id/submit') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
   submit(@Param('id') id: string) { return this.requests.submit(id); }
 
-  @Post(':id/approve') @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  @Post(':id/approve') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_FINANCE')
   approve(
     @Param('id') id: string,
     @CurrentUser() auth: AccessTokenPayload,
@@ -453,7 +460,7 @@ export class RequestsController {
     return this.requests.approve(id, auth, body?.budgetOverrideReason);
   }
 
-  @Post(':id/reject') @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
+  @Post(':id/reject') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_FINANCE')
   reject(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload, @Body() body: RejectRequestDto) {
     return this.requests.reject(id, auth, body?.reason);
   }

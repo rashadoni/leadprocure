@@ -406,6 +406,7 @@ export class BudgetsService {
   }
 
   async setPolicy(dto: BudgetPolicyDto, auth: AccessTokenPayload): Promise<BudgetPolicy> {
+    await this.lockPlans();
     if (dto.blockPct != null && dto.warnPct != null && dto.blockPct < dto.warnPct) {
       throw new BadRequestException('blockPct must be at least warnPct — blocking before warning makes no sense');
     }
@@ -442,7 +443,7 @@ export class BudgetsService {
     const budget = (
       await m.query(
         `SELECT b.id FROM budgets b
-         WHERE b.currency = $1
+         WHERE b.currency = $1 AND b.status IN ('APPROVED','CLOSED')
            AND now() >= b.period_start::timestamptz
            AND now() < (b.period_end + 1)::timestamptz
            AND (b.department_id IS NULL OR b.department_id = $2)
@@ -698,6 +699,20 @@ export class BudgetsService {
     }
   }
 
+  private async lockPlans() {
+    await this.rc.manager.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,85))`, [this.rc.orgId]);
+  }
+
+  private async assertBudgetAccess(id: string, write = false) {
+    const b = (await this.rc.manager.query(`SELECT department_id FROM budgets WHERE id=$1`, [id]))[0];
+    if (!b) throw new NotFoundException('Budget not found');
+    const ctx = this.rc.get();
+    if (ctx.role !== 'BUYER_USER') return;
+    const auth = { sub: ctx.actorId, org_id: ctx.orgId, role: ctx.role } as AccessTokenPayload;
+    if (write) await this.assertMayWrite(auth, b.department_id);
+    else if (await this.scopeFor(auth) !== b.department_id) throw new ForbiddenException('Budget is outside your department');
+  }
+
   private shape(r: any) {
     const amount = Number(r.amount_minor);
     // A signed-off period reports what it was signed off AS. Budgets closed before the
@@ -743,6 +758,7 @@ export class BudgetsService {
   }
 
   async create(dto: UpsertBudgetDto, auth: AccessTokenPayload) {
+    await this.lockPlans();
     const period = resolveBudgetPeriod(dto);
     await this.assertKnownCategory(dto.category?.trim() || '*');
     await this.assertMayWrite(auth, dto.departmentId ?? null);
@@ -774,6 +790,8 @@ export class BudgetsService {
   }
 
   async update(id: string, dto: UpsertBudgetDto, auth: AccessTokenPayload) {
+    await this.lockPlans();
+    await this.assertBudgetAccess(id, true);
     const period = resolveBudgetPeriod(dto);
     await this.assertKnownCategory(dto.category?.trim() || '*');
     await this.assertMayWrite(auth, dto.departmentId ?? null);
@@ -839,6 +857,7 @@ export class BudgetsService {
   }
 
   async revisions(budgetId: string) {
+    await this.assertBudgetAccess(budgetId);
     const rows = await this.rc.manager.query(
       `SELECT r.id, r.amount_before_minor, r.amount_after_minor, r.reason, r.created_at,
               r.rollover_from_budget_id,
@@ -895,6 +914,7 @@ export class BudgetsService {
     months: Array<{ month: string; shareBp: number }>,
     auth: AccessTokenPayload,
   ) {
+    await this.lockPlans();
     const b = await this.getOne(budgetId);
     await this.assertMayWrite(auth, b.departmentId ?? null);
     if (b.status === 'CLOSED') {
@@ -939,6 +959,7 @@ export class BudgetsService {
   }
 
   async rollover(sourceId: string, targetId: string, auth: AccessTokenPayload) {
+    await this.lockPlans();
     if (sourceId === targetId) throw new BadRequestException('Source and target must be different budgets');
     const all = await this.list();
     const source = all.find((b: any) => b.id === sourceId);
@@ -1073,6 +1094,7 @@ export class BudgetsService {
   // the papers behind it, using the same matching rule the totals were built from — so the
   // list can never disagree with the figure it explains.
   async documents(budgetId: string, kind: 'committed' | 'actual' | 'all' = 'all') {
+    await this.assertBudgetAccess(budgetId);
     const rows = await this.rc.manager.query(
       `WITH ${this.MATCHED_CTE}
        SELECT 'REQUEST' AS kind, m.id, m.request_no AS doc_no, m.title, m.category,
@@ -1108,6 +1130,8 @@ export class BudgetsService {
   }
 
   async submit(id: string, auth: AccessTokenPayload) {
+    await this.lockPlans();
+    await this.assertBudgetAccess(id, true);
     await this.requireStatus(id, ['DRAFT']);
     await this.rc.manager.query(
       `UPDATE budgets SET status='PENDING', submitted_by=$2, submitted_at=now(), updated_at=now() WHERE id=$1`,
@@ -1119,6 +1143,8 @@ export class BudgetsService {
 
   // Pull a plan back out of review — the way to edit something already sent.
   async recall(id: string, auth: AccessTokenPayload) {
+    await this.lockPlans();
+    await this.assertBudgetAccess(id, true);
     await this.requireStatus(id, ['PENDING']);
     await this.rc.manager.query(
       `UPDATE budgets SET status='DRAFT', submitted_by=NULL, submitted_at=NULL, updated_at=now() WHERE id=$1`,
@@ -1129,6 +1155,7 @@ export class BudgetsService {
   }
 
   async approveBudget(id: string, auth: AccessTokenPayload) {
+    await this.lockPlans();
     const b = await this.requireStatus(id, ['PENDING']);
     // Four-eyes: whoever put the number forward must not be the one who blesses it. But a
     // small buyer may have exactly one person who can approve at all, and a rule that locks
@@ -1139,7 +1166,8 @@ export class BudgetsService {
     if (b.submitted_by && b.submitted_by === auth.sub) {
       const others = await this.rc.manager.query(
         `SELECT 1 FROM memberships WHERE org_id = $1 AND user_id <> $2
-           AND role IN ('BUYER_ADMIN','BUYER_APPROVER') LIMIT 1`,
+           AND role IN ('BUYER_ADMIN','BUYER_APPROVER','BUYER_FINANCE')
+           AND EXISTS (SELECT 1 FROM organization_users u WHERE u.id=memberships.user_id AND u.status='ACTIVE') LIMIT 1`,
         [auth.org_id, auth.sub],
       );
       if (others.length) {
@@ -1156,6 +1184,7 @@ export class BudgetsService {
   }
 
   async rejectBudget(id: string, auth: AccessTokenPayload, reason: string) {
+    await this.lockPlans();
     const b = await this.requireStatus(id, ['PENDING']);
     if (b.submitted_by && b.submitted_by === auth.sub) {
       throw new ForbiddenException('You cannot decide on a budget you submitted (segregation of duties)');
@@ -1172,6 +1201,7 @@ export class BudgetsService {
   // spend, so historical reports stay whole. Refused before the period is over — a closed
   // budget that can still receive commitments would be a lie.
   async close(id: string, auth: AccessTokenPayload) {
+    await this.lockPlans();
     const b = await this.requireStatus(id, ['APPROVED']);
     const today = new Date().toISOString().slice(0, 10);
     if (iso(new Date(b.period_end)) >= today) {
@@ -1196,6 +1226,7 @@ export class BudgetsService {
   // Reopening exists because closings happen by mistake; it is audited exactly like the
   // close, so the pair is always visible together in the trail.
   async reopen(id: string, auth: AccessTokenPayload, reason: string) {
+    await this.lockPlans();
     const b = await this.requireStatus(id, ['CLOSED']);
     await this.rc.manager.query(
       `UPDATE budgets SET status='APPROVED', closed_by=NULL, closed_at=NULL, updated_at=now(),
@@ -1208,6 +1239,8 @@ export class BudgetsService {
   }
 
   async remove(id: string) {
+    await this.lockPlans();
+    await this.assertBudgetAccess(id, true);
     // Only a draft is disposable. Anything that has been approved is part of the financial
     // record — it gets closed, not deleted.
     await this.requireStatus(id, ['DRAFT']);
@@ -1237,6 +1270,7 @@ export class BudgetsService {
 
   // Fetch one budget by id — not by listing them all and filtering in JS.
   private async getOne(id: string) {
+    await this.assertBudgetAccess(id);
     const rows = await this.rc.manager.query(
       `WITH ${this.MATCHED_CTE}
        SELECT b.id, b.name, b.category, b.department_id, b.period_type, b.status,

@@ -42,10 +42,10 @@ export class SettingsService {
       const dep = await m.query(`SELECT id FROM departments WHERE id = $1`, [departmentId]);
       if (!dep.length) throw new BadRequestException('Unknown department');
     }
-    const rows = await m.query(
+    const rows = returnedRows(await m.query(
       `UPDATE memberships SET department_id = $3 WHERE user_id = $1 AND org_id = $2 RETURNING id`,
       [userId, auth.org_id, departmentId],
-    );
+    ));
     if (!rows.length) throw new BadRequestException('User is not a member of your organization');
     await this.audit.record('MEMBER_DEPARTMENT_SET', 'membership', rows[0].id, {
       user_id: userId, department_id: departmentId,
