@@ -136,6 +136,37 @@ e2e (happy + hostile isolation) → keep the full suite green → commit → pus
   spend ceiling per category + calendar year; APPROVED requests commit against the matching
   budget (encumbrance model). Utilization is derived; approval attaches a soft, non-blocking
   `budgetWarnings` when a budget is exceeded. UI `/buyer/budgets` with utilization bars.
+- **Budget by department** (migs 0028–0033) — what finance asked for, in six steps:
+  - **Departments** (0028): curated per-buyer cost centres (RLS, optional parent, owner),
+    `procurement_requests.department_id` + a home department on `memberships` that defaults
+    new requests. A department carrying spend is retired, never deleted.
+  - **Periods** (0029): budgets carry a date RANGE + `period_type` (YEAR/QUARTER/MONTH), so
+    one engine covers annual, quarterly, monthly and later a non-calendar fiscal year.
+    Commitment moved from `created_at` to a new `approved_at` — a request raised in December
+    and approved in January used to commit against LAST year.
+  - **One budget per request** (0030): the engine is inverted — each approved request picks
+    the single most specific budget (department+category → department → category → org-wide)
+    and utilization is a group-by over that choice, so an org-wide and a department budget
+    can no longer both count the same spend. A gist EXCLUDE stops overlapping scopes;
+    `GET /budgets/unbudgeted` reports approved spend no budget covers.
+  - **Actuals** (0031): `purchase_orders.request_id` links an order back to its request, so
+    a live PO supersedes the estimate it came from — Plan / Commitment / Actual never
+    double-count. `request_status` gains CANCELLED so an abandoned approval can release its
+    reserve (refused while live orders exist).
+  - **Thresholds** (0032): `warn_pct` (default 80) notifies; `block_pct` (default off) makes
+    the approval throw and roll back. `GET /budgets/impact/:requestId` answers "this eats 92%
+    of IT / Q3" before the approve click; admins may override with an audited written reason.
+  - **Revisions** (0033): append-only ledger of the opening plan and every amount change with
+    delta, reason and author; rollover of an unspent remainder is modelled as a revision of
+    the target budget pointing back at the source. CSV export of the filtered view.
+  - **AZN only** (0034): a budget in another currency matched nothing and sat at 0% forever,
+    which reads as underspending rather than as a broken budget. Requests are AZN by
+    construction; foreign ORDERS (a contract inherits its tender's evaluation currency) no
+    longer have their minor units added to an AZN budget at face value — they leave the AZN
+    estimate standing and surface in the unbudgeted report with their currency.
+  - **Catalog call-offs** carry their own department, so orders placed without a request are
+    charged to a budget too — but only to a category-agnostic one, since nobody classified
+    them.
 - **Spend analytics** (`/buyer/analytics`): 12-month spend chart (ACCEPTED POs), spend by
   category, top-5 suppliers, tender savings (estimate vs awarded, per event), invoices
   paid/outstanding — all RLS-scoped, no chart library.

@@ -59,9 +59,10 @@ export default function Shell() {
         </div>
       </aside>
       <main className="main">
+        {/* In the flow, ABOVE the section content — a floating overlay covered the page */}
+        <Guide />
         <Outlet />
       </main>
-      <Guide />
     </div>
   );
 }

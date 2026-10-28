@@ -52,7 +52,9 @@ export default function Dashboard() {
           <b style={{ color: 'var(--bad)' }}>⚠ {t('budget_over')}</b>
           {overBudgets.map((b: any) => (
             <div key={b.id} className="hint" style={{ marginTop: 4 }}>
-              {b.name}: {fmtMoney(b.committedMinor)} / {fmtMoney(b.amountMinor)} · {b.utilizationPct}%
+              {/* which department blew it matters more than the budget's name */}
+              {b.departmentCode ? `${b.departmentCode} · ` : ''}{b.name} ({b.periodLabel}):{' '}
+              {fmtMoney(b.committedMinor, b.currency)} / {fmtMoney(b.amountMinor, b.currency)} · {b.utilizationPct}%
             </div>
           ))}
           <div style={{ marginTop: 6 }}><Link to="/buyer/budgets">→ {t('budgets')}</Link></div>

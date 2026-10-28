@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useI18n } from '../i18n';
-import { GUIDES, SectionGuide, TourStep } from '../guides';
+import { GUIDES, SECTION_TITLE_KEY, SectionGuide } from '../guides';
 
-// Intercom-style section guide: a floating video thumbnail (screen recording of THIS
-// section on demo data) + an interactive spotlight tour over the live page elements.
-// Resolved by route; sections without a guide render nothing.
+// Section help video, presented as a CARD IN THE FLOW at the top of the section — not a
+// floating overlay. The old widget sat fixed in the bottom-right corner and covered the
+// working screen; this one occupies its own row, so nothing is ever hidden behind it.
+// Clicking expands into a centered modal; the × dismisses the card (remembered per
+// section in localStorage).
+//
+// The root carries data-help-video-widget: scripts/produce-guides.mjs hides that selector
+// while recording, so the help card never appears inside the guide it belongs to.
 
 function resolveGuide(pathname: string): SectionGuide | null {
   if (GUIDES[pathname]) return GUIDES[pathname];
@@ -16,109 +21,81 @@ function resolveGuide(pathname: string): SectionGuide | null {
   return prefix ? GUIDES[prefix] : null;
 }
 
-function Spotlight({ steps, onDone }: { steps: TourStep[]; onDone: () => void }) {
-  const { t, lang } = useI18n();
-  const [i, setI] = useState(0);
-  const present = useMemo(
-    () => steps.filter((s) => document.querySelector(s.selector)),
-    [steps],
-  );
-  const step = present[i];
-  const [rect, setRect] = useState<DOMRect | null>(null);
-
-  useEffect(() => {
-    if (!step) return;
-    const el = document.querySelector(step.selector);
-    if (!el) return;
-    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    const update = () => setRect(el.getBoundingClientRect());
-    const timer = setTimeout(update, 350); // after smooth scroll
-    update();
-    window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, true);
-    return () => { clearTimeout(timer); window.removeEventListener('resize', update); window.removeEventListener('scroll', update, true); };
-  }, [step]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onDone(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onDone]);
-
-  if (!step || !rect) return null;
-  const below = rect.bottom + 170 < window.innerHeight;
-  return (
-    <div className="tour-layer" onClick={onDone}>
-      <div
-        className="tour-spot"
-        style={{ top: rect.top - 6, left: rect.left - 6, width: rect.width + 12, height: rect.height + 12 }}
-      />
-      <div
-        className="tour-tip"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          top: below ? rect.bottom + 14 : Math.max(10, rect.top - 160),
-          left: Math.min(Math.max(10, rect.left), window.innerWidth - 340),
-        }}
-      >
-        <b>{step.title[lang] ?? step.title.ru}</b>
-        <p>{step.text[lang] ?? step.text.ru}</p>
-        <div className="tour-nav">
-          <span className="hint">{i + 1} / {present.length}</span>
-          {i > 0 && <button className="btn small ghost" onClick={() => setI(i - 1)}>‹ {t('prev')}</button>}
-          {i < present.length - 1
-            ? <button className="btn small" onClick={() => setI(i + 1)}>{t('next')} ›</button>
-            : <button className="btn small" onClick={onDone}>✓ OK</button>}
-        </div>
-      </div>
-    </div>
-  );
+// same longest-prefix rule as the guide itself, so a detail page is headed by its section
+function resolveTitleKey(pathname: string): string | undefined {
+  if (SECTION_TITLE_KEY[pathname]) return SECTION_TITLE_KEY[pathname];
+  const prefix = Object.keys(SECTION_TITLE_KEY)
+    .filter((k) => k.endsWith('/') && pathname.startsWith(k))
+    .sort((a, b) => b.length - a.length)[0];
+  return prefix ? SECTION_TITLE_KEY[prefix] : undefined;
 }
+
+const DISMISSED = 'guide_dismissed';
+const dismissedSet = (): Set<string> => {
+  try { return new Set(JSON.parse(localStorage.getItem(DISMISSED) ?? '[]')); } catch { return new Set(); }
+};
 
 export default function Guide() {
   const { pathname } = useLocation();
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const guide = resolveGuide(pathname);
-  const [video, setVideo] = useState(false);
-  const [tour, setTour] = useState(false);
-  const [hidden, setHidden] = useState(() => sessionStorage.getItem('guide_hidden') === '1');
+  const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState<Set<string>>(dismissedSet);
 
-  useEffect(() => { setVideo(false); setTour(false); }, [pathname]);
+  // a new section starts collapsed, whatever the previous one was doing
+  useEffect(() => { setOpen(false); }, [pathname]);
 
-  if (!guide || hidden) return null;
-  // per-language asset, with a graceful fallback to the Russian recording if a language's
-  // video/poster isn't present yet (e.g. produced later).
-  const videoUrl = `/guides/${guide.key}.${lang}.webm`;
-  const videoFallback = `/guides/${guide.key}.ru.webm`;
-  const posterUrl = `/guides/${guide.key}.${lang}.png`;
+  // Esc closes the expanded player, like any modal on the page.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  if (!guide || dismissed.has(guide.key)) return null;
+
+  // Recordings are Azerbaijani only — see guides.ts. Asking for the interface language
+  // would 404 on every non-az UI and fall back a moment later, so ask for az directly.
+  const videoUrl = `/guides/${guide.key}.az.webm`;
+  const posterUrl = `/guides/${guide.key}.az.png`;
+  const titleKey = resolveTitleKey(pathname);
+  const title = titleKey ? t(titleKey) : '';
+
+  const hide = () => {
+    const next = new Set(dismissed).add(guide.key);
+    localStorage.setItem(DISMISSED, JSON.stringify([...next]));
+    setDismissed(next);
+  };
+
   return (
     <>
-      <div className="guide-widget">
-        <button className="guide-close" title="✕"
-          onClick={() => { sessionStorage.setItem('guide_hidden', '1'); setHidden(true); }}>✕</button>
-        <div className="guide-thumb" onClick={() => setVideo(true)}>
-          <img src={posterUrl} alt="" onError={(e) => { (e.target as HTMLImageElement).src = `/guides/${guide.key}.ru.png`; }} />
-          <div className="guide-play">▶</div>
+      <div className="help-card" data-help-video-widget>
+        <button className="help-thumb" onClick={() => setOpen(true)} aria-label={t('guide_open')}>
+          <img src={posterUrl} alt="" />
+          <span className="help-play">▶</span>
+        </button>
+        <div className="help-text">
+          <div className="help-kicker">🎥 {t('guide')}</div>
+          {title && <div className="help-title">{title}</div>}
+          <div className="help-sub">{t('guide_sub')}</div>
         </div>
-        <div className="guide-label">{t('guide')}</div>
-        {guide.tour && guide.tour.length > 0 && (
-          <button className="btn small ghost" style={{ width: '100%' }} onClick={() => setTour(true)}>
-            🧭 {t('tour')}
-          </button>
-        )}
+        <div className="help-actions">
+          <button className="btn help-open" onClick={() => setOpen(true)}>▶ {t('guide_open')}</button>
+          <button className="help-x" onClick={hide} aria-label="✕">✕</button>
+        </div>
       </div>
 
-      {video && (
-        <div className="guide-modal" onClick={() => setVideo(false)}>
-          <video key={videoUrl} src={videoUrl} poster={posterUrl} controls autoPlay
-            onClick={(e) => e.stopPropagation()}
-            onError={(e) => {
-              const v = e.target as HTMLVideoElement;
-              if (!v.src.endsWith(`${guide.key}.ru.webm`)) v.src = videoFallback;
-            }} />
+      {open && (
+        <div className="help-modal" onClick={() => setOpen(false)}>
+          <div className="help-modal-inner" onClick={(e) => e.stopPropagation()}>
+            <video key={videoUrl} src={videoUrl} poster={posterUrl} controls autoPlay />
+            <button className="btn ghost small help-collapse" onClick={() => setOpen(false)}>
+              ⤡ {t('guide_collapse')}
+            </button>
+          </div>
         </div>
       )}
-      {tour && guide.tour && <Spotlight steps={guide.tour} onDone={() => setTour(false)} />}
     </>
   );
 }

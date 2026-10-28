@@ -36,6 +36,10 @@ const pause = ms => new Promise(r => setTimeout(r, ms));
   const budget = await call('/budgets', 'POST', { name: `IT ${tag}`, category: 'IT',
     periodYear: new Date().getUTCFullYear(), amountMinor: 50_000 }, buyer, 201);
   assert.ok(budget.id);
+  assert.equal(budget.status, 'DRAFT');
+  await call(`/budgets/${budget.id}/submit`, 'POST', undefined, buyer, 201);
+  await call(`/budgets/${budget.id}/approve`, 'POST', undefined, buyer, 403);
+  await call(`/budgets/${budget.id}/approve`, 'POST', undefined, approver, 201);
   if (process.env.FRESH_BROWSER_ACCOUNT_FILE) {
     writeFileSync(process.env.FRESH_BROWSER_ACCOUNT_FILE, JSON.stringify({
       email: `buyer-a-${tag}@acceptance.invalid`, password, budgetName: `IT ${tag}`,

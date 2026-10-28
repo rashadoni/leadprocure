@@ -14,7 +14,7 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
-import { IsArray, IsIn, IsInt, IsOptional, IsString, Max, Min, MinLength, ValidateNested } from 'class-validator';
+import { IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min, MinLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import type { ProcurementMethod } from '@leadprocure/shared';
 import { CurrentUser, Roles } from '../../common/auth/decorators';
@@ -35,11 +35,24 @@ class ItemDto {
 class UpsertRequestDto {
   @IsString() @MinLength(3) title!: string;
   @IsOptional() @IsString() category?: string;
+  // Which department's budget this spend belongs to. Omitted → the author's home
+  // department (memberships.department_id); still NULL → reports as "unassigned".
+  @IsOptional() @IsUUID() departmentId?: string;
   @IsOptional() @IsIn(['INCLUSIVE', 'EXCLUSIVE']) vatMode?: 'INCLUSIVE' | 'EXCLUSIVE';
   @IsArray() @ValidateNested({ each: true }) @Type(() => ItemDto) items!: ItemDto[];
 }
 class RejectRequestDto {
   @IsOptional() @IsString() reason?: string;
+}
+// Cancelling releases budget, so the reason is mandatory — the audit trail must say why
+// the money went back.
+class CancelRequestDto {
+  @IsString() @MinLength(3) reason!: string;
+}
+// Only meaningful when a block threshold is armed: the written justification for pushing
+// an approval through it anyway.
+class ApproveRequestDto {
+  @IsOptional() @IsString() @MinLength(3) budgetOverrideReason?: string;
 }
 // Policy entries are buyer-configured maps; guard the envelope shape (array), leave the
 // per-entry fields to the service which persists them as-is.
@@ -55,10 +68,11 @@ export class RequestsService {
     private readonly budgets: BudgetsService,
   ) {}
 
-  async list(q?: string, paging: Paging = parsePaging()) {
+  async list(q?: string, paging: Paging = parsePaging(), departmentId?: string) {
     const rows = await this.rc.manager.query(
       `SELECT pr.id, pr.request_no, pr.title, pr.status, pr.estimated_total_minor, pr.currency, pr.category,
-              pr.method_resolved, pr.created_at,
+              pr.method_resolved, pr.created_at, pr.department_id,
+              (SELECT d.code FROM departments d WHERE d.id = pr.department_id) AS department_code,
               (SELECT u.full_name FROM organization_users u WHERE u.id = pr.created_by) AS created_by_name,
               count(*) OVER()::int AS total_count,
               (SELECT count(*)::int FROM approval_steps s WHERE s.request_id = pr.id) AS steps_total,
@@ -67,8 +81,9 @@ export class RequestsService {
                ORDER BY s.step_no LIMIT 1) AS current_role
        FROM procurement_requests pr
        WHERE ($1::text IS NULL OR pr.title ILIKE '%' || $1 || '%' OR pr.request_no ILIKE '%' || $1 || '%')
+         AND ($4::uuid IS NULL OR pr.department_id = $4)
        ORDER BY pr.created_at DESC LIMIT $2 OFFSET $3`,
-      [q ?? null, paging.limit, paging.offset],
+      [q ?? null, paging.limit, paging.offset, departmentId ?? null],
     );
     return pageFrom(rows, paging);
   }
@@ -85,7 +100,16 @@ export class RequestsService {
       `SELECT step_no, approver_role, status, acted_at FROM approval_steps WHERE request_id = $1 ORDER BY step_no`,
       [id],
     );
-    return { ...rows[0], items, approvals };
+    const dep = rows[0].department_id
+      ? (await m.query(`SELECT code, name FROM departments WHERE id = $1`, [rows[0].department_id]))[0]
+      : null;
+    return {
+      ...rows[0],
+      department_code: dep?.code ?? null,
+      department_name: dep?.name ?? null,
+      items,
+      approvals,
+    };
   }
 
   async getApprovalPolicies() {
@@ -114,12 +138,13 @@ export class RequestsService {
     const seq = await m.query(`SELECT next_document_no($1,'REQ') AS n`, [auth.org_id]);
     const requestNo = `REQ-${new Date().getFullYear()}-${String(Number(seq[0].n)).padStart(4, '0')}`;
     const total = this.computeTotal(dto.items);
+    const departmentId = await this.resolveDepartment(dto.departmentId, auth);
     const req = (
       await m.query(
-        `INSERT INTO procurement_requests(owner_org_id, request_no, title, category, vat_mode,
+        `INSERT INTO procurement_requests(owner_org_id, request_no, title, category, department_id, vat_mode,
            estimated_total_minor, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-        [auth.org_id, requestNo, dto.title, dto.category ?? '*', dto.vatMode ?? 'EXCLUSIVE', total, auth.sub],
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+        [auth.org_id, requestNo, dto.title, dto.category ?? '*', departmentId, dto.vatMode ?? 'EXCLUSIVE', total, auth.sub],
       )
     )[0];
     await this.insertItems(req.id, auth.org_id, dto.items);
@@ -132,9 +157,14 @@ export class RequestsService {
     const total = this.computeTotal(dto.items);
     await m.query(
       `UPDATE procurement_requests
-       SET title=$2, category=$3, vat_mode=$4, estimated_total_minor=$5, version=version+1, updated_at=now()
+       SET title=$2, category=$3, department_id=$4, vat_mode=$5, estimated_total_minor=$6,
+           version=version+1, updated_at=now()
        WHERE id=$1`,
-      [id, dto.title, dto.category ?? req.category, dto.vatMode ?? req.vat_mode, total],
+      [
+        id, dto.title, dto.category ?? req.category,
+        dto.departmentId ?? req.department_id,
+        dto.vatMode ?? req.vat_mode, total,
+      ],
     );
     await m.query(`DELETE FROM request_items WHERE request_id = $1`, [id]);
     await this.insertItems(id, auth.org_id, dto.items);
@@ -170,7 +200,7 @@ export class RequestsService {
 
   // Approval recomputes the total server-side from items (client totals are never
   // trusted) and resolves the procurement method from the buyer's value-band policy.
-  async approve(id: string, auth: AccessTokenPayload) {
+  async approve(id: string, auth: AccessTokenPayload, budgetOverrideReason?: string) {
     const m = this.rc.manager;
     await m.query(`SELECT id FROM procurement_requests WHERE id=$1 FOR UPDATE`, [id]);
     const req = await this.requireStatus(id, ['SUBMITTED']);
@@ -216,16 +246,21 @@ export class RequestsService {
     );
     const total = Number(totalRows[0].total);
     const method = await this.resolveMethod(req.category, total);
+    // approved_at is the date the spend is charged on — budgets slice by it, so it must be
+    // the approval instant, not the (possibly much earlier) creation date.
     await m.query(
       `UPDATE procurement_requests
-       SET status='APPROVED', approved_by=$2, estimated_total_minor=$3, method_resolved=$4, updated_at=now()
+       SET status='APPROVED', approved_by=$2, approved_at=now(), estimated_total_minor=$3,
+           method_resolved=$4, updated_at=now()
        WHERE id=$1`,
       [id, auth.sub, total, method],
     );
     await this.audit.record('REQUEST_APPROVED', 'procurement_request', id, { total, method });
+    // Budget control. With no block threshold configured (the default) this only attaches
+    // warnings, exactly as before. With one armed, it THROWS — and because the whole
+    // request runs in one transaction, the approval above is rolled back with it.
+    const budgetWarnings = await this.budgets.enforceOnApproval(id, auth, budgetOverrideReason);
     const approved = await this.get(id);
-    // Soft, non-blocking budget control: flag any budget this approval tips over.
-    const budgetWarnings = await this.budgets.warningsForRequest(approved);
     return { ...approved, budgetWarnings };
   }
 
@@ -249,6 +284,32 @@ export class RequestsService {
       [id, auth.sub],
     );
     await this.audit.record('REQUEST_REJECTED', 'procurement_request', id, { reason: reason ?? null });
+    return this.get(id);
+  }
+
+  // Cancel an APPROVED request that will never be ordered. Without this the budget
+  // commitment it holds is permanent: the money stays reserved against a purchase that
+  // nobody is going to make. Refused once real orders exist — cancel those first, so the
+  // spend history and the budget never disagree.
+  async cancel(id: string, auth: AccessTokenPayload, reason: string) {
+    const m = this.rc.manager;
+    await this.requireStatus(id, ['APPROVED']);
+    const live = await m.query(
+      `SELECT po_no FROM purchase_orders WHERE request_id=$1 AND status NOT IN ('CANCELLED','REJECTED')`,
+      [id],
+    );
+    if (live.length) {
+      throw new BadRequestException(
+        `Cannot cancel: order(s) ${live.map((p: any) => p.po_no).join(', ')} already exist — cancel them first`,
+      );
+    }
+    await m.query(
+      `UPDATE procurement_requests
+       SET status='CANCELLED', cancelled_at=now(), cancel_reason=$2, updated_at=now()
+       WHERE id=$1`,
+      [id, reason],
+    );
+    await this.audit.record('REQUEST_CANCELLED', 'procurement_request', id, { reason, by: auth.sub });
     return this.get(id);
   }
 
@@ -288,6 +349,24 @@ export class RequestsService {
     return rows.length ? rows[0].method : 'OPEN_TENDER';
   }
 
+  // An explicit department must exist for THIS buyer (RLS makes another org's department
+  // invisible, so a missing row is either a typo or a cross-org probe — both are 400).
+  // With none given, fall back to the author's home department; NULL stays NULL.
+  private async resolveDepartment(departmentId: string | undefined, auth: AccessTokenPayload): Promise<string | null> {
+    const m = this.rc.manager;
+    if (departmentId) {
+      const found = await m.query(`SELECT id, is_active FROM departments WHERE id = $1`, [departmentId]);
+      if (!found.length) throw new BadRequestException('Unknown department');
+      if (!found[0].is_active) throw new BadRequestException('Department is inactive');
+      return departmentId;
+    }
+    const home = await m.query(
+      `SELECT department_id FROM memberships WHERE user_id = $1 AND org_id = $2 AND department_id IS NOT NULL LIMIT 1`,
+      [auth.sub, auth.org_id],
+    );
+    return home[0]?.department_id ?? null;
+  }
+
   private computeTotal(items: ItemDto[]): number {
     if (!items.length) throw new BadRequestException('At least one item is required');
     return safeMoney(items.reduce((sum, it) => sum + lineMoney(it.qty, it.estUnitPriceMinor), 0));
@@ -323,8 +402,13 @@ export class RequestsController {
   constructor(private readonly requests: RequestsService) {}
 
   @Get() @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
-  list(@Query('q') q?: string, @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
-    return this.requests.list(q, parsePaging(page, pageSize));
+  list(
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('departmentId') departmentId?: string,
+  ) {
+    return this.requests.list(q, parsePaging(page, pageSize), departmentId || undefined);
   }
 
   @Get('method-policies') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
@@ -361,13 +445,22 @@ export class RequestsController {
   submit(@Param('id') id: string) { return this.requests.submit(id); }
 
   @Post(':id/approve') @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
-  approve(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
-    return this.requests.approve(id, auth);
+  approve(
+    @Param('id') id: string,
+    @CurrentUser() auth: AccessTokenPayload,
+    @Body() body?: ApproveRequestDto,
+  ) {
+    return this.requests.approve(id, auth, body?.budgetOverrideReason);
   }
 
   @Post(':id/reject') @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   reject(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload, @Body() body: RejectRequestDto) {
     return this.requests.reject(id, auth, body?.reason);
+  }
+
+  @Post(':id/cancel') @Roles('BUYER_ADMIN')
+  cancel(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload, @Body() body: CancelRequestDto) {
+    return this.requests.cancel(id, auth, body.reason);
   }
 }
 
