@@ -1,4 +1,4 @@
-import { returnedRows } from '../../common/procurement/invariants';
+import { returnedRows, safeMoney } from '../../common/procurement/invariants';
 import {
   BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get,
   Injectable, Module, NotFoundException, Param, Post, Put, Query, Res,
@@ -455,6 +455,7 @@ export class BudgetsService {
     )[0];
     if (!budget) return null; // no budget covers this spend — the unbudgeted report's job
 
+    await this.assertBudgetAccess(budget.id);
     const current = (await this.list()).find((b: any) => b.id === budget.id);
     if (!current) return null;
     const policy = await this.getPolicy();
@@ -469,8 +470,8 @@ export class BudgetsService {
       currentUsedMinor: current.usedMinor, requestMinor: amount,
       projectedUsedMinor: projected, projectedPct: pct,
       warnPct: policy.warnPct, blockPct: policy.blockPct,
-      wouldWarn: pct >= policy.warnPct,
-      wouldBlock: policy.blockPct != null && pct > policy.blockPct,
+      wouldWarn: BigInt(projected) * 100n >= BigInt(current.amountMinor) * BigInt(policy.warnPct),
+      wouldBlock: policy.blockPct != null && BigInt(projected) * 100n > BigInt(current.amountMinor) * BigInt(policy.blockPct),
     };
   }
 
@@ -487,7 +488,8 @@ export class BudgetsService {
       if (!overrideReason) {
         throw new ForbiddenException(
           `Budget "${impact.budgetName}"${impact.departmentCode ? ` (${impact.departmentCode})` : ''} ` +
-          `would reach ${impact.projectedPct}% of ${impact.periodLabel}, over the ${impact.blockPct}% block threshold. ` +
+          (impact.amountMinor === 0 ? 'has a zero limit and positive projected spend. ' :
+          `would exceed the ${impact.blockPct}% block threshold for ${impact.periodLabel} (${impact.projectedUsedMinor} minor units). `) +
           (policy.allowOverride ? 'An admin may approve with a written override reason.' : 'Overrides are disabled for this organization.'),
         );
       }
@@ -759,6 +761,7 @@ export class BudgetsService {
 
   async create(dto: UpsertBudgetDto, auth: AccessTokenPayload) {
     await this.lockPlans();
+    safeMoney(dto.amountMinor);
     const period = resolveBudgetPeriod(dto);
     await this.assertKnownCategory(dto.category?.trim() || '*');
     await this.assertMayWrite(auth, dto.departmentId ?? null);
@@ -792,6 +795,7 @@ export class BudgetsService {
   async update(id: string, dto: UpsertBudgetDto, auth: AccessTokenPayload) {
     await this.lockPlans();
     await this.assertBudgetAccess(id, true);
+    safeMoney(dto.amountMinor);
     const period = resolveBudgetPeriod(dto);
     await this.assertKnownCategory(dto.category?.trim() || '*');
     await this.assertMayWrite(auth, dto.departmentId ?? null);
@@ -977,7 +981,7 @@ export class BudgetsService {
     );
     if (already.length) throw new ConflictException('This remainder has already been carried forward');
 
-    const amount = target.amountMinor + source.remainingMinor;
+    const amount = safeMoney(target.amountMinor + source.remainingMinor);
     await this.rc.manager.query(`UPDATE budgets SET amount_minor=$2, updated_at=now() WHERE id=$1`, [targetId, amount]);
     await this.rc.manager.query(
       `INSERT INTO budget_revisions(buyer_org_id, budget_id, amount_before_minor, amount_after_minor, reason,

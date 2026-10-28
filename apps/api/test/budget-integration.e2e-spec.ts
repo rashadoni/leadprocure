@@ -42,8 +42,8 @@ describe('runtime budget and procurement audit integration', () => {
   });
   const draftBudget = async (name: string, category: string, amountMinor: number, departmentId?: string) =>
     (await http().post('/budgets').set(...auth(buyer)).send({ name: `${name}-${tag}`, category, amountMinor, periodYear: year, ...(departmentId ? { departmentId } : {}) }).expect(201)).body.id;
-  const requestFor = async (category: string, departmentId?: string) => {
-    const r = await http().post('/requests').set(...auth(buyer)).send({ title: `Request ${tag}`, category, ...(departmentId ? { departmentId } : {}), items: [{ name: 'Item', qty: 1, estUnitPriceMinor: 800 }] }).expect(201);
+  const requestFor = async (category: string, departmentId?: string, estUnitPriceMinor = 800) => {
+    const r = await http().post('/requests').set(...auth(buyer)).send({ title: `Request ${tag}`, category, ...(departmentId ? { departmentId } : {}), items: [{ name: 'Item', qty: 1, estUnitPriceMinor }] }).expect(201);
     await http().post(`/requests/${r.body.id}/submit`).set(...auth(buyer)).expect(201); return r.body.id;
   };
 
@@ -54,10 +54,16 @@ describe('runtime budget and procurement audit integration', () => {
       await http().get(`/budgets/${other}/${suffix}`).set(...auth(plain)).expect(403);
       await http().get(`/budgets/${own}/${suffix}`).set(...auth(plain)).expect(200);
     }
-    await http().post(`/budgets/${other}/submit`).set(...auth(plain)).expect(403);
-    await http().delete(`/budgets/${other}`).set(...auth(plain)).expect(403);
+    const hiddenRequest = await requestFor('OTHER', depB);
+    // Activate the other department plan so the impact lookup would otherwise expose it.
     await http().post(`/budgets/${other}/submit`).set(...auth(buyer)).expect(201);
-    await http().post(`/budgets/${other}/recall`).set(...auth(plain)).expect(403);
+    await http().post(`/budgets/${other}/approve`).set(...auth(approver)).expect(201);
+    await http().get(`/budgets/impact/${hiddenRequest}`).set(...auth(plain)).expect(403);
+    const otherDraft = await draftBudget('Other draft', 'OTHER_DRAFT', 10000, depB);
+    await http().post(`/budgets/${otherDraft}/submit`).set(...auth(plain)).expect(403);
+    await http().delete(`/budgets/${otherDraft}`).set(...auth(plain)).expect(403);
+    await http().post(`/budgets/${otherDraft}/submit`).set(...auth(buyer)).expect(201);
+    await http().post(`/budgets/${otherDraft}/recall`).set(...auth(plain)).expect(403);
     await http().post(`/budgets/${own}/submit`).set(...auth(plain)).expect(201);
     await http().post(`/budgets/${own}/recall`).set(...auth(plain)).expect(201);
   });
@@ -90,18 +96,31 @@ describe('runtime budget and procurement audit integration', () => {
     await owner.query('SELECT pg_advisory_xact_lock(hashtextextended($1,85))', [org]);
     const pending = ids.map(id => http().post(`/requests/${id}/approve`).set(...auth(approver)).then(r => r));
     let blocked = 0;
+    let settled: PromiseSettledResult<any>[] = [];
     try {
       for (let i = 0; i < 100; i++) {
         const r = await owner.query("SELECT count(*)::int AS n FROM pg_stat_activity WHERE wait_event='advisory' AND query LIKE '%hashtextextended($1,85)%'");
         blocked = r.rows[0].n; if (blocked >= 2) break;
         await new Promise(resolve => setTimeout(resolve, 20));
       }
-    } finally { await owner.query('ROLLBACK'); }
-    const outcomes = await Promise.all(pending);
+    } finally { await owner.query('ROLLBACK'); settled = await Promise.allSettled(pending); }
+    const outcomes = settled.map(r => { if (r.status === 'rejected') throw r.reason; return r.value; });
     expect(blocked).toBeGreaterThanOrEqual(2);
     expect(outcomes.map(r => r.status).sort()).toEqual([201, 403]);
     const b = (await http().get('/budgets').set(...auth(buyer)).expect(200)).body.find((x: any) => x.id === live);
     expect(b.usedMinor).toBe(800);
+  });
+
+  it('blocks positive spend against zero and a one-minor-unit breach despite display rounding', async () => {
+    for (const [category, limit, requestAmount] of [['ZERO', 0, 800], ['MINOR', 100000, 100001]] as const) {
+      const id = await draftBudget(category, category, limit);
+      await http().post(`/budgets/${id}/submit`).set(...auth(buyer)).expect(201);
+      await http().post(`/budgets/${id}/approve`).set(...auth(approver)).expect(201);
+      const req = await requestFor(category, undefined, requestAmount);
+      const impact = await http().get(`/budgets/impact/${req}`).set(...auth(buyer)).expect(200);
+      expect(impact.body.wouldBlock).toBe(true);
+      await http().post(`/requests/${req}/approve`).set(...auth(approver)).expect(403);
+    }
   });
 
   it('preserves financial department references and rejects absent membership updates', async () => {
