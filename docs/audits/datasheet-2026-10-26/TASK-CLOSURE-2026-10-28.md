@@ -69,3 +69,8 @@ PR12 merged into main1b25692 and exact-main293API/3contention/13browser/fresh ga
 ## PR13 merged-main verification
 
 Owner explicitly approved PR13; normal exact-head merge produced main90414698629dea5c69e70dfeeb2a3762fa93be14. Reviewed and merged trees match. Run40764184136 BOTH jobs SUCCESS:294API/3contention/13native browser/1freshHTTPS; build, exports, migrations, restore and fresh signed-license/private-storage/AV PASS. See OCDS-EARLY-DISCLOSURE-MAIN-ACCEPTANCE-2026-10-29.json. Production unchanged.
+
+
+## LP-A19 budget approval messages and current policy
+
+Candidatee6ec993 / PR14, full run40765408662 BOTH jobs SUCCESS:294API/3contention/14native browser/1freshHTTPS and build/typecheck/schemas/migrations/restore/fresh AV-private storage PASS. Requests no longer treats any403+cached wouldBlock as permission to override. Only explicit current server budget code+canOverride can prompt; disabled policy/self-approval show AZ/RU/EN reasons. Real browser zero-budget/current-policy/override/SoD checks and existing API rollback assertions pass. Separate independent review no blockers. See BUDGET-DIALOG-ACCEPTANCE-2026-10-29.json. Ready for separate owner merge approval; main and production not changed by PR14 yet. This bounded finding qualifies earlier broad LP-A19 completeness statements; other evidence remains valid.
