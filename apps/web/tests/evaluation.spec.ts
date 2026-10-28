@@ -67,9 +67,9 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
   await expect(groupA.getByRole('button').first()).toHaveText(/Browser audit s2.*⭐/);
   await expect(groupB.getByRole('button').first()).toHaveText(/Browser audit s2.*⭐/);
   expect(currentEvaluation.ranking[0].bid_id).toBe(bids[1].id);
-  const awardThrough = async (button: Locator, reason: string) => {
+  const awardThrough = async (button: Locator, reason: string, targetEventId = event.id) => {
     const dialog = page.waitForEvent('dialog').then(async d => { expect(d.type()).toBe('prompt'); await d.accept(reason); });
-    const response = page.waitForResponse(r => r.url().endsWith(`/events/${event.id}/award`) && r.request().method() === 'POST');
+    const response = page.waitForResponse(r => r.url().endsWith(`/events/${targetEventId}/award`) && r.request().method() === 'POST');
     await button.click(); await dialog;
     const r = await response; expect(r.status(), await r.text()).toBe(201);
   };
@@ -106,4 +106,46 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
     expect(po.items.map((i: any) => i.name)).toEqual([itemName]);
     expect(Number(po.total_minor)).toBe(total);
   }
+  // The same UI change must preserve reverse-auction price ranking (LP-A04/A05).
+  const auctionReq = await call('/requests', { title: `Browser auction ${tag}`, items: [{ name: 'Auction item', qty: 10, estUnitPriceMinor: 10000 }] }, buyer.accessToken);
+  await call(`/requests/${auctionReq.id}/submit`, {}, buyer.accessToken);
+  await call(`/requests/${auctionReq.id}/approve`, {}, approver.accessToken);
+  const auction = await call(`/events/reverse/from-request/${auctionReq.id}`, { closeAt: new Date(Date.now() + 3600000).toISOString(), visibility: 'PUBLIC', startPriceMinor: 100000, minDecrementMinor: 1000 }, buyer.accessToken);
+  await call(`/events/${auction.id}/publish`, {}, buyer.accessToken);
+  for (const [supplier, price] of [[s1, 9000], [s2, 8000]] as const) {
+    await call(`/events/${auction.id}/auction/bids`, { items: [{ eventItemId: auction.items[0].id, unitPriceMinor: price }] }, supplier.accessToken);
+  }
+  const clock = new Client({ connectionString: process.env.DATABASE_OWNER_URL });
+  await clock.connect();
+  try {
+    await clock.query(`UPDATE sourcing_events SET close_at=now()-interval '1 second' WHERE id=$1`, [auction.id]);
+    await clock.query(`SELECT * FROM close_due_events()`);
+  } finally { await clock.end(); }
+  await page.goto(`/buyer/events/${auction.id}`);
+  const finalized = page.waitForResponse(r => r.url().endsWith(`/events/${auction.id}/auction/finalize`) && r.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Finalize', exact: true }).click();
+  expect((await finalized).status()).toBe(201);
+  const auctionLot = page.getByRole('group', { name: auction.lots[0].title, exact: true });
+  await expect(auctionLot.getByRole('button').first()).toHaveText(/Browser audit s2.*⭐/);
+  await expect(auctionLot.getByRole('button').first()).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Score', exact: true })).toHaveCount(0);
+  await awardThrough(auctionLot.getByRole('button', { name: /Browser audit s2/ }), 'Best accepted auction price', auction.id);
+  const auctionContractResponse = page.waitForResponse(r => r.url().includes('/contracts/from-award/') && r.request().method() === 'POST');
+  await page.getByRole('button', { name: `Create contract · ${auction.lots[0].title}`, exact: true }).click();
+  const auctionContract = await (await auctionContractResponse).json();
+  await page.waitForURL('**/buyer/contracts');
+  expect(auctionContract.supplier_org_id).toBe(s2.org.id);
+  expect(Number(auctionContract.total_minor)).toBe(80000);
+  const auctionPo = await call(`/contracts/${auctionContract.id}/orders`, {}, buyer.accessToken);
+  expect(auctionPo.items).toHaveLength(1);
+  expect(Number(auctionPo.items[0].unit_price_minor)).toBe(8000);
+  expect(Number(auctionPo.total_minor)).toBe(80000);
+  for (const status of ['CONFIRMED', 'SHIPPED', 'DELIVERED']) {
+    await call(`/orders/${auctionPo.id}/status`, { status }, s2.accessToken);
+  }
+  await call(`/orders/${auctionPo.id}/receipts`, { items: [{ poItemId: auctionPo.items[0].id, qty: 10 }] }, buyer.accessToken);
+  const auctionInvoice = await call(`/invoices/from-po/${auctionPo.id}`, { items: [{ poItemId: auctionPo.items[0].id, qty: 10, unitPriceMinor: 8000 }] }, s2.accessToken);
+  expect(auctionInvoice.status).toBe('MATCHED');
+  expect(Number(auctionInvoice.gross_minor)).toBe(80000);
+
 });
