@@ -1,0 +1,35 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/16",
+  "head": "ada0d3e05758186ad890ef428ab4660ae284c5f8",
+  "originalCriterion": "LP-A19 RFI/RFP native flow, own response persistence and localized submission receipts",
+  "status": "PASS",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/40775869583",
+  "apiSuites": 26,
+  "apiTests": 294,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "freshHttpsBrowserTests": 1,
+  "newNativeSubsteps": [
+    "RFI AZ",
+    "RFP RU",
+    "RFP EN"
+  ],
+  "assertions": [
+    "actual supplier registration/context httpOnly session without token injection/copied cookies or extra password login",
+    "UI submission and localized SHA receipt",
+    "supplier own read-only response persists after reload and closing",
+    "buyer actual HTTP and UI cannot obtain technical text before opening",
+    "another supplier has no own bid and no technical text before/after opening",
+    "actual buyer UI opening reveals proposal with real RFP price1200minor",
+    "RFI total stays null, Score/Award/AI absent and actual API award400"
+  ],
+  "independentReview": "rfx_response_review bound no-remaining-blockers review to exact ada0d3e after marker/emoji selector correction",
+  "automaticReview": "40775869602 fallback Anthropic400 insufficient credits; not semantic review",
+  "rawLog": "/tmp/leadprocure-rfx-response-ada0d3e.log",
+  "productionChanged": false,
+  "materialsChanged": false,
+  "mergeStatus": "awaiting separate owner authorization",
+  "smtpMetaPriority": "LAST per owner; external delivery NOT RUN",
+  "qualification": "Specific original LP-A19 criterion accepted in disposable CI; RFP native step stops at opening/scoring availability, not a newly claimed full RFP invoice chain. No all20/live production claim."
+}
