@@ -209,7 +209,7 @@ export class RequestsService {
     // Segregation of duties: the person who raised the request cannot approve it — the
     // spend always needs a second pair of eyes. (Checked before any approval-step mutation.)
     if (req.created_by && req.created_by === auth.sub) {
-      throw new ForbiddenException('You cannot approve a request you created (segregation of duties)');
+      throw new ForbiddenException({ statusCode: 403, error: 'Forbidden', code: 'REQUEST_SELF_APPROVAL_FORBIDDEN', message: 'You cannot approve a request you created (segregation of duties)' });
     }
 
     // Multi-step chain: advance the current step; only the FINAL step triggers the

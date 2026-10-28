@@ -90,6 +90,14 @@ export default function Requests() {
   // actually approves — nobody waves 36 000 ₼ through without seeing what's in it.
   const [preview, setPreview] = useState<Record<string, any>>({});
   const [impact, setImpact] = useState<Record<string, any>>({});
+  const approvalError = (e: any) => {
+    switch (e.response?.data?.code) {
+      case 'BUDGET_LIMIT_EXCEEDED': return t('bud_approval_blocked');
+      case 'BUDGET_OVERRIDE_FORBIDDEN': return t('bud_override_forbidden');
+      case 'REQUEST_SELF_APPROVAL_FORBIDDEN': return t('request_self_approval_forbidden');
+      default: return e.response?.data?.message?.toString() ?? 'Error';
+    }
+  };
   const approveGuard = async (id: string) => {
     if (!preview[id]) {
       const { data } = await api.get(`/requests/${id}`);
@@ -103,13 +111,14 @@ export default function Requests() {
     try {
       await api.post(`/requests/${id}/approve`);
     } catch (e: any) {
-      // 403 = a budget block threshold; an admin may push through with a written reason
-      const msg = e.response?.data?.message?.toString() ?? 'Error';
-      if (e.response?.status === 403 && isAdmin && impact[id]?.wouldBlock) {
-        const reason = prompt(`${msg}\n\n${t('bud_override_prompt')}`);
+      // Only the current server decision can authorize an override, never a cached preview.
+      const msg = approvalError(e);
+      if (e.response?.status === 403 && e.response.data?.code === 'BUDGET_LIMIT_EXCEEDED'
+        && e.response.data.canOverride === true && isAdmin) {
+        const reason = prompt(t('bud_override_prompt'));
         if (!reason || reason.trim().length < 3) return;
         try { await api.post(`/requests/${id}/approve`, { budgetOverrideReason: reason.trim() }); }
-        catch (e2: any) { alert(e2.response?.data?.message?.toString() ?? 'Error'); return; }
+        catch (e2: any) { alert(approvalError(e2)); return; }
       } else { alert(msg); return; }
     }
     load();

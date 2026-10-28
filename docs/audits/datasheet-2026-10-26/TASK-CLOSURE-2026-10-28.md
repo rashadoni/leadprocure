@@ -59,3 +59,13 @@ Candidatece090a1 / PR12, run40706846700 BOTH jobs PASS:26suites/293API,3contenti
 ## LP-A14 explicit negative endpoint check
 
 29October: add standalone authenticated OCDS export check before opening. Existing detail secrecy and post-award export results do not independently prove this exact criterion. Assert no bid identifier/prices/payload, empty awards and no tender value; uninvited supplier404. Independent static review no blockers; new hosted outcome pending. No product bug or new feature claimed.
+
+
+## LP-A14 result, 29October
+
+PR12 merged into main1b25692 and exact-main293API/3contention/13browser/fresh gate40762059590 PASS. Continued LP-A14: standalone pre-opening OCDS boundary in candidate49d5d67 / PR13 PASS in full run40762961832(294API/3contention/13browser/1freshHTTPS). New test rejects actual bid ID, financial/payload fields and known bid prices, verifies uninvited supplier404. Separate independent reviewer no blockers. Application code unchanged; this is explicit criterion evidence, not a newly claimed product fix. No blanket all20 production acceptance or optional release work.
+
+
+## PR13 merged-main verification
+
+Owner explicitly approved PR13; normal exact-head merge produced main90414698629dea5c69e70dfeeb2a3762fa93be14. Reviewed and merged trees match. Run40764184136 BOTH jobs SUCCESS:294API/3contention/13native browser/1freshHTTPS; build, exports, migrations, restore and fresh signed-license/private-storage/AV PASS. See OCDS-EARLY-DISCLOSURE-MAIN-ACCEPTANCE-2026-10-29.json. Production unchanged.

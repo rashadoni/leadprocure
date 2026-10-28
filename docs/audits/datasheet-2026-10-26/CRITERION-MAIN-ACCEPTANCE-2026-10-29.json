@@ -1,0 +1,38 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/12",
+  "head": "ce090a14af847f12696828c10439a19358a43d50",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/40762059590",
+  "status": "PASS",
+  "apiSuites": 26,
+  "apiTests": 293,
+  "contentionTests": 3,
+  "nativeBrowserScenarios": 13,
+  "freshHttpsBrowserScenarios": 1,
+  "newExplicitCriteria": {
+    "LP-A03": [
+      "8 concurrent contract retries: one row/one audit",
+      "cancel queued before create: no contract; cancellation audit only",
+      "create queued before cancel: one active award/contract; no cancellation audit"
+    ],
+    "LP-A06": [
+      "re-evaluate queued before award: new evaluation referenced in award and audit",
+      "award queued before re-evaluate: no post-award evaluation",
+      "disqualify queued before award: no award of disqualified bid",
+      "award queued before disqualify: existing active award cannot be disqualified"
+    ],
+    "LP-A11": [
+      "BLOCKED rejects new order from existing ACTIVE catalog without creating PO; earlier CONFIRMED PO completes shipment/GRN; unblocking restores new orders"
+    ]
+  },
+  "observedBarrier": "actual HTTP requests waiting on holder event advisory lock, pg_blocking_pids and pg_stat_clear_snapshot; both queue orders independently tested",
+  "independentCodexReview": "No blockers; HTTP start, barrier, cleanup, persisted rows/audits and catalog flow reviewed",
+  "automaticAgentReview": "fallback Anthropic400 insufficient credits; no semantic review",
+  "businessLogicChanged": false,
+  "productionChanged": false,
+  "rawLog": "/tmp/leadprocure-criterion-main-1b25692.log",
+  "qualification": "Closes specified missing acceptance-evidence cases. General suite PASS is not proof of every possible behavior; no blanket all20 production acceptance.",
+  "mergeCommit": "1b25692823a23537be5fd5b36eb6314d3f11045e",
+  "mergeAuthorization": "User continued immediately after pending PR12 merge question",
+  "reviewedAndMergedSourceTreesEqual": true
+}
