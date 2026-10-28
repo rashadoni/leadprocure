@@ -1,5 +1,16 @@
 # Исполнение LP-A00–LP-A19
 
+## После разрешённого объединения PR3/4/5/6 — 28 октября 2026
+
+**Все четыре PR объединены по явному разрешению владельца.** Итоговый main `974a31b05703279d7f36c72a153d42b5bbd321a4`: [полная приёмка40593765052](https://github.com/rashadoni/leadprocure/actions/runs/40593765052) и [PPTX rendering40593880674](https://github.com/rashadoni/leadprocure/actions/runs/40593880674) SUCCESS.195 API +3 contention +9 Chromium +1 fresh HTTPS; build/schema/upgrade/restore и15 страниц PPTX PASS. Предыдущие записи «main не изменялся / merge не разрешён» ниже сохранены как история и superseded этим фактом.
+
+**Это не разрешение и не готовность заменить действующий runtime.** Read-only сверка выявила ветку `claude/budget-workflow400f861` с40 применёнными миграциями и расширенным бюджетированием. В ней отсутствует `budgets.period_year`, необходимый прежнему main. Прямое обновление main сломало бы бюджеты/согласование. Подробности и реальные release prerequisites: [RUNTIME-RECONCILIATION-2026-10-28.md](RUNTIME-RECONCILIATION-2026-10-28.md).
+
+Подготовлен отдельный кандидат, сохраняющий действующее бюджетирование и исправления закупок: [PR7 API](https://github.com/rashadoni/leadprocure/pull/7), [PR8 UI](https://github.com/rashadoni/leadprocure/pull/8), [PR9 гиды и маршрут](https://github.com/rashadoni/leadprocure/pull/9). Они зависимы в указанном порядке; каждый diff меньше400000bytes, лимит ревью не изменялся. Их текущие проверки должны приниматься по собственным SHA, а не по старому зелёному main. Оба исходных набора применённых миграций проверяются по именам и SHA256 файлов, обновление — отдельными синтетическими базами. Новые конкретные найденные дефекты и результаты исправлений — в [журнале интеграции](../../budget-audit-integration-session-log.md).
+
+Разрешение на merge PR3/4/5/6 не подменяет владельческое решение по новым PR7/8/9. Production не менялся; смешанные каталоги Compose, подписанная лицензия оператора и реальный защищённый backup остаются отдельными условиями выпуска. SMTP/Meta отсутствуют по ответу владельца. Историческая матрица ниже относится к указанным там кандидатам и изолированным сценариям.
+
+
 ## Дополнительная приёмка — 28 октября 2026 (Asia/Baku)
 
 По указанию пользователя работа продолжена сразу после каждого блока. **Полный расширенный gate PASS:** [run40590876331](https://github.com/rashadoni/leadprocure/actions/runs/40590876331), code `e0cd658f7c9454e523205795fa68aa40f87bcef0`.195 API +3 отдельные contention tests +9 обычных Chromium scenarios; fresh production Compose, typecheck/build/schemas/upgrade/restore PASS. Отдельный настоящий HTTPS Chromium scenario также PASS. Доказательства: [ACCEPTANCE-2026-10-28-EXTENDED.json](ACCEPTANCE-2026-10-28-EXTENDED.json).

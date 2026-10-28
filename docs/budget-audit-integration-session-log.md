@@ -31,3 +31,9 @@ Created dedicated codex/leadprocure-budget-audit-integration worktree from main9
 
 - Final source72b448c; independent routing rereview found no blockers. Final hosted run40652348096 active. Cancelled only this task's known obsolete2a9d28c40652015154 andb1d304a40651791356 to avoid repeating heavy source builds after the route fix; successful main gates untouched. Earlier stages remain historical evidence, not final acceptance.
 - Preparing three bounded review parts: API/migrations/shared/integration fixtures; buyer UI+native browser; existing runtime guide assets/scripts/routing documentation. No review cap increased, main remains974a31b. Production unmodified/not authorized; signed operator license and protected backup are still concrete release prerequisites.
+
+## 2026-10-28 — bounded PRs and native accessible-name correction
+
+- Created draft PR7(API)6551e6c301369bytes, PR8(UI)1fa3075175739bytes, PR9(guides/docs)cc40fa2284952bytes; each below unchanged400000byte review cap. Attached all3. Original full candidate history preserved on integration branch; split trees compose exactly to31bc308. Merge approval for earlier PR3/4/5/6 does not authorize these new PRs.
+- Correction to prior cancellation entry:40652015154 cancellation requested;40651791356 had already completed, so cancellation refused. Its fresh production job actually succeeded; its native browser failed at finance role routing before the fix.
+-72b448c native browser now renders correct finance menu, request row and decision buttons. Its remaining failure was exact accessible-name locator: tooltip text is appended to button name. Added explicit localized aria-label for approve/confirm action, preserving two-step decision. No authorization or assertion weakened. New PR8/PR9 head checks required.283API+3contention/dual-history upgrade/full build remain passed on72b448c; no final all-green claim yet.
