@@ -38,11 +38,16 @@ export default function Analytics() {
   const { t } = useI18n();
   const [currency,setCurrency]=useState('AZN');
   const [d, setD] = useState<Spend | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [reload, setReload] = useState(0);
   // The page used to be hard-wired to the last 12 months, so "show me Q3" had no answer.
   // Presets cover what gets asked for; the month inputs cover everything else.
   const [win, setWin] = useState<{ from: string; to: string }>({ from: '', to: '' });
   const monthsAgo = (n: number) => {
-    const dt = new Date(); dt.setUTCMonth(dt.getUTCMonth() - n);
+    const dt = new Date();
+    // Month arithmetic must start on day 1: June 31 otherwise rolls into July.
+    dt.setUTCDate(1);
+    dt.setUTCMonth(dt.getUTCMonth() - n);
     return dt.toISOString().slice(0, 7);
   };
   const thisMonth = new Date().toISOString().slice(0, 7);
@@ -51,14 +56,21 @@ export default function Analytics() {
   // the card simply doesn't render — the rest of the page is unaffected.
   const [pace, setPace] = useState<Pace[]>([]);
   useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    setD(null);
+    setLoadError(false);
     api.get('/dashboard/spend-analytics', {
+      signal: controller.signal,
       params: {
         currency,
         ...(win.from ? { from: `${win.from}-01` } : {}),
         ...(win.to ? { to: `${win.to}-01` } : {}),
       },
-    }).then((r) => setD(r.data));
-  }, [win.from, win.to, currency]);
+    }).then((r) => { if (active) setD(r.data); })
+      .catch(() => { if (active) setLoadError(true); });
+    return () => { active = false; controller.abort(); };
+  }, [win.from, win.to, currency, reload]);
   useEffect(() => {
     api.get('/budgets/rollup', { params: { current: 1 } })
       .then((r) => setPace(r.data)).catch(() => setPace([]));
@@ -78,7 +90,20 @@ export default function Analytics() {
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
 
-  if (!d) return <><h1>{t('analytics')}</h1><div className="center">…</div></>;
+  const filters = <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
+    <select data-testid="analytics-currency" aria-label={t('currency')} value={currency} onChange={e=>setCurrency(e.target.value)}>{['AZN','USD','EUR'].map(c=><option key={c}>{c}</option>)}</select>
+    <button className="btn ghost small" onClick={() => preset(11)}>{t('win_12m')}</button>
+    <button className="btn ghost small" onClick={() => preset(2)}>{t('win_quarter')}</button>
+    <button className="btn ghost small" onClick={() => setWin({ from: `${new Date().getUTCFullYear()}-01`, to: thisMonth })}>{t('win_ytd')}</button>
+    <input type="month" aria-label={t('analytics_from')} value={win.from} onChange={(e) => setWin({ ...win, from: e.target.value })} style={{ width: 150 }} />
+    <input type="month" aria-label={t('analytics_to')} value={win.to} onChange={(e) => setWin({ ...win, to: e.target.value })} style={{ width: 150 }} />
+    <button className="btn ghost small" disabled={!d} onClick={exportCsv}>⤓ CSV</button>
+  </div>;
+
+  if (!d) return <><h1>{t('analytics')}</h1>{filters}
+    {loadError ? <div role="alert">{t('analytics_load_error')} <button className="btn ghost small" onClick={() => setReload(n => n + 1)}>{t('analytics_retry')}</button></div>
+      : <div className="center" role="status">…</div>}
+  </>;
 
   const money = (value: number) => fmtMoney(value, d.currency);
   // the plan line must fit the same scale as the bars, or it lands off the chart
@@ -101,7 +126,7 @@ export default function Analytics() {
   return (
     <>
       <h1>{t('analytics')}</h1>
-      <select data-testid="analytics-currency" aria-label={t('currency')} value={currency} onChange={e=>setCurrency(e.target.value)}>{['AZN','USD','EUR'].map(c=><option key={c}>{c}</option>)}</select>
+      {filters}
       <p className="hint">{t('spend_date_basis')}</p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12, marginBottom: 16 }}>
@@ -124,14 +149,6 @@ export default function Analytics() {
       <div className="card">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <h3 style={{ margin: 0 }}>{t('monthly_spend')}</h3>
-          <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', alignItems: 'center' }}>
-            <button className="btn ghost small" onClick={() => preset(11)}>{t('win_12m')}</button>
-            <button className="btn ghost small" onClick={() => preset(2)}>{t('win_quarter')}</button>
-            <button className="btn ghost small" onClick={() => setWin({ from: `${new Date().getFullYear()}-01`, to: thisMonth })}>{t('win_ytd')}</button>
-            <input type="month" value={win.from} onChange={(e) => setWin({ ...win, from: e.target.value })} style={{ width: 150 }} />
-            <input type="month" value={win.to} onChange={(e) => setWin({ ...win, to: e.target.value })} style={{ width: 150 }} />
-            <button className="btn ghost small" onClick={exportCsv}>⤓ CSV</button>
-          </div>
         </div>
         <div className="chart">
           {d.monthly.map((m) => (

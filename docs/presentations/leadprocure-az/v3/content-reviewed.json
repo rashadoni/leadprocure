@@ -237,7 +237,7 @@
       "number": 11,
       "role": "CFO üçün büdcə və xərc görünürlüğü",
       "title": "Büdcə öhdəliyi ilə faktiki xərc ayrı görünür",
-      "visibleText": "Təsdiqlənmiş tələblər büdcəyə təsiri göstərir. Qəbul edilmiş sifarişlər xərc analitikasına daxil olur. Limit aşımı qərarverənə xəbərdarlıq edir.",
+      "visibleText": "Təsdiqlənmiş tələblər büdcəyə təsiri göstərir. Qəbul edilmiş sifarişlər xərc analitikasına daxil olur. Aşım xəbərdarlığı və sazlanmış hədd üzrə bloklama tətbiq edilir.",
       "diagram": {
         "type": "Eyni prosesin iki maliyyə baxışı",
         "description": "Yuxarı xətt təsdiq mərhələsindən büdcə öhdəliyinə, aşağı xətt qəbul mərhələsindən faktiki xərcə aparır. Xətlər ayrı saxlanılır və eyni satınalma ilə əlaqələndirilir. Real məlumat olmadığı üçün rəqəmli gauge və uydurma istifadə faizi yoxdur.",
@@ -249,11 +249,14 @@
           "Aşım xəbərdarlığı"
         ]
       },
-      "speakerNotes": "Büdcə istifadəsi kateqoriya, il və valyuta üzrə uyğun təsdiqlənmiş tələblərdən hesablanır. Bu göstərici bank hesabındakı qalıq və ya ödənilmiş məbləğ deyil. Xərc analitikası isə qəbul edilmiş PO-lara əsaslanır; aylar, kateqoriyalar, əsas təchizatçılar və qaimə statusları üzrə baxış verir. Büdcə aşımı xəbərdarlıq yaradır, təsdiqi avtomatik bloklamır. Müştəriyə bu fərqi açıq izah edin: platforma qərar üçün görünürlük verir və mövcud qaydaları tətbiq edir; maliyyə siyasətinin bütün sərt bloklama tələblərinin artıq hazır olduğunu vəd etmir. Xərclər valyutalar üzrə ayrılır; aylıq qrafik sifarişin yaradılma tarixinə görə qurulur. Analitika ləğv olunmuş nəticələri daxil etmir.",
+      "speakerNotes": "Büdcələr AZN ilə şöbə, kateqoriya və dövr üzrə planlaşdırılır; planın təsdiqi, reviziyası və dövrün bağlanması dəstəklənir. Tələblər, sifarişlər və qaimələr plan və faktiki göstəricilərlə əlaqələndirilir. Bu göstəricilər bank hesabındakı qalıq deyil. Standart qaydada büdcə aşımı xəbərdarlıq yaradır; təşkilat bloklama həddi sazlayıbsa, uyğun aşım təsdiqi dayandırır. Administratorun istisnası səbəblə əsaslandırılır. Maliyyə əməkdaşı yalnız ona təyin edilmiş maliyyə təsdiq addımını yerinə yetirir. Xərc analitikası qəbul edilmiş PO-lara əsaslanır; xərclər valyutalar üzrə ayrılır, aylıq qrafik sifarişin yaradılma tarixinə görə qurulur. Ləğv edilmiş nəticələr qənaət hesablamasına daxil edilmir. Bunları bank ödənişi və ya avtomatik valyuta konvertasiyası kimi təqdim etməyin.",
       "sources": [
-        "apps/api/src/modules/budgets/budgets.module.ts:30–63,114–137",
-        "apps/api/src/modules/dashboard/dashboard.module.ts:86–147"
-      ]
+        "apps/api/src/modules/budgets/budgets.module.ts",
+        "apps/api/src/modules/requests/requests.module.ts",
+        "apps/api/src/modules/dashboard/dashboard.module.ts",
+        "apps/api/test/budget-integration.e2e-spec.ts"
+      ],
+      "budgetPolicySummary": "Aşım xəbərdarlığı; sazlanmış hədd üzrə bloklama."
     },
     {
       "number": 12,

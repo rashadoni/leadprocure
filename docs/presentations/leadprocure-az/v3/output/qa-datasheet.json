@@ -29,7 +29,7 @@
   "page1CapabilityRowHeightPt": 104.2,
   "page2ConditionsBottomPt": 712.6,
   "page2PilotBottomPt": 792,
-  "visualReview": "PASS: all local PDF pages and contact sheets reviewed; no clipping or missing Azerbaijani glyphs",
-  "pdfBytes": 67115,
-  "native_pptx_render": "NOT RUN for v3: native PowerPoint/Google Slides rendering unavailable in this pass"
+  "visualReview": "PENDING",
+  "docx": "NOT RUN: python-docx is unavailable; no dependency installation requested. Editable Markdown source supplied.",
+  "pdfBytes": 67138
 }

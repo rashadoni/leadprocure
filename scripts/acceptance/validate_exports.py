@@ -33,7 +33,7 @@ if __name__=='__main__':
     directory=pathlib.Path(sys.argv[1] if len(sys.argv)>1 else '/tmp/leadprocure-audit-exports')
     validator=etree.XMLSchema(etree.parse(str(p)))
     results=[]
-    for name in ['inclusive.xml','zero.xml']:
+    for name in ['inclusive.xml','zero.xml','mixed-inclusive.xml','mixed-exclusive.xml']:
         doc=directory/name;validator.assertValid(etree.parse(str(doc)))
         results.append({'file':name,'schema':UBL,'sha256':hashlib.sha256(doc.read_bytes()).hexdigest(),'result':'PASS'})
     schema=schema_json(OCDS)

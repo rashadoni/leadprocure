@@ -42,7 +42,7 @@ Sifariş, faktiki qəbul və qaimə müqayisə edilir; qiymət və miqdar uyğun
 
 ### 09. Büdcə və xərc analitikası
 
-Kateqoriya və il üzrə limitlər, tələblərin büdcəyə təsiri və aşım xəbərdarlıqları görünür. Qəbul edilmiş sifarişlər üzrə xərclər valyuta ilə ayrılır; ay sifarişin yaradılma tarixinə görə hesablanır.
+AZN ilə şöbə və dövr üzrə büdcələr, plan/fakt və aşım nəzarəti. Sazlanmış hədd təsdiqi bloklaya bilər; administrator istisnası əsaslandırılır. Qəbul edilmiş sifarişlərin xərcləri valyuta və yaranma ayına görə ayrılır.
 
 ### 10. Planlı təchizatçı xatırlatmaları
 
@@ -54,6 +54,7 @@ Cavab verməmiş dəvətli təchizatçılar üçün e-poçt və WhatsApp ardıc�
 
 - Alıcı administratoru
 - Təsdiqləyən şəxs
+- Maliyyə əməkdaşı
 - Alıcı istifadəçisi
 - Təchizatçı istifadəçisi
 
@@ -92,7 +93,7 @@ Cavab verməmiş dəvətli təchizatçılar üçün e-poçt və WhatsApp ardıc�
 
 ### Funksiyaların tətbiq şərtləri
 
-- Büdcə aşımı təsdiqi avtomatik bloklamır. Ödəniş statusunun qeydi bank köçürməsi deyil.
+- Büdcə bloklaması təşkilatın sazladığı həddə bağlıdır. Ödəniş statusunun qeydi bank köçürməsi deyil.
 - CSV canlı ERP sinxronlaşdırılması deyil. Ümumi UBL ixracı Peppol şəbəkəsinə qoşulma deyil; ayrıca Access Point tələb olunur.
 - Təchizatçı yoxlaması sənədlər və alıcının qərarına əsaslanır. Real ASAN İmza operator bağlantısı cari versiyada aktiv deyil.
 - SMTP/Meta göndərişi kanallar qoşulduqdan sonra pilotda yoxlanılır. LLM izahı konfiqurasiyadan asılıdır; yerli evristik model mövcuddur.

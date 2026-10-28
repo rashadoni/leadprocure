@@ -66,7 +66,7 @@
     },
     {
       "title": "Büdcə və xərc analitikası",
-      "description": "Kateqoriya və il üzrə limitlər, tələblərin büdcəyə təsiri və aşım xəbərdarlıqları görünür. Qəbul edilmiş sifarişlər üzrə xərclər valyuta ilə ayrılır; ay sifarişin yaradılma tarixinə görə hesablanır."
+      "description": "AZN ilə şöbə və dövr üzrə büdcələr, plan/fakt və aşım nəzarəti. Sazlanmış hədd təsdiqi bloklaya bilər; administrator istisnası əsaslandırılır. Qəbul edilmiş sifarişlərin xərcləri valyuta və yaranma ayına görə ayrılır."
     },
     {
       "title": "Planlı təchizatçı xatırlatmaları",
@@ -76,6 +76,7 @@
   "roles": [
     "Alıcı administratoru",
     "Təsdiqləyən şəxs",
+    "Maliyyə əməkdaşı",
     "Alıcı istifadəçisi",
     "Təchizatçı istifadəçisi"
   ],
@@ -120,7 +121,7 @@
     "Son təqdimetmə tarixinin və məbləğ hesablamalarının serverdə yoxlanılması."
   ],
   "caveats": [
-    "Büdcə aşımı təsdiqi avtomatik bloklamır. Ödəniş statusunun qeydi bank köçürməsi deyil.",
+    "Büdcə bloklaması təşkilatın sazladığı həddə bağlıdır. Ödəniş statusunun qeydi bank köçürməsi deyil.",
     "CSV canlı ERP sinxronlaşdırılması deyil. Ümumi UBL ixracı Peppol şəbəkəsinə qoşulma deyil; ayrıca Access Point tələb olunur.",
     "Təchizatçı yoxlaması sənədlər və alıcının qərarına əsaslanır. Real ASAN İmza operator bağlantısı cari versiyada aktiv deyil.",
     "SMTP/Meta göndərişi kanallar qoşulduqdan sonra pilotda yoxlanılır. LLM izahı konfiqurasiyadan asılıdır; yerli evristik model mövcuddur.",

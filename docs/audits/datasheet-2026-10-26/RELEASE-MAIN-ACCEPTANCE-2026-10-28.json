@@ -1,0 +1,43 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/10",
+  "mergeCommit": "0a27fb026618422f852a857bd9ee39e23a441bd2",
+  "reviewedHead": "6bcbb571cb7c3979267dd5de8d83420c920dc72d",
+  "mergedTreeMatchesReviewedHead": true,
+  "ownerAuthorization": "Давай, объединяй PR10 и собирай пакет",
+  "packageRun": "https://github.com/rashadoni/leadprocure/actions/runs/40666156243",
+  "packageStatus": "PASS",
+  "publicApiUrl": "http://75.119.156.234:3100",
+  "artifact": {
+    "id": 12805622974,
+    "name": "leadprocure-release-0a27fb026618422f852a857bd9ee39e23a441bd2",
+    "url": "https://github.com/rashadoni/leadprocure/actions/runs/40666156243/artifacts/12805622974",
+    "sizeBytes": 268719865,
+    "githubArtifactDigest": "sha256:a49c07741f587b1244a5b3007db5e46ba7dc593f1a99837e8ee4ebc08f945b77",
+    "expiresAtUTC": "2026-11-04T09:42:20Z"
+  },
+  "workerVerification": "Archive size and SHA256; remove tags, reload both images and verify actual image IDs/platform/revision",
+  "duplicateContaboDownload": "Cancelled for speed; no complete local copy claimed. Use authenticated GitHub artifact.",
+  "mainAcceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/40666138522",
+  "mainAcceptanceStatus": "PASS",
+  "jobs": {
+    "acceptance": 122740983063,
+    "fresh-install": 122740983351
+  },
+  "apiSuites": 25,
+  "apiTests": 283,
+  "contentionTests": 3,
+  "nativeBrowserScenarios": 10,
+  "freshHttpsBrowserScenarios": 1,
+  "freshSignedFileLicensePrivateStorageRealCleanAndEicar": "PASS",
+  "modeledLegacyStorageVersions": 4,
+  "restoredRlsTables": 51,
+  "productionChanged": false,
+  "remainingBoundaries": [
+    "Production deploy not authorized",
+    "Operator license choice pending",
+    "Existing Contabo backup coverage/freshness/recovery suitability unverified",
+    "Actual public HTTP/IP smoke after authorized deployment not run",
+    "SMTP/Meta connections absent"
+  ]
+}

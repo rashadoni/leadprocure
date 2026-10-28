@@ -1,5 +1,9 @@
 # Исполнение LP-A00–LP-A19
 
+## Текущий фокус — исходные20 задач, 28 октября2026
+
+Main0a27fb0 принят полным run40666138522:283API/3contention/10browser/1freshHTTPS, оба jobs PASS. PR3–10 объединены по разрешениям. Production не обновлён. Старые блокеры runner/period_year и статусы draft ниже сохранены как история и superseded. Текущая матрица критериев — [TASK-CLOSURE-2026-10-28.md](TASK-CLOSURE-2026-10-28.md); текущие изменения LP-A09/A10/A13/A19 ещё не приняты. По коррекции владельца отдельная подготовка релиза/лицензии/бэкапа сейчас не является задачей разработки.
+
 ## После разрешённого объединения PR3/4/5/6 — 28 октября 2026
 
 **Все четыре PR объединены по явному разрешению владельца.** Итоговый main `974a31b05703279d7f36c72a153d42b5bbd321a4`: [полная приёмка40593765052](https://github.com/rashadoni/leadprocure/actions/runs/40593765052) и [PPTX rendering40593880674](https://github.com/rashadoni/leadprocure/actions/runs/40593880674) SUCCESS.195 API +3 contention +9 Chromium +1 fresh HTTPS; build/schema/upgrade/restore и15 страниц PPTX PASS. Предыдущие записи «main не изменялся / merge не разрешён» ниже сохранены как история и superseded этим фактом.

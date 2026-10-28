@@ -1,0 +1,38 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/10",
+  "head": "6bcbb571cb7c3979267dd5de8d83420c920dc72d",
+  "packageSourceSyntheticMerge": "d8d002e0f8ef0b68cf0fd38c82ee0a51f99bfa37",
+  "publicApiUrl": "http://75.119.156.234:3100",
+  "packageRun": "https://github.com/rashadoni/leadprocure/actions/runs/40658523778",
+  "packageStatus": "PASS",
+  "archiveRoundTrip": "worker removed both tags, loaded archive and verified actual image IDs/platform/revision",
+  "artifact": {
+    "id": 12802148492,
+    "name": "leadprocure-release-d8d002e0f8ef0b68cf0fd38c82ee0a51f99bfa37",
+    "sizeBytes": 268730810,
+    "githubArtifactDigest": "sha256:89a6d2aacd0f7c0161609c10748b653c7a4bb2aa274679c186f4f78b3789fc91",
+    "url": "https://github.com/rashadoni/leadprocure/actions/runs/40658523778/artifacts/12802148492",
+    "expiresAtUTC": "2026-11-04T08:41:56Z"
+  },
+  "regressionRun": "https://github.com/rashadoni/leadprocure/actions/runs/40658523769",
+  "regressionStatus": "PASS",
+  "apiSuites": 25,
+  "apiTests": 283,
+  "contentionTests": 3,
+  "nativeBrowserScenarios": 10,
+  "freshHttpsBrowserScenarios": 1,
+  "freshSignedLicensePrivateStorageRealClamav": "PASS",
+  "modeledLegacyStorageVersions": 4,
+  "restoredRlsTables": 51,
+  "targetedManifestTests": 6,
+  "independentCodexReview": "No blockers; reviewed implementation and workflow context correction",
+  "automatedReview": "Fallback only: Anthropic400 insufficient credit; not semantic review",
+  "productionChanges": false,
+  "limits": [
+    "Candidate package, not a release from merged main; dispatch on reviewed main after merge",
+    "Actual production HTTP route, license, existing backup coverage and restore suitability remain separate",
+    "No production database or customer files copied or changed",
+    "No new merge or deployment permission inferred"
+  ]
+}
