@@ -1,0 +1,30 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/13",
+  "head": "49d5d67fe83c84481f4ad9d491b57ca1ec0862b9",
+  "originalCriterion": "LP-A14 negative early-disclosure export",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/40764184136",
+  "status": "PASS",
+  "apiSuites": 26,
+  "apiTests": 294,
+  "contentionTests": 3,
+  "nativeBrowserScenarios": 13,
+  "freshHttpsBrowserScenarios": 1,
+  "assertions": [
+    "actual buyer HTTP export before opening",
+    "no bid ID/financial or sealed-payload fields",
+    "no fixture prices in minor/currency unit forms",
+    "active tender/empty awards/absent tender value",
+    "uninvited supplier404"
+  ],
+  "independentReview": "separate oc ds criterion reviewer found no blockers; fixture arithmetic, JSON omission and controller/RLS checked",
+  "automatedReview": "fallback Anthropic400 insufficient credit; not semantic review",
+  "businessLogicChanged": false,
+  "productionChanged": false,
+  "rawLog": "/tmp/leadprocure-ocds-main-9041469.log",
+  "priorMain": "1b25692823a23537be5fd5b36eb6314d3f11045e",
+  "priorMainAcceptance": "https://github.com/rashadoni/leadprocure/actions/runs/40762059590",
+  "mergeCommit": "90414698629dea5c69e70dfeeb2a3762fa93be14",
+  "mergeAuthorization": "Owner explicitly: Давай, объединяй PR13",
+  "reviewedAndMergedSourceTreesEqual": true
+}
