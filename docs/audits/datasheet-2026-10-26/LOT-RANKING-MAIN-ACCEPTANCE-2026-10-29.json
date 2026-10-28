@@ -1,0 +1,40 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/15",
+  "head": "7ee3c554414a9d29bd33c8e50d17df039c9131db",
+  "originalCriteria": [
+    "LP-A03",
+    "LP-A04",
+    "LP-A05",
+    "LP-A07"
+  ],
+  "status": "PASS",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/40774882018",
+  "apiSuites": 26,
+  "apiTests": 294,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "freshHttpsBrowserTests": 1,
+  "explicitNativeAssertions": [
+    "unscored sealed awards disabled and not starred",
+    "tied current formal scores have no unique leader",
+    "re-evaluation shows62/68 with more expensive S2 leading lot A",
+    "partial award keeps remaining lot AI action and locks scoring while valid disqualification remains",
+    "two different active winners reference current evaluation",
+    "two UI-created/activated contracts and actual POs contain only awarded lot and supplier",
+    "native reverse-auction finalization ranks by price without formal scoring",
+    "winning80000minor propagates through UI contract, real PO lifecycle, receipt and MATCHED inclusive invoice"
+  ],
+  "independentReview": "separate lot_ranking_review plus lot_ranking_final_review reviewed current source and final selector diff, no remaining blockers",
+  "automaticReview": "40770949573 fallback Anthropic400 insufficient credits; not semantic review",
+  "supersededGate": "40769736407 browser failed on exact tooltip-expanded action name; fixed without timeout/assertion weakening; final gate passed",
+  "rawLog": "/tmp/leadprocure-lot-ranking-main-8b0e68f.log",
+  "productionChanged": false,
+  "materialsChanged": false,
+  "mergeStatus": "MERGED",
+  "smtpMetaPriority": "LAST, per explicit owner correction; external delivery NOT RUN",
+  "qualification": "Closes these concrete original UI criteria in isolated CI, not every possible behavior or live production acceptance.",
+  "mergeCommit": "8b0e68f8d6b4381deffcd97297d7b0a3f62cb8ac",
+  "mergeAuthorization": "Owner explicitly answered давай to PR15",
+  "reviewedAndMergedSourceTreesEqual": true
+}
