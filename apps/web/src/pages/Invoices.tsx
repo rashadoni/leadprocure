@@ -14,8 +14,18 @@ export default function Invoices() {
   const load = () => api.get('/invoices').then((r) => setRows(r.data));
   useEffect(() => { load(); }, []);
 
-  const act = async (fn: () => Promise<unknown>) => {
-    try { await fn(); load(); } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  const act = async (id: string, fn: () => Promise<{ data: any } | undefined>) => {
+    try {
+      const result = await fn();
+      if (!result) return; // cancelled override prompt — no state transition
+      // The mutation returns the canonical invoice row. Keep loaded item details,
+      // but update status/match/totals only after the server confirms success.
+      // A card closed while the request was running must stay closed.
+      setOpen((current) => current[id]
+        ? { ...current, [id]: { ...current[id], ...result.data } }
+        : current);
+      await load();
+    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
   const expand = async (id: string) => {
     if (open[id]) { setOpen((o) => ({ ...o, [id]: null })); return; }
@@ -24,13 +34,13 @@ export default function Invoices() {
   };
 
   // A DISPUTED invoice (failed 3-way match) can only be approved with a documented override.
-  const approveInvoice = (i: any) => act(async () => {
+  const approveInvoice = (i: any) => act(i.id, async () => {
     let reason: string | undefined;
     if (i.status === 'DISPUTED') {
       reason = window.prompt(t('override_reason_prompt')) ?? undefined;
       if (!reason) return;
     }
-    await api.post(`/invoices/${i.id}/approve`, reason ? { reason } : {});
+    return api.post(`/invoices/${i.id}/approve`, reason ? { reason } : {});
   });
 
   const badge = (s: string) =>
@@ -56,11 +66,11 @@ export default function Invoices() {
                   {isBuyer && ['MATCHED', 'DISPUTED', 'SUBMITTED'].includes(i.status) && (
                     <>
                       <button className="btn small" data-tip={t('tip_inv_approve')} onClick={() => approveInvoice(i)}>{t('approve')}</button>{' '}
-                      <button className="btn small ghost" data-tip={t('tip_inv_reject')} onClick={() => act(() => api.post(`/invoices/${i.id}/reject`))}>{t('reject')}</button>
+                      <button className="btn small ghost" data-tip={t('tip_inv_reject')} onClick={() => act(i.id, () => api.post(`/invoices/${i.id}/reject`))}>{t('reject')}</button>
                     </>
                   )}
                   {isBuyer && i.status === 'APPROVED' && (
-                    <button className="btn small" data-tip={t('tip_pay')} onClick={() => act(() => api.post(`/invoices/${i.id}/pay`))}>💳 {t('pay')}</button>
+                    <button className="btn small" data-tip={t('tip_pay')} onClick={() => act(i.id, () => api.post(`/invoices/${i.id}/pay`))}>💳 {t('pay')}</button>
                   )}
                 </td>
               </tr>

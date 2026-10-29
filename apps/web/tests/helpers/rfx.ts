@@ -154,9 +154,20 @@ async function verifyRfpPayment({buyerPage,supplierPage,call,buyerToken,event,op
     await expect(supplierPage.locator('tr').filter({has:supplierPage.getByRole('link',{name:invoice.invoice_no,exact:true})}).filter({has:supplierPage.getByRole('cell',{name:po.po_no,exact:true})}).locator('.badge.MATCHED')).toBeVisible();
     await buyerPage.goto('/buyer/invoices');
     const invoiced=buyerPage.locator('tr').filter({has:buyerPage.getByRole('link',{name:invoice.invoice_no,exact:true})}).filter({has:buyerPage.getByRole('cell',{name:po.po_no,exact:true})});
+    await invoiced.getByRole('link',{name:invoice.invoice_no,exact:true}).click();
+    const detailHeading=buyerPage.getByRole('heading',{level:3}).filter({hasText:invoice.invoice_no});
+    await expect(detailHeading.locator('.badge.MATCHED')).toBeVisible();
     await clicked(buyerPage,`/invoices/${invoice.id}/approve`,()=>invoiced.getByRole('button',{name:/^Approve\b/}).click());
+    await expect(invoiced.locator('.badge.APPROVED')).toBeVisible();
+    await expect(detailHeading.locator('.badge.APPROVED')).toBeVisible();
+    await expect(detailHeading.locator('.badge.MATCHED')).toHaveCount(0);
     await clicked(buyerPage,`/invoices/${invoice.id}/pay`,()=>invoiced.getByRole('button',{name:/^💳 Pay\b/}).click());
     await expect(invoiced.locator('.badge.PAID')).toBeVisible();
+    await expect(detailHeading.locator('.badge.PAID')).toBeVisible();
+    await expect(detailHeading.locator('.badge.APPROVED')).toHaveCount(0);
+    // Updating the returned row must preserve loaded comparison lines/items.
+    await expect(buyerPage.getByRole('heading',{name:'Three-way match ✅',exact:true})).toBeVisible();
+    await expect(buyerPage.getByRole('columnheader',{name:'Invoice price',exact:true})).toBeVisible();
     const settled=await call(`/invoices/${invoice.id}`,undefined,buyerToken,'get',200);
     expect(settled.status).toBe('PAID');
     expect([settled.net_minor,settled.vat_minor,settled.gross_minor].map(Number)).toEqual([1200,216,1416]);
