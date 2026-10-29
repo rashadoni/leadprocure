@@ -2,7 +2,7 @@
 
 Этот документ собирает текущие результаты; исходный план [TASKS.md](TASKS.md) и исторический журнал сохранены. Ранние общие формулировки «все задачи выполнены» не означают полную внешнюю/production приёмку. VERIFIED ниже означает исправление и конкретную изолированную техническую проверку в обозначенных границах. PARTIAL_EXTERNAL оставляет внешний критерий открытым; NOT RUN нигде не считается PASS.
 
-Репозиторий: **rashadoni/leadprocure**. PR17 и PR18 объединены. Проверенный baseline main `3990a7d04b647d4d7d5bf6010a601c2622978ee5` имеет то же дерево, что проверенный кандидат PR18 `1494149`; кандидат полностью прошёл run40833169209 (324 API), точный main полностью прошёл run40833937868. Все 12 новых HTTP/barrier проверок прошли. Production не изменён.
+Репозиторий: **rashadoni/leadprocure**. Базовый main `436a8b8` прошёл330API; следующая коррекция LP-A17 `cff06db` прошла334API в run40844677259. Результаты ниже привязаны к конкретным версиям и границам проверок. Production не изменён.
 
 ## Все 20 задач
 
@@ -76,3 +76,10 @@ PR18 прошёл полный hosted gate и независимое ревью,
 ## LP-A17: проверка сбоев и ранних callback — новая техническая часть ожидает CI
 
 После принятого PR20 найдены два дополнительных дефекта сохранности: DB write failure всё равно подтверждался HTTP200; callback до регистрации providerID в сообщении терялся. Подготовлены503 на сбой записи с сохранением остальных элементов, durable private receipt providerID/status, общая блокировка86 с sender log и4новых actual HTTP/HMAC/PostgreSQL/RLS сценария (включая2управляемых порядка гонки). Новая миграция0041; старые миграции не меняются. Новый код пока NOT VERIFIED до hosted gate; прежние результаты PR20 не подменяют его приёмку. Внешняя SMTP/Meta доставка по-прежнему NOT RUN.
+
+
+## LP-A17: сохранность callback при сбое и раннем поступлении — PASS
+
+Код `cff06dbf95de5eb60f35840b454653b3f434f86d`, [40844677259](https://github.com/rashadoni/leadprocure/actions/runs/40844677259): BOTH jobs SUCCESS,29suites/334API (4новых actual HTTP/HMAC/runtimeDataSource/PostgreSQL/RLS),3contention/14nativebrowser/1freshHTTPS,fullbuild/typecheck/4UBL+OCDS/both migration histories/restore52RLS/fresh signedlicense-private storage-realClamAV PASS. Независимое exact-head ревью без блокеров. Доказательство CALLBACK-PERSISTENCE-ACCEPTANCE-2026-10-29.json.
+
+DB write failure даёт503 и сохраняет возможность повторить пакет; независимые сообщения при этом обрабатываются. Принятый ранний callback сохраняется в приватной таблице providerID/status и применяется при регистрации сообщения. Общая блокировка86 защищает оба порядка гонки; записи не дублируются. Runtime app_user не читает receipt table напрямую; сырые payload/получатели там не сохраняются. Предыдущая новая часть NOT VERIFIED superseded этим фактическим результатом. A17 снова PARTIAL_EXTERNAL: реальное поведение SMTP/Meta и внешняя доставка остаются NOT RUN, тестовые provider records синтетические.

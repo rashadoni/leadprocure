@@ -218,3 +218,6 @@ SMTP/Meta оставить самой последней задачей. Пре�
 
 
 29октября, продолжение LP-A17: обнаружены и исправлены потеря callback-пакетов после первых entry/change и регрессия READ/DELIVERED от поздних SENT/FAILED. NEW migration0040;6actual HTTP/HMAC/PostgreSQL/RLS tests PASS, candidate516314e/run40839644727:330API/3contention/14nativebrowser/1freshHTTPS и остальные gates BOTH SUCCESS. Независимое exact-head ревью без блокеров. META-DELIVERY-ACCEPTANCE-2026-10-29.json. Историческое «нет доступной разработки» уточнено этим конкретным исправлением; реальная внешняя отправка по-прежнему NOT RUN, production не менялся.
+
+
+LP-A17, продолжение29октября: corrected falseHTTP200 after DB failure and loss of early callback before sender registration. NEW migration0041/private durable receipt+shared provider lock;4real HTTP/HMAC/PostgreSQL/RLS cases PASS, codecff06db/run40844677259 BOTH SUCCESS:334API/3contention/14nativebrowser/1freshHTTPS,build/schemas/both histories/restore52RLS/fresh installation. CALLBACK-PERSISTENCE-ACCEPTANCE-2026-10-29.json. Independent exact-head review no blockers; actual external SMTP/Meta delivery remains NOT RUN, production untouched.
