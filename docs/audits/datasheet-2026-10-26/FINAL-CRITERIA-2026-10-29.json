@@ -3,7 +3,7 @@
   "date": "2026-10-29",
   "productionChanged": false,
   "scope": "LP-A00–LP-A16, LP-A18, LP-A19; SMTP/Meta removed by owner instruction",
-  "gateStatus": "A19_NATIVE_RFP_PASS",
+  "gateStatus": "A02_PARTIAL_INVOICE_UI_PASS",
   "tasks": [
     {
       "id": "LP-A00",
@@ -25,9 +25,9 @@
       "id": "LP-A02",
       "title": "Сверка количеств и R01",
       "status": "VERIFIED",
-      "evidence": "audit-regressions; invoices; amendments; procurement.stress-spec; common/procurement/invariants.ts",
-      "assertions": "Дубли poItemId отклоняются; совокупный billable остаток и rematch пересчитываются под общей блокировкой PO. Повторные invoices/GRN, частичная приёмка и disputed→matched проверены. Новые 4 теста явно наблюдают queued HTTP в PostgreSQL: два счёта, две приёмки и оба порядка счёт/приёмка.",
-      "limits": "Стресс 12×8 не является capacity/SLA тестом."
+      "evidence": "audit-regressions; invoices; amendments; procurement.stress-spec; common/procurement/invariants.ts; PARTIAL-INVOICE-ACCEPTANCE-2026-10-29.json; web/tests/helpers/partial-invoice.ts",
+      "assertions": "Дубли poItemId отклоняются; совокупный billable остаток и rematch пересчитываются под общей блокировкой PO. Повторные invoices/GRN, частичная приёмка и disputed→matched проверены. Новые 4 теста явно наблюдают queued HTTP в PostgreSQL: два счёта, две приёмки и оба порядка счёт/приёмка. Интерфейс поставщика выставляет только принятый невыставленный остаток; после4болтов+5шайб следующий счёт содержит только6болтов. При нуле нет нового POST, пояснение AZ/RU/EN. Реальные API-проверки статусов резерва/отклонения/поздней приёмки и foreign buyer/supplier.",
+      "limits": "Стресс 12×8 не является capacity/SLA тестом. Остаток чтения — подсказка; при конкурентном изменении сервер повторяет сверку под блокировкой PO."
     },
     {
       "id": "LP-A03",
@@ -164,10 +164,10 @@
     "Внешние ERP/банк/ASAN/Peppol; CSV/PAID/dev signature не являются их интеграцией.",
     "Microsoft PowerPoint desktop: подключённой сессии нет."
   ],
-  "candidateHead": "e210c401218664522ed64f5c942f51148c686730",
-  "candidateRun": "https://github.com/rashadoni/leadprocure/actions/runs/40928824772",
+  "candidateHead": "82b4c0704890c9858461868fe29e05cf0f7afebc",
+  "candidateRun": "https://github.com/rashadoni/leadprocure/actions/runs/40931911051",
   "apiSuites": 29,
-  "apiTests": 346,
+  "apiTests": 348,
   "contentionTests": 3,
   "nativeBrowserTests": 14,
   "freshHttpsBrowserTests": 1,
@@ -180,8 +180,8 @@
     "activeTasks": 19,
     "allActiveTasksFullyAccepted": false
   },
-  "baselineMergedMain": "cca8e5a0ed541ab86d378fba82626d7ff98245ff",
-  "baselineMainRun": "https://github.com/rashadoni/leadprocure/actions/runs/40890271318",
+  "baselineMergedMain": "8abae18317860806c56715fad205b6d438112a0e",
+  "baselineMainRun": "https://github.com/rashadoni/leadprocure/actions/runs/40930167152",
   "restoredRlsTables": 52,
   "excludedTasks": [
     {

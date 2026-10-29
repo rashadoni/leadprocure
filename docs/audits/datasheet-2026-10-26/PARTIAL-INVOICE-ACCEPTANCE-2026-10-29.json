@@ -1,0 +1,29 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/25",
+  "testedSourceHead": "82b4c0704890c9858461868fe29e05cf0f7afebc",
+  "status": "PASS",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/40931911051",
+  "apiSuites": 29,
+  "apiTests": 348,
+  "newBalanceApiTests": 2,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "freshHttpsBrowserTests": 1,
+  "restoredRlsTables": 52,
+  "assertions": [
+    "receipt summary exposes same received-minus-MATCHED/APPROVED/PAID quantities as write-side invoice matching; independent aggregates avoid join multiplication",
+    "partial receipts/multiple lines, matched→approved→paid reserves balance, disputed/rejected do not reserve; rejection releases and later receipts replenish",
+    "actual HTTP/auth/RLS foreign buyer and supplier cannot read summary",
+    "supplier native UI invoices4bolts+5washers then only6bolts after later receipt; verifies actual submitted request lines and bothMATCHED statuses",
+    "exhausted balance inAZ/RU/EN shows localized explanation and makes no additional invoicePOST",
+    "existing full native RFP toPAID/role checks continue passing",
+    "fullbuild/typecheck/4UBL+OCDS/both applied histories/restore52RLS/fresh signedlicense-private storage-realClamAV PASS"
+  ],
+  "independentReview": "deadline_boundary_review exact82b4c0704890c9858461868fe29e05cf0f7afebc no blockers",
+  "rawLog": "/tmp/leadprocure-partial-invoice-82b4c07-acceptance.log",
+  "freshLog": "/tmp/leadprocure-partial-invoice-82b4c07-fresh.log",
+  "qualification": "Balance read is advisory; existing server PO lock and recheck remain authoritative. Partial receipt fixtures are actual API setup; invoice creation/empty-balance interactions are native browser actions. PAID is application status, not bank settlement. No schema or excluded-task changes. Existing external/client acceptance limits unchanged.",
+  "productionChanged": false,
+  "materialsChanged": false
+}
