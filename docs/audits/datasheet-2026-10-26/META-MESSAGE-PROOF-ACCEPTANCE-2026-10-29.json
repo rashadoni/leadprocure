@@ -1,0 +1,34 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/23",
+  "testedSourceHead": "c003384dd992e5d510aa32d4146e0d4ff6cc1dd0",
+  "status": "PASS",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/40888938082",
+  "apiSuites": 29,
+  "apiTests": 346,
+  "newProviderProofTests": 5,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "freshHttpsBrowserTests": 1,
+  "restoredRlsTables": 52,
+  "assertions": [
+    "HTTP200 with missing/non-string/blank message ID or invalid JSON remains UNKNOWN without automatic replay",
+    "channel test returns400 without success timestamp or success audit on unconfirmed acceptance",
+    "actual parser/worker/PostgreSQL/API with only fetch mocked at network boundary",
+    "valid provider ID completes SENT and binds signed delivered callback to same message",
+    "fullbuild/typecheck/4UBL+OCDS/both applied histories/restore52RLS/fresh signedlicense-private storage-realClamAV PASS",
+    "existing disposable restore uses matching PostgreSQL clients from service container; all data/RLS assertions retained"
+  ],
+  "independentReview": "deadline_boundary_review exactc003384dd992e5d510aa32d4146e0d4ff6cc1dd0 no blockers",
+  "rawLog": "/tmp/leadprocure-meta-message-proof-c003384-acceptance.log",
+  "freshLog": "/tmp/leadprocure-meta-message-proof-c003384-fresh.log",
+  "qualification": "Synthetic fetch responses only, no live Meta/SMTP send or actual provider delivery acceptance. External connections/receivers absent; A17/A19 remain PARTIAL_EXTERNAL. HTTP success or provider ID alone is not proof of recipient delivery.",
+  "productionChanged": false,
+  "materialsChanged": false,
+  "firstCandidate": {
+    "head": "247d54a188a9f3794c2e7a0c705891d9c67b8afc",
+    "run": 40888164170,
+    "status": "FAIL",
+    "reason": "Host runner pg_dump emitted SET transaction_timeout unsupported by PostgreSQL16. API346/contention3/browser14 passed; full gate not PASS."
+  }
+}
