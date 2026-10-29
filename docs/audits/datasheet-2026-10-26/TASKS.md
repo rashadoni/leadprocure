@@ -221,3 +221,6 @@ SMTP/Meta оставить самой последней задачей. Пре�
 
 
 LP-A17, продолжение29октября: corrected falseHTTP200 after DB failure and loss of early callback before sender registration. NEW migration0041/private durable receipt+shared provider lock;4real HTTP/HMAC/PostgreSQL/RLS cases PASS, codecff06db/run40844677259 BOTH SUCCESS:334API/3contention/14nativebrowser/1freshHTTPS,build/schemas/both histories/restore52RLS/fresh installation. CALLBACK-PERSISTENCE-ACCEPTANCE-2026-10-29.json. Independent exact-head review no blockers; actual external SMTP/Meta delivery remains NOT RUN, production untouched.
+
+
+LP-A17, продолжение29октября: worker lease ownership/providerID recovery/confirmed-delivery requeue controls accepted. NEW0042;7actual DB/worker/HTTP cases; sourcebb183be/run40849057531 BOTH SUCCESS:341API/3contention/14nativebrowser/1freshHTTPS,build/schemas/both histories/restore52RLS/fresh installation. DISPATCH-OWNERSHIP-ACCEPTANCE-2026-10-29.json; independent exact-head no blockers. Actual external delivery remains NOT RUN, synthetic transport is not provider acceptance; no exactly-once network guarantee or production change.

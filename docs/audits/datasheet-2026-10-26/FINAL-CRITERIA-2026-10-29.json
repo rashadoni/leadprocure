@@ -3,7 +3,7 @@
   "date": "2026-10-29",
   "productionChanged": false,
   "scope": "original LP-A00–LP-A19 only",
-  "gateStatus": "A17_RECOVERY_PENDING",
+  "gateStatus": "A17_RECOVERY_PASS",
   "tasks": [
     {
       "id": "LP-A00",
@@ -144,19 +144,17 @@
     {
       "id": "LP-A17",
       "title": "SMTP/Meta и достоверная отправка",
-      "status": "PARTIAL_PENDING_CANDIDATE",
-      "evidence": "followups; mail; audit-webhook; followup_outbox/dispatch; meta-delivery; migration0040; private callback receipt migration0041",
-      "assertions": "Локальные states/outbox/lease/recovery/dedupe/stop/responded/reconcile и HMAC boundary проверены. Console не даёт SENT. UNKNOWN после неопределённого исхода не повторяется автоматически. Полные callback-пакеты и защита подтверждённого READ/DELIVERED от регрессии проверены на реальных HTTP/HMAC/PostgreSQL/RLS. Сбой записи не получает HTTP200; ранние callback сохраняются до регистрации сообщения; оба порядка реальной гонки и повтор частично сохранённого пакета проверены.",
+      "status": "PARTIAL_EXTERNAL",
+      "evidence": "followups; mail; audit-webhook; followup_outbox/dispatch; meta-delivery; migration0040; private callback receipt migration0041; dispatch ownership migration0042",
+      "assertions": "Локальные states/outbox/lease/recovery/dedupe/stop/responded/reconcile и HMAC boundary проверены. Console не даёт SENT. UNKNOWN после неопределённого исхода не повторяется автоматически. Полные callback-пакеты и защита подтверждённого READ/DELIVERED от регрессии проверены на реальных HTTP/HMAC/PostgreSQL/RLS. Сбой записи не получает HTTP200; ранние callback сохраняются до регистрации сообщения; оба порядка реальной гонки и повтор частично сохранённого пакета проверены. Старые/истёкшие leases не завершают новую попытку; providerID сохраняется при сбое записи; подтверждённая доставка блокирует requeue/redispatch.",
       "limits": "ПОСЛЕДНЯЯ задача. Реальные org SMTP и Meta delivery/callback NOT RUN: владелец сообщил, что подключений и тестовых получателей пока нет. Mock transport и подписанный локальный callback не являются подтверждением внешней доставки.",
-      "qualification": "New callback persistence/migration0041 and4 real HTTP/HMAC/runtimeDataSource/PostgreSQL/RLS cases passed hosted40844677259; synthetic provider records, live delivery NOT RUN.",
+      "qualification": "Recovery/migration0042 plus7 actual DB/worker/HTTP cases passed hosted40849057531; provider transport synthetic, real external delivery NOT RUN.",
       "verifiedInternalChecks": [
         "all entry/change callback batching",
         "confirmed delivery/read cannot regress on late callbacks",
         "actual HTTP HMAC→runtimeDataSource→PostgreSQL provider message binding",
         "No HTTP200 after a callback DB write failure; safe partial-batch retry",
-        "Persist signed early callback and serialize receipt/message registration in both actual queue orders"
-      ],
-      "remainingInternalChecks": [
+        "Persist signed early callback and serialize receipt/message registration in both actual queue orders",
         "Opaque per-dispatch lease ownership across expiry/manual counter reset and paused old worker",
         "Retain known provider ID when final storage fails; retain stale provider fact without clobbering a new lease",
         "Confirmed provider acceptance/delivery blocks contradictory requeue and dispatch"
@@ -186,10 +184,10 @@
     "Внешние ERP/банк/ASAN/Peppol; CSV/PAID/dev signature не являются их интеграцией.",
     "Microsoft PowerPoint desktop: подключённой сессии нет."
   ],
-  "candidateHead": "cff06dbf95de5eb60f35840b454653b3f434f86d",
-  "candidateRun": "https://github.com/rashadoni/leadprocure/actions/runs/40844677259",
+  "candidateHead": "bb183be04a41834ebc310a8b368bdbc1822c47f6",
+  "candidateRun": "https://github.com/rashadoni/leadprocure/actions/runs/40849057531",
   "apiSuites": 29,
-  "apiTests": 334,
+  "apiTests": 341,
   "contentionTests": 3,
   "nativeBrowserTests": 14,
   "freshHttpsBrowserTests": 1,
@@ -200,11 +198,9 @@
       "LP-A19"
     ],
     "all20FullyAccepted": false,
-    "partialTechnicalTasks": [
-      "LP-A17"
-    ]
+    "partialTechnicalTasks": []
   },
-  "baselineMergedMain": "436a8b89273f25506a6037d3fc42e63bfb41084a",
-  "baselineMainRun": "https://github.com/rashadoni/leadprocure/actions/runs/40840808558",
+  "baselineMergedMain": "81ff50b945ea28f08c7c7f285e6a09f88c620e57",
+  "baselineMainRun": "https://github.com/rashadoni/leadprocure/actions/runs/40845841145",
   "restoredRlsTables": 52
 }
