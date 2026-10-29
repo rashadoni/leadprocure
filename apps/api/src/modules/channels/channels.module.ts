@@ -290,25 +290,29 @@ export class WhatsappWebhookController {
     if (!req.rawBody || !/^sha256=[0-9a-f]{64}$/i.test(signature)) throw new UnauthorizedException('Invalid webhook signature');
     const expected=createHmac('sha256',secret).update(req.rawBody).digest();
     if (!timingSafeEqual(expected,Buffer.from(signature.slice(7),'hex'))) throw new UnauthorizedException('Invalid webhook signature');
-    try {
-      // A signed callback can contain several entries/changes; process every
-      // message status rather than acknowledging and dropping the rest of a batch.
-      for (const entry of Array.isArray(body?.entry) ? body.entry : []) {
-        for (const change of Array.isArray(entry?.changes) ? entry.changes : []) {
-          const statuses = change?.value?.statuses;
-          if (!Array.isArray(statuses)) continue;
-          for (const s of statuses) {
-            if (typeof s?.id === 'string' && s.id.length > 0 && ['sent','delivered','read','failed'].includes(s?.status)) {
-              await this.ds.query(`SELECT followup_msg_set_status($1, $2)`, [s.id, s.status])
-                .catch((e) => this.logger.warn(`status update failed: ${e?.message}`));
+    let failed = false;
+    // A signed callback can contain several entries/changes; process every
+    // message status rather than acknowledging and dropping the rest of a batch.
+    for (const entry of Array.isArray(body?.entry) ? body.entry : []) {
+      for (const change of Array.isArray(entry?.changes) ? entry.changes : []) {
+        const statuses = change?.value?.statuses;
+        if (!Array.isArray(statuses)) continue;
+        for (const s of statuses) {
+          if (typeof s?.id === 'string' && s.id.length > 0 && ['sent','delivered','read','failed'].includes(s?.status)) {
+            try {
+              await this.ds.query(`SELECT followup_msg_set_status($1, $2)`, [s.id, s.status]);
+            } catch (e: any) {
+              failed = true;
+              this.logger.warn(`status update failed: ${e?.message}`);
             }
           }
         }
       }
-    } catch (e: any) {
-      this.logger.warn(`webhook parse failed: ${e?.message}`);
     }
-    return { received: true }; // always 200 so Meta doesn't retry-storm
+    // Acknowledge only persisted callbacks. Successful members of a partially
+    // failed batch are safe to replay: the DB update preserves confirmed progress.
+    if (failed) throw new ServiceUnavailableException('Unable to persist delivery status; retry callback');
+    return { received: true };
   }
 }
 

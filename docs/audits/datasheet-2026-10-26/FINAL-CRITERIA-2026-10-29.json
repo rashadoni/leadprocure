@@ -145,14 +145,16 @@
       "id": "LP-A17",
       "title": "SMTP/Meta и достоверная отправка",
       "status": "PARTIAL_EXTERNAL",
-      "evidence": "followups; mail; audit-webhook; followup_outbox/dispatch; meta-delivery; migration0040",
-      "assertions": "Локальные states/outbox/lease/recovery/dedupe/stop/responded/reconcile и HMAC boundary проверены. Console не даёт SENT. UNKNOWN после неопределённого исхода не повторяется автоматически. Полные callback-пакеты и защита подтверждённого READ/DELIVERED от регрессии проверены на реальных HTTP/HMAC/PostgreSQL/RLS.",
+      "evidence": "followups; mail; audit-webhook; followup_outbox/dispatch; meta-delivery; migration0040; private callback receipt migration0041",
+      "assertions": "Локальные states/outbox/lease/recovery/dedupe/stop/responded/reconcile и HMAC boundary проверены. Console не даёт SENT. UNKNOWN после неопределённого исхода не повторяется автоматически. Полные callback-пакеты и защита подтверждённого READ/DELIVERED от регрессии проверены на реальных HTTP/HMAC/PostgreSQL/RLS. Сбой записи не получает HTTP200; ранние callback сохраняются до регистрации сообщения; оба порядка реальной гонки и повтор частично сохранённого пакета проверены.",
       "limits": "ПОСЛЕДНЯЯ задача. Реальные org SMTP и Meta delivery/callback NOT RUN: владелец сообщил, что подключений и тестовых получателей пока нет. Mock transport и подписанный локальный callback не являются подтверждением внешней доставки.",
-      "qualification": "New A17 source/migration0040 and6 real HTTP/HMAC/PostgreSQL/RLS tests passed hosted40839644727; synthetic provider rows, no live external delivery.",
+      "qualification": "New callback persistence/migration0041 and4 real HTTP/HMAC/runtimeDataSource/PostgreSQL/RLS cases passed hosted40844677259; synthetic provider records, live delivery NOT RUN.",
       "verifiedInternalChecks": [
         "all entry/change callback batching",
         "confirmed delivery/read cannot regress on late callbacks",
-        "actual HTTP HMAC→runtimeDataSource→PostgreSQL provider message binding"
+        "actual HTTP HMAC→runtimeDataSource→PostgreSQL provider message binding",
+        "No HTTP200 after a callback DB write failure; safe partial-batch retry",
+        "Persist signed early callback and serialize receipt/message registration in both actual queue orders"
       ]
     },
     {
@@ -179,10 +181,10 @@
     "Внешние ERP/банк/ASAN/Peppol; CSV/PAID/dev signature не являются их интеграцией.",
     "Microsoft PowerPoint desktop: подключённой сессии нет."
   ],
-  "candidateHead": "516314e10d092ac1b002c3c32baff8b094d8a253",
-  "candidateRun": "https://github.com/rashadoni/leadprocure/actions/runs/40839644727",
+  "candidateHead": "cff06dbf95de5eb60f35840b454653b3f434f86d",
+  "candidateRun": "https://github.com/rashadoni/leadprocure/actions/runs/40844677259",
   "apiSuites": 29,
-  "apiTests": 330,
+  "apiTests": 334,
   "contentionTests": 3,
   "nativeBrowserTests": 14,
   "freshHttpsBrowserTests": 1,
@@ -195,6 +197,7 @@
     "all20FullyAccepted": false,
     "partialTechnicalTasks": []
   },
-  "baselineMergedMain": "3990a7d04b647d4d7d5bf6010a601c2622978ee5",
-  "baselineMainRun": "https://github.com/rashadoni/leadprocure/actions/runs/40833937868"
+  "baselineMergedMain": "436a8b89273f25506a6037d3fc42e63bfb41084a",
+  "baselineMainRun": "https://github.com/rashadoni/leadprocure/actions/runs/40840808558",
+  "restoredRlsTables": 52
 }

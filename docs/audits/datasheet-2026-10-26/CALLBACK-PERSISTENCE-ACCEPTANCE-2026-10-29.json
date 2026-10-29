@@ -1,0 +1,29 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/21",
+  "testedSourceHead": "cff06dbf95de5eb60f35840b454653b3f434f86d",
+  "status": "PASS",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/40844677259",
+  "apiSuites": 29,
+  "apiTests": 334,
+  "newPersistenceTests": 4,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "freshHttpsBrowserTests": 1,
+  "restoredRlsTables": 52,
+  "migration": "1720000000041-followup-callback-inbox.ts",
+  "assertions": [
+    "real PostgreSQL trigger failure produces503, does not falsely persist failed message/receipt, and does not block independent batch members",
+    "identical signed batch retry after storage recovery succeeds without duplicate messages",
+    "signed early callback persists provider ID/status; actual runtime sender-log function applies strongest confirmation on registration",
+    "private receipt table denies direct app_user reads",
+    "both actually observed advisory-lock86 callback/sender registration queue orders end with one READ message",
+    "fullbuild/typecheck/4UBL+OCDS/both applied migration histories/restore52RLS/fresh signedlicense-private storage-realClamAV PASS"
+  ],
+  "independentReview": "deadline_boundary_review exactcff06db no blockers",
+  "rawLog": "/tmp/leadprocure-callback-persistence-cff06db-acceptance.log",
+  "freshLog": "/tmp/leadprocure-callback-persistence-cff06db-fresh.log",
+  "qualification": "Synthetic provider fixtures and real local signed HTTP/runtimeDataSource/PostgreSQL/RLS; NOT live Meta/SMTP sends, receipts or provider retry policy acceptance. No external connections/receivers supplied.",
+  "productionChanged": false,
+  "materialsChanged": false
+}

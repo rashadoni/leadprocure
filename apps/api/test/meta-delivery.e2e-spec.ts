@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { Client } from 'pg';
+import { DataSource } from 'typeorm';
 import { randomUUID, createHmac } from 'crypto';
 import { AppModule } from '../src/app.module';
 import { addApprover } from './helpers';
@@ -106,6 +107,75 @@ describe('LP-A17 Meta delivery progress and batched callbacks', () => {
     expect((await callback(one(email.provider,'read'))).status).toBe(200);
     expect(await status(a.id)).toBe('SENT'); expect(await status(email.id)).toBe('SENT');
     expect((await owner.query('SELECT followup_msg_set_status($1,$2) AS n',[a.provider,'APPROVED'])).rows[0].n).toBe(0);
+  });
+  it('persists a callback received before its message and applies it when the sender logs that message', async () => {
+    const provider = `wamid.audit.${randomUUID()}`, recipient = `early-${randomUUID()}`;
+    expect((await callback(one(provider,'read'))).status).toBe(200);
+    expect((await owner.query('SELECT status FROM whatsapp_delivery_receipts WHERE provider_msg_id=$1',[provider])).rows[0].status).toBe('READ');
+    await app.get(DataSource).query('SELECT followup_log_message_ex($1,0,$2,$3,$4,NULL,$5)',
+      [first.enrollment,'WHATSAPP',recipient,'SENT',provider]);
+    const rows = (await owner.query('SELECT status FROM followup_messages WHERE provider_msg_id=$1',[provider])).rows;
+    expect(rows).toEqual([{ status:'READ' }]);
+    await expect(app.get(DataSource).query('SELECT * FROM whatsapp_delivery_receipts')).rejects.toThrow(/permission denied/i);
+  });
+  for (const firstOperation of ['callback','message']) {
+    it(`serializes callback and message registration when ${firstOperation} actually waits first`, async () => {
+      const provider = `wamid.audit.${randomUUID()}`, recipient = `race-${randomUUID()}`;
+      const pending: Array<Promise<any>> = [];
+      let responses: PromiseSettledResult<any>[] = [];
+      const log = () => app.get(DataSource).query('SELECT followup_log_message_ex($1,0,$2,$3,$4,NULL,$5)',
+        [first.enrollment,'WHATSAPP',recipient,'SENT',provider]);
+      const notify = () => callback(one(provider,'read'));
+      await owner.query('BEGIN');
+      try {
+        const pid = (await owner.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
+        await owner.query('SELECT pg_advisory_xact_lock(hashtextextended($1,86))',[provider]);
+        for (const operation of firstOperation === 'callback' ? [notify,log] : [log,notify]) {
+          pending.push(operation());
+          const deadline = Date.now()+10000;
+          let observed = false;
+          while (Date.now()<deadline) {
+            await owner.query('SELECT pg_stat_clear_snapshot()');
+            const n = (await owner.query(`SELECT count(*)::int AS n FROM pg_stat_activity
+              WHERE wait_event='advisory' AND $1=ANY(pg_blocking_pids(pid))`,[pid])).rows[0].n;
+            if (n>=pending.length) { observed=true; break; }
+            await new Promise(resolve=>setTimeout(resolve,20));
+          }
+          expect(observed).toBe(true);
+        }
+      } finally { await owner.query('ROLLBACK'); responses=await Promise.allSettled(pending); }
+      const values = responses.map(r=>{ if(r.status==='rejected')throw r.reason;return r.value; });
+      expect(values[firstOperation==='callback'?0:1].status).toBe(200);
+      expect((await owner.query('SELECT status FROM followup_messages WHERE provider_msg_id=$1',[provider])).rows).toEqual([{ status:'READ' }]);
+    });
+  }
+  it('returns503 for real storage failure, preserves other batch members and safely accepts a retry', async () => {
+    const a = await message(), b = await message();
+    const fn = `meta_fail_${tag}`, trigger = `${fn}_trigger`;
+    const body = { entry:[{ changes:[{ value:{ statuses:[
+      { id:a.provider,status:'read' },{ id:b.provider,status:'read' },
+    ] } }] }] };
+    try {
+      // Temporary fixture trigger fails only this synthetic message's UPDATE.
+      // It exercises the actual runtime PostgreSQL failure path, not a mocked DS.
+      await owner.query(`CREATE FUNCTION ${fn}() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN IF OLD.provider_msg_id=TG_ARGV[0] THEN RAISE EXCEPTION 'Synthetic callback storage failure'; END IF;
+        RETURN NEW; END $$`);
+      const ddl = (await owner.query(`SELECT format('CREATE TRIGGER %I BEFORE UPDATE ON followup_messages
+        FOR EACH ROW EXECUTE FUNCTION %I(%L)', $1::text,$2::text,$3::text) AS ddl`, [trigger,fn,a.provider])).rows[0].ddl;
+      await owner.query(ddl);
+      const failed = await callback(body);
+      expect(failed.status).toBe(503);
+      expect(failed.body.message).toBe('Unable to persist delivery status; retry callback');
+      expect(await status(a.id)).toBe('SENT'); expect(await status(b.id)).toBe('READ');
+    } finally {
+      await owner.query(`DROP TRIGGER IF EXISTS ${trigger} ON followup_messages`);
+      await owner.query(`DROP FUNCTION IF EXISTS ${fn}()`);
+    }
+    expect((await callback(body)).status).toBe(200);
+    expect(await status(a.id)).toBe('READ'); expect(await status(b.id)).toBe('READ');
+    expect((await owner.query('SELECT count(*)::int AS n FROM followup_messages WHERE provider_msg_id=ANY($1::text[])',
+      [[a.provider,b.provider]])).rows[0].n).toBe(2);
   });
   it('concurrent stronger and weaker confirmations preserve the strongest status', async () => {
     const a = await message();
