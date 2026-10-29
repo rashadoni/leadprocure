@@ -217,3 +217,6 @@ LP-A17, продолжение29октября: corrected falseHTTP200 after DB 
 
 
 LP-A17, продолжение29октября: worker lease ownership/providerID recovery/confirmed-delivery requeue controls accepted. NEW0042;7actual DB/worker/HTTP cases; sourcebb183be/run40849057531 BOTH SUCCESS:341API/3contention/14nativebrowser/1freshHTTPS,build/schemas/both histories/restore52RLS/fresh installation. DISPATCH-OWNERSHIP-ACCEPTANCE-2026-10-29.json; independent exact-head no blockers. Actual external delivery remains NOT RUN, synthetic transport is not provider acceptance; no exactly-once network guarantee or production change.
+
+
+LP-A19, 29октября: native EN RFP до PAID и локализация деталей счёта AZ/RU/EN приняты на e210c40/run40928824772. Все downstream writes реальными browser controls; API read assertions. Net/VAT/gross1200/216/1416, persistedPAIDbuyer/supplier. BOTH hostedjobs SUCCESS:346API/3contention/14native/1fresh и остальные gates. RFP-NATIVE-PAYMENT-ACCEPTANCE-2026-10-29.json. Это уточняет старую границу RFPnativeopening; RUfull downstream/реальный банковский платёж не заявлены. Текущийscope19, исключённая задача не возобновлялась; production не менялся.
