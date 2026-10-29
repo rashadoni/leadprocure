@@ -30,11 +30,13 @@ export abstract class AiScorer {
   abstract readonly model: string;
 }
 
+const SCORING_WEIGHTS = { price: 0.5, delivery: 0.2, reliability: 0.3 };
+
 @Injectable()
 export class HeuristicScorer extends AiScorer {
   readonly model = 'heuristic-v1';
   // Transparent weights — a buyer can defend the recommendation to an auditor.
-  private readonly W = { price: 0.5, delivery: 0.2, reliability: 0.3 };
+  private readonly W = SCORING_WEIGHTS;
 
   constructor(private readonly rc: RequestContextService) {
     super();
@@ -154,17 +156,31 @@ export class HttpAiScorer extends AiScorer {
       });
       if (!res.ok) throw new Error(`orchestrator ${res.status}`);
       const data = (await res.json()) as any;
-      if (!Array.isArray(data.ranking) || data.ranking.length !== bids.length ||
-          new Set(data.ranking.map((r:any)=>r.bidId)).size !== bids.length ||
-          data.ranking.some((r:any)=> !bids.some((b:any)=>b.id===r.bidId) ||
-            ['priceScore','deliveryScore','reliabilityScore','weightedTotal'].some(k=>!Number.isFinite(r[k]) || r[k]<0 || r[k]>100)) ||
+      const text = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
+      const byId = new Map<string, any>(bids.map((b: any) => [b.id, b]));
+      // The HTTP provider is an untrusted boundary. Validate everything rendered by
+      // the client or used in localized copy before allowing it past the fallback.
+      if (!data || !text(data.model) || !text(data.rationale) || !data.weights ||
+          Object.entries(SCORING_WEIGHTS).some(([key, weight]) => data.weights[key] !== weight) ||
+          !Array.isArray(data.ranking) || data.ranking.length !== bids.length ||
+          new Set(data.ranking.map((r: any) => r?.bidId)).size !== bids.length ||
+          data.ranking.some((r: any, index: number) => !r || !byId.has(r.bidId) ||
+            ['priceScore', 'deliveryScore', 'reliabilityScore', 'weightedTotal'].some(key =>
+              !Number.isFinite(r[key]) || r[key] < 0 || r[key] > 100) ||
+            !Array.isArray(r.reasons) || !r.reasons.length || r.reasons.some((reason: unknown) => !text(reason)) ||
+            // Both implementations round to one decimal; tolerate its half-step only.
+            Math.abs(r.weightedTotal - (r.priceScore * SCORING_WEIGHTS.price +
+              r.deliveryScore * SCORING_WEIGHTS.delivery + r.reliabilityScore * SCORING_WEIGHTS.reliability)) > 0.050001 ||
+            (index > 0 && data.ranking[index - 1].weightedTotal < r.weightedTotal)) ||
           data.recommendedBidId !== data.ranking[0]?.bidId) throw new Error('Invalid scorer response');
       return {
         model: data.model,
         weights: data.weights,
         ranking: data.ranking.map((r: any) => ({
           bidId: r.bidId, supplierOrgId: bids.find((b: any) => b.id === r.bidId)?.supplier_org_id ?? '',
-          supplierName: r.supplierName, totalMinor: r.totalMinor, deliveryDays: r.deliveryDays,
+          // Provider prose/scores may be useful; party, amount and delivery facts stay local.
+          supplierName: byId.get(r.bidId).supplier_name, totalMinor: Number(byId.get(r.bidId).total_minor),
+          deliveryDays: byId.get(r.bidId).delivery_days == null ? null : Number(byId.get(r.bidId).delivery_days),
           priceScore: r.priceScore, deliveryScore: r.deliveryScore, reliabilityScore: r.reliabilityScore,
           weightedTotal: r.weightedTotal, reasons: r.reasons,
         })),

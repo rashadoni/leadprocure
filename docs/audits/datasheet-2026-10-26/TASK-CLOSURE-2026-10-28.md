@@ -91,3 +91,13 @@ PR15 candidate7ee3c55 / run40770949640 BOTH jobs SUCCESS:26suites/294API,3conten
 ## PR15 merged and exact main accepted
 
 Owner authorized PR15. Normal exact-head merge→8b0e68f8d6b4381deffcd97297d7b0a3f62cb8ac, full reviewed tree equality. Final-main40774882018 BOTH jobs SUCCESS:294API/3contention/14native browser/1freshHTTPS, build/typecheck/schemas/both migration histories/restore51RLS/fresh acceptance PASS. Durable LOT-RANKING-MAIN-ACCEPTANCE-2026-10-29.json. Continued original LP-A19 RFI/RFP own-response/native criterion while CI ran. SMTP/Meta remains last; no production change or blanket all20/live acceptance.
+
+
+## LP-A19 supplier RFI/RFP own response and actual native privacy flow
+
+Candidateada0d3e / PR16, run40775869583 BOTH jobs SUCCESS:26suites/294API,3contention,14native browser tests with RFI-AZ/RFP-RU/RFP-EN substeps,1freshHTTPS; build/typecheck/official4UBL+OCDS/both migrations/restore51RLS/fresh signedfile-private storage-realAV PASS. Supplier now reads its authorized own technical text after refresh/closing; submission/extension receipts localized, RFI finance placeholder removed. Actual supplier-context registration supplies its own real cookie, no copied session/token injection/extralogin. Actual buyer and foreign supplier cannot obtain text preopening; actual buyerUIopening reveals it; foreignsupplier still cannot; RFI remains null-priced/no Score/Award/AI and API award400. Independent review exactSHA no remaining blockers after selector correction. Durable RFX-RESPONSE-ACCEPTANCE-2026-10-29.json. Separate merge authorization pending; main8b0e68f/production unchanged by PR16. SMTP/Meta remains LAST. No blanket all20/live claim; native RFP path here stops at opening/scoring availability.
+
+
+## Autonomous delivery authorization and PR16 main
+
+Owner authorized autonomous pushes/CI/PRs/merges for original LP-A00–19 after actual independent review and passing checks; separate per-PR «давай» superseded. Production excluded, SMTP/Meta LAST. PR16 merged normally→53dc4a3, reviewed tree equal; exact-main40777765511 BOTH jobs SUCCESS:294API/3contention/14browser/1freshHTTPS plus build/typecheck/schemas/migrations/restore/fresh PASS. See RFX-RESPONSE-MAIN-ACCEPTANCE-2026-10-29.json. Next final criterion inventory identified a remaining LP-A12 provider structural validation/fallback gap; candidate tests must run before closure.
