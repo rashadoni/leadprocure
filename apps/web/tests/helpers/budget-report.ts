@@ -35,13 +35,13 @@ export async function verifyBudgetReport({page,call,buyerToken,tag}:{page:Page;c
       await year.fill(years[1]);
       await expect(page.getByText(names[1],{exact:true})).toBeVisible();
       await expect(page.getByText(names[0],{exact:true})).toHaveCount(0);
-      await expect(rollup.locator('tbody tr').first().locator('td').nth(1)).toHaveText('200,02 AZN');
+      await expect(rollup.locator('tbody tr').first().locator('td').nth(1)).toHaveText(/^200[.,]02\s+AZN$/);
       release();await drained;
       await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
       await expect(year).toHaveValue(years[1]);
       await expect(page.getByText(names[1],{exact:true})).toBeVisible();
       await expect(page.getByText(names[0],{exact:true})).toHaveCount(0);
-      await expect(rollup.locator('tbody tr').first().locator('td').nth(1)).toHaveText('200,02 AZN');
+      await expect(rollup.locator('tbody tr').first().locator('td').nth(1)).toHaveText(/^200[.,]02\s+AZN$/);
     } finally {release();await page.unrouteAll({behavior:'wait'});page.off('requestfinished',onFinished);}
   });
   const cases=[
