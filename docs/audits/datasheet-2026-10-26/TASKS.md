@@ -206,3 +206,12 @@ Microsoft PowerPoint desktop session отсутствует. Следующая 
 ## Коррекция очереди владельцем — 29 октября2026
 
 SMTP/Meta оставить самой последней задачей. Предыдущие next-action записи, ставившие внешнюю отправку сразу после PR14, superseded по приоритету. Сначала завершать доступные исходные критерии закупок/бюджетирования. PR15 подготовлен по LP-A07/A03 с дополнительной native-проверкой аукциона LP-A04/A05; результат и точные границы в LOT-RANKING-ACCEPTANCE-2026-10-29.json и TASK-CLOSURE-2026-10-28.md. Исходные20 критериев выше не изменены; это не merge/deploy разрешение.
+
+
+## Актуальная сверка всех20 критериев — 29 октября2026
+
+[FINAL-CRITERIA-2026-10-29.md](FINAL-CRITERIA-2026-10-29.md) и одноимённый JSON собирают текущие результаты вместо чтения исторических статусов по отдельности. PR17/PR18 объединены; кандидат1494149 прошёл hosted40833169209:28suites/324API,3contention/14nativebrowser/1freshHTTPS,fullbuild/typecheck/4UBL+OCDS/both histories/restore51RLS/fresh signedlicense-private storage-realAV PASS. Точное main3990a7d проверяется отдельным запуском; кандидатный результат не подменяет этот gate.
+
+18задач технически проверены в указанных границах. A17 и A19 остаются частично открыты по внешней/клиентской приёмке: SMTP/Meta подключения отсутствуют по ответу владельца; реальные отправка/получение/callback NOT RUN. Live LLM quality, клиентское внедрение и desktop PowerPoint также не объявлены проверенными. Общая авторизация владельца разрешает push/CI/PR/merge после независимого ревью и необходимых проверок; старые требования нового «давай» для каждого исходного PR superseded. Production не менялся. Никаких новых release/backup проектов.
+
+Окончательный результат точного main3990a7d: [40833937868](https://github.com/rashadoni/leadprocure/actions/runs/40833937868) BOTH jobs SUCCESS,324API/3contention/14nativebrowser/1freshHTTPS и остальные gates PASS. Статус «main проверяется» выше superseded; доказательство FINAL-CRITERIA-MAIN-ACCEPTANCE-2026-10-29.json. Итоговая таблица:18 технически проверенных задач, A17/A19 частично открыты по внешним зависимостям. Production не изменён.

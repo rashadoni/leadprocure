@@ -3,7 +3,7 @@
   "date": "2026-10-29",
   "productionChanged": false,
   "scope": "original LP-A00–LP-A19 only",
-  "gateStatus": "PR18_PENDING",
+  "gateStatus": "MAIN_PASS",
   "tasks": [
     {
       "id": "LP-A00",
@@ -24,10 +24,10 @@
     {
       "id": "LP-A02",
       "title": "Сверка количеств и R01",
-      "status": "PENDING_CANDIDATE",
+      "status": "VERIFIED",
       "evidence": "audit-regressions; invoices; amendments; procurement.stress-spec; common/procurement/invariants.ts",
       "assertions": "Дубли poItemId отклоняются; совокупный billable остаток и rematch пересчитываются под общей блокировкой PO. Повторные invoices/GRN, частичная приёмка и disputed→matched проверены. Новые 4 теста явно наблюдают queued HTTP в PostgreSQL: два счёта, две приёмки и оба порядка счёт/приёмка.",
-      "limits": "Новые barrier-тесты ещё не прошли hosted gate. Стресс 12×8 не является capacity/SLA тестом."
+      "limits": "Стресс 12×8 не является capacity/SLA тестом."
     },
     {
       "id": "LP-A03",
@@ -72,10 +72,10 @@
     {
       "id": "LP-A08",
       "title": "Валюта, объём, safe money",
-      "status": "PENDING_CANDIDATE",
+      "status": "VERIFIED",
       "evidence": "audit-regressions; integrity; multilot; ai-provider; deadline-boundaries; invariants.ts",
       "assertions": "Разная валюта bid/event отклоняется. Сравнение и downstream по одному лоту/объёму; внешний AI не заменяет исходные суммы/имена/срок. Safe integer guards на цену/произведение/итог; новые HTTP отрицательные сценарии подтверждают rollback заявки и сохранность старого sealed bid.",
-      "limits": "Новые HTTP overflow-тесты ожидают gate. Автоматический FX не реализован в этом потоке и не обещается."
+      "limits": "Автоматический FX не реализован в этом потоке и не обещается."
     },
     {
       "id": "LP-A09",
@@ -152,10 +152,10 @@
     {
       "id": "LP-A18",
       "title": "Дедлайны и конкуренция",
-      "status": "PENDING_CANDIDATE",
+      "status": "VERIFIED",
       "evidence": "deadline-boundaries; auction-flow; procurement.stress-spec; audit-regressions",
       "assertions": "Время сервера, withdrawal после close_at отклонён. Auction tick/extension/closer сериализованы. Новые реальные queued resubmit/withdraw при TRY-lock skip сохраняют исходный sealed payload; два opening дают 201/400 и один audit; положительный withdrawal/replacement сохранён.",
-      "limits": "Новые sealed overlap-тесты ожидают gate. Отклонённая транзакция не сохраняет domain audit/tick; журнал принятых изменений не выдаётся за журнал всех атак/отклонённых запросов."
+      "limits": "Отклонённая транзакция не сохраняет domain audit/tick; журнал принятых изменений не выдаётся за журнал всех атак/отклонённых запросов."
     },
     {
       "id": "LP-A19",
@@ -163,7 +163,7 @@
       "status": "PARTIAL_EXTERNAL",
       "evidence": "full acceptance.yml; web tests/helpers/rfx.ts; rfi-rfp; render-presentations; v3/output; CLAIMS.md",
       "assertions": "Full API/security/build/native browser и fresh isolated install, upgrade/restore. RFQ и auction downstream до GRN/invoice, direct/catalog и payment-status API. RFI AZ/RFP RU/EN: own response после reload/close, buyer secrecy/opening, foreign supplier deny, RFI без цен/award. Текущие PPTX/PDF/notes синхронизированы; независимый render 15 страниц, 100% текста.",
-      "limits": "Новый отдельный RFP API downstream до MATCHED/PAID пока PENDING PR18. RFI не имеет финансового downstream по модели. Native RFP сценарий заканчивается opening/scoring availability; не заявляется отдельный native RFP→payment. Не исчерпывающий редакторский аудит всех строк. Внешние/клиентские ограничения из externalNotRun остаются NOT RUN."
+      "limits": "Отдельный RFP API downstream до MATCHED/PAID прошёл PR18 gate. RFI не имеет финансового downstream по модели. Native RFP сценарий заканчивается opening/scoring availability; не заявляется отдельный native RFP→payment. Не исчерпывающий редакторский аудит всех строк. Внешние/клиентские ограничения из externalNotRun остаются NOT RUN."
     }
   ],
   "externalNotRun": [
@@ -172,5 +172,22 @@
     "Реальное клиентское внедрение, коммерческая лицензия, public TLS и реальный existing-volume upgrade.",
     "Внешние ERP/банк/ASAN/Peppol; CSV/PAID/dev signature не являются их интеграцией.",
     "Microsoft PowerPoint desktop: подключённой сессии нет."
-  ]
+  ],
+  "candidateHead": "149414908877b508c8daa5249f22afdca9b3a7a3",
+  "mergedMain": "3990a7d04b647d4d7d5bf6010a601c2622978ee5",
+  "candidateRun": "https://github.com/rashadoni/leadprocure/actions/runs/40833169209",
+  "apiSuites": 28,
+  "apiTests": 324,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "freshHttpsBrowserTests": 1,
+  "summary": {
+    "verifiedTechnicalTasks": 18,
+    "partialExternalTasks": [
+      "LP-A17",
+      "LP-A19"
+    ],
+    "all20FullyAccepted": false
+  },
+  "mainRun": "https://github.com/rashadoni/leadprocure/actions/runs/40833937868"
 }

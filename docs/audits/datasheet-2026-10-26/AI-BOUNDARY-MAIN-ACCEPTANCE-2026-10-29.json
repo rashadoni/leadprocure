@@ -1,0 +1,31 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/17",
+  "head": "4491a22c282324c20eb37a51f4c4c507926342c1",
+  "originalCriterion": "LP-A12 external response validation/fallback; authoritative same-currency/lot facts",
+  "status": "PASS",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/40832467413",
+  "apiSuites": 27,
+  "apiTests": 312,
+  "newHttpBoundaryTests": 18,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "freshHttpsBrowserTests": 1,
+  "assertions": [
+    "real loopback HTTP provider; actual Nest auth/request transaction/PostgreSQL/RLS",
+    "zero price and same-day delivery finite; neutral reliability60",
+    "malformed weights/model/rationale/reasons/score/IDs/order/weighted total safely fall back before copy/UI",
+    "HTTP503, malformed JSON, socket disconnect use heuristic fallback",
+    "provider cannot replace supplier name, amount or delivery facts",
+    "no provider calls before opening or for a foreign buyer; recommendation does not create awards"
+  ],
+  "independentReview": "ai_boundary_review bound no-blockers review to exact4491a22",
+  "automaticReview": "40831230796 fallback Anthropic400 insufficient credits; not semantic review",
+  "rawLog": "/tmp/leadprocure-ai-boundary-main-446954a-acceptance.log",
+  "freshLog": "/tmp/leadprocure-ai-boundary-main-446954a-fresh.log",
+  "productionChanged": false,
+  "materialsChanged": false,
+  "qualification": "Real HTTP contract tested with a controlled local provider, NOT live external LLM quality/availability.",
+  "mergedMain": "446954a198ecb33f8a25a83e096bc50d92600f43",
+  "reviewedTreeEqualsMain": true
+}
