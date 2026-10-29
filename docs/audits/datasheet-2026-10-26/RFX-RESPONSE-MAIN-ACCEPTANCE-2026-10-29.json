@@ -26,7 +26,7 @@
   ],
   "independentReview": "rfx_response_review bound no-remaining-blockers review to exact ada0d3e after marker/emoji selector correction",
   "automaticReview": "40775869602 fallback Anthropic400 insufficient credits; not semantic review",
-  "rawLog": "/tmp/leadprocure-rfx-response-main-53dc4a3.log",
+  "rawLog": "/tmp/leadprocure-rfx-response-main-53dc4a3-acceptance.log",
   "productionChanged": false,
   "materialsChanged": false,
   "mergeStatus": "MERGED",
@@ -34,5 +34,6 @@
   "qualification": "Specific original LP-A19 criterion accepted in disposable CI; RFP native step stops at opening/scoring availability, not a newly claimed full RFP invoice chain. No all20/live production claim.",
   "mergeCommit": "53dc4a3bac79691f4c87a6a20fec15f3bf6bbd93",
   "mergeAuthorization": "Owner broad original LP-A00–19 push/CI/PR/merge authorization; independent review and passing checks required, no repeated permission",
-  "reviewedAndMergedSourceTreesEqual": true
+  "reviewedAndMergedSourceTreesEqual": true,
+  "freshLog": "/tmp/leadprocure-rfx-response-main-53dc4a3-fresh.log"
 }

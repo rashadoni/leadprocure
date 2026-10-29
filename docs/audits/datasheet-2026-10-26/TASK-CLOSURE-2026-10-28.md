@@ -101,3 +101,8 @@ Candidateada0d3e / PR16, run40775869583 BOTH jobs SUCCESS:26suites/294API,3conte
 ## Autonomous delivery authorization and PR16 main
 
 Owner authorized autonomous pushes/CI/PRs/merges for original LP-A00–19 after actual independent review and passing checks; separate per-PR «давай» superseded. Production excluded, SMTP/Meta LAST. PR16 merged normally→53dc4a3, reviewed tree equal; exact-main40777765511 BOTH jobs SUCCESS:294API/3contention/14browser/1freshHTTPS plus build/typecheck/schemas/migrations/restore/fresh PASS. See RFX-RESPONSE-MAIN-ACCEPTANCE-2026-10-29.json. Next final criterion inventory identified a remaining LP-A12 provider structural validation/fallback gap; candidate tests must run before closure.
+
+
+## LP-A12 explicit HTTP provider contract/fallback acceptance
+
+PR17 candidate4491a22 / run40831230913 BOTH jobs SUCCESS:27suites/312API (18new real HTTP boundary tests),3contention/14native browser/1freshHTTPS; build/typecheck/4UBL+OCDS/both migrations/restore/fresh PASS. Provider structural fields, fixed weights, weighted-total/order consistency and IDs validated; authoritative name/amount/delivery stay local. Real HTTP malformed/503/disconnect and before-opening/foreign-buyer checks pass using actual API/auth/RLS. Separate independent exact-head review no blockers. Live LLM remains NOT RUN, not disguised as the loopback fixture. See AI-BOUNDARY-ACCEPTANCE-2026-10-29.json. Owner broad merge authorization applies after ready checks; no new permission request. Continue explicit A08/A18 HTTP/concurrency evidence, then final all20 criterion inventory, SMTP/Meta LAST.
