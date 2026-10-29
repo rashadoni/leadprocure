@@ -151,4 +151,6 @@ jobs:
             /tmp/leadprocure-web.log
             /tmp/leadprocure-minio.log
       - name: Backup and restore disposable database
+        env:
+          ACCEPTANCE_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
         run: bash scripts/acceptance/backup-restore.sh
