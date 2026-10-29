@@ -20,6 +20,7 @@ const dict: Record<Lang, Record<string, string>> = {
     delivery_CONFIRMED_NOT_SENT: "Göndərilmədiyi təsdiqlənib",
     delivery_reconcile_reason: "Göndərilmədiyini yoxladıqdan sonra səbəbi yazın (ən azı 10 simvol)",
     delivery_confirm_not_sent: "Göndərilməyib — yenidən növbəyə al",
+    delivery_already_confirmed: "Provayder göndərişi artıq təsdiqləyib; təkrar göndərmək olmaz.",
 
     spend_date_basis: 'Qəbul edilmiş sifarişlər; ay sifarişin yaradılma tarixinə görə müəyyən edilir.', order_price_basis: 'Sifarişin qiymət rejimi',
     login: 'Daxil ol', logout: 'Çıxış', email: 'E-poçt', password: 'Şifrə', register: 'Qeydiyyat',
@@ -229,6 +230,7 @@ const dict: Record<Lang, Record<string, string>> = {
     delivery_CONFIRMED_NOT_SENT: "Отсутствие отправки подтверждено",
     delivery_reconcile_reason: "После проверки, что сообщение не отправлено, укажите причину (минимум 10 символов)",
     delivery_confirm_not_sent: "Не отправлено — вернуть в очередь",
+    delivery_already_confirmed: "Провайдер уже подтвердил отправку; повторная отправка запрещена.",
 
     spend_date_basis: 'Принятые заказы; месяц определяется датой создания заказа.', order_price_basis: 'Цены заказа',
     login: 'Войти', logout: 'Выход', email: 'Email', password: 'Пароль', register: 'Регистрация',
@@ -438,6 +440,7 @@ const dict: Record<Lang, Record<string, string>> = {
     delivery_CONFIRMED_NOT_SENT: "Not sent confirmed",
     delivery_reconcile_reason: "After confirming no message was sent, provide a reason (at least 10 characters)",
     delivery_confirm_not_sent: "Not sent — requeue",
+    delivery_already_confirmed: "The provider has confirmed sending; this reminder cannot be resent.",
 
     spend_date_basis: 'Accepted orders; month is based on order creation date.', order_price_basis: 'Order price basis',
     login: 'Log in', logout: 'Log out', email: 'Email', password: 'Password', register: 'Register',

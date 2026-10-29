@@ -3,7 +3,7 @@
   "date": "2026-10-29",
   "productionChanged": false,
   "scope": "original LP-A00–LP-A19 only",
-  "gateStatus": "A17_IMPLEMENTATION_PASS",
+  "gateStatus": "A17_RECOVERY_PENDING",
   "tasks": [
     {
       "id": "LP-A00",
@@ -144,7 +144,7 @@
     {
       "id": "LP-A17",
       "title": "SMTP/Meta и достоверная отправка",
-      "status": "PARTIAL_EXTERNAL",
+      "status": "PARTIAL_PENDING_CANDIDATE",
       "evidence": "followups; mail; audit-webhook; followup_outbox/dispatch; meta-delivery; migration0040; private callback receipt migration0041",
       "assertions": "Локальные states/outbox/lease/recovery/dedupe/stop/responded/reconcile и HMAC boundary проверены. Console не даёт SENT. UNKNOWN после неопределённого исхода не повторяется автоматически. Полные callback-пакеты и защита подтверждённого READ/DELIVERED от регрессии проверены на реальных HTTP/HMAC/PostgreSQL/RLS. Сбой записи не получает HTTP200; ранние callback сохраняются до регистрации сообщения; оба порядка реальной гонки и повтор частично сохранённого пакета проверены.",
       "limits": "ПОСЛЕДНЯЯ задача. Реальные org SMTP и Meta delivery/callback NOT RUN: владелец сообщил, что подключений и тестовых получателей пока нет. Mock transport и подписанный локальный callback не являются подтверждением внешней доставки.",
@@ -155,6 +155,11 @@
         "actual HTTP HMAC→runtimeDataSource→PostgreSQL provider message binding",
         "No HTTP200 after a callback DB write failure; safe partial-batch retry",
         "Persist signed early callback and serialize receipt/message registration in both actual queue orders"
+      ],
+      "remainingInternalChecks": [
+        "Opaque per-dispatch lease ownership across expiry/manual counter reset and paused old worker",
+        "Retain known provider ID when final storage fails; retain stale provider fact without clobbering a new lease",
+        "Confirmed provider acceptance/delivery blocks contradictory requeue and dispatch"
       ]
     },
     {
@@ -195,7 +200,9 @@
       "LP-A19"
     ],
     "all20FullyAccepted": false,
-    "partialTechnicalTasks": []
+    "partialTechnicalTasks": [
+      "LP-A17"
+    ]
   },
   "baselineMergedMain": "436a8b89273f25506a6037d3fc42e63bfb41084a",
   "baselineMainRun": "https://github.com/rashadoni/leadprocure/actions/runs/40840808558",

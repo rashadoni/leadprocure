@@ -1,4 +1,7 @@
 import { DataSource } from 'typeorm';
+import { SchedulerRegistry } from '@nestjs/schedule';
+import { createHmac } from 'crypto';
+import * as channelSenders from '../src/modules/channels/channels.module';
 import { AppConfig } from '../src/common/config/config.service';
 import { ConsoleMailProvider } from '../src/common/mail/mail.module';
 import { ConsoleWhatsAppProvider } from '../src/modules/followups/followups.module';
@@ -63,10 +66,12 @@ describe('outreach follow-ups (API e2e)', () => {
 
   beforeAll(async () => {
     const mod = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(MailProvider).useValue({kind:'test',send:async()=>{}}).compile();
-    app = mod.createNestApplication();
+    app = mod.createNestApplication({ rawBody:true });
     app.use(cookieParser());
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
+    // Tests drive real ticks explicitly; avoid unrelated wall-clock cron races.
+    app.get(SchedulerRegistry).getCronJobs().forEach(job=>job.stop());
     scheduler = app.get(FollowupsScheduler);
     owner = new Client({ connectionString: process.env.DATABASE_OWNER_URL });
     await owner.connect();
@@ -221,7 +226,149 @@ describe('outreach follow-ups (API e2e)', () => {
     await owner.query(`UPDATE followup_outbox SET lease_until=now()-interval '1 minute' WHERE id=$1`,[first[0].id]);
     const second=(await owner.query(`SELECT * FROM followup_claim_outbox()`)).rows;expect(second).toHaveLength(1);expect(second[0].id).toBe(waiting[0].id);
     expect((await owner.query(`SELECT status FROM followup_outbox WHERE id=$1`,[first[0].id])).rows[0].status).toBe('UNKNOWN');
-    await owner.query(`SELECT followup_finish_outbox($1,'SENT',NULL,NULL)`,[second[0].id]);
+    await owner.query(`SELECT followup_finish_outbox($1,'SENT',NULL,NULL,$2)`,[second[0].id,second[0].lease_token]);
+  });
+
+  async function dueDelivery(channel='EMAIL') {
+    await scheduler.tick();
+    await http().put('/settings/followup-plan').set(...bearer(buyerToken))
+      .send({ steps:[{ channel,afterHours:1 }] }).expect(200);
+    if (channel==='WHATSAPP') await owner.query("UPDATE organizations SET phone='synthetic-recipient' WHERE id=$1",[supplierOrgId]);
+    const ev = await makeOpenEvent();
+    await http().post(`/events/${ev.eventId}/followups`).set(...bearer(buyerToken)).send({ supplierOrgIds:[supplierOrgId] }).expect(201);
+    await rewind(ev.eventId,supplierOrgId);
+    return ev;
+  }
+  async function leasedDelivery(channel='EMAIL') {
+    const ev = await dueDelivery(channel);
+    const job = (await owner.query('SELECT * FROM followup_claim_outbox()')).rows.find((j:any)=>j.work.event_id===ev.eventId);
+    expect(job).toBeTruthy(); expect(job.lease_token).toEqual(expect.any(String));
+    return { ev,job };
+  }
+  const finish = (job:any,state:string,provider:string|null=null,token=job.lease_token) => owner.query(
+    'SELECT followup_finish_outbox($1,$2,NULL,$3,$4) AS done',[job.id,state,provider,token]);
+  const allowed = async (job:any,token=job.lease_token) => (await owner.query(
+    'SELECT followup_dispatch_allowed($1,$2) AS allowed',[job.id,token])).rows[0].allowed;
+  async function reclaim(ev:any,job:any) {
+    await owner.query("UPDATE followup_outbox SET lease_until=now()-interval '1 minute' WHERE id=$1",[job.id]);
+    await owner.query('SELECT * FROM followup_claim_outbox()');
+    await http().post(`/events/${ev.eventId}/followups/jobs/${job.id}/reconcile`).set(...bearer(buyerToken))
+      .send({ decision:'CONFIRMED_NOT_SENT',reason:'Fixture provider confirmed no dispatch occurred' }).expect(201);
+    const next = (await owner.query('SELECT * FROM followup_claim_outbox()')).rows.find((j:any)=>j.id===job.id);
+    expect(next).toBeTruthy(); expect(next.lease_token).not.toBe(job.lease_token);
+    return next;
+  }
+  it('only the active opaque lease can dispatch/finish; unfenced legacy calls fail closed', async () => {
+    const { job } = await leasedDelivery();
+    expect(await allowed(job)).toBe(true); expect(await allowed(job,randomUUID())).toBe(false);
+    expect((await owner.query('SELECT followup_dispatch_allowed($1) AS allowed',[job.id])).rows[0].allowed).toBe(false);
+    await owner.query("SELECT followup_finish_outbox($1,'SENT',NULL,NULL)",[job.id]);
+    expect((await finish(job,'SENT',null,randomUUID())).rows[0].done).toBe(false);
+    expect((await owner.query('SELECT status,lease_token FROM followup_outbox WHERE id=$1',[job.id])).rows[0])
+      .toMatchObject({ status:'SENDING',lease_token:job.lease_token });
+    expect((await finish(job,'SENT')).rows[0].done).toBe(true);
+    expect((await finish(job,'SENT')).rows[0].done).toBe(false);
+    expect((await owner.query("SELECT count(*)::int AS n FROM followup_messages WHERE enrollment_id=$1 AND status='SENT'",[job.enrollment_id])).rows[0].n).toBe(1);
+  });
+  it('expired leases cannot dispatch before cleanup and cannot finish a newly reclaimed attempt with the same counter', async () => {
+    const { ev,job } = await leasedDelivery();
+    await owner.query("UPDATE followup_outbox SET lease_until=now()-interval '1 minute' WHERE id=$1",[job.id]);
+    expect(await allowed(job)).toBe(false);
+    const next = await reclaim(ev,job);
+    expect(next.attempts).toBe(job.attempts); // manual reconciliation reset does not reuse the opaque lease
+    expect((await finish(job,'SENT')).rows[0].done).toBe(false);
+    expect((await owner.query('SELECT status,lease_token FROM followup_outbox WHERE id=$1',[job.id])).rows[0])
+      .toMatchObject({ status:'SENDING',lease_token:next.lease_token });
+    expect((await finish(next,'SENT')).rows[0].done).toBe(true);
+  });
+  it('late known provider acceptance is retained once without completing a new lease or authorizing resend', async () => {
+    const { ev,job } = await leasedDelivery('WHATSAPP'), provider=`wamid.audit.${randomUUID()}`;
+    const next = await reclaim(ev,job);
+    expect((await finish(job,'SENT',provider)).rows[0].done).toBe(false);
+    expect((await finish(job,'SENT',provider)).rows[0].done).toBe(false);
+    expect((await owner.query('SELECT status,lease_token FROM followup_outbox WHERE id=$1',[job.id])).rows[0])
+      .toMatchObject({ status:'SENDING',lease_token:next.lease_token });
+    expect((await owner.query('SELECT status FROM followup_messages WHERE provider_msg_id=$1',[provider])).rows).toEqual([{ status:'SENT' }]);
+    expect(await allowed(next)).toBe(false);
+    await finish(next,'CANCELLED');
+  });
+  it('a confirmed callback blocks contradictory reconciliation and exposes a safe UI flag without lease tokens', async () => {
+    const { ev,job } = await leasedDelivery('WHATSAPP'), provider=`wamid.audit.${randomUUID()}`;
+    await finish(job,'UNKNOWN',provider);
+    const previous=process.env.WHATSAPP_APP_SECRET, secret=`isolated-reconcile-${tag}`;
+    try {
+      process.env.WHATSAPP_APP_SECRET=secret;
+      const raw=JSON.stringify({ entry:[{ changes:[{ value:{ statuses:[{ id:provider,status:'read' }] } }] }] });
+      await http().post('/channels/whatsapp/webhook').set('Content-Type','application/json')
+        .set('x-hub-signature-256','sha256='+createHmac('sha256',secret).update(raw).digest('hex')).send(raw).expect(200);
+    } finally { if(previous===undefined)delete process.env.WHATSAPP_APP_SECRET;else process.env.WHATSAPP_APP_SECRET=previous; }
+    const row=(await fups(ev.eventId)).find((r:any)=>r.supplier_org_id===supplierOrgId);
+    const shown=row.jobs.find((j:any)=>j.id===job.id);
+    expect(shown.delivery_confirmed).toBe(true); expect(shown).not.toHaveProperty('lease_token');
+    const denied=await http().post(`/events/${ev.eventId}/followups/jobs/${job.id}/reconcile`).set(...bearer(buyerToken))
+      .send({ decision:'CONFIRMED_NOT_SENT',reason:'Contradictory fixture decision must be rejected' }).expect(409);
+    expect(denied.body.code).toBe('DELIVERY_ALREADY_CONFIRMED');
+    expect((await owner.query('SELECT status FROM followup_outbox WHERE id=$1',[job.id])).rows[0].status).toBe('UNKNOWN');
+    await http().post(`/events/${ev.eventId}/followups/jobs/${job.id}/reconcile`).set(...bearer(buyerToken))
+      .send({ decision:'CONFIRMED_SENT',reason:'Provider delivery has been confirmed by signed callback' }).expect(201);
+  });
+  it('bounded pre-dispatch retries get fresh leases and stop after three failures', async () => {
+    let { job } = await leasedDelivery(); const id=job.id;
+    const tokens=new Set<string>();
+    for(let attempt=1;attempt<=3;attempt++) {
+      tokens.add(job.lease_token); expect(job.attempts).toBe(attempt);
+      await finish(job,'FAILED');
+      const saved=(await owner.query('SELECT status,lease_token FROM followup_outbox WHERE id=$1',[id])).rows[0];
+      expect(saved.lease_token).toBeNull(); expect(saved.status).toBe(attempt<3?'PENDING':'FAILED');
+      expect((await owner.query('SELECT * FROM followup_claim_outbox()')).rows).toHaveLength(0);
+      if(attempt<3) {
+        await owner.query("UPDATE followup_outbox SET lease_until=now()-interval '1 minute' WHERE id=$1",[id]);
+        job=(await owner.query('SELECT * FROM followup_claim_outbox()')).rows[0]; expect(job.id).toBe(id);
+      }
+    }
+    expect(tokens.size).toBe(3);
+  });
+  it('the actual worker preserves a known provider ID when final storage fails', async () => {
+    const ev=await dueDelivery('WHATSAPP'), provider=`wamid.audit.${randomUUID()}`;
+    const fn=`lease_send_fail_${tag}`, trigger=`${fn}_trigger`;
+    const send=jest.spyOn(channelSenders,'sendWhatsappVia').mockResolvedValue(provider);
+    try {
+      await http().put('/channels/WHATSAPP').set(...bearer(buyerToken)).send({ phoneNumberId:'synthetic-sender',accessToken:'isolated-token',isActive:true }).expect(200);
+      await owner.query(`CREATE FUNCTION ${fn}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+        IF NEW.status='SENT' AND (NEW.work->>'event_id')=TG_ARGV[0] THEN RAISE EXCEPTION 'Synthetic finish persistence failure'; END IF;
+        RETURN NEW; END $$`);
+      const ddl=(await owner.query(`SELECT format('CREATE TRIGGER %I BEFORE UPDATE ON followup_outbox FOR EACH ROW EXECUTE FUNCTION %I(%L)',
+        $1::text,$2::text,$3::text) AS ddl`,[trigger,fn,ev.eventId])).rows[0].ddl;
+      await owner.query(ddl);
+      await scheduler.tick(); expect(send).toHaveBeenCalledTimes(1);
+      const job=(await owner.query("SELECT * FROM followup_outbox WHERE work->>'event_id'=$1",[ev.eventId])).rows[0];
+      expect(job.status).toBe('UNKNOWN'); expect(job.lease_token).toBeNull();
+      expect((await owner.query('SELECT status,provider_msg_id FROM followup_messages WHERE enrollment_id=$1',[job.enrollment_id])).rows)
+        .toEqual([{ status:'UNKNOWN',provider_msg_id:provider }]);
+    } finally {
+      send.mockRestore();
+      await owner.query(`DROP TRIGGER IF EXISTS ${trigger} ON followup_outbox`);
+      await owner.query(`DROP FUNCTION IF EXISTS ${fn}()`);
+      await owner.query("DELETE FROM channel_connections WHERE buyer_org_id=(SELECT buyer_org_id FROM sourcing_events WHERE id=$1) AND channel='WHATSAPP'",[ev.eventId]);
+    }
+  });
+  it("a worker paused during transport cannot finish another worker's reclaimed lease", async () => {
+    const ev=await dueDelivery();
+    let release!:()=>void, entered!:()=>void;
+    const gate=new Promise<void>(resolve=>{release=resolve;});
+    const started=new Promise<void>(resolve=>{entered=resolve;});
+    const paused=new FollowupsScheduler(app.get(DataSource),{ kind:'test',send:async()=>{entered();await gate;} },new ConsoleWhatsAppProvider(),app.get(AppConfig));
+    const running=paused.tick(); let next:any;
+    let timer:ReturnType<typeof setTimeout>|undefined;
+    try {
+      await Promise.race([started,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Worker did not reach fixture transport')),5000);})]);
+      if(timer)clearTimeout(timer);
+      const job=(await owner.query("SELECT * FROM followup_outbox WHERE work->>'event_id'=$1",[ev.eventId])).rows[0];
+      next=await reclaim(ev,job);
+    } finally { if(timer)clearTimeout(timer);release();await running; }
+    expect((await owner.query('SELECT status,lease_token FROM followup_outbox WHERE id=$1',[next.id])).rows[0])
+      .toMatchObject({ status:'SENDING',lease_token:next.lease_token });
+    await finish(next,'CANCELLED');
   });
 
 });

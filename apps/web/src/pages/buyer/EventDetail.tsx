@@ -174,7 +174,10 @@ export default function EventDetail() {
         const planSteps: Array<{ channel: string; afterHours: number }> = fuPlan?.steps ?? [];
         const eligible = fups.filter((f: any) => !f.enrolled && !f.has_bid);
         const fuAct = async (fn: () => Promise<unknown>) => {
-          try { await fn(); loadFups(); } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+          try { await fn(); loadFups(); } catch (e: any) {
+            if (e.response?.data?.code==='DELIVERY_ALREADY_CONFIRMED') { loadFups(); alert(t('delivery_already_confirmed')); }
+            else alert(e.response?.data?.message?.toString() ?? 'Error');
+          }
         };
         // One visual step chip: icon + channel + when; state colours the chip.
         const StepChip = ({ s, state, hint }: { s: any; state: 'done' | 'next' | 'todo' | 'off'; hint?: string }) => (
@@ -304,7 +307,7 @@ export default function EventDetail() {
                             )}
                             {(f.jobs ?? []).filter((j:any)=>['BUYER_ADMIN','BUYER_APPROVER'].includes(session?.org.role ?? '') && ['UNKNOWN','FAILED','NOT_CONFIGURED'].includes(j.status)).map((j:any)=><div key={j.id}>
                               <span>{t(`delivery_${j.status}`)} · {j.recipient}</span>
-                              <button className="btn small ghost" onClick={()=>{
+                              <button className="btn small ghost" disabled={j.delivery_confirmed} title={j.delivery_confirmed ? t('delivery_already_confirmed') : undefined} onClick={()=>{
                                 const reason=window.prompt(t('delivery_reconcile_reason'));if(!reason)return;
                                 fuAct(()=>api.post(`/events/${id}/followups/jobs/${j.id}/reconcile`,{decision:'CONFIRMED_NOT_SENT',reason}));
                               }}>{t('delivery_confirm_not_sent')}</button>
