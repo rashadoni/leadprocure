@@ -104,7 +104,7 @@ async function verifyRfpPayment({buyerPage,supplierPage,call,buyerToken,event,op
   await test.step('RFP native scoring → award → contract → PO → GRN → invoice → PAID',async()=>{
     const clicked = async (page:Page,path:string,action:()=>Promise<void>) => {
       const pending=page.waitForResponse(r=>r.url().endsWith(path)&&r.request().method()==='POST');
-      await action(); const response=await pending;
+      const [response]=await Promise.all([pending,action()]);
       expect(response.status(),await response.text()).toBe(201); return response.json();
     };
     const bid=buyerPage.locator('tr').filter({hasText:opened.bids[0].supplier_name});
@@ -148,9 +148,9 @@ async function verifyRfpPayment({buyerPage,supplierPage,call,buyerToken,event,op
     await supplierPage.waitForURL('**/supplier/invoices');
     expect(invoice.status).toBe('MATCHED');
     expect([invoice.net_minor,invoice.vat_minor,invoice.gross_minor].map(Number)).toEqual([1200,216,1416]);
-    await expect(supplierPage.locator('tr').filter({hasText:invoice.invoice_no}).locator('.badge.MATCHED')).toBeVisible();
+    await expect(supplierPage.locator('tr').filter({has:supplierPage.getByRole('link',{name:invoice.invoice_no,exact:true})}).filter({has:supplierPage.getByRole('cell',{name:po.po_no,exact:true})}).locator('.badge.MATCHED')).toBeVisible();
     await buyerPage.goto('/buyer/invoices');
-    const invoiced=buyerPage.locator('tr').filter({hasText:invoice.invoice_no});
+    const invoiced=buyerPage.locator('tr').filter({has:buyerPage.getByRole('link',{name:invoice.invoice_no,exact:true})}).filter({has:buyerPage.getByRole('cell',{name:po.po_no,exact:true})});
     await clicked(buyerPage,`/invoices/${invoice.id}/approve`,()=>invoiced.getByRole('button',{name:/^Approve\b/}).click());
     await clicked(buyerPage,`/invoices/${invoice.id}/pay`,()=>invoiced.getByRole('button',{name:/^💳 Pay\b/}).click());
     await expect(invoiced.locator('.badge.PAID')).toBeVisible();
@@ -173,7 +173,7 @@ async function verifyRfpPayment({buyerPage,supplierPage,call,buyerToken,event,op
     }
     await buyerPage.locator('.lang').getByRole('button',{name:'EN',exact:true}).click();
     await supplierPage.reload();
-    await expect(supplierPage.locator('tr').filter({hasText:invoice.invoice_no}).locator('.badge.PAID')).toBeVisible();
+    await expect(supplierPage.locator('tr').filter({has:supplierPage.getByRole('link',{name:invoice.invoice_no,exact:true})}).filter({has:supplierPage.getByRole('cell',{name:po.po_no,exact:true})}).locator('.badge.PAID')).toBeVisible();
     await expect(supplierPage.getByRole('button',{name:/Approve|Pay/})).toHaveCount(0);
     // Return to the proposal page so existing own-response/secrecy assertions
     // still run after the entire commercial chain has completed.
