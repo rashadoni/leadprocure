@@ -33,12 +33,15 @@ export default function Orders() {
       const [{ data: po }, { data: rec }] = await Promise.all([
         api.get(`/orders/${poId}`), api.get(`/orders/${poId}/receipts`),
       ]);
-      const received: Record<string, number> = Object.fromEntries(rec.summary.map((s: any) => [s.po_item_id, Number(s.received)]));
-      const items = po.items.map((i: any) => ({
+      // Use the server's current received-minus-reserved balance. The submit
+      // endpoint rechecks it under the PO lock if another invoice wins a race.
+      const billable: Record<string, number> = Object.fromEntries(rec.summary.map((s: any) => [s.po_item_id, Number(s.billable)]));
+      const items = po.items.filter((i:any) => billable[i.id] > 0).map((i: any) => ({
         poItemId: i.id,
-        qty: received[i.id] > 0 ? received[i.id] : Number(i.qty),
+        qty: billable[i.id],
         unitPriceMinor: Number(i.unit_price_minor),
       }));
+      if (!items.length) { alert(t('invoice_no_billable')); return; }
       await api.post(`/invoices/from-po/${poId}`, { items });
       nav('/supplier/invoices');
     } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }

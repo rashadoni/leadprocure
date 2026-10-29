@@ -367,11 +367,13 @@ export class ContractsService {
 
   private async receiptSummary(poId: string) {
     return this.rc.manager.query(
-      `SELECT poi.id AS po_item_id, poi.name, poi.qty AS ordered,
-              COALESCE(SUM(gri.qty_received),0) AS received
-       FROM purchase_order_items poi
-       LEFT JOIN goods_receipt_items gri ON gri.po_item_id = poi.id
-       WHERE poi.po_id = $1 GROUP BY poi.id, poi.name, poi.qty ORDER BY poi.line_no`,
+      `SELECT s.*, GREATEST(s.received-s.invoiced,0) AS billable FROM (
+         SELECT poi.id AS po_item_id, poi.name, poi.qty AS ordered, poi.line_no,
+           COALESCE((SELECT SUM(gri.qty_received) FROM goods_receipt_items gri WHERE gri.po_item_id=poi.id),0) AS received,
+           COALESCE((SELECT SUM(ii.qty) FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id
+             WHERE ii.po_item_id=poi.id AND i.status IN ('MATCHED','APPROVED','PAID')),0) AS invoiced
+         FROM purchase_order_items poi WHERE poi.po_id=$1
+       ) s ORDER BY s.line_no`,
       [poId],
     );
   }
