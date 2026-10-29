@@ -118,12 +118,15 @@ async function verifyRfpPayment({buyerPage,supplierPage,call,buyerToken,event,op
     await decision;
     await expect(group.locator('.badge.AWARDED')).toBeVisible();
     const award=(await call(`/events/${event.id}`,undefined,buyerToken,'get',200)).awards.find((a:any)=>!a.cancelled_at);
+    const activation=buyerPage.waitForResponse(r=>/\/contracts\/[^/]+\/activate$/.test(r.url())&&r.request().method()==='POST');
     const contract=await clicked(buyerPage,`/contracts/from-award/${award.id}`,
       ()=>buyerPage.getByRole('button',{name:`Create contract · ${event.lots[0].title}`}).click());
+    const activated=await activation;expect(activated.status(),await activated.text()).toBe(201);
+    expect(activated.url()).toContain(`/contracts/${contract.id}/activate`);
     await buyerPage.waitForURL('**/buyer/contracts');
     expect(Number(contract.total_minor)).toBe(1200);
     const contractRow=buyerPage.locator('tr').filter({hasText:contract.contract_no});
-    await clicked(buyerPage,`/contracts/${contract.id}/activate`,()=>contractRow.getByRole('button',{name:/^Activate\b/}).click());
+    await expect(contractRow.locator('.badge.ACTIVE')).toBeVisible();
     const po=await clicked(buyerPage,`/contracts/${contract.id}/orders`,()=>contractRow.getByRole('button',{name:/^Create PO\b/}).click());
     expect(Number(po.total_minor)).toBe(1200);
     const order=buyerPage.locator('tr').filter({hasText:po.po_no});
@@ -141,7 +144,8 @@ async function verifyRfpPayment({buyerPage,supplierPage,call,buyerToken,event,op
     await supplierPage.reload();
     const invoice=await clicked(supplierPage,`/invoices/from-po/${po.id}`,()=>supplied.getByRole('button',{name:'🧾 Invoice',exact:true}).click());
     await supplierPage.waitForURL('**/supplier/invoices');
-    expect(invoice.status).toBe('MATCHED');expect(Number(invoice.gross_minor)).toBe(1200);
+    expect(invoice.status).toBe('MATCHED');
+    expect([invoice.net_minor,invoice.vat_minor,invoice.gross_minor].map(Number)).toEqual([1200,216,1416]);
     await expect(supplierPage.locator('tr').filter({hasText:invoice.invoice_no}).locator('.badge.MATCHED')).toBeVisible();
     await buyerPage.goto('/buyer/invoices');
     const invoiced=buyerPage.locator('tr').filter({hasText:invoice.invoice_no});
@@ -149,7 +153,9 @@ async function verifyRfpPayment({buyerPage,supplierPage,call,buyerToken,event,op
     await clicked(buyerPage,`/invoices/${invoice.id}/pay`,()=>invoiced.getByRole('button',{name:/^💳 Pay\b/}).click());
     await expect(invoiced.locator('.badge.PAID')).toBeVisible();
     const settled=await call(`/invoices/${invoice.id}`,undefined,buyerToken,'get',200);
-    expect(settled.status).toBe('PAID');expect(Number(settled.gross_minor)).toBe(1200);expect(settled.match.ok).toBe(true);
+    expect(settled.status).toBe('PAID');
+    expect([settled.net_minor,settled.vat_minor,settled.gross_minor].map(Number)).toEqual([1200,216,1416]);
+    expect(settled.match.ok).toBe(true);
     await buyerPage.reload();
     await expect(invoiced.locator('.badge.PAID')).toBeVisible();
     await invoiced.getByRole('link',{name:invoice.invoice_no,exact:true}).click();
