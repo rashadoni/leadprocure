@@ -73,6 +73,66 @@ describe('datasheet audit: files, financial boundaries and concurrency', () => {
     const result=await Promise.all([send(),send()]);expect(result.map(r=>r.status).sort()).toEqual([201,400]);
     expect(Number((await db.query(`SELECT sum(qty_received) q FROM goods_receipt_items WHERE po_item_id=$1`,[i])).rows[0].q)).toBe(10);
   });
+  // LP-A02/R01: do not infer overlap just from Promise.all. Observe each
+  // authenticated HTTP transaction waiting on the exact production order lock.
+  async function queuedOrderWrites(poId: string, writes: Array<() => Promise<any>>) {
+    const pending: Array<Promise<any>> = [];
+    let results: PromiseSettledResult<any>[] = [];
+    await db.query('BEGIN');
+    try {
+      const pid = (await db.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
+      await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,84))', [poId]);
+      for (const write of writes) {
+        pending.push(write());
+        const deadline = Date.now() + 10000;
+        let observed = false;
+        while (Date.now() < deadline) {
+          await db.query('SELECT pg_stat_clear_snapshot()');
+          const n = (await db.query(`SELECT count(*)::int AS n FROM pg_stat_activity
+            WHERE wait_event='advisory' AND $1=ANY(pg_blocking_pids(pid))`, [pid])).rows[0].n;
+          if (n >= pending.length) { observed = true; break; }
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        expect(observed).toBe(true);
+      }
+    } finally { await db.query('ROLLBACK'); results = await Promise.allSettled(pending); }
+    return results.map(r => { if (r.status === 'rejected') throw r.reason; return r.value; });
+  }
+  it('R01 two observed queued invoices reserve the same received quantity only once', async () => {
+    const { p, i } = await po();
+    await http().post(`/orders/${p}/receipts`).set(...auth(buyer)).send({ items: [{ poItemId:i,qty:10 }] }).expect(201);
+    const invoice = () => http().post(`/invoices/from-po/${p}`).set(...auth(supplier))
+      .send({ items: [{ poItemId:i,qty:10,unitPriceMinor:100 }] }).then(r => r);
+    const responses = await queuedOrderWrites(p, [invoice, invoice]);
+    expect(responses.map(r => r.status)).toEqual([201,201]);
+    expect(responses.map(r => r.body.status).sort()).toEqual(['DISPUTED','MATCHED']);
+    expect(Number((await db.query(`SELECT sum(ii.qty) AS qty FROM invoice_items ii JOIN invoices v ON v.id=ii.invoice_id
+      WHERE ii.po_item_id=$1 AND v.status IN ('MATCHED','APPROVED','PAID')`, [i])).rows[0].qty)).toBe(10);
+  });
+  it('R01 two observed queued receipts cannot both consume the same remaining quantity', async () => {
+    const { p, i } = await po();
+    const receipt = () => http().post(`/orders/${p}/receipts`).set(...auth(buyer))
+      .send({ items: [{ poItemId:i,qty:10 }] }).then(r => r);
+    const responses = await queuedOrderWrites(p, [receipt, receipt]);
+    expect(responses.map(r => r.status).sort()).toEqual([201,400]);
+    expect(Number((await db.query('SELECT sum(qty_received) AS qty FROM goods_receipt_items WHERE po_item_id=$1', [i])).rows[0].qty)).toBe(10);
+  });
+  for (const first of ['invoice','receipt']) {
+    it(`R01 ${first} queued first yields the same final matched invoice and accepted quantity`, async () => {
+      const { p, i } = await po();
+      const invoice = () => http().post(`/invoices/from-po/${p}`).set(...auth(supplier))
+        .send({ items: [{ poItemId:i,qty:10,unitPriceMinor:100 }] }).then(r => r);
+      const receipt = () => http().post(`/orders/${p}/receipts`).set(...auth(buyer))
+        .send({ items: [{ poItemId:i,qty:10 }] }).then(r => r);
+      const responses = await queuedOrderWrites(p, first === 'invoice' ? [invoice,receipt] : [receipt,invoice]);
+      expect(responses.map(r => r.status)).toEqual([201,201]);
+      const invoiceId = responses[first === 'invoice' ? 0 : 1].body.id;
+      const final = (await http().get(`/invoices/${invoiceId}`).set(...auth(buyer)).expect(200)).body;
+      expect(final.status).toBe('MATCHED');
+      expect(Number((await db.query('SELECT sum(qty_received) AS qty FROM goods_receipt_items WHERE po_item_id=$1', [i])).rows[0].qty)).toBe(10);
+      expect((await db.query('SELECT count(*)::int AS n FROM invoices WHERE po_id=$1', [p])).rows[0].n).toBe(1);
+    });
+  }
   it('preserves inclusive VAT and emits the snapshot in generic UBL',async()=>{
     const {p,i}=await po(1,11800,'INCLUSIVE',1800);await http().post(`/orders/${p}/receipts`).set(...auth(buyer)).send({items:[{poItemId:i,qty:1}]}).expect(201);
     const inv=(await http().post(`/invoices/from-po/${p}`).set(...auth(supplier)).send({items:[{poItemId:i,qty:1,unitPriceMinor:11800}]}).expect(201)).body;

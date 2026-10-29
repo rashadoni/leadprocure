@@ -105,6 +105,30 @@ describe('RFI / RFP events (API e2e)', () => {
         .expect(201);
       await http().post(`/events/${evId}/award`).set(...bearer(buyer)).send({ lotId, bidId, justification: 'sole compliant proposal' }).expect(201);
     });
+    it('the awarded RFP preserves its price through contract, PO, receipt, invoice and payment status', async () => {
+      const event = (await http().get(`/events/${evId}`).set(...bearer(buyer)).expect(200)).body;
+      const contract = (await http().post(`/contracts/from-award/${event.awards[0].id}`)
+        .set(...bearer(buyer)).expect(201)).body;
+      expect(Number(contract.total_minor)).toBe(450_000);
+      await http().post(`/contracts/${contract.id}/activate`).set(...bearer(buyer)).expect(201);
+      const order = (await http().post(`/contracts/${contract.id}/orders`).set(...bearer(buyer)).expect(201)).body;
+      expect(order.items).toHaveLength(1); expect(Number(order.total_minor)).toBe(450_000);
+      expect(Number(order.items[0].unit_price_minor)).toBe(450_000);
+      await http().post(`/orders/${order.id}/status`).set(...bearer(buyer)).send({ status:'ISSUED' }).expect(201);
+      for (const status of ['CONFIRMED','PACKED','SHIPPED','DELIVERED']) {
+        await http().post(`/orders/${order.id}/status`).set(...bearer(supplier)).send({ status }).expect(201);
+      }
+      await http().post(`/orders/${order.id}/receipts`).set(...bearer(buyer))
+        .send({ items:[{ poItemId:order.items[0].id,qty:1 }] }).expect(201);
+      const invoice = (await http().post(`/invoices/from-po/${order.id}`).set(...bearer(supplier))
+        .send({ items:[{ poItemId:order.items[0].id,qty:1,unitPriceMinor:450_000 }] }).expect(201)).body;
+      expect(invoice.status).toBe('MATCHED');
+      expect([Number(invoice.net_minor),Number(invoice.vat_minor),Number(invoice.gross_minor)])
+        .toEqual([450_000,81_000,531_000]); // default EXCLUSIVE 18% from original request
+      await http().post(`/invoices/${invoice.id}/approve`).set(...bearer(buyer)).expect(201);
+      const paid = (await http().post(`/invoices/${invoice.id}/pay`).set(...bearer(buyer)).expect(201)).body;
+      expect(paid.status).toBe('PAID'); // accounting status, not a bank transfer
+    });
   });
 
   describe('RFI', () => {
