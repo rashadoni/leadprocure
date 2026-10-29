@@ -1,0 +1,44 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/22",
+  "testedSourceHead": "bb183be04a41834ebc310a8b368bdbc1822c47f6",
+  "status": "PASS",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/40871970567",
+  "apiSuites": 29,
+  "apiTests": 341,
+  "newRecoveryTests": 7,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "freshHttpsBrowserTests": 1,
+  "restoredRlsTables": 52,
+  "migration": "1720000000042-followup-dispatch-ownership.ts",
+  "assertions": [
+    "opaque active lease required for dispatch/finish; expired/wrong and tokenless legacy calls fail closed",
+    "manual reconciliation counter reset cannot make an old worker own a new lease",
+    "late known provider facts retained once without completing another lease or authorizing resend",
+    "actual signed callback blocks contradictory HTTP reconciliation409; API confirmation flag contains no lease token",
+    "bounded3pre-dispatch retries use fresh tokens and terminate",
+    "real worker with real DB finish-trigger failure preserves a stubbed known providerID in UNKNOWN history",
+    "worker paused inside synthetic transport cannot finish another worker reclaimed lease",
+    "fullbuild/typecheck/4UBL+OCDS/both histories/restore52RLS/fresh signedlicense-private storage-realClamAV PASS"
+  ],
+  "independentReview": "deadline_boundary_review exact final87785abe782d6edc08156176f491d84f9a097069 no blockers; executable paths equal full-accepted sourcebb183be",
+  "rawLog": "/tmp/leadprocure-dispatch-ownership-main-b8cfe8d-acceptance.log",
+  "freshLog": "/tmp/leadprocure-dispatch-ownership-main-b8cfe8d-fresh.log",
+  "qualification": "Actual DB/worker/HTTP with synthetic provider transport only. Already-started external I/O cannot be recalled; universal exactly-once delivery not promised. Real SMTP/Meta/client acceptance NOT RUN. UI copy reviewed/built in AZ/RU/EN; new blocked-requeue path verified through API, not claimed as an additional native browser scenario.",
+  "productionChanged": false,
+  "materialsChanged": false,
+  "mergedMain": "b8cfe8dbae554576ea89fa9e2f95102817b02cb4",
+  "reviewedFinalHead": "87785abe782d6edc08156176f491d84f9a097069",
+  "reviewedTreeEqualsMain": true,
+  "automaticReview": "40850205197/job123367487625 Anthropic400 insufficient-credit fallback; not semantic review",
+  "redundantDocOnlyRepeat": {
+    "run": 40850081769,
+    "status": "CANCELLED",
+    "reason": "Only documentary outcomes changed after full-passed sourcebb183be. Not counted PASS."
+  },
+  "jobs": {
+    "acceptance": 123441023558,
+    "freshInstall": 123441023156
+  }
+}

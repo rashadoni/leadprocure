@@ -352,6 +352,82 @@ describe('outreach follow-ups (API e2e)', () => {
       await owner.query("DELETE FROM channel_connections WHERE buyer_org_id=(SELECT buyer_org_id FROM sourcing_events WHERE id=$1) AND channel='WHATSAPP'",[ev.eventId]);
     }
   });
+  for (const [label,body] of [
+    ['missing ID',{}],
+    ['non-string ID',{ messages:[{ id:42 }] }],
+    ['blank ID',{ messages:[{ id:'   ' }] }],
+    ['invalid JSON',null],
+  ] as const) {
+    it(`HTTP200 from Meta with ${label} stays UNKNOWN and is not blindly retried`, async () => {
+      const ev=await dueDelivery('WHATSAPP');
+      // Network boundary only: real sender parser, scheduler, SQL and HTTP UI.
+      // Fail closed for any unexpected request; no real provider is contacted.
+      const network=jest.spyOn(globalThis,'fetch').mockImplementation(async (input,init)=>{
+        expect(String(input)).toBe('https://graph.facebook.com/v21.0/synthetic-sender/messages');
+        expect(init?.method).toBe('POST');
+        return new Response(body===null ? 'not-json' : JSON.stringify(body),{status:200,headers:{'Content-Type':'application/json'}});
+      });
+      try {
+        await owner.query(`INSERT INTO channel_connections(buyer_org_id,channel,config,is_active)
+          SELECT buyer_org_id,'WHATSAPP',$2::jsonb,true FROM sourcing_events WHERE id=$1`,
+          [ev.eventId,JSON.stringify({phoneNumberId:'synthetic-sender',accessToken:'isolated-token'})]);
+        await scheduler.tick();
+        expect(network).toHaveBeenCalledTimes(1);
+        const job=(await owner.query("SELECT * FROM followup_outbox WHERE work->>'event_id'=$1",[ev.eventId])).rows[0];
+        expect(job.status).toBe('UNKNOWN'); expect(job.lease_token).toBeNull();
+        const messages=(await owner.query('SELECT status,provider_msg_id,detail FROM followup_messages WHERE enrollment_id=$1',[job.enrollment_id])).rows;
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toMatchObject({status:'UNKNOWN',provider_msg_id:null});
+        expect(messages[0].detail).toContain('delivery is unconfirmed');
+        await scheduler.tick(); expect(network).toHaveBeenCalledTimes(1);
+        const shown=(await fups(ev.eventId)).find((r:any)=>r.supplier_org_id===supplierOrgId);
+        expect(shown.messages.map((m:any)=>m.status)).toEqual(['UNKNOWN']);
+        expect(shown.jobs[0].delivery_confirmed).toBe(false);
+        const checked=await http().post('/channels/WHATSAPP/test').set(...bearer(buyerToken))
+          .send({to:'synthetic-recipient'}).expect(400);
+        expect(checked.body.message).toContain('delivery is unconfirmed');
+        const connection=(await http().get('/channels').set(...bearer(buyerToken)).expect(200)).body
+          .find((c:any)=>c.channel==='WHATSAPP');
+        expect(connection.lastTestAt).toBeNull();
+        expect((await owner.query(`SELECT count(*)::int AS n FROM audit_events WHERE action='CHANNEL_TEST_SENT'
+          AND entity_id=(SELECT buyer_org_id FROM sourcing_events WHERE id=$1)`,[ev.eventId])).rows[0].n).toBe(0);
+      } finally {
+        network.mockRestore();
+        await owner.query("DELETE FROM channel_connections WHERE buyer_org_id=(SELECT buyer_org_id FROM sourcing_events WHERE id=$1) AND channel='WHATSAPP'",[ev.eventId]);
+      }
+    });
+  }
+  it('a usable Meta message ID completes the real worker and binds a signed delivery callback', async () => {
+    const ev=await dueDelivery('WHATSAPP'),provider=`wamid.audit.${randomUUID()}`;
+    const previous=process.env.WHATSAPP_APP_SECRET,secret=`isolated-meta-send-${tag}`;
+    const network=jest.spyOn(globalThis,'fetch').mockImplementation(async (input,init)=>{
+      expect(String(input)).toBe('https://graph.facebook.com/v21.0/synthetic-sender/messages');
+      expect(init?.method).toBe('POST');
+      return new Response(JSON.stringify({messages:[{id:provider}]}),{status:200,headers:{'Content-Type':'application/json'}});
+    });
+    try {
+      process.env.WHATSAPP_APP_SECRET=secret;
+      await owner.query(`INSERT INTO channel_connections(buyer_org_id,channel,config,is_active)
+        SELECT buyer_org_id,'WHATSAPP',$2::jsonb,true FROM sourcing_events WHERE id=$1`,
+        [ev.eventId,JSON.stringify({phoneNumberId:'synthetic-sender',accessToken:'isolated-token'})]);
+      await scheduler.tick(); expect(network).toHaveBeenCalledTimes(1);
+      const job=(await owner.query("SELECT * FROM followup_outbox WHERE work->>'event_id'=$1",[ev.eventId])).rows[0];
+      expect(job.status).toBe('SENT');
+      expect((await owner.query('SELECT status,provider_msg_id FROM followup_messages WHERE enrollment_id=$1',[job.enrollment_id])).rows)
+        .toEqual([{status:'SENT',provider_msg_id:provider}]);
+      const raw=JSON.stringify({entry:[{changes:[{value:{statuses:[{id:provider,status:'delivered'}]}}]}]});
+      await http().post('/channels/whatsapp/webhook').set('Content-Type','application/json')
+        .set('x-hub-signature-256','sha256='+createHmac('sha256',secret).update(raw).digest('hex')).send(raw).expect(200);
+      const shown=(await fups(ev.eventId)).find((r:any)=>r.supplier_org_id===supplierOrgId);
+      expect(shown.messages.map((m:any)=>m.status)).toEqual(['DELIVERED']);
+      expect(shown.jobs[0].delivery_confirmed).toBe(true);
+      await scheduler.tick(); expect(network).toHaveBeenCalledTimes(1);
+    } finally {
+      network.mockRestore();
+      if(previous===undefined)delete process.env.WHATSAPP_APP_SECRET;else process.env.WHATSAPP_APP_SECRET=previous;
+      await owner.query("DELETE FROM channel_connections WHERE buyer_org_id=(SELECT buyer_org_id FROM sourcing_events WHERE id=$1) AND channel='WHATSAPP'",[ev.eventId]);
+    }
+  });
   it("a worker paused during transport cannot finish another worker's reclaimed lease", async () => {
     const ev=await dueDelivery();
     let release!:()=>void, entered!:()=>void;
