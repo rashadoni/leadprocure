@@ -1,0 +1,176 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "date": "2026-10-29",
+  "productionChanged": false,
+  "scope": "original LP-A00–LP-A19 only",
+  "gateStatus": "PR18_PENDING",
+  "tasks": [
+    {
+      "id": "LP-A00",
+      "title": "Изолированная приёмка",
+      "status": "VERIFIED",
+      "evidence": "acceptance.yml; assert-isolated.cjs; upgrade-branches.cjs; upgrade-check.cjs; backup-restore.sh",
+      "assertions": "Отдельные PostgreSQL/MinIO, app_user без BYPASSRLS, защита от production URL, миграции с нуля и обеих применённых историй, восстановление с 51 RLS-таблицей. Полные проверки только hosted CI.",
+      "limits": "Не доказывает готовность любого клиентского окружения."
+    },
+    {
+      "id": "LP-A01",
+      "title": "Файлы и KYC",
+      "status": "VERIFIED",
+      "evidence": "audit-regressions; clamav; verification; sourcing-flow; DocumentsService.consumeUpload/assertDownloadable",
+      "assertions": "Одноразовый grant своей организации, фактические bytes/hash, неизменяемая подтверждённая копия. Общий lifecycle для document/bid/KYC. HTTP foreign-grant/foreign-download и buyer-before/after-opening; реальный MinIO и ClamAV clean/EICAR. Исторический read-only анализ namespace: 0 несовпадений, файлы не удалялись.",
+      "limits": "Отрицательные проверки разных типов опираются также на общий consumeUpload/download seam; это не внешний pentest."
+    },
+    {
+      "id": "LP-A02",
+      "title": "Сверка количеств и R01",
+      "status": "PENDING_CANDIDATE",
+      "evidence": "audit-regressions; invoices; amendments; procurement.stress-spec; common/procurement/invariants.ts",
+      "assertions": "Дубли poItemId отклоняются; совокупный billable остаток и rematch пересчитываются под общей блокировкой PO. Повторные invoices/GRN, частичная приёмка и disputed→matched проверены. Новые 4 теста явно наблюдают queued HTTP в PostgreSQL: два счёта, две приёмки и оба порядка счёт/приёмка.",
+      "limits": "Новые barrier-тесты ещё не прошли hosted gate. Стресс 12×8 не является capacity/SLA тестом."
+    },
+    {
+      "id": "LP-A03",
+      "title": "Границы лота",
+      "status": "VERIFIED",
+      "evidence": "multilot; integrity; award-contract-concurrency; web/evaluation.spec.ts",
+      "assertions": "Два поставщика на два лота: договор/PO/catalog содержат только выигранные строки. Восемь реально ожидающих повторов дают один договор и audit. Cancel/create проверены в обоих порядках; UI действия и победители по каждому award.",
+      "limits": "Отменить award с уже созданным договором нельзя; это выбранное правило защиты обязательства."
+    },
+    {
+      "id": "LP-A04",
+      "title": "Аукцион до счёта",
+      "status": "VERIFIED",
+      "evidence": "auction-flow; procurement.stress-spec; web/evaluation.spec.ts",
+      "assertions": "Принятые tick-строки материализуются в bid; повторная финализация не дублирует строки. Native finalize→award→contract, реальные PO→GRN→MATCHED invoice сохраняют цену победителя 80000 minor.",
+      "limits": "Это проверенный пример, не обещание процента экономии."
+    },
+    {
+      "id": "LP-A05",
+      "title": "Серверный победитель аукциона",
+      "status": "VERIFIED",
+      "evidence": "auction-flow; SourcingService.award; procurement.stress-spec",
+      "assertions": "Худшая ставка/чужая принадлежность не принимается. Сервер определяет лучшую допустимую ставку, сохраняет цену/обоснование в аудите; повтор award идемпотентен. Положительный decrement не допускает равный следующий tick.",
+      "limits": "Исключение с выбором худшей ставки не обещается. Для исторических равных сумм применяется серверный порядок."
+    },
+    {
+      "id": "LP-A06",
+      "title": "Полная актуальная оценка",
+      "status": "VERIFIED",
+      "evidence": "integrity; audit-regressions; award-contract-concurrency; migrations",
+      "assertions": "Пустые/неполные/дублированные scores и неизвестные criteria отклоняются; DB uniqueness. Locked criteria, допустимые диапазоны и актуальная evaluation у award. Реально queued reevaluate/award и disqualify/award проверены в обоих порядках.",
+      "limits": "Формальная оценка и AI recommendation — отдельные механизмы."
+    },
+    {
+      "id": "LP-A07",
+      "title": "Экран оценки",
+      "status": "VERIFIED",
+      "evidence": "web/evaluation.spec.ts; EventDetail.tsx",
+      "assertions": "Поля из locked criteria; текущая оценка отдельно от истории. Переоценка 62/68 меняет лидера, самая низкая цена его не подменяет; ничья не рисует единственного лидера. Выбор после частичного award работает по оставшемуся лоту.",
+      "limits": "Native сценарий проверяет конкретный custom-набор, не все возможные наборы."
+    },
+    {
+      "id": "LP-A08",
+      "title": "Валюта, объём, safe money",
+      "status": "PENDING_CANDIDATE",
+      "evidence": "audit-regressions; integrity; multilot; ai-provider; deadline-boundaries; invariants.ts",
+      "assertions": "Разная валюта bid/event отклоняется. Сравнение и downstream по одному лоту/объёму; внешний AI не заменяет исходные суммы/имена/срок. Safe integer guards на цену/произведение/итог; новые HTTP отрицательные сценарии подтверждают rollback заявки и сохранность старого sealed bid.",
+      "limits": "Новые HTTP overflow-тесты ожидают gate. Автоматический FX не реализован в этом потоке и не обещается."
+    },
+    {
+      "id": "LP-A09",
+      "title": "НДС и денежные snapshots",
+      "status": "VERIFIED",
+      "evidence": "audit-regressions; invoices; amendments; catalogs; common/procurement/invariants.ts",
+      "assertions": "Целые minor units, integer VAT rounding. INCLUSIVE/EXCLUSIVE, 0% и смешанные 0/18% проходят реальные GRN/invoice цепочки; net/tax/gross 20000/1800/21800. Режим и ставки сохраняются в snapshots.",
+      "limits": "Исторические invoices без достоверного snapshot не пересчитываются автоматически."
+    },
+    {
+      "id": "LP-A10",
+      "title": "UBL",
+      "status": "VERIFIED",
+      "evidence": "audit-regressions; scripts/acceptance/validate_exports.py",
+      "assertions": "Четыре реально выгруженных XML, включая смешанные ставки обоих режимов, проходят официальную OASIS UBL 2.1 XSD. Категории/ставки/валюта/итоги берутся из snapshot.",
+      "limits": "Generic UBL: не Peppol BIS/Schematron, Access Point или подтверждённая доставка по сети."
+    },
+    {
+      "id": "LP-A11",
+      "title": "BLOCKED поставщик",
+      "status": "VERIFIED",
+      "evidence": "audit-regressions; catalogs; assertSupplierAllowed call sites",
+      "assertions": "Общий guard новых приглашений, bids/ticks, awards, договоров/PO и catalog orders. HTTP блокировка уже активного каталога; ранее подтверждённый PO доходит до приёмки. Статус и audit IDs проверены на PostgreSQL.",
+      "limits": "Старые обязательства не прекращаются автоматически."
+    },
+    {
+      "id": "LP-A12",
+      "title": "AI edge cases и fallback",
+      "status": "VERIFIED",
+      "evidence": "ai-provider; audit-regressions; ai-scorer.ts; recommendationCopy",
+      "assertions": "Нулевая цена/доставка в тот же день, neutral reliability=60, finite scores. 18 реальных HTTP boundary тестов: структура/фиксированные веса/порядок/weighted total/IDs, malformed JSON/503/disconnect, secrecy/foreign buyer. Facts берутся из открытых локальных строк; invalid response→heuristic fallback.",
+      "limits": "Живой внешний LLM и качество его объяснений NOT RUN. Loopback HTTP fixture не выдан за внешнюю приёмку; AI не назначает winner."
+    },
+    {
+      "id": "LP-A13",
+      "title": "Аналитика и бюджет",
+      "status": "VERIFIED",
+      "evidence": "analytics; budgets; budget-integration; departments; web/analytics,finance,budget-approval",
+      "assertions": "Активные award totals по лоту, cancel/reaward, net basis, валюты отдельно. Принятые PO считаются по дате создания заказа; обязательства/приёмка/оплата различены. Stale response/31-е число, AZ/RU/EN и текущая budget policy/SoD проверены. AZN бюджеты, подразделения/периоды, exact limits, finance role и concurrent approvals сохранены.",
+      "limits": "Это не баланс банковского счёта и не автоматический FX."
+    },
+    {
+      "id": "LP-A14",
+      "title": "OCDS",
+      "status": "VERIFIED",
+      "evidence": "sourcing-flow; audit-regressions; validate_exports.py",
+      "assertions": "Корректные active/cancelled awards, lot value/currency/supplier и release data; canonical OCDS 1.1.5 schema. Отдельный actual HTTP негативный тест до opening исключает bid ID/цены/payload и tender value; foreign supplier 404.",
+      "limits": "Реальный downstream потребитель NOT RUN; schema validation не является его интеграционной приёмкой."
+    },
+    {
+      "id": "LP-A15",
+      "title": "TypeORM RETURNING",
+      "status": "VERIFIED",
+      "evidence": "returnedRows; followups; audit-regressions; budget-integration; settings/categories/catalogs/contracts call sites",
+      "assertions": "UPDATE/DELETE rows отделены от affected count. Проверены реальные supplier status, followup stop и audit entity ID, отсутствующая membership. Все найденные аналогичные RETURNING-пути используют helper либо предварительный SELECT.",
+      "limits": "Source inspection дополняет реальные PostgreSQL тесты; не утверждается отдельный новый тест каждого SQL выражения."
+    },
+    {
+      "id": "LP-A16",
+      "title": "Лицензирование",
+      "status": "VERIFIED",
+      "evidence": "audit-license; scripts/acceptance/fresh-install.sh",
+      "assertions": "Production missing-license restricted; dev fallback явно отделён. Реальная PASETO подпись, valid_from, valid→grace→restricted без рестарта, renewal, revoked/tampered. Fresh production Compose использует signed file license и проверяет завершение разрешённых операций.",
+      "limits": "Клиентская коммерческая лицензия/установка NOT RUN; выпуск такой лицензии не подменяет разработку."
+    },
+    {
+      "id": "LP-A17",
+      "title": "SMTP/Meta и достоверная отправка",
+      "status": "PARTIAL_EXTERNAL",
+      "evidence": "followups; mail; audit-webhook; followup_outbox/dispatch",
+      "assertions": "Локальные states/outbox/lease/recovery/dedupe/stop/responded/reconcile и HMAC boundary проверены. Console не даёт SENT. UNKNOWN после неопределённого исхода не повторяется автоматически.",
+      "limits": "ПОСЛЕДНЯЯ задача. Реальные org SMTP и Meta delivery/callback NOT RUN: владелец сообщил, что подключений и тестовых получателей пока нет. Mock transport и подписанный локальный callback не являются подтверждением внешней доставки."
+    },
+    {
+      "id": "LP-A18",
+      "title": "Дедлайны и конкуренция",
+      "status": "PENDING_CANDIDATE",
+      "evidence": "deadline-boundaries; auction-flow; procurement.stress-spec; audit-regressions",
+      "assertions": "Время сервера, withdrawal после close_at отклонён. Auction tick/extension/closer сериализованы. Новые реальные queued resubmit/withdraw при TRY-lock skip сохраняют исходный sealed payload; два opening дают 201/400 и один audit; положительный withdrawal/replacement сохранён.",
+      "limits": "Новые sealed overlap-тесты ожидают gate. Отклонённая транзакция не сохраняет domain audit/tick; журнал принятых изменений не выдаётся за журнал всех атак/отклонённых запросов."
+    },
+    {
+      "id": "LP-A19",
+      "title": "Общая приёмка, языки, материалы",
+      "status": "PARTIAL_EXTERNAL",
+      "evidence": "full acceptance.yml; web tests/helpers/rfx.ts; rfi-rfp; render-presentations; v3/output; CLAIMS.md",
+      "assertions": "Full API/security/build/native browser и fresh isolated install, upgrade/restore. RFQ и auction downstream до GRN/invoice, direct/catalog и payment-status API. RFI AZ/RFP RU/EN: own response после reload/close, buyer secrecy/opening, foreign supplier deny, RFI без цен/award. Текущие PPTX/PDF/notes синхронизированы; независимый render 15 страниц, 100% текста.",
+      "limits": "Новый отдельный RFP API downstream до MATCHED/PAID пока PENDING PR18. RFI не имеет финансового downstream по модели. Native RFP сценарий заканчивается opening/scoring availability; не заявляется отдельный native RFP→payment. Не исчерпывающий редакторский аудит всех строк. Внешние/клиентские ограничения из externalNotRun остаются NOT RUN."
+    }
+  ],
+  "externalNotRun": [
+    "Реальные org SMTP и Meta отправка, получение и callbacks: подключения/получатели отсутствуют по ответу владельца.",
+    "Live external LLM quality/availability.",
+    "Реальное клиентское внедрение, коммерческая лицензия, public TLS и реальный existing-volume upgrade.",
+    "Внешние ERP/банк/ASAN/Peppol; CSV/PAID/dev signature не являются их интеграцией.",
+    "Microsoft PowerPoint desktop: подключённой сессии нет."
+  ]
+}
