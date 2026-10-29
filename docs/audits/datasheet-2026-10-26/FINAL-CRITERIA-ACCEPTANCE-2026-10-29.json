@@ -1,0 +1,33 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/18",
+  "head": "149414908877b508c8daa5249f22afdca9b3a7a3",
+  "status": "PASS",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/40833169209",
+  "apiSuites": 28,
+  "apiTests": 324,
+  "newCriterionTests": 12,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "freshHttpsBrowserTests": 1,
+  "independentReview": "deadline_boundary_review exact1494149 no blockers, including reports",
+  "automaticReview": "Anthropic400 insufficient-credit fallback; not semantic review",
+  "rawLog": "/tmp/leadprocure-final-criteria-1494149-acceptance.log",
+  "freshLog": "/tmp/leadprocure-final-criteria-1494149-fresh.log",
+  "assertions": [
+    "A02 actual observed PostgreSQL order-lock waits: invoice/invoice, receipt/receipt, invoice/receipt in both queue orders",
+    "A08 unsafe request unit/product/aggregate rejected and rollback confirmed; overflowing replacement leaves entire original supplier payload unchanged",
+    "A18 real closer skips locked event, late queued bid/withdraw cannot change original sealed bid; two queued opening requests materialize once; legal predeadline replacement succeeds",
+    "A19 RFP actual HTTP award→contract→PO→GRN→MATCHED invoice→APPROVED→PAID keeps450000 price and EXCLUSIVE18% snapshot450000/81000/531000",
+    "full build/typecheck,4officialUBL/OCDS exports,both migration histories,restore51RLS,fresh signed license/private storage/realClamAV PASS"
+  ],
+  "fixtureLimits": "PO prerequisites for R01 use owner SQL; contested business writes authenticated HTTP/RLS. Deadline/lock control owner fixture only.",
+  "externalNotRun": [
+    "real SMTP/Meta delivery/callback: no configured connections/recipients",
+    "live external LLM quality",
+    "client rollout/commercial license/public TLS/real legacy volume upgrade",
+    "desktop PowerPoint"
+  ],
+  "productionChanged": false,
+  "materialsChanged": false
+}
