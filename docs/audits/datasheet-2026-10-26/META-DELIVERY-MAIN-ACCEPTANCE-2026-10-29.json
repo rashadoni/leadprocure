@@ -1,0 +1,38 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/20",
+  "testedSourceHead": "516314e10d092ac1b002c3c32baff8b094d8a253",
+  "status": "PASS",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/40840808558",
+  "apiSuites": 29,
+  "apiTests": 330,
+  "newMetaHttpDbTests": 6,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "freshHttpsBrowserTests": 1,
+  "migration": "1720000000040-followup-delivery-progress.ts",
+  "assertions": [
+    "raw-body HMAC checked before real runtime DataSource/PostgreSQL update",
+    "every entry/change/status in signed batch processed; malformed entries skipped",
+    "provider ID updates correct WHATSAPP message only; unknown IDs/EMAIL/unsigned requests do not mutate target rows",
+    "confirmed READ/DELIVERED survives delayed/duplicate weaker/failure callbacks; positive confirmation can resolve FAILED",
+    "concurrent stronger/weaker callbacks preserve READ",
+    "foreign buyer sees no followup messages",
+    "both applied migration histories upgrade without rewriting old migrations; full build/schemas/restore/fresh install PASS"
+  ],
+  "independentReview": "deadline_boundary_review exact finalheadccdf793 no blockers; source equals accepted516314e",
+  "rawLog": "/tmp/leadprocure-meta-delivery-main-436a8b8-acceptance.log",
+  "freshLog": "/tmp/leadprocure-meta-delivery-main-436a8b8-fresh.log",
+  "qualification": "Synthetic provider message fixtures and signed local HTTP callbacks; NOT live Meta/SMTP send, receipt or external callback acceptance. Already lost historical statuses cannot be reconstructed.",
+  "productionChanged": false,
+  "materialsChanged": false,
+  "mergedMain": "436a8b89273f25506a6037d3fc42e63bfb41084a",
+  "reviewedFinalHead": "ccdf7935d833b6614107f1be49ddd5e5dc76fed6",
+  "reviewedTreeEqualsMain": true,
+  "automaticReview": "40840745855 Anthropic400 insufficient-credit fallback; not semantic review",
+  "redundantDocsOnlyRun": {
+    "run": 40840688548,
+    "status": "CANCELLED",
+    "reason": "No executable source difference from full-passed516314e; documentary result updates only. Not counted as PASS."
+  }
+}
