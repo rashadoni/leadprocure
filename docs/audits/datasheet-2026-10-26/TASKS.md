@@ -1,5 +1,7 @@
 # Leadprocure — задачи по результатам аудита data sheet
 
+> Текущий объём по прямому указанию владельца: **19 задач — LP-A00–LP-A16, LP-A18, LP-A19**. SMTP/Meta (бывшая LP-A17) исключена из списка и очереди. Не возобновлять её без нового явного поручения. Старые датированные записи ниже — история, а не действующий план.
+
 Основание: REPORT.md, audit checkpoint 4abd5c8. Исходный снимок плана отмечал все задачи **TODO**; критерии ниже сохранены. Текущее исполнение и реальные остатки: [TASK-CLOSURE-2026-10-28.md](TASK-CLOSURE-2026-10-28.md). P1 — блокирует обещание корректности соответствующей функции клиенту; P2 — исправить до окончательной приёмки заявленного объёма. Production-изменения требуют отдельной авторизации.
 
 ## LP-A00 · Подготовить изолированную среду приёмки
@@ -132,15 +134,6 @@
 - Проверять ограничения новых операций, сохраняя согласованный режим завершения уже начатых закупок.
 - **Готово:** тесты с управляемыми часами проходят valid → grace → restricted; health не выдаёт dev fallback за установленную лицензию; ограничения и разрешённые продолжения выполняются.
 
-## LP-A17 · P2 · Обеспечить достоверную отправку напоминаний — F18
-
-- Разделить NOT_CONFIGURED/SIMULATED/SENT и подтверждённые provider delivery states.
-- Реализовать durable outbox, ограниченные retry и защиту от дублей; шаг не должен теряться при падении процесса.
-- Проверять остановку/ответ/закрытие непосредственно перед dispatch; описать поведение уже отправленного сообщения.
-- Проверить org-level SMTP и Meta отдельно; внешние тестовые отправки выполнять только в согласованном интеграционном сценарии.
-- **Готово:** console не создаёт SENT, перезапуск не теряет и не дублирует отправку, stopped/responded цепочки не продолжают новые отправки, provider ID/callback связаны с сообщением. Фактическая доставка подтверждена тестовым получателем либо явно NOT RUN.
-- **Зависимости:** LP-A15 для корректного stop/audit.
-
 ## LP-A18 · P2 · Закрыть пограничные операции по дедлайну
 
 - Проверять close_at при withdraw, а не только status OPEN.
@@ -163,7 +156,7 @@
 
 1. LP-A00 + подготовка LP-A01/LP-A02.
 2. LP-A03–LP-A06; LP-A08/LP-A09 как основа денег и налогов.
-3. LP-A07/LP-A10–LP-A18 с указанными зависимостями.
+3. LP-A07/LP-A10–LP-A16 и LP-A18 с указанными зависимостями.
 4. LP-A19; отдельное решение о выпуске проверенной версии.
 
 Правило закрытия каждой задачи: исправление + подходящий отрицательный/положительный тест + доказательство результата + новая миграция при изменении схемы + запись в журнал. Изолированные service doubles из аудита полезны для воспроизведения, но не заменяют SQL/RLS/HTTP проверки соответствующих инвариантов.
@@ -224,3 +217,6 @@ LP-A17, продолжение29октября: corrected falseHTTP200 after DB 
 
 
 LP-A17, продолжение29октября: worker lease ownership/providerID recovery/confirmed-delivery requeue controls accepted. NEW0042;7actual DB/worker/HTTP cases; sourcebb183be/run40849057531 BOTH SUCCESS:341API/3contention/14nativebrowser/1freshHTTPS,build/schemas/both histories/restore52RLS/fresh installation. DISPATCH-OWNERSHIP-ACCEPTANCE-2026-10-29.json; independent exact-head no blockers. Actual external delivery remains NOT RUN, synthetic transport is not provider acceptance; no exactly-once network guarantee or production change.
+
+
+LP-A19, 29октября: native EN RFP до PAID и локализация деталей счёта AZ/RU/EN приняты на e210c40/run40928824772. Все downstream writes реальными browser controls; API read assertions. Net/VAT/gross1200/216/1416, persistedPAIDbuyer/supplier. BOTH hostedjobs SUCCESS:346API/3contention/14native/1fresh и остальные gates. RFP-NATIVE-PAYMENT-ACCEPTANCE-2026-10-29.json. Это уточняет старую границу RFPnativeopening; RUfull downstream/реальный банковский платёж не заявлены. Текущийscope19, исключённая задача не возобновлялась; production не менялся.

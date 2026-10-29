@@ -84,10 +84,99 @@ export async function verifyRfiRfp({ browser, buyerPage, call, buyerToken, appro
         expect(Number(opened.bids[0].total_minor)).toBe(1200);
         await expect(buyerPage.getByRole('button', { name: 'Score', exact: true })).toBeVisible();
       }
+      if (scenario.type === 'RFP' && scenario.lang === 'en') {
+        await verifyRfpPayment({buyerPage,supplierPage,call,buyerToken,event,opened});
+      }
       await supplierPage.reload();
       await expect(supplierPage.getByRole('note', { name: scenario.label, exact: true })).toHaveText(text);
       const otherAfter = await call(`/events/${event.id}`, undefined, foreignSupplierToken, 'get', 200);
       expect(otherAfter.my_bid).toBeNull(); expect(JSON.stringify(otherAfter)).not.toContain(marker);
     });
   } finally { await context.close(); }
+}
+
+// Every downstream write is made by an authenticated native browser click.
+// API calls below only assert resulting state/price; clock adjustment remains
+// confined to the isolated deadline fixture above. PAID is an application status.
+async function verifyRfpPayment({buyerPage,supplierPage,call,buyerToken,event,opened}: {
+  buyerPage:Page; supplierPage:Page; call:Call; buyerToken:string; event:any; opened:any;
+}) {
+  await test.step('RFP native scoring → award → contract → PO → GRN → invoice → PAID',async()=>{
+    const clicked = async (page:Page,path:string,action:()=>Promise<void>) => {
+      const pending=page.waitForResponse(r=>r.url().endsWith(path)&&r.request().method()==='POST');
+      const [response]=await Promise.all([pending,action()]);
+      expect(response.status(),await response.text()).toBe(201); return response.json();
+    };
+    const bid=buyerPage.locator('tr').filter({hasText:opened.bids[0].supplier_name});
+    for(const criterion of event.evaluation_criteria ?? opened.evaluation_criteria) {
+      await bid.locator('label').filter({hasText:`${criterion.key} · ${criterion.weight}%`}).locator('input').fill('90');
+    }
+    await clicked(buyerPage,`/events/${event.id}/evaluate`,()=>buyerPage.getByRole('button',{name:'Score',exact:true}).click());
+    const group=buyerPage.getByRole('group',{name:event.lots[0].title,exact:true});
+    const decision=buyerPage.waitForEvent('dialog').then(async d=>{expect(d.type()).toBe('prompt');await d.accept('Sole RFP proposal meets the published requirements');});
+    await clicked(buyerPage,`/events/${event.id}/award`,()=>group.getByRole('button',{name:new RegExp(opened.bids[0].supplier_name)}).click());
+    await decision;
+    await expect(group.locator('.badge.AWARDED')).toBeVisible();
+    const award=(await call(`/events/${event.id}`,undefined,buyerToken,'get',200)).awards.find((a:any)=>!a.cancelled_at);
+    const activation=buyerPage.waitForResponse(r=>/\/contracts\/[^/]+\/activate$/.test(r.url())&&r.request().method()==='POST');
+    const contract=await clicked(buyerPage,`/contracts/from-award/${award.id}`,
+      ()=>buyerPage.getByRole('button',{name:`Create contract · ${event.lots[0].title}`}).click());
+    // The click immediately performs a full-page navigation after activation;
+    // Chromium can discard its body, but status/URL remain available.
+    const activated=await activation;expect(activated.status()).toBe(201);
+    expect(activated.url()).toContain(`/contracts/${contract.id}/activate`);
+    await buyerPage.waitForURL('**/buyer/contracts');
+    expect(Number(contract.total_minor)).toBe(1200);
+    const contractRow=buyerPage.locator('tr').filter({hasText:contract.contract_no});
+    await expect(contractRow.locator('.badge.ACTIVE')).toBeVisible();
+    const po=await clicked(buyerPage,`/contracts/${contract.id}/orders`,()=>contractRow.getByRole('button',{name:/^Create PO\b/}).click());
+    expect(Number(po.total_minor)).toBe(1200);
+    const order=buyerPage.locator('tr').filter({hasText:po.po_no});
+    await clicked(buyerPage,`/orders/${po.id}/status`,()=>order.getByRole('button',{name:'Issue',exact:true}).click());
+    await supplierPage.goto('/supplier/orders');
+    const supplied=supplierPage.locator('tr').filter({hasText:po.po_no});
+    for(const label of ['Confirm','Packed','Ship','Delivered']) {
+      await clicked(supplierPage,`/orders/${po.id}/status`,()=>supplied.getByRole('button',{name:`→ ${label}`,exact:true}).click());
+    }
+    await buyerPage.reload();
+    await clicked(buyerPage,`/orders/${po.id}/receipts`,()=>order.getByRole('button',{name:/^Receive\b/}).click());
+    await expect(order.locator('.badge.ACCEPTED')).toBeVisible();
+    const receipt=await call(`/orders/${po.id}/receipts`,undefined,buyerToken,'get',200);
+    expect(receipt.summary).toHaveLength(1);expect(Number(receipt.summary[0].received)).toBe(1);
+    await supplierPage.reload();
+    const invoice=await clicked(supplierPage,`/invoices/from-po/${po.id}`,()=>supplied.getByRole('button',{name:'🧾 Invoice',exact:true}).click());
+    await supplierPage.waitForURL('**/supplier/invoices');
+    expect(invoice.status).toBe('MATCHED');
+    expect([invoice.net_minor,invoice.vat_minor,invoice.gross_minor].map(Number)).toEqual([1200,216,1416]);
+    await expect(supplierPage.locator('tr').filter({has:supplierPage.getByRole('link',{name:invoice.invoice_no,exact:true})}).filter({has:supplierPage.getByRole('cell',{name:po.po_no,exact:true})}).locator('.badge.MATCHED')).toBeVisible();
+    await buyerPage.goto('/buyer/invoices');
+    const invoiced=buyerPage.locator('tr').filter({has:buyerPage.getByRole('link',{name:invoice.invoice_no,exact:true})}).filter({has:buyerPage.getByRole('cell',{name:po.po_no,exact:true})});
+    await clicked(buyerPage,`/invoices/${invoice.id}/approve`,()=>invoiced.getByRole('button',{name:/^Approve\b/}).click());
+    await clicked(buyerPage,`/invoices/${invoice.id}/pay`,()=>invoiced.getByRole('button',{name:/^💳 Pay\b/}).click());
+    await expect(invoiced.locator('.badge.PAID')).toBeVisible();
+    const settled=await call(`/invoices/${invoice.id}`,undefined,buyerToken,'get',200);
+    expect(settled.status).toBe('PAID');
+    expect([settled.net_minor,settled.vat_minor,settled.gross_minor].map(Number)).toEqual([1200,216,1416]);
+    expect(settled.match.ok).toBe(true);
+    await buyerPage.reload();
+    await expect(invoiced.locator('.badge.PAID')).toBeVisible();
+    await invoiced.getByRole('link',{name:invoice.invoice_no,exact:true}).click();
+    for(const [lang,match,price,net,vat] of [
+      ['EN','Three-way match','Invoice price','Net amount','VAT'],
+      ['RU','Трёхсторонняя сверка','Цена в счёте','Без НДС','НДС'],
+      ['AZ','Üçtərəfli uyğunlaşdırma','Qaimə qiyməti','ƏDV-siz məbləğ','ƏDV'],
+    ]) {
+      await buyerPage.locator('.lang').getByRole('button',{name:lang,exact:true}).click();
+      await expect(buyerPage.getByRole('heading',{name:`${match} ✅`,exact:true})).toBeVisible();
+      await expect(buyerPage.getByRole('columnheader',{name:price,exact:true})).toBeVisible();
+      await expect(buyerPage.locator('.hint').filter({hasText:net}).filter({hasText:vat})).toBeVisible();
+    }
+    await buyerPage.locator('.lang').getByRole('button',{name:'EN',exact:true}).click();
+    await supplierPage.reload();
+    await expect(supplierPage.locator('tr').filter({has:supplierPage.getByRole('link',{name:invoice.invoice_no,exact:true})}).filter({has:supplierPage.getByRole('cell',{name:po.po_no,exact:true})}).locator('.badge.PAID')).toBeVisible();
+    await expect(supplierPage.getByRole('button',{name:/Approve|Pay/})).toHaveCount(0);
+    // Return to the proposal page so existing own-response/secrecy assertions
+    // still run after the entire commercial chain has completed.
+    await supplierPage.goto(`/supplier/events/${event.id}`);
+  });
 }
