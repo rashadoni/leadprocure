@@ -144,7 +144,7 @@
     {
       "id": "LP-A17",
       "title": "SMTP/Meta и достоверная отправка",
-      "status": "PARTIAL_EXTERNAL",
+      "status": "PARTIAL_PENDING_CANDIDATE",
       "evidence": "followups; mail; audit-webhook; followup_outbox/dispatch; meta-delivery; migration0040",
       "assertions": "Локальные states/outbox/lease/recovery/dedupe/stop/responded/reconcile и HMAC boundary проверены. Console не даёт SENT. UNKNOWN после неопределённого исхода не повторяется автоматически. Полные callback-пакеты и защита подтверждённого READ/DELIVERED от регрессии проверены на реальных HTTP/HMAC/PostgreSQL/RLS.",
       "limits": "ПОСЛЕДНЯЯ задача. Реальные org SMTP и Meta delivery/callback NOT RUN: владелец сообщил, что подключений и тестовых получателей пока нет. Mock transport и подписанный локальный callback не являются подтверждением внешней доставки.",
@@ -153,6 +153,10 @@
         "all entry/change callback batching",
         "confirmed delivery/read cannot regress on late callbacks",
         "actual HTTP HMAC→runtimeDataSource→PostgreSQL provider message binding"
+      ],
+      "remainingInternalChecks": [
+        "No HTTP200 after a callback DB write failure; safe partial-batch retry",
+        "Persist signed early callback and serialize receipt/message registration in both actual queue orders"
       ]
     },
     {
@@ -193,7 +197,9 @@
       "LP-A19"
     ],
     "all20FullyAccepted": false,
-    "partialTechnicalTasks": []
+    "partialTechnicalTasks": [
+      "LP-A17"
+    ]
   },
   "baselineMergedMain": "3990a7d04b647d4d7d5bf6010a601c2622978ee5",
   "baselineMainRun": "https://github.com/rashadoni/leadprocure/actions/runs/40833937868"
