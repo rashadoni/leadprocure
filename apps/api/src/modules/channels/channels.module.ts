@@ -291,12 +291,17 @@ export class WhatsappWebhookController {
     const expected=createHmac('sha256',secret).update(req.rawBody).digest();
     if (!timingSafeEqual(expected,Buffer.from(signature.slice(7),'hex'))) throw new UnauthorizedException('Invalid webhook signature');
     try {
-      const statuses = body?.entry?.[0]?.changes?.[0]?.value?.statuses;
-      if (Array.isArray(statuses)) {
-        for (const s of statuses) {
-          if (s?.id && ['sent','delivered','read','failed'].includes(s?.status)) {
-            await this.ds.query(`SELECT followup_msg_set_status($1, $2)`, [s.id, s.status])
-              .catch((e) => this.logger.warn(`status update failed: ${e?.message}`));
+      // A signed callback can contain several entries/changes; process every
+      // message status rather than acknowledging and dropping the rest of a batch.
+      for (const entry of Array.isArray(body?.entry) ? body.entry : []) {
+        for (const change of Array.isArray(entry?.changes) ? entry.changes : []) {
+          const statuses = change?.value?.statuses;
+          if (!Array.isArray(statuses)) continue;
+          for (const s of statuses) {
+            if (typeof s?.id === 'string' && s.id.length > 0 && ['sent','delivered','read','failed'].includes(s?.status)) {
+              await this.ds.query(`SELECT followup_msg_set_status($1, $2)`, [s.id, s.status])
+                .catch((e) => this.logger.warn(`status update failed: ${e?.message}`));
+            }
           }
         }
       }
