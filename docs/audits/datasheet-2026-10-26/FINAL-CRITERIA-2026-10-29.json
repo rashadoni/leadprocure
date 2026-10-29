@@ -3,7 +3,7 @@
   "date": "2026-10-29",
   "productionChanged": false,
   "scope": "original LP-A00–LP-A19 only",
-  "gateStatus": "MAIN_PASS",
+  "gateStatus": "A17_IMPLEMENTATION_PASS",
   "tasks": [
     {
       "id": "LP-A00",
@@ -145,9 +145,15 @@
       "id": "LP-A17",
       "title": "SMTP/Meta и достоверная отправка",
       "status": "PARTIAL_EXTERNAL",
-      "evidence": "followups; mail; audit-webhook; followup_outbox/dispatch",
-      "assertions": "Локальные states/outbox/lease/recovery/dedupe/stop/responded/reconcile и HMAC boundary проверены. Console не даёт SENT. UNKNOWN после неопределённого исхода не повторяется автоматически.",
-      "limits": "ПОСЛЕДНЯЯ задача. Реальные org SMTP и Meta delivery/callback NOT RUN: владелец сообщил, что подключений и тестовых получателей пока нет. Mock transport и подписанный локальный callback не являются подтверждением внешней доставки."
+      "evidence": "followups; mail; audit-webhook; followup_outbox/dispatch; meta-delivery; migration0040",
+      "assertions": "Локальные states/outbox/lease/recovery/dedupe/stop/responded/reconcile и HMAC boundary проверены. Console не даёт SENT. UNKNOWN после неопределённого исхода не повторяется автоматически. Полные callback-пакеты и защита подтверждённого READ/DELIVERED от регрессии проверены на реальных HTTP/HMAC/PostgreSQL/RLS.",
+      "limits": "ПОСЛЕДНЯЯ задача. Реальные org SMTP и Meta delivery/callback NOT RUN: владелец сообщил, что подключений и тестовых получателей пока нет. Mock transport и подписанный локальный callback не являются подтверждением внешней доставки.",
+      "qualification": "New A17 source/migration0040 and6 real HTTP/HMAC/PostgreSQL/RLS tests passed hosted40839644727; synthetic provider rows, no live external delivery.",
+      "verifiedInternalChecks": [
+        "all entry/change callback batching",
+        "confirmed delivery/read cannot regress on late callbacks",
+        "actual HTTP HMAC→runtimeDataSource→PostgreSQL provider message binding"
+      ]
     },
     {
       "id": "LP-A18",
@@ -173,11 +179,10 @@
     "Внешние ERP/банк/ASAN/Peppol; CSV/PAID/dev signature не являются их интеграцией.",
     "Microsoft PowerPoint desktop: подключённой сессии нет."
   ],
-  "candidateHead": "149414908877b508c8daa5249f22afdca9b3a7a3",
-  "mergedMain": "3990a7d04b647d4d7d5bf6010a601c2622978ee5",
-  "candidateRun": "https://github.com/rashadoni/leadprocure/actions/runs/40833169209",
-  "apiSuites": 28,
-  "apiTests": 324,
+  "candidateHead": "516314e10d092ac1b002c3c32baff8b094d8a253",
+  "candidateRun": "https://github.com/rashadoni/leadprocure/actions/runs/40839644727",
+  "apiSuites": 29,
+  "apiTests": 330,
   "contentionTests": 3,
   "nativeBrowserTests": 14,
   "freshHttpsBrowserTests": 1,
@@ -187,7 +192,9 @@
       "LP-A17",
       "LP-A19"
     ],
-    "all20FullyAccepted": false
+    "all20FullyAccepted": false,
+    "partialTechnicalTasks": []
   },
-  "mainRun": "https://github.com/rashadoni/leadprocure/actions/runs/40833937868"
+  "baselineMergedMain": "3990a7d04b647d4d7d5bf6010a601c2622978ee5",
+  "baselineMainRun": "https://github.com/rashadoni/leadprocure/actions/runs/40833937868"
 }
