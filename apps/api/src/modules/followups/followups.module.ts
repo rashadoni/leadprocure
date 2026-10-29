@@ -5,7 +5,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import {
-  BadRequestException, Body, Controller, Get, Injectable, Logger, Module,
+  BadRequestException, Body, ConflictException, Controller, Get, Injectable, Logger, Module,
   NotFoundException, Param, Post, Put,
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -146,7 +146,14 @@ export class FollowupsService {
   async reconcile(eventId: string, jobId: string, decision: string, reason: string, auth: AccessTokenPayload) {
     const row=(await this.rc.manager.query(`SELECT o.id FROM followup_outbox o JOIN followup_enrollments fe ON fe.id=o.enrollment_id WHERE o.id=$1 AND fe.event_id=$2`,[jobId,eventId]))[0];
     if (!row) throw new NotFoundException('Delivery job not found');
-    await this.rc.manager.query(`SELECT followup_reconcile_outbox($1,$2,$3)`,[jobId,decision,reason]);
+    try {
+      await this.rc.manager.query(`SELECT followup_reconcile_outbox($1,$2,$3)`,[jobId,decision,reason]);
+    } catch (e: any) {
+      if (e.message?.includes('Confirmed provider delivery cannot be requeued')) {
+        throw new ConflictException({ code:'DELIVERY_ALREADY_CONFIRMED',message:'Confirmed provider delivery cannot be requeued' });
+      }
+      throw e;
+    }
     await this.audit.record('FOLLOWUP_RECONCILED','followup_outbox',jobId,{decision,reason});
     return {ok:true};
   }
@@ -163,7 +170,7 @@ export class FollowupsService {
               fe.status, fe.current_step,
               COALESCE(jsonb_array_length(fe.steps), 0) AS total_steps,
               fe.steps, fe.next_run_at,
-              COALESCE((SELECT jsonb_agg(jsonb_build_object('id',j.id,'status',j.status,'recipient',j.recipient,'attempts',j.attempts)) FROM followup_outbox j WHERE j.enrollment_id=fe.id),'[]'::jsonb) AS jobs,
+              COALESCE((SELECT jsonb_agg(jsonb_build_object('id',j.id,'status',j.status,'recipient',j.recipient,'attempts',j.attempts,'delivery_confirmed',followup_job_has_confirmation(j.id))) FROM followup_outbox j WHERE j.enrollment_id=fe.id),'[]'::jsonb) AS jobs,
               COALESCE((SELECT count(*)::int FROM followup_messages fm WHERE fm.enrollment_id = fe.id), 0) AS sent_count,
               COALESCE((SELECT jsonb_agg(jsonb_build_object(
                           'step_no', fm.step_no, 'channel', fm.channel, 'recipient', fm.recipient,
@@ -206,18 +213,18 @@ export class FollowupsScheduler {
       count++;
       const w=job.work;
       const finish = (status:string,detail?:string,provider?:string) => this.ds.query(
-        `SELECT followup_finish_outbox($1,$2,$3,$4)`,[job.id,status,detail ?? null,provider ?? null]);
+        `SELECT followup_finish_outbox($1,$2,$3,$4,$5)`,[job.id,status,detail ?? null,provider ?? null,job.lease_token]);
       let dispatched=false;
+      let providerId:string|undefined;
       try {
-        const allowed=(await this.ds.query(`SELECT followup_dispatch_allowed($1) AS allowed`,[job.id]))[0]?.allowed;
+        const allowed=(await this.ds.query(`SELECT followup_dispatch_allowed($1,$2) AS allowed`,[job.id,job.lease_token]))[0]?.allowed;
         if (!allowed) {await finish('CANCELLED');continue;}
         if (job.recipient==='-') {await finish('SKIPPED','No recipient');continue;}
         const cfg=(await this.ds.query(`SELECT channel_config_get($1,$2) AS c`,[job.buyer_org_id,w.channel]))[0]?.c;
         const deadline=w.close_at ? new Date(w.close_at).toISOString() : '—';
         const text=`${w.buyer_name} · Leadprocure\n${w.event_title}\nSon təqdimetmə tarixi: ${deadline}\n${this.cfg.webBaseUrl}`;
         // Recheck immediately before handing the message to an external provider.
-        if (!(await this.ds.query(`SELECT followup_dispatch_allowed($1) AS allowed`,[job.id]))[0]?.allowed) {await finish('CANCELLED');continue;}
-        let provider:string|undefined;
+        if (!(await this.ds.query(`SELECT followup_dispatch_allowed($1,$2) AS allowed`,[job.id,job.lease_token]))[0]?.allowed) {await finish('CANCELLED');continue;}
         if (w.channel==='EMAIL') {
           if (!cfg?.host && this.mail.kind==='console') {await finish('NOT_CONFIGURED');continue;}
           dispatched=true;
@@ -226,14 +233,14 @@ export class FollowupsScheduler {
         } else {
           if (!cfg?.phoneNumberId && this.wa.kind==='console') {await finish('NOT_CONFIGURED');continue;}
           dispatched=true;
-          if (cfg?.phoneNumberId) provider=await sendWhatsappVia(cfg,job.recipient,text);
+          if (cfg?.phoneNumberId) providerId=await sendWhatsappVia(cfg,job.recipient,text);
           else await this.wa.send(job.recipient,text);
         }
-        await finish('SENT',undefined,provider);
+        await finish('SENT',undefined,providerId);
       } catch(e:any) {
         // A timeout after dispatch is ambiguous, not proof that delivery failed.
         // Preserve it for reconciliation rather than risking duplicate supplier messages.
-        await finish(dispatched ? 'UNKNOWN':'FAILED',String(e?.message ?? 'Delivery failed').slice(0,300));
+        await finish(dispatched ? 'UNKNOWN':'FAILED',String(e?.message ?? 'Delivery failed').slice(0,300),providerId);
       }
     }
     if (count) this.logger.log(`follow-ups: advanced ${count} chain step(s)`);

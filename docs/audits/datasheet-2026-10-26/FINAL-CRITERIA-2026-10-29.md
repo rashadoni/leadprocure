@@ -2,7 +2,7 @@
 
 Этот документ собирает текущие результаты; исходный план [TASKS.md](TASKS.md) и исторический журнал сохранены. Ранние общие формулировки «все задачи выполнены» не означают полную внешнюю/production приёмку. VERIFIED ниже означает исправление и конкретную изолированную техническую проверку в обозначенных границах. PARTIAL_EXTERNAL оставляет внешний критерий открытым; NOT RUN нигде не считается PASS.
 
-Репозиторий: **rashadoni/leadprocure**. Базовый main `436a8b8` прошёл330API; следующая коррекция LP-A17 `cff06db` прошла334API в run40844677259. Результаты ниже привязаны к конкретным версиям и границам проверок. Production не изменён.
+Репозиторий: **rashadoni/leadprocure**. Базовый main `81ff50b` прошёл334API; коррекция восстановления LP-A17 `bb183be` прошла341API в run40849057531. Результаты ниже привязаны к конкретным версиям и границам проверок. Production не изменён.
 
 ## Все 20 задач
 
@@ -83,3 +83,15 @@ PR18 прошёл полный hosted gate и независимое ревью,
 Код `cff06dbf95de5eb60f35840b454653b3f434f86d`, [40844677259](https://github.com/rashadoni/leadprocure/actions/runs/40844677259): BOTH jobs SUCCESS,29suites/334API (4новых actual HTTP/HMAC/runtimeDataSource/PostgreSQL/RLS),3contention/14nativebrowser/1freshHTTPS,fullbuild/typecheck/4UBL+OCDS/both migration histories/restore52RLS/fresh signedlicense-private storage-realClamAV PASS. Независимое exact-head ревью без блокеров. Доказательство CALLBACK-PERSISTENCE-ACCEPTANCE-2026-10-29.json.
 
 DB write failure даёт503 и сохраняет возможность повторить пакет; независимые сообщения при этом обрабатываются. Принятый ранний callback сохраняется в приватной таблице providerID/status и применяется при регистрации сообщения. Общая блокировка86 защищает оба порядка гонки; записи не дублируются. Runtime app_user не читает receipt table напрямую; сырые payload/получатели там не сохраняются. Предыдущая новая часть NOT VERIFIED superseded этим фактическим результатом. A17 снова PARTIAL_EXTERNAL: реальное поведение SMTP/Meta и внешняя доставка остаются NOT RUN, тестовые provider records синтетические.
+
+
+## LP-A17: восстановление worker и подтверждённая доставка — новая часть ожидает CI
+
+Продолжение выявило отсутствие привязки завершения к конкретной попытке и потерю providerID при ошибке финальной записи. Подготовлена миграция0042 с непрозрачным lease token, fencing dispatch/finish, безопасным отказом старых вызовов, сохранением позднего известного provider результата и блокировкой противоречивого requeue после подтверждения. API409/confirmation flag и пояснение AZ/RU/EN; токены не выдаются интерфейсу. Семь дополнительных actual DB/worker/HTTP тестов ожидают hosted gate; до него новое поведение NOT VERIFIED. Transport fixtures синтетические, реальная SMTP/Meta доставка NOT RUN. Уже начатый внешний запрос невозможно отозвать этим fencing-механизмом; неоднозначная доставка требует проверки, универсальная exactly-once гарантия не заявляется.
+
+
+## LP-A17: worker recovery/provider evidence — PASS
+
+Код `bb183be04a41834ebc310a8b368bdbc1822c47f6`, [40849057531](https://github.com/rashadoni/leadprocure/actions/runs/40849057531): BOTH SUCCESS,29suites/341API (7new actual DB/worker/HTTP),3contention/14nativebrowser/1freshHTTPS,fullbuild/typecheck/4UBL+OCDS/both histories/restore52RLS/fresh signedlicense-private storage-realClamAV PASS. Независимое exact-head ревью без блокеров; DISPATCH-OWNERSHIP-ACCEPTANCE-2026-10-29.json. Это supersedes новую техническую часть pending выше.
+
+Новая попытка получает отдельный lease token, поэтому ручной сброс attempts не позволяет старому worker завершить новую отправку. Старые вызовы без токена безопасно отказывают; providerID сохраняется при сбое финальной записи, поздний известный результат остаётся в истории без изменения чужой попытки. Подтверждённая отправка/доставка блокирует противоречивый requeue и повторный dispatch. API отдаёт только confirmation flag, UI поясняет запрет AZ/RU/EN; токен не раскрывается. Новая UI-ветка проверена через API/source/build, не выдана за отдельный новый native сценарий. Уже начатый внешний I/O не отзывается, универсальная exactly-once гарантия не заявляется. A17/A19 внешняя часть остаётся PARTIAL_EXTERNAL/NOT RUN.

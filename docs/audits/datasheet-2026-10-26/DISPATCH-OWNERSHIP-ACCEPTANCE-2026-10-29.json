@@ -1,0 +1,31 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/22",
+  "testedSourceHead": "bb183be04a41834ebc310a8b368bdbc1822c47f6",
+  "status": "PASS",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/40849057531",
+  "apiSuites": 29,
+  "apiTests": 341,
+  "newRecoveryTests": 7,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "freshHttpsBrowserTests": 1,
+  "restoredRlsTables": 52,
+  "migration": "1720000000042-followup-dispatch-ownership.ts",
+  "assertions": [
+    "opaque active lease required for dispatch/finish; expired/wrong and tokenless legacy calls fail closed",
+    "manual reconciliation counter reset cannot make an old worker own a new lease",
+    "late known provider facts retained once without completing another lease or authorizing resend",
+    "actual signed callback blocks contradictory HTTP reconciliation409; API confirmation flag contains no lease token",
+    "bounded3pre-dispatch retries use fresh tokens and terminate",
+    "real worker with real DB finish-trigger failure preserves a stubbed known providerID in UNKNOWN history",
+    "worker paused inside synthetic transport cannot finish another worker reclaimed lease",
+    "fullbuild/typecheck/4UBL+OCDS/both histories/restore52RLS/fresh signedlicense-private storage-realClamAV PASS"
+  ],
+  "independentReview": "deadline_boundary_review exactbb183be no blockers",
+  "rawLog": "/tmp/leadprocure-dispatch-ownership-bb183be-acceptance.log",
+  "freshLog": "/tmp/leadprocure-dispatch-ownership-bb183be-fresh.log",
+  "qualification": "Actual DB/worker/HTTP with synthetic provider transport only. Already-started external I/O cannot be recalled; universal exactly-once delivery not promised. Real SMTP/Meta/client acceptance NOT RUN. UI copy reviewed/built in AZ/RU/EN; new blocked-requeue path verified through API, not claimed as an additional native browser scenario.",
+  "productionChanged": false,
+  "materialsChanged": false
+}
