@@ -1,0 +1,27 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/26",
+  "testedSourceHead": "2309467a93e41cce39663f220070f6ecb6781495",
+  "status": "PASS",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/40934552495",
+  "apiSuites": 29,
+  "apiTests": 348,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "freshHttpsBrowserTests": 1,
+  "restoredRlsTables": 52,
+  "assertions": [
+    "actual authenticated native RFP opensMATCHEDinvoice before approving",
+    "row and already-open card both becomeAPPROVED thenPAID without close/reopen/reload, no previousstatusbadge remains",
+    "loaded comparison section remains available after canonical mutation-row merge",
+    "existing persistedPAID/reload/AZRUEN/supplier-role/RFP/partial-invoice assertions continue passing",
+    "approve/reject/pay share handler; source review confirms success-only merge and closed-card preservation",
+    "fullbuild/typecheck/4UBL+OCDS/both applied histories/restore52RLS/fresh signedlicense-private storage-realClamAV PASS"
+  ],
+  "independentReview": "deadline_boundary_review exact2309467a93e41cce39663f220070f6ecb6781495 no blockers",
+  "rawLog": "/tmp/leadprocure-invoice-detail-2309467-acceptance.log",
+  "freshLog": "/tmp/leadprocure-invoice-detail-2309467-fresh.log",
+  "qualification": "Native open-card transition acceptance covers APPROVED/PAID, not a new rejection/cancelled-prompt/failure-specific native case. Those shared-handler paths reviewed by source and existing API regression; no exhaustive client-side race guarantee. PAID is application status, not bank settlement. External/client acceptance limits and current19-task scope unchanged.",
+  "productionChanged": false,
+  "materialsChanged": false
+}
