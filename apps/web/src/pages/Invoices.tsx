@@ -73,10 +73,10 @@ export default function Invoices() {
       {Object.entries(open).filter(([, v]) => v).map(([id, inv]) => (
         <div className="card" key={id}>
           <h3>{inv.invoice_no} · {fmtMoney(inv.gross_minor, inv.currency)} <Badge status={inv.status} cls={badge(inv.status)} /></h3>
-          <div className="hint">net {fmtMoney(inv.net_minor, inv.currency)} + ƏDV {fmtMoney(inv.vat_minor, inv.currency)}</div>
-          <h3 style={{ marginTop: 10 }}>3-way match {inv.match?.ok ? '✅' : '⚠️'}</h3>
+          <div className="hint">{t('inv_net')} {fmtMoney(inv.net_minor, inv.currency)} + {t('inv_vat')} {fmtMoney(inv.vat_minor, inv.currency)}</div>
+          <h3 style={{ marginTop: 10 }}>{t('inv_match')} {inv.match?.ok ? '✅' : '⚠️'}</h3>
           <table>
-            <thead><tr><th>Invoice price</th><th>PO price</th><th>Invoice qty</th><th>Received</th><th>OK</th></tr></thead>
+            <thead><tr><th>{t('inv_price')}</th><th>{t('inv_po_price')}</th><th>{t('inv_qty')}</th><th>{t('inv_received')}</th><th>{t('inv_ok')}</th></tr></thead>
             <tbody>
               {(inv.match?.lines ?? []).map((l: any, idx: number) => (
                 <tr key={idx}>
