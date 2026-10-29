@@ -175,4 +175,53 @@ describe('invoices + 3-way match', () => {
     cur = await http().get(`/invoices/${inv.body.id}`).set(...bearer(buyer)).expect(200);
     expect(cur.body.status).toBe('MATCHED');
   });
+  async function balanceOrder() {
+    const req=await http().post('/requests').set(...bearer(buyer)).send({title:`Invoice balance ${tag}`,
+      items:[{name:'Balance bolt',qty:10,estUnitPriceMinor:100},{name:'Balance washer',qty:5,estUnitPriceMinor:200}]}).expect(201);
+    await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approver)).expect(201);
+    const po=(await http().post(`/orders/direct/from-request/${req.body.id}`).set(...bearer(buyer)).send({supplierOrgId:supplierOrg}).expect(201)).body;
+    await http().post(`/orders/${po.id}/status`).set(...bearer(buyer)).send({status:'ISSUED'}).expect(201);
+    for(const status of ['CONFIRMED','PACKED','SHIPPED','DELIVERED'])
+      await http().post(`/orders/${po.id}/status`).set(...bearer(supplier)).send({status}).expect(201);
+    return po;
+  }
+  const balance=async(po:any,token=buyer)=>(await http().get(`/orders/${po.id}/receipts`).set(...bearer(token)).expect(200)).body.summary;
+  it('receipt balance subtracts matched/approved/paid quantities, excludes disputed and preserves independent lines',async()=>{
+    const po=await balanceOrder(),[bolt,washer]=po.items;
+    expect((await balance(po)).map((r:any)=>Number(r.billable))).toEqual([0,0]);
+    await http().post(`/orders/${po.id}/receipts`).set(...bearer(buyer)).send({items:[
+      {poItemId:bolt.id,qty:4},{poItemId:washer.id,qty:5}]}).expect(201);
+    const first=(await http().post(`/invoices/from-po/${po.id}`).set(...bearer(supplier)).send({items:[
+      {poItemId:bolt.id,qty:3,unitPriceMinor:100},{poItemId:washer.id,qty:5,unitPriceMinor:200}]}).expect(201)).body;
+    expect(first.status).toBe('MATCHED');
+    const quantities=(rows:any[])=>rows.map(r=>[r.po_item_id,Number(r.received),Number(r.invoiced),Number(r.billable)]);
+    const expected=[[bolt.id,4,3,1],[washer.id,5,5,0]];
+    expect(quantities(await balance(po))).toEqual(expected);
+    expect(quantities(await balance(po,supplier))).toEqual(expected);
+    await http().post(`/invoices/${first.id}/approve`).set(...bearer(buyer)).expect(201);
+    expect(quantities(await balance(po))).toEqual(expected);
+    await http().post(`/invoices/${first.id}/pay`).set(...bearer(buyer)).expect(201);
+    expect(quantities(await balance(po))).toEqual(expected);
+    const disputed=(await http().post(`/invoices/from-po/${po.id}`).set(...bearer(supplier)).send({items:[
+      {poItemId:bolt.id,qty:2,unitPriceMinor:100}]}).expect(201)).body;
+    expect(disputed.status).toBe('DISPUTED');expect(quantities(await balance(po))).toEqual(expected);
+    await http().post(`/invoices/${disputed.id}/reject`).set(...bearer(buyer)).expect(201);
+    await http().post(`/orders/${po.id}/receipts`).set(...bearer(buyer)).send({items:[{poItemId:bolt.id,qty:6}]}).expect(201);
+    expect(quantities(await balance(po))).toEqual([[bolt.id,10,3,7],[washer.id,5,5,0]]);
+  });
+  it('rejecting a matched invoice releases balance and foreign organizations cannot read the summary',async()=>{
+    const po=await balanceOrder(),bolt=po.items[0];
+    await http().post(`/orders/${po.id}/receipts`).set(...bearer(buyer)).send({items:[{poItemId:bolt.id,qty:4}]}).expect(201);
+    const inv=(await http().post(`/invoices/from-po/${po.id}`).set(...bearer(supplier)).send({items:[
+      {poItemId:bolt.id,qty:4,unitPriceMinor:100}]}).expect(201)).body;
+    expect(inv.status).toBe('MATCHED');expect(Number((await balance(po))[0].billable)).toBe(0);
+    await http().post(`/invoices/${inv.id}/reject`).set(...bearer(buyer)).expect(201);
+    expect(Number((await balance(po))[0].billable)).toBe(4);
+    expect(await balance(po,s2)).toEqual([]);
+    const foreign=(await http().post('/auth/register/buyer').send({legalName:`Inv foreign ${tag}`,email:`inv-foreign-${tag}@t.test`,
+      password:'password123',fullName:'Foreign'}).expect(201)).body;
+    expect(await balance(po,foreign.accessToken)).toEqual([]);
+  });
+
 });

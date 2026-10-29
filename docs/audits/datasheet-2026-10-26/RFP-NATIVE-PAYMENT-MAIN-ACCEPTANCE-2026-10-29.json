@@ -1,0 +1,61 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/24",
+  "testedSourceHead": "e210c401218664522ed64f5c942f51148c686730",
+  "status": "PASS",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/40930167152",
+  "apiSuites": 29,
+  "apiTests": 346,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "freshHttpsBrowserTests": 1,
+  "restoredRlsTables": 52,
+  "assertions": [
+    "EN RFP native browser submission/opening/scoring/award/contract automaticactivation/POissue/supplierdelivery/GRN/MATCHEDinvoice/approval/PAID",
+    "all downstream mutations from actual authenticated buyer/supplier browser clicks; API only inspects resulting state",
+    "bid/contract/PO net1200, invoice EXCLUSIVE18% net/tax/gross1200/216/1416 minor units",
+    "PAID persists through reload for buyer and supplier, supplier cannot see buyer approval/payment controls",
+    "actual paid invoice net/VAT/match/comparison headings render AZ/RU/EN via native language controls",
+    "existing own-response and foreign-supplier secrecy assertions still run after downstream completion",
+    "fullbuild/typecheck/4UBL+OCDS/both applied histories/restore52RLS/fresh signedlicense-private storage-realClamAV PASS"
+  ],
+  "independentReview": "deadline_boundary_review exactfinal6ca34a4754cdbf338b5530ecc1374270369774ae no blockers; non-doc paths equal full-accepted e210c40",
+  "rawLog": "/tmp/leadprocure-rfp-native-main-8abae18-acceptance.log",
+  "freshLog": "/tmp/leadprocure-rfp-native-main-8abae18-fresh.log",
+  "qualification": "Full native downstream is the EN RFP case; RU RFP remains covered through opening. Invoice details checked in all3languages. PAID is application status, not bank payment. Excluded task not resumed. External/client/desktopPowerPoint limits remain NOT RUN.",
+  "productionChanged": false,
+  "materialsChanged": false,
+  "priorCandidates": [
+    {
+      "head": "b1091cd",
+      "run": 40926342728,
+      "status": "CANCELLED",
+      "reason": "Superseded after independent review fixed test assumptions."
+    },
+    {
+      "head": "0157164",
+      "run": 40926470057,
+      "status": "FAIL",
+      "reason": "Activation response-body diagnostic invalid after full-page navigation."
+    },
+    {
+      "head": "5a1fff1",
+      "run": 40928093046,
+      "status": "FAIL",
+      "reason": "Supplier-scoped invoice numbers require exact invoice+PO row binding."
+    }
+  ],
+  "mergedMain": "8abae18317860806c56715fad205b6d438112a0e",
+  "reviewedFinalHead": "6ca34a4754cdbf338b5530ecc1374270369774ae",
+  "reviewedTreeEqualsMain": true,
+  "jobs": {
+    "acceptance": 123646165312,
+    "freshInstall": 123646165707
+  },
+  "automaticReview": "40930070652/job123645838544 Anthropic400 insufficient-credit fallback; not semantic review",
+  "redundantDocOnlyRepeat": {
+    "run": 40930010822,
+    "status": "CANCELLED",
+    "reason": "Only documentary outcomes changed after full accepted e210c40; not counted PASS."
+  }
+}

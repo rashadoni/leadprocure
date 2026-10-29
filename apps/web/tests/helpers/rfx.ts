@@ -1,5 +1,6 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { createRequire } from 'node:module';
+import { verifyPartialInvoices } from './partial-invoice';
 const apiRequire = createRequire(new URL('../../../api/package.json', import.meta.url));
 
 type Call = (path: string, body: any, token?: string, method?: string, status?: number) => Promise<any>;
@@ -19,6 +20,7 @@ export async function verifyRfiRfp({ browser, buyerPage, call, buyerToken, appro
       email: `rfx-browser-${tag}@audit.invalid`, password: 'Rfx-fixture-password123',
     } });
     expect(registration.status(), await registration.text()).toBe(201);
+    const supplier = await registration.json();
     const supplierPage = await context.newPage();
     await supplierPage.goto('/supplier/dashboard');
     await expect(supplierPage.locator('h1')).toBeVisible();
@@ -92,6 +94,7 @@ export async function verifyRfiRfp({ browser, buyerPage, call, buyerToken, appro
       const otherAfter = await call(`/events/${event.id}`, undefined, foreignSupplierToken, 'get', 200);
       expect(otherAfter.my_bid).toBeNull(); expect(JSON.stringify(otherAfter)).not.toContain(marker);
     });
+    await verifyPartialInvoices({supplierPage,call,buyerToken,approverToken,supplierOrgId:supplier.org.id,tag});
   } finally { await context.close(); }
 }
 
