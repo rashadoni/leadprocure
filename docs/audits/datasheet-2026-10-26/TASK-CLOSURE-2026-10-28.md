@@ -106,3 +106,12 @@ Owner authorized autonomous pushes/CI/PRs/merges for original LP-A00–19 after 
 ## LP-A12 explicit HTTP provider contract/fallback acceptance
 
 PR17 candidate4491a22 / run40831230913 BOTH jobs SUCCESS:27suites/312API (18new real HTTP boundary tests),3contention/14native browser/1freshHTTPS; build/typecheck/4UBL+OCDS/both migrations/restore/fresh PASS. Provider structural fields, fixed weights, weighted-total/order consistency and IDs validated; authoritative name/amount/delivery stay local. Real HTTP malformed/503/disconnect and before-opening/foreign-buyer checks pass using actual API/auth/RLS. Separate independent exact-head review no blockers. Live LLM remains NOT RUN, not disguised as the loopback fixture. See AI-BOUNDARY-ACCEPTANCE-2026-10-29.json. Owner broad merge authorization applies after ready checks; no new permission request. Continue explicit A08/A18 HTTP/concurrency evidence, then final all20 criterion inventory, SMTP/Meta LAST.
+
+
+## Актуальная сверка всех20 критериев — 29 октября2026
+
+[FINAL-CRITERIA-2026-10-29.md](FINAL-CRITERIA-2026-10-29.md) и одноимённый JSON собирают текущие результаты вместо чтения исторических статусов по отдельности. PR17/PR18 объединены; кандидат1494149 прошёл hosted40833169209:28suites/324API,3contention/14nativebrowser/1freshHTTPS,fullbuild/typecheck/4UBL+OCDS/both histories/restore51RLS/fresh signedlicense-private storage-realAV PASS. Точное main3990a7d проверяется отдельным запуском; кандидатный результат не подменяет этот gate.
+
+18задач технически проверены в указанных границах. A17 и A19 остаются частично открыты по внешней/клиентской приёмке: SMTP/Meta подключения отсутствуют по ответу владельца; реальные отправка/получение/callback NOT RUN. Live LLM quality, клиентское внедрение и desktop PowerPoint также не объявлены проверенными. Общая авторизация владельца разрешает push/CI/PR/merge после независимого ревью и необходимых проверок; старые требования нового «давай» для каждого исходного PR superseded. Production не менялся. Никаких новых release/backup проектов.
+
+Окончательный результат точного main3990a7d: [40833937868](https://github.com/rashadoni/leadprocure/actions/runs/40833937868) BOTH jobs SUCCESS,324API/3contention/14nativebrowser/1freshHTTPS и остальные gates PASS. Статус «main проверяется» выше superseded; доказательство FINAL-CRITERIA-MAIN-ACCEPTANCE-2026-10-29.json. Итоговая таблица:18 технически проверенных задач, A17/A19 частично открыты по внешним зависимостям. Production не изменён.
