@@ -2,8 +2,8 @@
   "repository": "rashadoni/leadprocure",
   "date": "2026-10-29",
   "productionChanged": false,
-  "scope": "original LP-A00–LP-A19 only",
-  "gateStatus": "A17_RECOVERY_PASS",
+  "scope": "LP-A00–LP-A16, LP-A18, LP-A19; SMTP/Meta removed by owner instruction",
+  "gateStatus": "TECHNICAL_PASS_EXTERNAL_CLIENT_PARTIAL",
   "tasks": [
     {
       "id": "LP-A00",
@@ -142,25 +142,6 @@
       "limits": "Клиентская коммерческая лицензия/установка NOT RUN; выпуск такой лицензии не подменяет разработку."
     },
     {
-      "id": "LP-A17",
-      "title": "SMTP/Meta и достоверная отправка",
-      "status": "PARTIAL_EXTERNAL",
-      "evidence": "followups; mail; audit-webhook; followup_outbox/dispatch; meta-delivery; migration0040; private callback receipt migration0041; dispatch ownership migration0042",
-      "assertions": "Локальные states/outbox/lease/recovery/dedupe/stop/responded/reconcile и HMAC boundary проверены. Console не даёт SENT. UNKNOWN после неопределённого исхода не повторяется автоматически. Полные callback-пакеты и защита подтверждённого READ/DELIVERED от регрессии проверены на реальных HTTP/HMAC/PostgreSQL/RLS. Сбой записи не получает HTTP200; ранние callback сохраняются до регистрации сообщения; оба порядка реальной гонки и повтор частично сохранённого пакета проверены. Старые/истёкшие leases не завершают новую попытку; providerID сохраняется при сбое записи; подтверждённая доставка блокирует requeue/redispatch.",
-      "limits": "ПОСЛЕДНЯЯ задача. Реальные org SMTP и Meta delivery/callback NOT RUN: владелец сообщил, что подключений и тестовых получателей пока нет. Mock transport и подписанный локальный callback не являются подтверждением внешней доставки.",
-      "qualification": "Recovery/migration0042 plus7 actual DB/worker/HTTP cases passed hosted40849057531; provider transport synthetic, real external delivery NOT RUN.",
-      "verifiedInternalChecks": [
-        "all entry/change callback batching",
-        "confirmed delivery/read cannot regress on late callbacks",
-        "actual HTTP HMAC→runtimeDataSource→PostgreSQL provider message binding",
-        "No HTTP200 after a callback DB write failure; safe partial-batch retry",
-        "Persist signed early callback and serialize receipt/message registration in both actual queue orders",
-        "Opaque per-dispatch lease ownership across expiry/manual counter reset and paused old worker",
-        "Retain known provider ID when final storage fails; retain stale provider fact without clobbering a new lease",
-        "Confirmed provider acceptance/delivery blocks contradictory requeue and dispatch"
-      ]
-    },
-    {
       "id": "LP-A18",
       "title": "Дедлайны и конкуренция",
       "status": "VERIFIED",
@@ -178,7 +159,6 @@
     }
   ],
   "externalNotRun": [
-    "Реальные org SMTP и Meta отправка, получение и callbacks: подключения/получатели отсутствуют по ответу владельца.",
     "Live external LLM quality/availability.",
     "Реальное клиентское внедрение, коммерческая лицензия, public TLS и реальный existing-volume upgrade.",
     "Внешние ERP/банк/ASAN/Peppol; CSV/PAID/dev signature не являются их интеграцией.",
@@ -194,13 +174,21 @@
   "summary": {
     "verifiedTechnicalTasks": 18,
     "partialExternalTasks": [
-      "LP-A17",
       "LP-A19"
     ],
-    "all20FullyAccepted": false,
-    "partialTechnicalTasks": []
+    "partialTechnicalTasks": [],
+    "activeTasks": 19,
+    "allActiveTasksFullyAccepted": false
   },
   "baselineMergedMain": "81ff50b945ea28f08c7c7f285e6a09f88c620e57",
   "baselineMainRun": "https://github.com/rashadoni/leadprocure/actions/runs/40845841145",
-  "restoredRlsTables": 52
+  "restoredRlsTables": 52,
+  "excludedTasks": [
+    {
+      "id": "LP-A17",
+      "title": "SMTP/Meta",
+      "status": "REMOVED_BY_OWNER",
+      "instruction": "Исключить из списка и дальнейшей работы; не возвращать без нового явного поручения."
+    }
+  ]
 }
