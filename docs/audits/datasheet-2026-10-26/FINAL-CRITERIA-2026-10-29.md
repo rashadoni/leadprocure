@@ -4,7 +4,7 @@
 
 Этот документ собирает текущие результаты; исходный план [TASKS.md](TASKS.md) и исторический журнал сохранены. Ранние общие формулировки «все задачи выполнены» не означают полную внешнюю/production приёмку. VERIFIED ниже означает исправление и конкретную изолированную техническую проверку в обозначенных границах. PARTIAL_EXTERNAL оставляет внешний критерий открытым; NOT RUN нигде не считается PASS.
 
-Репозиторий: **rashadoni/leadprocure**. Базовый main `8e3379e` прошёл348API; кандидат `2309467` прошёл полный hosted40934552495, включая native обновление открытых деталей счёта при APPROVED/PAID без reload. RFP/partial-invoice coverage сохранено. Production не изменён.
+Репозиторий: **rashadoni/leadprocure**. Базовый main `eaef455` прошёл348API; кандидат `2b2ee8d` прошёл полный hosted40938983781, включая native budget filter race/error/retry AZ/RU/EN. Прежние RFP/partial-invoice/open-details сценарии сохранены. Production не изменён.
 
 ## Текущие 19 задач
 
@@ -108,3 +108,7 @@ DB write failure даёт503 и сохраняет возможность пов
 ## LP-A19: актуальный статус открытого счёта — PASS
 
 Код `2309467a93e41cce39663f220070f6ecb6781495`, hosted [40934552495](https://github.com/rashadoni/leadprocure/actions/runs/40934552495): оба jobs SUCCESS,29suites/348API,3contention/14nativebrowser/1freshHTTPS,fullbuild/typecheck/4UBL+OCDS/both histories/restore52RLS/fresh signedlicense-private storage-realClamAV PASS. Раньше действие обновляло только список, оставляя открытые детали со старым статусом. Теперь общий handler обновляет их подтверждённой серверной строкой, сохраняя items. Native RFP держит карточку открытой и проверяет APPROVED, затем PAID вместе со строкой без reopen/reload; таблица сверки сохраняется. Отдельные native reject/cancel/failure сценарии не заявлены; общий handler проверен ревью и прежними API tests. INVOICE-DETAIL-ACCEPTANCE-2026-10-29.json. Активный scope19 и внешние ограничения не изменены.
+
+## LP-A13/A19: актуальность и ошибки бюджетного отчёта — PASS
+
+Код `2b2ee8d6b857cb6419acd98aadc9e184235a6a77`, hosted [40938983781](https://github.com/rashadoni/leadprocure/actions/runs/40938983781): BOTH jobs SUCCESS,29suites/348API,3contention/14nativebrowser/1freshHTTPS,fullbuild/typecheck/4UBL+OCDS/both histories/restore52RLS/fresh signedlicense-private storage-realClamAV PASS. Native finance проверка задерживает реальные list/rollup2031, показывает2032/20002minor, затем отпускает старые ответы и проверяет сохранность фильтра/плана/суммы. Отдельные503fixtures для list/rollup/unbudgeted подтверждают AZ/RU/EN error/retry, скрытие старых данных и запрет CSV до готовности. Для BUYER_USER запрещённые org-report/exports не запрашиваются/не предлагаются; роль проверена source+прежней API regression, новый native USERкейс не заявлен. Это согласованная UI-публикация, не общий DBsnapshot; математика/ACL/scopeотчётов не менялись. Первое падение теста из-за decimalseparator сохранено как FAIL. BUDGET-REPORT-ACCEPTANCE-2026-10-29.json. Активныйscope19 и внешние ограничения не изменены.
