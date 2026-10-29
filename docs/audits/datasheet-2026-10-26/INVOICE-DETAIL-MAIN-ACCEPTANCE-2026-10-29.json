@@ -1,0 +1,40 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/26",
+  "testedSourceHead": "2309467a93e41cce39663f220070f6ecb6781495",
+  "status": "PASS",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/40936254474",
+  "apiSuites": 29,
+  "apiTests": 348,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "freshHttpsBrowserTests": 1,
+  "restoredRlsTables": 52,
+  "assertions": [
+    "actual authenticated native RFP opensMATCHEDinvoice before approving",
+    "row and already-open card both becomeAPPROVED thenPAID without close/reopen/reload, no previousstatusbadge remains",
+    "loaded comparison section remains available after canonical mutation-row merge",
+    "existing persistedPAID/reload/AZRUEN/supplier-role/RFP/partial-invoice assertions continue passing",
+    "approve/reject/pay share handler; source review confirms success-only merge and closed-card preservation",
+    "fullbuild/typecheck/4UBL+OCDS/both applied histories/restore52RLS/fresh signedlicense-private storage-realClamAV PASS"
+  ],
+  "independentReview": "deadline_boundary_review exactfinal161fb261d23b59419586c348254270725d914aaf no blockers; executable paths equal full-accepted2309467",
+  "rawLog": "/tmp/leadprocure-invoice-detail-main-eaef455-acceptance.log",
+  "freshLog": "/tmp/leadprocure-invoice-detail-main-eaef455-fresh.log",
+  "qualification": "Native open-card transition acceptance covers APPROVED/PAID, not a new rejection/cancelled-prompt/failure-specific native case. Those shared-handler paths reviewed by source and existing API regression; no exhaustive client-side race guarantee. PAID is application status, not bank settlement. External/client acceptance limits and current19-task scope unchanged.",
+  "productionChanged": false,
+  "materialsChanged": false,
+  "mergedMain": "eaef455ed4d9779630ae0ccf6aa572185b2e0593",
+  "reviewedFinalHead": "161fb261d23b59419586c348254270725d914aaf",
+  "reviewedTreeEqualsMain": true,
+  "jobs": {
+    "acceptance": 123667459229,
+    "freshInstall": 123667458854
+  },
+  "automaticReview": "40935730982/job123665657748 Anthropic400 insufficient-credit fallback; not semantic review",
+  "redundantDocOnlyRepeat": {
+    "run": 40935684259,
+    "status": "CANCELLED",
+    "reason": "Only accepted outcome docs changed after full-passed source2309467, not counted PASS."
+  }
+}
