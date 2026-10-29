@@ -5,6 +5,7 @@ type Lang = 'az' | 'ru' | 'en';
 const dict: Record<Lang, Record<string, string>> = {
   az: {
     analytics_from: 'Başlanğıc ayı', analytics_to: 'Son ay',
+    budget_load_error: 'Büdcə hesabatını yükləmək mümkün olmadı.',
     analytics_load_error: 'Analitikanı yükləmək mümkün olmadı.', analytics_retry: 'Yenidən yoxla',
     currency: "Valyuta",
     delivery_UNKNOWN: "Çatdırılma nəticəsi məlum deyil",
@@ -217,6 +218,7 @@ const dict: Record<Lang, Record<string, string>> = {
   },
   ru: {
     analytics_from: 'Начальный месяц', analytics_to: 'Конечный месяц',
+    budget_load_error: 'Не удалось загрузить бюджетный отчёт.',
     analytics_load_error: 'Не удалось загрузить аналитику.', analytics_retry: 'Повторить',
     currency: "Валюта",
     delivery_UNKNOWN: "Результат отправки неизвестен",
@@ -429,6 +431,7 @@ const dict: Record<Lang, Record<string, string>> = {
   },
   en: {
     analytics_from: 'From month', analytics_to: 'To month',
+    budget_load_error: 'Could not load the budget report.',
     analytics_load_error: 'Could not load analytics.', analytics_retry: 'Retry',
     currency: "Currency",
     delivery_UNKNOWN: "Delivery outcome unknown",

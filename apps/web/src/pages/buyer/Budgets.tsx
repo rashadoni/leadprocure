@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, useEffect, useState } from 'react';
+import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
 import { api, fmtDate, fmtMoney } from '../../api/client';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/auth';
@@ -48,6 +48,7 @@ export default function Budgets() {
   const { t } = useI18n();
   const { session } = useAuth();
   const canManagePlans = ['BUYER_ADMIN', 'BUYER_FINANCE'].includes(session?.org.role ?? '');
+  const canReadOrgReports = ['BUYER_ADMIN', 'BUYER_FINANCE', 'BUYER_APPROVER'].includes(session?.org.role ?? '');
   const [rows, setRows] = useState<Budget[]>([]);
   const [form, setForm] = useState({ ...empty });
   const [editId, setEditId] = useState<string | null>(null);
@@ -61,28 +62,43 @@ export default function Budgets() {
 
   // Period + department filter over the list, all optional.
   const [filter, setFilter] = useState({ periodType: '', year: '', departmentId: '' });
-  const load = () => {
-    api.get('/budgets', {
-      params: {
-        ...(filter.periodType ? { periodType: filter.periodType } : {}),
-        ...(filter.year ? { year: filter.year } : {}),
-        ...(filter.departmentId ? { departmentId: filter.departmentId } : {}),
-      },
-    }).then((r) => setRows(r.data));
-    api.get('/budgets/rollup', {
-      params: {
-        ...(filter.periodType ? { periodType: filter.periodType } : {}),
-        ...(filter.year ? { year: filter.year } : {}),
-      },
-    }).then((r) => setDepSummary(r.data)).catch(() => setDepSummary([]));
-    // approved spend no budget covers — invisible in a per-budget table, so it gets its own panel
-    api.get('/budgets/unbudgeted').then((r) => setUnbudgeted(r.data)).catch(() => setUnbudgeted([]));
-  };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [filter.periodType, filter.year, filter.departmentId]);
-
-  // Per-department rollup: what finance actually opens the page for. Server-side, because
-  // "paid" comes from settled invoices — the client only has the budget rows.
+  const activeFilter = useRef(filter);
+  activeFilter.current = filter;
+  const loadVersion = useRef(0);
+  const [reportLoading, setReportLoading] = useState(true);
+  const [reportError, setReportError] = useState(false);
+  // Per-department rollup is server-side; paid spend is not derivable from plan rows.
   const [depSummary, setDepSummary] = useState<any[]>([]);
+  const load = async () => {
+    const version = ++loadVersion.current;
+    // A completed mutation may still hold an older render's load callback.
+    // Always reload the filters currently displayed on screen.
+    const selected = activeFilter.current;
+    const period = {
+      ...(selected.periodType ? { periodType: selected.periodType } : {}),
+      ...(selected.year ? { year: selected.year } : {}),
+    };
+    setReportLoading(true); setReportError(false);
+    setRows([]); setDepSummary([]); setUnbudgeted([]);
+    const results = await Promise.allSettled([
+      api.get('/budgets', { params: { ...period, ...(selected.departmentId ? { departmentId: selected.departmentId } : {}) } }),
+      api.get('/budgets/rollup', { params: period }),
+      // BUYER_USER can read scoped plans/rollup, but not the org-wide spend report.
+      canReadOrgReports ? api.get('/budgets/unbudgeted') : Promise.resolve({ data: [] }),
+    ]);
+    if (version !== loadVersion.current) return;
+    if (results.some(result => result.status === 'rejected')) {
+      setReportError(true); setReportLoading(false); return;
+    }
+    const [plans, rollup, outside] = results as PromiseFulfilledResult<{ data: any[] }>[];
+    setRows(plans.value.data); setDepSummary(rollup.value.data); setUnbudgeted(outside.value.data);
+    setReportLoading(false);
+  };
+  useEffect(() => {
+    void load();
+    return () => { loadVersion.current++; }; // invalidate on filter change/unmount
+    /* eslint-disable-next-line */
+  }, [filter.periodType, filter.year, filter.departmentId, canReadOrgReports]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -133,6 +149,7 @@ export default function Budgets() {
   // Two files, two jobs: 'budgets.csv' is the whole picture for a person, 'budgets-1c.csv'
   // is the plan by month and dimension for the accounting system to import.
   const download = async (path: string, name: string) => {
+    if (!canReadOrgReports || reportLoading || reportError) return;
     try {
       const { data } = await api.get(path, {
         params: {
@@ -295,7 +312,7 @@ export default function Budgets() {
       )}
 
       {depSummary.length > 0 && (
-        <div className="card">
+        <div className="card" data-testid="budget-rollup">
           <h3>{t('bud_by_department')}</h3>
           <table>
             <thead><tr>
@@ -358,8 +375,10 @@ export default function Budgets() {
             <option value="">{t('dep_all')}</option>
             {deps.map((d) => <option key={d.id} value={d.id}>{d.code}</option>)}
           </select>
-          <button className="btn ghost small" onClick={exportCsv}>⤓ CSV</button>
-          <button className="btn ghost small" data-tip={t('bud_1c_tip')} onClick={export1c}>📤 {t('bud_1c')}</button>
+          {canReadOrgReports && <>
+            <button className="btn ghost small" disabled={reportLoading || reportError} onClick={exportCsv}>⤓ CSV</button>
+            <button className="btn ghost small" disabled={reportLoading || reportError} data-tip={t('bud_1c_tip')} onClick={export1c}>📤 {t('bud_1c')}</button>
+          </>}
           {canManagePlans && (
             <>
               {/* Bulk entry: thirty department budgets through a one-row form is what pushes
@@ -380,7 +399,11 @@ export default function Budgets() {
             </>
           )}
         </div>
-        <table>
+        {reportLoading && <div role="status">…</div>}
+        {reportError && <div role="alert">{t('budget_load_error')}{' '}
+          <button className="btn ghost small" onClick={() => void load()}>{t('analytics_retry')}</button>
+        </div>}
+        {!reportLoading && !reportError && <table data-testid="budget-list">
           <thead><tr>
             <th>{t('name')}</th><th>{t('status')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('period')}</th>
             <th>{t('amount')}</th><th>{t('committed')}</th><th>{t('actual')}</th><th>{t('remaining')}</th>
@@ -544,7 +567,7 @@ export default function Budgets() {
             })}
             {rows.length === 0 && <tr><td colSpan={canManagePlans ? 11 : 10} className="hint">—</td></tr>}
           </tbody>
-        </table>
+        </table>}
       </div>
 
       {unbudgeted.length > 0 && (

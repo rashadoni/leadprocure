@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { createRequire } from 'node:module';
+import { verifyBudgetReport } from './helpers/budget-report';
 const apiRequire = createRequire(new URL('../../api/package.json', import.meta.url));
 
 test('finance sees and completes its assigned approval step without procurement controls', async ({ page, request }) => {
@@ -35,4 +36,5 @@ test('finance sees and completes its assigned approval step without procurement 
   await planForm.locator('input[step="0.01"]').fill('100.01');
   await planForm.getByRole('button', { name: 'Create', exact: true }).click();
   await expect(page.locator('tr').filter({ hasText: `Finance plan ${tag}` })).toBeVisible();
+  await verifyBudgetReport({page,call,buyerToken:buyer.accessToken,tag});
 });
