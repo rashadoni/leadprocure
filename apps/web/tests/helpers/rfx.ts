@@ -121,7 +121,9 @@ async function verifyRfpPayment({buyerPage,supplierPage,call,buyerToken,event,op
     const activation=buyerPage.waitForResponse(r=>/\/contracts\/[^/]+\/activate$/.test(r.url())&&r.request().method()==='POST');
     const contract=await clicked(buyerPage,`/contracts/from-award/${award.id}`,
       ()=>buyerPage.getByRole('button',{name:`Create contract · ${event.lots[0].title}`}).click());
-    const activated=await activation;expect(activated.status(),await activated.text()).toBe(201);
+    // The click immediately performs a full-page navigation after activation;
+    // Chromium can discard its body, but status/URL remain available.
+    const activated=await activation;expect(activated.status()).toBe(201);
     expect(activated.url()).toContain(`/contracts/${contract.id}/activate`);
     await buyerPage.waitForURL('**/buyer/contracts');
     expect(Number(contract.total_minor)).toBe(1200);
