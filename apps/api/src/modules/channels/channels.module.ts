@@ -59,7 +59,7 @@ export async function sendEmailVia(cfg: any, to: string, subject: string, text: 
 // Send via Meta Cloud API. With a template configured → template message (works for cold
 // business-initiated outreach, the reminder text goes into the {{1}} body param); without
 // one → plain text (only delivered inside the 24h window). Errors surface Meta's message.
-export async function sendWhatsappVia(cfg: any, to: string, text: string): Promise<string | undefined> {
+export async function sendWhatsappVia(cfg: any, to: string, text: string): Promise<string> {
   const phone = String(to).replace(/[^\d]/g, ''); // Meta wants digits only
   const body = cfg.templateName
     ? {
@@ -79,7 +79,14 @@ export async function sendWhatsappVia(cfg: any, to: string, text: string): Promi
   });
   const j = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(j?.error?.message ?? `Meta API ${res.status}`);
-  return j?.messages?.[0]?.id; // wamid — matched later by the delivery-status webhook
+  // HTTP success alone is not evidence that a message was accepted. Without
+  // a usable provider ID it cannot be matched to delivery callbacks, and the
+  // worker must retain UNKNOWN rather than falsely completing the job as SENT.
+  const id = j?.messages?.[0]?.id;
+  if (typeof id !== 'string' || !id.trim()) {
+    throw new Error('Meta response did not include a message ID; delivery is unconfirmed');
+  }
+  return id; // wamid — matched later by the delivery-status webhook
 }
 
 // Approved templates for the org's WABA — populates the "template name" dropdown so the
