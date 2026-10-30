@@ -1,0 +1,39 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/32",
+  "status": "TESTED_CASES_PASS_FOLLOWUP_REQUIRED",
+  "mergedMain": "f90bef178d0f2599bec58b3b470acc0aa0d1fae7",
+  "reviewedFinalHead": "9bd141f75c8f9e076c5f12ab7ce704ba167e4ebb",
+  "sourceHead": "81ea3a5f1bf50bc3688bed7cdd729bbf7baf08d3",
+  "fullTreeMatchesReviewedHead": true,
+  "nonDocumentationTreeMatchesAcceptedSource": true,
+  "mergedMainAcceptance": "https://github.com/rashadoni/leadprocure/actions/runs/41030989549",
+  "sourceAcceptance": "https://github.com/rashadoni/leadprocure/actions/runs/41029977827",
+  "apiSuites": 30,
+  "apiTests": 353,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "nativeBrowserSeconds": 37.6,
+  "freshHttpsBrowserTests": 1,
+  "restoredRlsTables": 52,
+  "rawLog": "/tmp/leadprocure-invoice-read-main-f90bef1-acceptance.log",
+  "freshLog": "/tmp/leadprocure-invoice-read-main-f90bef1-fresh.log",
+  "requiredAutomaticReview": {
+    "run": 41030847480,
+    "job": 123979948253,
+    "status": "SUCCESS",
+    "qualification": "Actual Anthropic400 insufficient-credit fallback; separate actual independent exact-head semantic review fulfilled."
+  },
+  "cancelledRedundantDocumentationOnlyRun": 41030847332,
+  "qualification": "UI detail state fix, no server/schema/money/permission changes. New fixture setup via actualAPI, not a new all-native procurement chain. Delayed responses come from real API, error503 is controlled frontend fixture, not server rollback/liveprovider/disconnect. Native mutation races cover approvalAZ/paymentRU; pendingclose and detailerrorretry coverAZ/RU/EN. Fresh-read precedence/unmount/stale-error policy additionally source-reviewed, not separate new native external-update/unmount tests. Existing primary RFP AZ/RU/EN and invoice-negative/partial flows retained.14 top-level native tests unchanged. Current19-task/18VERIFIED/A19PARTIAL_EXTERNAL and external limits retained. PAID is recorded status, not bankpayment. No materialbinary/new render/production changes.",
+  "knownFollowup": {
+    "status": "CONFIRMED_OPEN",
+    "reviewer": "invoice_newer_read_review",
+    "counterexample": "GET starts before local approve but its database read occurs after approval plus another authorized client payment. It returns newerPAID; localAPPROVED overlay incorrectly replaces it. Invoice row has no usable revision timestamp.",
+    "nextAction": "Replace ambiguous response overlay with a guarded fresh read after overlapping mutation; add real newer-response regression. Do not claim full read integrity closed."
+  },
+  "applicationChanged": true,
+  "serverChanged": false,
+  "materialsChanged": false,
+  "productionChanged": false
+}

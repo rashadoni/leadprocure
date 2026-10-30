@@ -12,21 +12,28 @@ export default function Invoices() {
   const [open, setOpen] = useState<Record<string, any>>({});
   const detailSequence = useRef(0);
   const detailIntent = useRef<Record<string, { request: number; open: boolean }>>({});
-  const confirmedMutation = useRef<Record<string, { version: number; row: any }>>({});
+  const mutationVersion = useRef<Record<string, number>>({});
+  const listRequest = useRef(0);
 
-  const load = () => api.get('/invoices').then((r) => setRows(r.data));
+  const load = async () => {
+    const request = ++listRequest.current;
+    const { data } = await api.get('/invoices');
+    if (request === listRequest.current) setRows(data);
+  };
   useEffect(() => {
     load();
-    return () => { detailIntent.current = {}; confirmedMutation.current = {}; };
+    return () => { detailIntent.current = {}; mutationVersion.current = {}; listRequest.current++; };
   }, []);
 
   const act = async (id: string, fn: () => Promise<{ data: any } | undefined>) => {
     try {
       const result = await fn();
       if (!result) return; // cancelled override prompt — no state transition
-      // A detail GET already in flight may contain the pre-mutation status. Keep
-      // the confirmed row for that read; a later GET still trusts fresh server data.
-      confirmedMutation.current[id] = { version: ++detailSequence.current, row: result.data };
+      // Any GET spanning this confirmation has ambiguous snapshot ordering.
+      // Invalidate older list reads and let a pending detail read refresh itself.
+      mutationVersion.current[id] = ++detailSequence.current;
+      listRequest.current++;
+      setRows((current) => current.map((row) => row.id === id ? { ...row, ...result.data } : row));
       // The mutation returns the canonical invoice row. Keep loaded item details,
       // but update status/match/totals only after the server confirms success.
       // A card closed while the request was running must stay closed.
@@ -41,14 +48,21 @@ export default function Invoices() {
     const request = ++detailSequence.current;
     detailIntent.current[id] = { request, open: wantsOpen };
     if (!wantsOpen) { setOpen((o) => ({ ...o, [id]: null })); return; }
-    const mutationAtStart = confirmedMutation.current[id]?.version;
     const isCurrent = () => detailIntent.current[id]?.request === request && detailIntent.current[id]?.open;
     try {
-      const { data } = await api.get(`/invoices/${id}`);
-      if (!isCurrent()) return;
-      const latest = confirmedMutation.current[id];
-      const detail = latest && latest.version !== mutationAtStart ? { ...data, ...latest.row } : data;
-      setOpen((o) => ({ ...o, [id]: detail }));
+      while (isCurrent()) {
+        const versionAtStart = mutationVersion.current[id];
+        const { data } = await api.get(`/invoices/${id}`);
+        if (!isCurrent()) return;
+        // The response could be older OR newer than our last mutation. Do not
+        // overlay a local row: read again after confirmation and trust the server.
+        // Another read is needed only when a successful local action overlapped it.
+        if (mutationVersion.current[id] !== versionAtStart) continue;
+        listRequest.current++;
+        setRows((current) => current.map((row) => row.id === id ? { ...row, ...data } : row));
+        setOpen((o) => ({ ...o, [id]: data }));
+        return;
+      }
     } catch (e: any) {
       if (!isCurrent()) return;
       detailIntent.current[id] = { request, open: false };
