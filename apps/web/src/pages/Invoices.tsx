@@ -9,6 +9,8 @@ export default function Invoices() {
   const { session } = useAuth();
   const isBuyer = session?.org.kind !== 'SUPPLIER';
   const [rows, setRows] = useState<any[]>([]);
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState(false);
   const [open, setOpen] = useState<Record<string, any>>({});
   const detailSequence = useRef(0);
   const detailIntent = useRef<Record<string, { request: number; open: boolean }>>({});
@@ -17,8 +19,16 @@ export default function Invoices() {
 
   const load = async () => {
     const request = ++listRequest.current;
-    const { data } = await api.get('/invoices');
-    if (request === listRequest.current) setRows(data);
+    setListLoading(true);
+    setListError(false);
+    try {
+      const { data } = await api.get('/invoices');
+      if (request === listRequest.current) setRows(data);
+    } catch {
+      if (request === listRequest.current) setListError(true);
+    } finally {
+      if (request === listRequest.current) setListLoading(false);
+    }
   };
   useEffect(() => {
     load();
@@ -59,6 +69,7 @@ export default function Invoices() {
         // Another read is needed only when a successful local action overlapped it.
         if (mutationVersion.current[id] !== versionAtStart) continue;
         listRequest.current++;
+        setListLoading(false);
         setRows((current) => current.map((row) => row.id === id ? { ...row, ...data } : row));
         setOpen((o) => ({ ...o, [id]: data }));
         return;
@@ -87,6 +98,11 @@ export default function Invoices() {
     <>
       <h1>🧾 {t('invoices')}</h1>
       <div className="card">
+        {listLoading && <div role="status" className="hint">{t('invoice_list_loading')}</div>}
+        {listError && <div role="alert">
+          <span>{t('invoice_list_error')}</span>{' '}
+          <button className="btn small ghost" onClick={() => load()}>{t('invoice_list_retry')}</button>
+        </div>}
         <table>
           <thead><tr><th>#</th><th>PO</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th>{t('date')}</th><th>{t('due_date')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
@@ -114,7 +130,7 @@ export default function Invoices() {
             ))}
           </tbody>
         </table>
-        {rows.length === 0 && <div className="hint">—{!isBuyer ? ` ${t('hint_invoices_empty')}` : ''}</div>}
+        {!listLoading && !listError && rows.length === 0 && <div className="hint">—{!isBuyer ? ` ${t('hint_invoices_empty')}` : ''}</div>}
       </div>
 
       {Object.entries(open).filter(([, v]) => v).map(([id, inv]) => (
