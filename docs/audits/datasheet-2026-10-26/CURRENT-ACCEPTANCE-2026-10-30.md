@@ -1,10 +1,12 @@
 # Текущая приёмка и утверждения материалов — 30 октября 2026
 
-Репозиторий: **rashadoni/leadprocure**. Принятый код: `b3e22042670b8de4fdcebee2c4a97fa288ed643f` (PR28). [Полная приёмка итогового main](https://github.com/rashadoni/leadprocure/actions/runs/41021028796): оба jobs SUCCESS; 30 API suites / 353 tests, 3 contention, 14 native browser, 1 fresh HTTPS. Build/typecheck, UBL/OCDS schemas, обе применённые истории миграций и restore 52 RLS-таблиц прошли. Точные SHA и границы: [доказательство](BUDGET-PAID-MAIN-ACCEPTANCE-2026-10-30.json).
+Репозиторий: **rashadoni/leadprocure**. Принятый исходный код: `0af7467da927f818f6ed6c12ad14c2fb3796ba82` (PR30). [Полная приёмка итогового main](https://github.com/rashadoni/leadprocure/actions/runs/41024770470): оба jobs SUCCESS;30suites/353API,3contention/14native/1freshHTTPS/52RLS, включая nativeRFP AZ/RU/EN. Точные границы: [доказательство](RFP-LANGUAGES-MAIN-ACCEPTANCE-2026-10-30.json).
 
 Действующий объём: **19 задач LP-A00–LP-A16, LP-A18, LP-A19**. 18 технически VERIFIED; LP-A19 — PARTIAL_EXTERNAL. Исключённая владельцем задача не входит в текущую очередь. Полная [матрица критериев](FINAL-CRITERIA-2026-10-29.md) и [машиночитаемый статус](FINAL-CRITERIA-2026-10-29.json) сохраняют точные ограничения. Исторические даты, кандидаты, числа тестов и разрешения в прежних записях не являются текущим состоянием.
 
 Дополнение LP-A19: кандидат `281ca64` прошёл [полный run41023648853](https://github.com/rashadoni/leadprocure/actions/runs/41023648853). Native RFP до PAID теперь проверен на AZ/RU/EN у обеих сторон; [точное доказательство](RFP-LANGUAGES-ACCEPTANCE-2026-10-30.json). Это расширение тестов, приложение и материалы не изменены. Прежнее ограничение полного downstream только EN superseded; внешние ограничения ниже сохранены.
+
+Дополнение отрицательных сценариев LP-A19: кандидат `59ef4ed` прошёл [run41026654540](https://github.com/rashadoni/leadprocure/actions/runs/41026654540). Approve/pay503 и отмена override проверены на AZ/RU/EN, фактический reject — EN; [точная граница](INVOICE-NEGATIVE-ACCEPTANCE-2026-10-30.json). Управляемая HTTP-ошибка не выдана за серверный rollback. Приложение/материалы неизменны.
 
 ## Что подтверждено для презентации и data sheet
 
