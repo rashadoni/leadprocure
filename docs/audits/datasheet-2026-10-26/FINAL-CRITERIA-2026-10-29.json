@@ -3,7 +3,7 @@
   "date": "2026-10-29",
   "productionChanged": false,
   "scope": "LP-A00–LP-A16, LP-A18, LP-A19; SMTP/Meta removed by owner instruction",
-  "gateStatus": "A13_BUDGET_SETTLEMENT_PASS",
+  "gateStatus": "A19_RFP_LANGUAGES_PASS",
   "tasks": [
     {
       "id": "LP-A00",
@@ -153,9 +153,9 @@
       "id": "LP-A19",
       "title": "Общая приёмка, языки, материалы",
       "status": "PARTIAL_EXTERNAL",
-      "evidence": "full acceptance.yml; web tests/helpers/rfx.ts; rfi-rfp; render-presentations; v3/output; CLAIMS.md; RFP-NATIVE-PAYMENT-ACCEPTANCE-2026-10-29.json; INVOICE-DETAIL-ACCEPTANCE-2026-10-29.json",
-      "assertions": "Full API/security/build/native browser и fresh isolated install, upgrade/restore. RFQ и auction downstream до GRN/invoice, direct/catalog и payment-status API. RFI AZ/RFP RU/EN: own response после reload/close, buyer secrecy/opening, foreign supplier deny, RFI без цен/award. Текущие PPTX/PDF/notes синхронизированы; независимый render 15 страниц, 100% текста. EN RFP native flow: оценка→победитель→договор→PO→доставка→GRN→MATCHED→APPROVED→PAID; все downstream записи реальными browser controls. Net/VAT/gross1200/216/1416; PAID после reload у обеих сторон. Детали оплаченного счёта AZ/RU/EN проверены переключателем языка. Открытая карточка счёта синхронно со строкой показывает APPROVED/PAID после фактического успеха без переоткрытия/reload; таблица сверки сохраняется.",
-      "limits": "Full native RFP downstream подтверждён для EN; RU RFP остаётся проверен до opening. RFI не имеет финансового downstream по модели. PAID не означает банковский платёж. Не исчерпывающий редакторский аудит всех строк. Внешние/клиентские ограничения из externalNotRun остаются NOT RUN. Новый native case открытой карточки проверяет APPROVED/PAID; отдельная native проверка reject/cancel/failure этим не заявляется."
+      "evidence": "full acceptance.yml; web tests/helpers/rfx.ts; rfi-rfp; render-presentations; v3/output; CLAIMS.md; RFP-NATIVE-PAYMENT-ACCEPTANCE-2026-10-29.json; INVOICE-DETAIL-ACCEPTANCE-2026-10-29.json; RFP-LANGUAGES-ACCEPTANCE-2026-10-30.json",
+      "assertions": "Full API/security/build/native browser и fresh isolated install, upgrade/restore. RFQ и auction downstream до GRN/invoice, direct/catalog и payment-status API. RFI AZ/RFP AZ/RU/EN: own response после reload/close, buyer secrecy/opening, foreign supplier deny, RFI без цен/award. Текущие PPTX/PDF/notes синхронизированы; независимый render 15 страниц, 100% текста. AZ/RU/EN RFP native flow: оценка→победитель→договор→PO→доставка→GRN→MATCHED→APPROVED→PAID; все downstream записи реальными browser controls. Net/VAT/gross1200/216/1416; PAID после reload у обеих сторон. Детали оплаченного счёта AZ/RU/EN проверены переключателем языка. Открытая карточка счёта синхронно со строкой показывает APPROVED/PAID после фактического успеха без переоткрытия/reload; таблица сверки сохраняется. Оба browser context выбирают язык через UI, он сохраняется при полной навигации/reload; все3RFP проходят1200net/216VAT/1416gross и открытые деталиMATCHED→APPROVED→PAID. RFI buyer opening также AZ.",
+      "limits": "Full native RFP downstream подтверждён для AZ/RU/EN в выбранных сценариях. RFI не имеет финансового downstream по модели. PAID не означает банковский платёж. Не исчерпывающий редакторский аудит всех строк. Внешние/клиентские ограничения из externalNotRun остаются NOT RUN. Новый native case открытой карточки проверяет APPROVED/PAID; отдельная native проверка reject/cancel/failure этим не заявляется."
     }
   ],
   "externalNotRun": [
@@ -164,8 +164,8 @@
     "Внешние ERP/банк/ASAN/Peppol; CSV/PAID/dev signature не являются их интеграцией.",
     "Microsoft PowerPoint desktop: подключённой сессии нет."
   ],
-  "candidateHead": "754df0958c9b320df7692b75223b6850bfd36637",
-  "candidateRun": "https://github.com/rashadoni/leadprocure/actions/runs/41020041051",
+  "candidateHead": "281ca64a2039dce4a07dc65fdb81d7365818217c",
+  "candidateRun": "https://github.com/rashadoni/leadprocure/actions/runs/41023648853",
   "apiSuites": 30,
   "apiTests": 353,
   "contentionTests": 3,
