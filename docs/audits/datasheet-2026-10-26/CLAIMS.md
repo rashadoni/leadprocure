@@ -1,3 +1,7 @@
+> **Актуальное состояние — 30 октября 2026:** [текущая приёмка и claims](CURRENT-ACCEPTANCE-2026-10-30.md). Main `b3e2204`, PR28 объединён, полный CI41021028796 PASS: 353 API / 14 native / 1 fresh HTTPS. Действуют 19 задач; 18 VERIFIED, LP-A19 PARTIAL_EXTERNAL. Исключённая владельцем задача не входит в очередь. Production не менялся.
+>
+> **Ниже сохранена история.** Старые «текущие» статусы, 20 задач, не объединённые кандидаты и прежние разрешения superseded указанной сводкой и прямыми указаниями владельца. Исторические доказательства не удалены.
+
 # Утверждения материалов v3: границы подтверждения
 
 Дата: 28 октября 2026 (Asia/Baku). Проверенный main `0a27fb026618422f852a857bd9ee39e23a441bd2`: [run40666138522](https://github.com/rashadoni/leadprocure/actions/runs/40666138522),283 API +3 contention +10 native browser +1 fresh HTTPS, build/schemas/обе истории миграций/restore/fresh installation PASS. Production не обновлён. Уточнения LP-A09/A10/A13/A19 в кандидате7f52131 прошли собственный run40698739534:285API/3contention/13browser/1fresh HTTPS; новый PPTX render40698739541 PASS(15страниц/100%текста). Кандидат ещё не объединён; это отдельное доказательство от baseline. Актуальные критерии всех20 задач — [TASK-CLOSURE-2026-10-28.md](TASK-CLOSURE-2026-10-28.md).
