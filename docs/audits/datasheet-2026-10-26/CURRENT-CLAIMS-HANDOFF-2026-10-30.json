@@ -1,0 +1,39 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/29",
+  "status": "DOCUMENTATION_CHECKS_PASS",
+  "mergedMain": "b55a8f9fc090f9f7abeb79cc7c96559ca3884c09",
+  "reviewedFinalHead": "e6f167c4009fb9e625fdc1899d427c45bbf34117",
+  "fullTreeMatchesReviewedFinalHead": true,
+  "applicationTestsMaterialsMatchAcceptedMain": "b3e22042670b8de4fdcebee2c4a97fa288ed643f",
+  "acceptedSourceRun": "https://github.com/rashadoni/leadprocure/actions/runs/41021028796",
+  "independentReview": "current_claims_review exacte6f167c4009fb9e625fdc1899d427c45bbf34117 no blockers",
+  "checks": {
+    "allChangesUnderDocs": true,
+    "priorClaimsStatusHistoryPreserved": true,
+    "localLinks": 8,
+    "materialSha256Matched": 9,
+    "activeTasks": 19,
+    "verifiedTechnicalTasks": 18,
+    "partialExternalTasks": [
+      "LP-A19"
+    ],
+    "gitDiffCheck": "PASS"
+  },
+  "requiredAutomaticReview": {
+    "run": 41022095211,
+    "job": 123951521697,
+    "status": "SUCCESS",
+    "semanticReviewFallback": true,
+    "qualification": "Separate actual independent exact-head review fulfilled; automatic API fallback not counted semantic review."
+  },
+  "cancelledRedundantRuns": [
+    41022095218,
+    41022180374
+  ],
+  "fullBuildApiBrowserFreshInstallForThisDocumentationChange": "NOT RUN; source/tests/materials byte-identical to accepted b3e2204. Cancelled repeats never counted PASS.",
+  "desktopPowerPoint": "NOT RUN; no connected document sessions found",
+  "newRenderPerformed": false,
+  "productionChanged": false,
+  "materialsChanged": false
+}
