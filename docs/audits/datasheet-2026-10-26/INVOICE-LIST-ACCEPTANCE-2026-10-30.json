@@ -1,0 +1,30 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/34",
+  "status": "BOTH_JOBS_PASS",
+  "testedSourceHead": "e140c022db582e77df02323d991779a2fc2bf3e5",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/41111209233",
+  "apiSuites": 30,
+  "apiTests": 353,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "nativeBrowserSeconds": 35.7,
+  "freshHttpsBrowserTests": 1,
+  "restoredRlsTables": 52,
+  "assertions": [
+    "Actual authenticated buyer and supplier contexts test initial held GET503 on each AZ/RU/EN: six cases. Loading text is visible while held, localized alert/retry after failure, no invoice rows or false successful empty-result hint.",
+    "After removing interception, native retry receives actual authorized GET200; actual PAID row and net1200/VAT216/gross1416 asserted from API, PAID rendered, error removed, no pageerror. Routes and pending handlers are cleaned without arbitrary sleep, extra login, session injection or timeout increase.",
+    "Source catches list load failure, retains prior rows, and only current generation sets loading/error/result. Successful mutation is not reported failed merely because its refresh fails. Accepted detail invalidates older list and settles loading. These postmutation refresh-failure/stale-failed-read/unmount policies are source-reviewed, not separate new native cases.",
+    "Prior newerPAID/lateAPPROVEDlist, oldsnapshotapproveAZ/payRU, pendingclose/detail503retryAZRUEN, primaryRFP3languages, negative and partial-invoice paths retained.",
+    "Full build/typecheck/4UBL+OCDS/both migration histories/restore52RLS/fresh signedlicense-private storage-realClamAV PASS."
+  ],
+  "independentReview": "invoice_list_retry_review exacte140c022db582e77df02323d991779a2fc2bf3e5 no blockers",
+  "rawLog": "/tmp/leadprocure-invoice-list-e140c02-acceptance.log",
+  "freshLog": "/tmp/leadprocure-invoice-list-e140c02-fresh.log",
+  "qualification": "Controlled GET503 is frontend HTTP-failure acceptance, not server rollback, transport disconnect or liveprovider failure. Actual existing API fixture prepares PAID invoice; not new full native procurement chain. 14 top-level browser tests unchanged. Recorded PAID not bankpayment. Source-reviewed postmutation refresh failure/stale failed read/unmount not claimed newly executed browser tests.19active/18VERIFIED/A19PARTIAL_EXTERNAL; external limits retained. No API/schema/money/permission/material/production change. Hostheavy checks NOT RUN by contract, hosted equivalents PASS.",
+  "failedCandidates": [],
+  "applicationChanged": true,
+  "serverChanged": false,
+  "materialsChanged": false,
+  "productionChanged": false
+}
