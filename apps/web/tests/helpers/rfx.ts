@@ -217,7 +217,7 @@ async function verifyRfpPayment({buyerPage,supplierPage,call,buyerToken,event,op
     await supplierPage.reload();
     await expect(supplierPage.locator('tr').filter({has:supplierPage.getByRole('link',{name:invoice.invoice_no,exact:true})}).filter({has:supplierPage.getByRole('cell',{name:po.po_no,exact:true})}).locator('.badge.PAID')).toBeVisible();
     for (const name of [copy.approve, `💳 ${copy.pay}`]) {
-      await expect(supplierPage.getByRole('button',{name,exact:true})).toHaveCount(0);
+      await expect(supplierPage.getByRole('button',{name:controlName(name)})).toHaveCount(0);
     }
     // Return to the proposal page so existing own-response/secrecy assertions
     // still run after the entire commercial chain has completed.
