@@ -1,6 +1,6 @@
 # Текущая приёмка и утверждения материалов — 30 октября 2026
 
-Репозиторий: **rashadoni/leadprocure**. Принятый исходный код: `7d5d7c3a236e757791dbe2da248fc0da374de2c7` (PR31). [Полная приёмка итогового main](https://github.com/rashadoni/leadprocure/actions/runs/41027721940): оба jobsSUCCESS;30suites/353API,3contention/14native/1freshHTTPS/52RLS, включая nativeRFP AZ/RU/EN и отрицательные операции со счётом. Точные границы: [доказательство](INVOICE-NEGATIVE-MAIN-ACCEPTANCE-2026-10-30.json).
+Репозиторий: **rashadoni/leadprocure**. Принятый main `f90bef178d0f2599bec58b3b470acc0aa0d1fae7` (PR32), [полная приёмка](https://github.com/rashadoni/leadprocure/actions/runs/41030989549) PASS в проверенных сценариях; подтверждённый newer-read дефект отмечен в [историческом доказательстве](INVOICE-READ-MAIN-ACCEPTANCE-2026-10-30.json). Исправленный кандидат `61eedda3af97d0fcb82ef4f12ba0b5464d06a1b7` (PR33) прошёл [полный CI](https://github.com/rashadoni/leadprocure/actions/runs/41108753656):353API/30suites,3contention/14native/1freshHTTPS/52RLS. [Доказательство исправления](INVOICE-NEWER-ACCEPTANCE-2026-10-30.json): реальный новый PAID и поздний старый списокAPPROVED не откатывают строку/карточку. Кандидат пока не выдаётся за объединённый main.
 
 Действующий объём: **19 задач LP-A00–LP-A16, LP-A18, LP-A19**. 18 технически VERIFIED; LP-A19 — PARTIAL_EXTERNAL. Исключённая владельцем задача не входит в текущую очередь. Полная [матрица критериев](FINAL-CRITERIA-2026-10-29.md) и [машиночитаемый статус](FINAL-CRITERIA-2026-10-29.json) сохраняют точные ограничения. Исторические даты, кандидаты, числа тестов и разрешения в прежних записях не являются текущим состоянием.
 
@@ -9,6 +9,8 @@
 Дополнение отрицательных сценариев LP-A19: кандидат `59ef4ed` прошёл [run41026654540](https://github.com/rashadoni/leadprocure/actions/runs/41026654540). Approve/pay503 и отмена override проверены на AZ/RU/EN, фактический reject — EN; [точная граница](INVOICE-NEGATIVE-ACCEPTANCE-2026-10-30.json). Управляемая HTTP-ошибка не выдана за серверный rollback. Приложение/материалы неизменны.
 
 Дополнение LP-A19 по деталям счёта: UIкандидат `81ea3a5` прошёл [run41029977827](https://github.com/rashadoni/leadprocure/actions/runs/41029977827). Старые detailGET после nativeapproveAZ/payRU не меняют новый статус; pendingclose и detailerrorretry провереныAZ/RU/EN. [Точная граница](INVOICE-READ-ACCEPTANCE-2026-10-30.json). Сервер/материалы не менялись; внешние ограничения сохранены.
+
+Дополнение PR33 supersedes прежнюю локальную overlay-логику PR32: неоднозначный GET перечитывается, свежий ответ сервера не перекрывается кешем. Новый nativeapproveEN + actualauthorized APIpayment и actualGETPAID/lateAPPROVEDlist дополняют прежние oldsnapshotAZ/RU и pendingclose/errorretry3языка. [Точные границы](INVOICE-NEWER-ACCEPTANCE-2026-10-30.json); внешние ограничения сохранены.
 
 ## Что подтверждено для презентации и data sheet
 

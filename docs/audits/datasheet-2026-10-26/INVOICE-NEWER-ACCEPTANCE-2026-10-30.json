@@ -1,0 +1,32 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/33",
+  "status": "PASS",
+  "testedSourceHead": "61eedda3af97d0fcb82ef4f12ba0b5464d06a1b7",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/41108753656",
+  "apiSuites": 30,
+  "apiTests": 353,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "nativeBrowserSeconds": 34.2,
+  "freshHttpsBrowserTests": 1,
+  "restoredRlsTables": 52,
+  "assertions": [
+    "A GET spanning a successful local mutation is discarded and reread while the same current open intent remains. Accepted server data is never overwritten with an older local row. No polling or automatic retry of failed HTTP requests.",
+    "Native approveEN starts a detail GET held before actual backend execution. Separate actually authorized registration-token API client pays the invoice; released actual GET explicitly returns PAID. Native row and card become PAID.",
+    "An actual earlier list response captured as APPROVED is released after accepting PAID detail. Row and card remain PAID; exact requestfinished/render-frame draining, no arbitrary sleep or timeout increase.",
+    "Previous actual old-snapshot approveAZ/payRU and pending-close/detail503/localized retry AZ/RU/EN retained. Primary RFP three-language, negative invoice and partial receipt scenarios retained.",
+    "Real API confirms recorded PAID, net1200/VAT216/gross1416. Setup via actual authenticated API fixture with two received units and two matched invoices; external payment API client is not claimed a different user or a full native procurement chain.",
+    "Full build/typecheck/4UBL+OCDS/both migration histories/restore52RLS/fresh signed license-private storage-realClamAV PASS."
+  ],
+  "independentReview": "invoice_newer_read_review exact61eedda3af97d0fcb82ef4f12ba0b5464d06a1b7 no blockers",
+  "rawLog": "/tmp/leadprocure-invoice-newer-61eedda-acceptance.log",
+  "freshLog": "/tmp/leadprocure-invoice-newer-61eedda-fresh.log",
+  "resolves": "INVOICE-READ-MAIN-ACCEPTANCE-2026-10-30.json newer-server-response CONFIRMED_OPEN at historical f90bef1; that version-bound receipt is preserved.",
+  "qualification": "14 top-level browser tests, expanded scenarios not new top-level tests. Native new approval is EN, separate payment is actual authorized API. PAID is recorded status, not bank transfer. Source review additionally covers close/unmount/stale errors; no separate new unmount test. Active19/18VERIFIED/A19PARTIAL_EXTERNAL; external limits retained. No server/schema/money/permission/material/production changes. Host heavy checks NOT RUN by workload contract, hosted equivalents PASS.",
+  "failedCandidates": [],
+  "applicationChanged": true,
+  "serverChanged": false,
+  "materialsChanged": false,
+  "productionChanged": false
+}
