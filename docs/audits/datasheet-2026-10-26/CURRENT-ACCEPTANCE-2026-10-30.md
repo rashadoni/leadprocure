@@ -1,6 +1,6 @@
 # Текущая приёмка и утверждения материалов — 30 октября 2026
 
-Репозиторий: **rashadoni/leadprocure**. Принятый main `f90bef178d0f2599bec58b3b470acc0aa0d1fae7` (PR32), [полная приёмка](https://github.com/rashadoni/leadprocure/actions/runs/41030989549) PASS в проверенных сценариях; подтверждённый newer-read дефект отмечен в [историческом доказательстве](INVOICE-READ-MAIN-ACCEPTANCE-2026-10-30.json). Исправленный кандидат `61eedda3af97d0fcb82ef4f12ba0b5464d06a1b7` (PR33) прошёл [полный CI](https://github.com/rashadoni/leadprocure/actions/runs/41108753656):353API/30suites,3contention/14native/1freshHTTPS/52RLS. [Доказательство исправления](INVOICE-NEWER-ACCEPTANCE-2026-10-30.json): реальный новый PAID и поздний старый списокAPPROVED не откатывают строку/карточку. Кандидат пока не выдаётся за объединённый main.
+Репозиторий: **rashadoni/leadprocure**. Принятый main `cc259140afedad80c8ff92d75e27fed42557e27b` (PR33), [полный CI](https://github.com/rashadoni/leadprocure/actions/runs/41109942437) PASS:353API/30suites,3contention/14native/1freshHTTPS/52RLS; [доказательство](INVOICE-NEWER-MAIN-ACCEPTANCE-2026-10-30.json). Новый UIкандидат `e140c022db582e77df02323d991779a2fc2bf3e5` (PR34), [run41111209233](https://github.com/rashadoni/leadprocure/actions/runs/41111209233): оба jobsSUCCESS. [Ошибка списка/retry](INVOICE-LIST-ACCEPTANCE-2026-10-30.json) провереныbuyer/supplierAZ/RU/EN. Кандидат пока не выдаётся за mergedmain.
 
 Действующий объём: **19 задач LP-A00–LP-A16, LP-A18, LP-A19**. 18 технически VERIFIED; LP-A19 — PARTIAL_EXTERNAL. Исключённая владельцем задача не входит в текущую очередь. Полная [матрица критериев](FINAL-CRITERIA-2026-10-29.md) и [машиночитаемый статус](FINAL-CRITERIA-2026-10-29.json) сохраняют точные ограничения. Исторические даты, кандидаты, числа тестов и разрешения в прежних записях не являются текущим состоянием.
 
@@ -11,6 +11,8 @@
 Дополнение LP-A19 по деталям счёта: UIкандидат `81ea3a5` прошёл [run41029977827](https://github.com/rashadoni/leadprocure/actions/runs/41029977827). Старые detailGET после nativeapproveAZ/payRU не меняют новый статус; pendingclose и detailerrorretry провереныAZ/RU/EN. [Точная граница](INVOICE-READ-ACCEPTANCE-2026-10-30.json). Сервер/материалы не менялись; внешние ограничения сохранены.
 
 Дополнение PR33 supersedes прежнюю локальную overlay-логику PR32: неоднозначный GET перечитывается, свежий ответ сервера не перекрывается кешем. Новый nativeapproveEN + actualauthorized APIpayment и actualGETPAID/lateAPPROVEDlist дополняют прежние oldsnapshotAZ/RU и pendingclose/errorretry3языка. [Точные границы](INVOICE-NEWER-ACCEPTANCE-2026-10-30.json); внешние ограничения сохранены.
+
+Дополнение PR34: первоначальная ошибка списка больше не выглядит пустым результатом. Localized loading/error/retry провереныbuyer/supplierAZ/RU/EN; реальный повтор показываетPAID с правильными суммами. Postmutation refresh failure/stalefailure/unmount source-reviewed, не новые nativecases. [Точная граница](INVOICE-LIST-ACCEPTANCE-2026-10-30.json).
 
 ## Что подтверждено для презентации и data sheet
 
