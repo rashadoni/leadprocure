@@ -1,0 +1,45 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/28",
+  "status": "PASS",
+  "mergedMain": "b3e22042670b8de4fdcebee2c4a97fa288ed643f",
+  "reviewedFinalHead": "e6ac65e0d9000354919e4cd57e936201b5af4622",
+  "fullTreeMatchesReviewedFinalHead": true,
+  "nonDocumentationTreeMatchesAcceptedSource": true,
+  "sourceAcceptance": "https://github.com/rashadoni/leadprocure/actions/runs/41020041051",
+  "sourceHead": "754df0958c9b320df7692b75223b6850bfd36637",
+  "mergedMainAcceptance": "https://github.com/rashadoni/leadprocure/actions/runs/41021028796",
+  "apiSuites": 30,
+  "apiTests": 353,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "freshHttpsBrowserTests": 1,
+  "restoredRlsTables": 52,
+  "acceptanceJob": 123948141640,
+  "freshInstallJob": 123948141337,
+  "rawLog": "/tmp/leadprocure-budget-paid-main-b3e2204-acceptance.log",
+  "freshLog": "/tmp/leadprocure-budget-paid-main-b3e2204-fresh.log",
+  "independentReview": "paid_period_review exact e6ac65e0d9000354919e4cd57e936201b5af4622 no blockers; source754df09 separately reviewed",
+  "requiredAutomaticReview": {
+    "run": 41020949774,
+    "job": 123947892805,
+    "status": "SUCCESS",
+    "qualification": "Actual log Anthropic400 insufficient-credit fallback. Separate actual independent exact-head semantic review fulfilled."
+  },
+  "redundantDocumentationOnlyRun": {
+    "run": 41020949724,
+    "status": "CANCELLED_NOT_PASS",
+    "reason": "Only accepted outcome docs changed; non-doc equality and independent finaldoc review proven."
+  },
+  "priorCandidate": {
+    "head": "61b8e74d3bd9ee6a2f958aa77600d7144ad02ce3",
+    "run": 41018921723,
+    "status": "CANCELLED_NOT_PASS",
+    "reason": "353 assertions passed but multilot teardown failed awards_winning_bid_id FK and left app open. Fixed buyer-first fixture cleanup with unconditional resource close; no assertion weakened."
+  },
+  "scope": "19 active original tasks;18VERIFIED/A19PARTIAL_EXTERNAL; owner-removed task not resumed",
+  "qualification": "Obligation-period settlement, not bank cash-flow/payment date. Invoice department snapshot retained. Eligibility from own/ancestor-owned selected budget windows, never siblings; selected list periods, not prorated partial from/to. Five new actual API tests; no new native browser paid-period scenario claimed. Existing native cases pass. No changes to actual/commitment allocation, PAID transition, RLS policies, schema or materials. Current19-task scope/external limits unchanged.",
+  "productionChanged": false,
+  "materialsChanged": false,
+  "fullHostBuildAndE2e": "NOT RUN per Contabo workload contract; equivalent hosted gates PASS"
+}
