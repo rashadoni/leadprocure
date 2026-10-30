@@ -2,6 +2,7 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
 import { createRequire } from 'node:module';
 import { verifyPartialInvoices } from './partial-invoice';
 import { verifyInvoiceMutationFailure } from './invoice-negative';
+import { verifyInvoiceDetailConcurrency } from './invoice-detail-race';
 const apiRequire = createRequire(new URL('../../../api/package.json', import.meta.url));
 
 type Call = (path: string, body: any, token?: string, method?: string, status?: number) => Promise<any>;
@@ -122,6 +123,8 @@ export async function verifyRfiRfp({ browser, buyerPage, call, buyerToken, appro
       expect(otherAfter.my_bid).toBeNull(); expect(JSON.stringify(otherAfter)).not.toContain(marker);
     });
     await verifyPartialInvoices({supplierPage,buyerPage,call,buyerToken,approverToken,supplierToken:supplier.accessToken,supplierOrgId:supplier.org.id,tag});
+    await verifyInvoiceDetailConcurrency({page:buyerPage,supplierPage,call,buyerToken,approverToken,
+      supplierToken:supplier.accessToken,supplierOrgId:supplier.org.id,tag});
   } finally { await context.close(); }
 }
 

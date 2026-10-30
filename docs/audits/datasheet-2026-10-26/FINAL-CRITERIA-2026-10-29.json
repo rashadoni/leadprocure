@@ -3,7 +3,7 @@
   "date": "2026-10-29",
   "productionChanged": false,
   "scope": "LP-A00–LP-A16, LP-A18, LP-A19; SMTP/Meta removed by owner instruction",
-  "gateStatus": "A19_INVOICE_NEGATIVE_PASS",
+  "gateStatus": "A19_INVOICE_READ_PASS",
   "tasks": [
     {
       "id": "LP-A00",
@@ -153,9 +153,9 @@
       "id": "LP-A19",
       "title": "Общая приёмка, языки, материалы",
       "status": "PARTIAL_EXTERNAL",
-      "evidence": "full acceptance.yml; web tests/helpers/rfx.ts; rfi-rfp; render-presentations; v3/output; CLAIMS.md; RFP-NATIVE-PAYMENT-ACCEPTANCE-2026-10-29.json; INVOICE-DETAIL-ACCEPTANCE-2026-10-29.json; RFP-LANGUAGES-ACCEPTANCE-2026-10-30.json; INVOICE-NEGATIVE-ACCEPTANCE-2026-10-30.json; web/tests/helpers/invoice-negative.ts",
-      "assertions": "Full API/security/build/native browser и fresh isolated install, upgrade/restore. RFQ и auction downstream до GRN/invoice, direct/catalog и payment-status API. RFI AZ/RFP AZ/RU/EN: own response после reload/close, buyer secrecy/opening, foreign supplier deny, RFI без цен/award. Текущие PPTX/PDF/notes синхронизированы; независимый render 15 страниц, 100% текста. AZ/RU/EN RFP native flow: оценка→победитель→договор→PO→доставка→GRN→MATCHED→APPROVED→PAID; все downstream записи реальными browser controls. Net/VAT/gross1200/216/1416; PAID после reload у обеих сторон. Детали оплаченного счёта AZ/RU/EN проверены переключателем языка. Открытая карточка счёта синхронно со строкой показывает APPROVED/PAID после фактического успеха без переоткрытия/reload; таблица сверки сохраняется. Оба browser context выбирают язык через UI, он сохраняется при полной навигации/reload; все3RFP проходят1200net/216VAT/1416gross и открытые деталиMATCHED→APPROVED→PAID. RFI buyer opening также AZ. Native approve/pay controlled503AZ/RU/EN сохраняют строку/карточку и реальные status/net/VAT/gross/match; после unroute реальный повтор успешен. Отмена override AZ/RU/EN не отправляет POST и сохраняет DISPUTED/gross201. Reject503 сохраняет данные; реальный reject201EN обновляет строку/карточку и сохраняется после reload у покупателя/поставщика.",
-      "limits": "Full native RFP downstream подтверждён для AZ/RU/EN в выбранных сценариях. RFI не имеет финансового downstream по модели. PAID не означает банковский платёж. Не исчерпывающий редакторский аудит всех строк. Внешние/клиентские ограничения из externalNotRun остаются NOT RUN. Новые controlled503 подтверждают обработку HTTP-ошибки UI, не серверный rollback/transport disconnect. Cancellation проверяет noPOST/status/gross/UI; не полный аудит всех полей. Реальное отклонение проверено наEN; отмена и approve/pay503 — AZ/RU/EN."
+      "evidence": "full acceptance.yml; web tests/helpers/rfx.ts; rfi-rfp; render-presentations; v3/output; CLAIMS.md; RFP-NATIVE-PAYMENT-ACCEPTANCE-2026-10-29.json; INVOICE-DETAIL-ACCEPTANCE-2026-10-29.json; RFP-LANGUAGES-ACCEPTANCE-2026-10-30.json; INVOICE-NEGATIVE-ACCEPTANCE-2026-10-30.json; web/tests/helpers/invoice-negative.ts; INVOICE-READ-ACCEPTANCE-2026-10-30.json; web/tests/helpers/invoice-detail-race.ts",
+      "assertions": "Full API/security/build/native browser и fresh isolated install, upgrade/restore. RFQ и auction downstream до GRN/invoice, direct/catalog и payment-status API. RFI AZ/RFP AZ/RU/EN: own response после reload/close, buyer secrecy/opening, foreign supplier deny, RFI без цен/award. Текущие PPTX/PDF/notes синхронизированы; независимый render 15 страниц, 100% текста. AZ/RU/EN RFP native flow: оценка→победитель→договор→PO→доставка→GRN→MATCHED→APPROVED→PAID; все downstream записи реальными browser controls. Net/VAT/gross1200/216/1416; PAID после reload у обеих сторон. Детали оплаченного счёта AZ/RU/EN проверены переключателем языка. Открытая карточка счёта синхронно со строкой показывает APPROVED/PAID после фактического успеха без переоткрытия/reload; таблица сверки сохраняется. Оба browser context выбирают язык через UI, он сохраняется при полной навигации/reload; все3RFP проходят1200net/216VAT/1416gross и открытые деталиMATCHED→APPROVED→PAID. RFI buyer opening также AZ. Native approve/pay controlled503AZ/RU/EN сохраняют строку/карточку и реальные status/net/VAT/gross/match; после unroute реальный повтор успешен. Отмена override AZ/RU/EN не отправляет POST и сохраняет DISPUTED/gross201. Reject503 сохраняет данные; реальный reject201EN обновляет строку/карточку и сохраняется после reload у покупателя/поставщика. Поздний реальный detailGET не возвращает старые MATCHED/APPROVED после native approveAZ/payRU; отмена ожидающего открытия не запускает второйGET/не открывает карточку повторно. DetailGET503 даёт локализованный AZ/RU/EN alert, затем реальный retry открываетPAID. Прежние nativeRFP/negative/partial сценарии сохранены.",
+      "limits": "Full native RFP downstream подтверждён для AZ/RU/EN в выбранных сценариях. RFI не имеет финансового downstream по модели. PAID не означает банковский платёж. Не исчерпывающий редакторский аудит всех строк. Внешние/клиентские ограничения из externalNotRun остаются NOT RUN. Новые controlled503 подтверждают обработку HTTP-ошибки UI, не серверный rollback/transport disconnect. Cancellation проверяет noPOST/status/gross/UI; не полный аудит всех полей. Реальное отклонение проверено наEN; отмена и approve/pay503 — AZ/RU/EN. Новые detail-race сценарии: approveAZ/payRU; pendingclose/loaderrorretryAZ/RU/EN. Авторитет нового GET/unmount/устаревшие ошибки дополнительно проверены source-review; отдельные native внешнее изменение/unmount не заявлены."
     }
   ],
   "externalNotRun": [
@@ -164,8 +164,8 @@
     "Внешние ERP/банк/ASAN/Peppol; CSV/PAID/dev signature не являются их интеграцией.",
     "Microsoft PowerPoint desktop: подключённой сессии нет."
   ],
-  "candidateHead": "59ef4ed09eda930abf9b0e3a705d01ac4f689b43",
-  "candidateRun": "https://github.com/rashadoni/leadprocure/actions/runs/41026654540",
+  "candidateHead": "81ea3a5f1bf50bc3688bed7cdd729bbf7baf08d3",
+  "candidateRun": "https://github.com/rashadoni/leadprocure/actions/runs/41029977827",
   "apiSuites": 30,
   "apiTests": 353,
   "contentionTests": 3,
@@ -180,8 +180,8 @@
     "activeTasks": 19,
     "allActiveTasksFullyAccepted": false
   },
-  "baselineMergedMain": "0af7467da927f818f6ed6c12ad14c2fb3796ba82",
-  "baselineMainRun": "https://github.com/rashadoni/leadprocure/actions/runs/41024770470",
+  "baselineMergedMain": "7d5d7c3a236e757791dbe2da248fc0da374de2c7",
+  "baselineMainRun": "https://github.com/rashadoni/leadprocure/actions/runs/41027721940",
   "restoredRlsTables": 52,
   "excludedTasks": [
     {

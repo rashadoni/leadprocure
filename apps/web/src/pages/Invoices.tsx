@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, fmtDate, fmtMoney } from '../api/client';
 import { useAuth } from '../auth/auth';
 import { useI18n } from '../i18n';
@@ -10,14 +10,23 @@ export default function Invoices() {
   const isBuyer = session?.org.kind !== 'SUPPLIER';
   const [rows, setRows] = useState<any[]>([]);
   const [open, setOpen] = useState<Record<string, any>>({});
+  const detailSequence = useRef(0);
+  const detailIntent = useRef<Record<string, { request: number; open: boolean }>>({});
+  const confirmedMutation = useRef<Record<string, { version: number; row: any }>>({});
 
   const load = () => api.get('/invoices').then((r) => setRows(r.data));
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    return () => { detailIntent.current = {}; confirmedMutation.current = {}; };
+  }, []);
 
   const act = async (id: string, fn: () => Promise<{ data: any } | undefined>) => {
     try {
       const result = await fn();
       if (!result) return; // cancelled override prompt — no state transition
+      // A detail GET already in flight may contain the pre-mutation status. Keep
+      // the confirmed row for that read; a later GET still trusts fresh server data.
+      confirmedMutation.current[id] = { version: ++detailSequence.current, row: result.data };
       // The mutation returns the canonical invoice row. Keep loaded item details,
       // but update status/match/totals only after the server confirms success.
       // A card closed while the request was running must stay closed.
@@ -28,9 +37,23 @@ export default function Invoices() {
     } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
   const expand = async (id: string) => {
-    if (open[id]) { setOpen((o) => ({ ...o, [id]: null })); return; }
-    const { data } = await api.get(`/invoices/${id}`);
-    setOpen((o) => ({ ...o, [id]: data }));
+    const wantsOpen = !(detailIntent.current[id]?.open ?? !!open[id]);
+    const request = ++detailSequence.current;
+    detailIntent.current[id] = { request, open: wantsOpen };
+    if (!wantsOpen) { setOpen((o) => ({ ...o, [id]: null })); return; }
+    const mutationAtStart = confirmedMutation.current[id]?.version;
+    const isCurrent = () => detailIntent.current[id]?.request === request && detailIntent.current[id]?.open;
+    try {
+      const { data } = await api.get(`/invoices/${id}`);
+      if (!isCurrent()) return;
+      const latest = confirmedMutation.current[id];
+      const detail = latest && latest.version !== mutationAtStart ? { ...data, ...latest.row } : data;
+      setOpen((o) => ({ ...o, [id]: detail }));
+    } catch (e: any) {
+      if (!isCurrent()) return;
+      detailIntent.current[id] = { request, open: false };
+      alert(e.response?.data?.message?.toString() ?? t('invoice_details_error'));
+    }
   };
 
   // A DISPUTED invoice (failed 3-way match) can only be approved with a documented override.

@@ -1,0 +1,33 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/32",
+  "status": "PASS",
+  "testedSourceHead": "81ea3a5f1bf50bc3688bed7cdd729bbf7baf08d3",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/41029977827",
+  "apiSuites": 30,
+  "apiTests": 353,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "nativeBrowserSeconds": 37.7,
+  "freshHttpsBrowserTests": 1,
+  "restoredRlsTables": 52,
+  "assertions": [
+    "Separate actual authenticated DIRECT request/PO/delivery/GRN/invoice API fixture preserves prior RFP3language/negative/partial native scenarios unchanged; no extra login/session injection.",
+    "Native approveAZ holds an actual authorizedGET MATCHED snapshot until successfulPOST201 and rowAPPROVED, then releases it: card opensAPPROVED, never oldMATCHED.",
+    "Native payRU holds actual authorizedGET APPROVED snapshot until successfulPOST201 and rowPAID, then releases it: card opensPAID, never oldAPPROVED.",
+    "Pending paid-detail open/cancel testedAZ/RU/EN: one heldGET only, released response cannot reopen closed card.",
+    "Controlled detailGET503 emptybody testedAZ/RU/EN: localized fallbackalert, no opened card, actual unmocked retry opensPAID.",
+    "RealGET confirmsPAID1200net216VAT1416gross/matchok, supplierUI showsPAID. No arbitrary sleeps or timeout increase; requestfinished/renderframes drain released responses.",
+    "Per-invoice intent/read identity and mutation-version snapshot source-reviewed; only a mutation confirmed DURING a GET overrides its fetched row. FreshGET started afterward trustsserver; refs clear on unmount, stale errors ignored.",
+    "Fullbuild/typecheck/4UBL+OCDS/both migration histories/restore52RLS/fresh signedlicense-private storage-realClamAV PASS."
+  ],
+  "independentReview": "invoice_detail_race_review exact81ea3a5f1bf50bc3688bed7cdd729bbf7baf08d3 no blockers",
+  "rawLog": "/tmp/leadprocure-invoice-read-81ea3a5-acceptance.log",
+  "freshLog": "/tmp/leadprocure-invoice-read-81ea3a5-fresh.log",
+  "qualification": "UI detail state fix, no server/schema/money/permission changes. New fixture setup via actualAPI, not a new all-native procurement chain. Delayed responses come from real API, error503 is controlled frontend fixture, not server rollback/liveprovider/disconnect. Native mutation races cover approvalAZ/paymentRU; pendingclose and detailerrorretry coverAZ/RU/EN. Fresh-read precedence/unmount/stale-error policy additionally source-reviewed, not separate new native external-update/unmount tests. Existing primary RFP AZ/RU/EN and invoice-negative/partial flows retained.14 top-level native tests unchanged. Current19-task/18VERIFIED/A19PARTIAL_EXTERNAL and external limits retained. PAID is recorded status, not bankpayment. No materialbinary/new render/production changes.",
+  "failedCandidates": [],
+  "applicationChanged": true,
+  "serverChanged": false,
+  "materialsChanged": false,
+  "productionChanged": false
+}
