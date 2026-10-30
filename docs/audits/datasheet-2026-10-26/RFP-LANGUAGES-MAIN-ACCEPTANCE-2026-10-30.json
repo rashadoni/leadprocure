@@ -1,0 +1,58 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/30",
+  "status": "PASS",
+  "mergedMain": "0af7467da927f818f6ed6c12ad14c2fb3796ba82",
+  "reviewedFinalHead": "a4043579019b1d0af6312b37e66e00e7787ac7f2",
+  "fullTreeMatchesReviewedFinalHead": true,
+  "nonDocumentationTreeMatchesAcceptedSource": true,
+  "sourceHead": "281ca64a2039dce4a07dc65fdb81d7365818217c",
+  "sourceAcceptance": "https://github.com/rashadoni/leadprocure/actions/runs/41023648853",
+  "mergedMainAcceptance": "https://github.com/rashadoni/leadprocure/actions/runs/41024770470",
+  "acceptanceJob": 123960155052,
+  "freshInstallJob": 123960155491,
+  "apiSuites": 30,
+  "apiTests": 353,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "nativeBrowserSeconds": 25.3,
+  "freshHttpsBrowserTests": 1,
+  "restoredRlsTables": 52,
+  "rawLog": "/tmp/leadprocure-rfp-languages-main-0af7467-acceptance.log",
+  "freshLog": "/tmp/leadprocure-rfp-languages-main-0af7467-fresh.log",
+  "independentReview": "rfp_languages_review exacta4043579019b1d0af6312b37e66e00e7787ac7f2 no blockers; source281ca64 independently reviewed",
+  "requiredAutomaticReview": {
+    "run": 41024695948,
+    "job": 123959908219,
+    "status": "SUCCESS",
+    "qualification": "Actual Anthropic400 insufficient-credit fallback disclosed. Separate actual independent exact-head semantic review fulfilled."
+  },
+  "assertions": [
+    "Both actual authenticated buyer/supplier contexts select language via visible AZ/RU/EN buttons; initial buyer default no longer overwrites saved language on full navigation.",
+    "RFP AZ,RU,EN each use localized native browser controls through scoring/award/contract/PO issue/supplier delivery/GRN/invoice approval/PAID. Actual downstream writes only browser clicks with exactPOST201.",
+    "Each RFP contract/PO1200; invoice/settled1200net216VAT1416gross, match true and PAID persisted after buyer/supplier reload.",
+    "Each RFP retains open-cardMATCHED→APPROVED→PAID with line details, selected-language labels and invoice comparison checks AZ/RU/EN.",
+    "RFI AZ remains text only/no financial award; real opening now AZ buyer as well as supplier. Closed proposal/amount secrecy and foreign supplier before/after checks retained for all4Rfx scenarios.",
+    "Supplier forbidden buyer controls use help-aware full-leading-label matcher. No extra login/cookie/token injection or timeout increase.",
+    "Existing partial invoice/report/ranking/auction/native cases retained;14 top-level tests, not falsely counted as additional top-level tests.",
+    "Fullbuild/typecheck/4UBL+OCDS/both migration histories/restore52RLS/fresh signedlicense-private storage-realClamAV PASS."
+  ],
+  "priorCandidate": {
+    "head": "14b704b77492d1c6724092d6ef19b12ee94da59d",
+    "run": 41022556486,
+    "status": "PRIMARY_BROWSER_FAIL_THEN_REMAINDER_CANCELLED_NOT_PASS",
+    "reason": "Exact shortlabel selector excluded appended accessible data-tip help. Actual AZ button existed; changed to escaped full-leading-label+boundary matching, preserving action/role assertions."
+  },
+  "supersededCancelledRuns": [
+    41023477236,
+    41024559042,
+    41024620800,
+    41024695912
+  ],
+  "scope": "19 active original tasks,18VERIFIED/A19PARTIAL_EXTERNAL; owner-removed task not resumed",
+  "qualification": "New evidence is native language workflow coverage, not app feature changes. PAID is recorded application state, not bank payment. Not an exhaustive editorial audit or live client integration. API fixtures prepare event/request and owner connection adjusts deadline only; downstream writes are browser actions. Materials unchanged; no new render/desktopPowerPoint claim. Current19-task scope18VERIFIED/A19PARTIAL_EXTERNAL and external limits remain.",
+  "applicationChanged": false,
+  "materialsChanged": false,
+  "productionChanged": false,
+  "fullHostBuildAndE2e": "NOT RUN per Contabo workload contract; equivalent hosted gates PASS"
+}
