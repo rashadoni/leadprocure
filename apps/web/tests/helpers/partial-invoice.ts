@@ -1,10 +1,11 @@
 import {expect,test,type Page} from '@playwright/test';
+import {verifyInvoiceCancellationAndRejection} from './invoice-negative';
 type Call=(path:string,body:any,token?:string,method?:string,status?:number)=>Promise<any>;
 
 // Reuse actual authenticated contexts; API setup prepares partial receipts, while
 // invoice creation and exhausted-balance UX are exercised by real browser clicks.
-export async function verifyPartialInvoices({supplierPage,call,buyerToken,approverToken,supplierOrgId,tag}: {
-  supplierPage:Page;call:Call;buyerToken:string;approverToken:string;supplierOrgId:string;tag:string;
+export async function verifyPartialInvoices({supplierPage,buyerPage,call,buyerToken,approverToken,supplierToken,supplierOrgId,tag}: {
+  supplierPage:Page;buyerPage:Page;call:Call;buyerToken:string;approverToken:string;supplierToken:string;supplierOrgId:string;tag:string;
 }) {
   await test.step('partial receipts invoice only the unbilled lines and stop at zero balance',async()=>{
     await call(`/suppliers/${supplierOrgId}/invite`,{},buyerToken);
@@ -61,5 +62,7 @@ export async function verifyPartialInvoices({supplierPage,call,buyerToken,approv
       const summary=(await call(`/orders/${po.id}/receipts`,undefined,buyerToken,'get',200)).summary;
       expect(summary.map((r:any)=>Number(r.billable))).toEqual([0,0]);
     } finally {supplierPage.off('request',capture);}
+    await verifyInvoiceCancellationAndRejection({page:buyerPage,supplierPage,call,buyerToken,supplierToken,
+      poId:po.id,poNo:po.po_no,poItemId:washer.id});
   });
 }

@@ -1,6 +1,7 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { createRequire } from 'node:module';
 import { verifyPartialInvoices } from './partial-invoice';
+import { verifyInvoiceMutationFailure } from './invoice-negative';
 const apiRequire = createRequire(new URL('../../../api/package.json', import.meta.url));
 
 type Call = (path: string, body: any, token?: string, method?: string, status?: number) => Promise<any>;
@@ -120,7 +121,7 @@ export async function verifyRfiRfp({ browser, buyerPage, call, buyerToken, appro
       const otherAfter = await call(`/events/${event.id}`, undefined, foreignSupplierToken, 'get', 200);
       expect(otherAfter.my_bid).toBeNull(); expect(JSON.stringify(otherAfter)).not.toContain(marker);
     });
-    await verifyPartialInvoices({supplierPage,call,buyerToken,approverToken,supplierOrgId:supplier.org.id,tag});
+    await verifyPartialInvoices({supplierPage,buyerPage,call,buyerToken,approverToken,supplierToken:supplier.accessToken,supplierOrgId:supplier.org.id,tag});
   } finally { await context.close(); }
 }
 
@@ -185,10 +186,14 @@ async function verifyRfpPayment({buyerPage,supplierPage,call,buyerToken,event,op
     await invoiced.getByRole('link',{name:invoice.invoice_no,exact:true}).click();
     const detailHeading=buyerPage.getByRole('heading',{level:3}).filter({hasText:invoice.invoice_no});
     await expect(detailHeading.locator('.badge.MATCHED')).toBeVisible();
+    await verifyInvoiceMutationFailure({page:buyerPage,row:invoiced,heading:detailHeading,call,buyerToken,id:invoice.id,
+      action:'approve',status:'MATCHED',click:()=>invoiced.getByRole('button',{name:controlName(copy.approve)}).click()});
     await clicked(buyerPage,`/invoices/${invoice.id}/approve`,()=>invoiced.getByRole('button',{name:controlName(copy.approve)}).click());
     await expect(invoiced.locator('.badge.APPROVED')).toBeVisible();
     await expect(detailHeading.locator('.badge.APPROVED')).toBeVisible();
     await expect(detailHeading.locator('.badge.MATCHED')).toHaveCount(0);
+    await verifyInvoiceMutationFailure({page:buyerPage,row:invoiced,heading:detailHeading,call,buyerToken,id:invoice.id,
+      action:'pay',status:'APPROVED',click:()=>invoiced.getByRole('button',{name:controlName(`💳 ${copy.pay}`)}).click()});
     await clicked(buyerPage,`/invoices/${invoice.id}/pay`,()=>invoiced.getByRole('button',{name:controlName(`💳 ${copy.pay}`)}).click());
     await expect(invoiced.locator('.badge.PAID')).toBeVisible();
     await expect(detailHeading.locator('.badge.PAID')).toBeVisible();
