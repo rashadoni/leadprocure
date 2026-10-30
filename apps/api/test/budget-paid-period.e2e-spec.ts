@@ -113,6 +113,7 @@ describe('budget rollup: settled obligation periods and department isolation', (
     await invoice(5500, child, '2035-01-01T00:00:00Z');
     await invoice(6600, child, '2034-01-15T00:00:00Z', 'EUR', true);
     await invoice(7700, sibling, '2034-01-15T00:00:00Z');
+    await invoice(8800, sibling, '2034-03-15T00:00:00Z'); // sibling has no March plan
     await invoice(900, child, '2034-03-15T00:00:00Z', 'AZN', true);
     await invoice(1000, child, '2034-01-15T00:00:00Z', 'AZN', true, true);
     before = await rollup({ year: 2034, periodType: 'YEAR' });
@@ -136,8 +137,8 @@ describe('budget rollup: settled obligation periods and department isolation', (
   it('limits annual settlement by obligation year and currency without inflating spend', async () => {
     const current = await rollup({ year: 2034, periodType: 'YEAR' });
     expect(row(current, child).paidMinor).toBe(12900);
-    expect(row(current, sibling).paidMinor).toBe(7700);
-    expect(row(current, parent).paidMinor).toBe(20600);
+    expect(row(current, sibling).paidMinor).toBe(16500);
+    expect(row(current, parent).paidMinor).toBe(29400);
     expect(row(await rollup({ year: 2035, periodType: 'YEAR' }), child).paidMinor).toBe(5500);
     for (const id of [child, sibling, parent]) {
       expect(row(before, id).paidMinor).toBe(0);
@@ -148,7 +149,8 @@ describe('budget rollup: settled obligation periods and department isolation', (
   it('uses a union of selected months, excluding gaps and counting overlapping periods once', async () => {
     const months = await rollup({ year: 2034, periodType: 'MONTH' });
     expect(row(months, child).paidMinor).toBe(6300);
-    expect(row(months, parent).paidMinor).toBe(14000);
+    expect(row(months, sibling).paidMinor).toBe(7700);
+    expect(row(months, parent).paidMinor).toBe(14000); // sibling March cannot borrow child's March window
     // With annual + monthly budgets selected, the same invoice still counts only once.
     expect(row(await rollup({ year: 2034 }), child).paidMinor).toBe(12900);
   });

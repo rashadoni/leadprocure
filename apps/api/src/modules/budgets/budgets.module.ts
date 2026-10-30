@@ -606,9 +606,11 @@ export class BudgetsService {
       cur.committedMinor += b.committedMinor;
       cur.actualMinor += b.actualMinor;
       if (rolledUp) cur.includesChildren = true;
-      const windows = paidWindows.get(key) ?? [];
-      windows.push({ from: b.periodStart, to: b.periodEnd });
-      paidWindows.set(key, windows);
+      if (!rolledUp) {
+        const windows = paidWindows.get(key) ?? [];
+        windows.push({ from: b.periodStart, to: b.periodEnd });
+        paidWindows.set(key, windows);
+      }
       // Widest window for pace/forecast; settlement uses the selected period union.
       if (b.periodStart < cur.periodFrom) cur.periodFrom = b.periodStart;
       if (b.periodEnd > cur.periodTo) cur.periodTo = b.periodEnd;
@@ -646,13 +648,16 @@ export class BudgetsService {
        filter.scopeDepartmentId ?? null],
     );
     for (const row of paid) {
-      // an invoice counts for its own department AND for everyone above it, like the plan
+      // Eligibility comes from the invoice department or its ancestors' OWN budgets,
+      // never a sibling's period. Once covered, propagate once to each ancestor.
+      let covered = false;
       for (const key of [row.department_id ?? '', ...ancestors(row.department_id ?? null)]) {
         const cur = byDep.get(key);
         // only AZN settles against an AZN budget; foreign invoices are reported elsewhere
-        if (cur && row.currency === cur.currency && paidWindows.get(key)?.some(
+        covered = covered || !!paidWindows.get(key)?.some(
           (window) => row.budget_day >= window.from && row.budget_day <= window.to,
-        )) cur.paidMinor += Number(row.paid);
+        );
+        if (cur && row.currency === cur.currency && covered) cur.paidMinor += Number(row.paid);
       }
     }
 
