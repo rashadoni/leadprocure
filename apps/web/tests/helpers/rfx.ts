@@ -23,6 +23,10 @@ const paymentCopy = {
 } as const;
 type PaymentLanguage = keyof typeof paymentCopy;
 
+// data-tip adds accessible help text after a control's visible action label.
+// Require the complete leading label and a boundary while allowing that help.
+const controlName = (label: string) => new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$)`);
+
 // Reuse the buyer/approver from the actual procurement scenario. The supplier
 // registers in its own browser context, retaining that context's real httpOnly cookie.
 // No copied session/token injection or extra password-login requests.
@@ -93,20 +97,20 @@ export async function verifyRfiRfp({ browser, buyerPage, call, buyerToken, appro
       } finally { await clock.end(); }
       await buyerPage.reload();
       const openedResponse = buyerPage.waitForResponse(r => r.url().endsWith(`/events/${event.id}/open`) && r.request().method() === 'POST');
-      await buyerPage.getByRole('button', { name: copy.open, exact: true }).click();
+      await buyerPage.getByRole('button', { name: controlName(copy.open) }).click();
       expect((await openedResponse).status()).toBe(201);
       await expect(buyerPage.getByText(`📝 ${text}`, { exact: true })).toBeVisible();
       const opened = await call(`/events/${event.id}`, undefined, buyerToken, 'get', 200);
       expect(opened.bids[0].proposal_text).toBe(text);
       if (scenario.type === 'RFI') {
         expect(opened.bids[0].total_minor).toBeNull();
-        await expect(buyerPage.getByRole('button', { name: copy.score, exact: true })).toHaveCount(0);
-        await expect(buyerPage.getByRole('button', { name: copy.award, exact: true })).toHaveCount(0);
-        await expect(buyerPage.getByRole('button', { name: copy.analyze, exact: true })).toHaveCount(0);
+        await expect(buyerPage.getByRole('button', { name: controlName(copy.score) })).toHaveCount(0);
+        await expect(buyerPage.getByRole('button', { name: controlName(copy.award) })).toHaveCount(0);
+        await expect(buyerPage.getByRole('button', { name: controlName(copy.analyze) })).toHaveCount(0);
         await call(`/events/${event.id}/award`, { lotId: event.lots[0].id, bidId: opened.bids[0].id }, buyerToken, 'post', 400);
       } else {
         expect(Number(opened.bids[0].total_minor)).toBe(1200);
-        await expect(buyerPage.getByRole('button', { name: copy.score, exact: true })).toBeVisible();
+        await expect(buyerPage.getByRole('button', { name: controlName(copy.score) })).toBeVisible();
       }
       if (scenario.type === 'RFP') {
         await verifyRfpPayment({buyerPage,supplierPage,call,buyerToken,event,opened,lang});
@@ -138,7 +142,7 @@ async function verifyRfpPayment({buyerPage,supplierPage,call,buyerToken,event,op
     for(const criterion of event.evaluation_criteria ?? opened.evaluation_criteria) {
       await bid.locator('label').filter({hasText:`${criterion.key} · ${criterion.weight}%`}).locator('input').fill('90');
     }
-    await clicked(buyerPage,`/events/${event.id}/evaluate`,()=>buyerPage.getByRole('button',{name:copy.score,exact:true}).click());
+    await clicked(buyerPage,`/events/${event.id}/evaluate`,()=>buyerPage.getByRole('button',{name:controlName(copy.score)}).click());
     const group=buyerPage.getByRole('group',{name:event.lots[0].title,exact:true});
     const decision=buyerPage.waitForEvent('dialog').then(async d=>{expect(d.type()).toBe('prompt');await d.accept(copy.reason);});
     await clicked(buyerPage,`/events/${event.id}/award`,()=>group.getByRole('button',{name:new RegExp(opened.bids[0].supplier_name)}).click());
@@ -156,17 +160,17 @@ async function verifyRfpPayment({buyerPage,supplierPage,call,buyerToken,event,op
     expect(Number(contract.total_minor)).toBe(1200);
     const contractRow=buyerPage.locator('tr').filter({hasText:contract.contract_no});
     await expect(contractRow.locator('.badge.ACTIVE')).toBeVisible();
-    const po=await clicked(buyerPage,`/contracts/${contract.id}/orders`,()=>contractRow.getByRole('button',{name:copy.po,exact:true}).click());
+    const po=await clicked(buyerPage,`/contracts/${contract.id}/orders`,()=>contractRow.getByRole('button',{name:controlName(copy.po)}).click());
     expect(Number(po.total_minor)).toBe(1200);
     const order=buyerPage.locator('tr').filter({hasText:po.po_no});
-    await clicked(buyerPage,`/orders/${po.id}/status`,()=>order.getByRole('button',{name:copy.issue,exact:true}).click());
+    await clicked(buyerPage,`/orders/${po.id}/status`,()=>order.getByRole('button',{name:controlName(copy.issue)}).click());
     await supplierPage.goto('/supplier/orders');
     const supplied=supplierPage.locator('tr').filter({hasText:po.po_no});
     for(const label of copy.supplierSteps) {
       await clicked(supplierPage,`/orders/${po.id}/status`,()=>supplied.getByRole('button',{name:`→ ${label}`,exact:true}).click());
     }
     await buyerPage.reload();
-    await clicked(buyerPage,`/orders/${po.id}/receipts`,()=>order.getByRole('button',{name:`${copy.receive} 📥`,exact:true}).click());
+    await clicked(buyerPage,`/orders/${po.id}/receipts`,()=>order.getByRole('button',{name:controlName(`${copy.receive} 📥`)}).click());
     await expect(order.locator('.badge.ACCEPTED')).toBeVisible();
     const receipt=await call(`/orders/${po.id}/receipts`,undefined,buyerToken,'get',200);
     expect(receipt.summary).toHaveLength(1);expect(Number(receipt.summary[0].received)).toBe(1);
@@ -181,11 +185,11 @@ async function verifyRfpPayment({buyerPage,supplierPage,call,buyerToken,event,op
     await invoiced.getByRole('link',{name:invoice.invoice_no,exact:true}).click();
     const detailHeading=buyerPage.getByRole('heading',{level:3}).filter({hasText:invoice.invoice_no});
     await expect(detailHeading.locator('.badge.MATCHED')).toBeVisible();
-    await clicked(buyerPage,`/invoices/${invoice.id}/approve`,()=>invoiced.getByRole('button',{name:copy.approve,exact:true}).click());
+    await clicked(buyerPage,`/invoices/${invoice.id}/approve`,()=>invoiced.getByRole('button',{name:controlName(copy.approve)}).click());
     await expect(invoiced.locator('.badge.APPROVED')).toBeVisible();
     await expect(detailHeading.locator('.badge.APPROVED')).toBeVisible();
     await expect(detailHeading.locator('.badge.MATCHED')).toHaveCount(0);
-    await clicked(buyerPage,`/invoices/${invoice.id}/pay`,()=>invoiced.getByRole('button',{name:`💳 ${copy.pay}`,exact:true}).click());
+    await clicked(buyerPage,`/invoices/${invoice.id}/pay`,()=>invoiced.getByRole('button',{name:controlName(`💳 ${copy.pay}`)}).click());
     await expect(invoiced.locator('.badge.PAID')).toBeVisible();
     await expect(detailHeading.locator('.badge.PAID')).toBeVisible();
     await expect(detailHeading.locator('.badge.APPROVED')).toHaveCount(0);
