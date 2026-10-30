@@ -3,7 +3,7 @@
   "date": "2026-10-29",
   "productionChanged": false,
   "scope": "LP-A00–LP-A16, LP-A18, LP-A19; SMTP/Meta removed by owner instruction",
-  "gateStatus": "A13_BUDGET_REPORT_PASS",
+  "gateStatus": "A13_BUDGET_SETTLEMENT_PASS",
   "tasks": [
     {
       "id": "LP-A00",
@@ -113,9 +113,9 @@
       "id": "LP-A13",
       "title": "Аналитика и бюджет",
       "status": "VERIFIED",
-      "evidence": "analytics; budgets; budget-integration; departments; web/analytics,finance,budget-approval; BUDGET-REPORT-ACCEPTANCE-2026-10-29.json; web/tests/helpers/budget-report.ts",
-      "assertions": "Активные award totals по лоту, cancel/reaward, net basis, валюты отдельно. Принятые PO считаются по дате создания заказа; обязательства/приёмка/оплата различены. Stale response/31-е число, AZ/RU/EN и текущая budget policy/SoD проверены. AZN бюджеты, подразделения/периоды, exact limits, finance role и concurrent approvals сохранены. Native budget report: задержанные list/rollup старого2031 не заменяют выбранный2032/20002minor. При отказе любого из3reportendpoint данные скрыты, локализованные AZ/RU/EN retry загружают выбранный год; CSV выключен до готовности. BUYER_USER не запрашивает запрещённый org-report.",
-      "limits": "Это не баланс банковского счёта и не автоматический FX. Согласованное UI-обновление не является общим DB snapshot. Новый native кейс роли finance и смены года; BUYER_USER source+прежние API checks, остальные фильтры используют общий loader."
+      "evidence": "analytics; budgets; budget-integration; departments; web/analytics,finance,budget-approval; BUDGET-REPORT-ACCEPTANCE-2026-10-29.json; web/tests/helpers/budget-report.ts; budget-paid-period; BUDGET-PAID-ACCEPTANCE-2026-10-30.json",
+      "assertions": "Активные award totals по лоту, cancel/reaward, net basis, валюты отдельно. Принятые PO считаются по дате создания заказа; обязательства/приёмка/оплата различены. Stale response/31-е число, AZ/RU/EN и текущая budget policy/SoD проверены. AZN бюджеты, подразделения/периоды, exact limits, finance role и concurrent approvals сохранены. Native budget report: задержанные list/rollup старого2031 не заменяют выбранный2032/20002minor. При отказе любого из3reportendpoint данные скрыты, локализованные AZ/RU/EN retry загружают выбранный год; CSV выключен до готовности. BUYER_USER не запрашивает запрещённый org-report. Оплата в rollup отбирается по бюджетной дате обязательства и выбранным периодам без разрывов/повторного счёта; чужой период соседнего подразделения не расширяет доступ. Проверены UTC/смена года/валюта/каталог и BUYER_USER/foreign buyer; PAID не увеличивает actual/used.",
+      "limits": "Это не баланс банковского счёта и не автоматический FX. Согласованное UI-обновление не является общим DB snapshot. Новый native кейс роли finance и смены года; BUYER_USER source+прежние API checks, остальные фильтры используют общий loader. Это оплата обязательств выбранного периода, не движение денег по дате банковского платежа. Новые period/scope кейсы — actual API; отдельный native browser кейс периода оплаты не заявлен."
     },
     {
       "id": "LP-A14",
@@ -164,10 +164,10 @@
     "Внешние ERP/банк/ASAN/Peppol; CSV/PAID/dev signature не являются их интеграцией.",
     "Microsoft PowerPoint desktop: подключённой сессии нет."
   ],
-  "candidateHead": "2b2ee8d6b857cb6419acd98aadc9e184235a6a77",
-  "candidateRun": "https://github.com/rashadoni/leadprocure/actions/runs/40938983781",
-  "apiSuites": 29,
-  "apiTests": 348,
+  "candidateHead": "754df0958c9b320df7692b75223b6850bfd36637",
+  "candidateRun": "https://github.com/rashadoni/leadprocure/actions/runs/41020041051",
+  "apiSuites": 30,
+  "apiTests": 353,
   "contentionTests": 3,
   "nativeBrowserTests": 14,
   "freshHttpsBrowserTests": 1,
@@ -180,8 +180,8 @@
     "activeTasks": 19,
     "allActiveTasksFullyAccepted": false
   },
-  "baselineMergedMain": "eaef455ed4d9779630ae0ccf6aa572185b2e0593",
-  "baselineMainRun": "https://github.com/rashadoni/leadprocure/actions/runs/40936254474",
+  "baselineMergedMain": "0f26b4018bf34a7f068c987050aed2d456577e56",
+  "baselineMainRun": "https://github.com/rashadoni/leadprocure/actions/runs/41016806163",
   "restoredRlsTables": 52,
   "excludedTasks": [
     {

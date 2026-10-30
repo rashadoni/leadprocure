@@ -220,3 +220,5 @@ LP-A17, продолжение29октября: worker lease ownership/providerI
 
 
 LP-A19, 29октября: native EN RFP до PAID и локализация деталей счёта AZ/RU/EN приняты на e210c40/run40928824772. Все downstream writes реальными browser controls; API read assertions. Net/VAT/gross1200/216/1416, persistedPAIDbuyer/supplier. BOTH hostedjobs SUCCESS:346API/3contention/14native/1fresh и остальные gates. RFP-NATIVE-PAYMENT-ACCEPTANCE-2026-10-29.json. Это уточняет старую границу RFPnativeopening; RUfull downstream/реальный банковский платёж не заявлены. Текущийscope19, исключённая задача не возобновлялась; production не менялся.
+
+LP-A13/A19,30октября: периоды обязательств и department scope в paid rollup исправлены и приняты на754df09/run41020041051:30suites/353API,3contention/14native/1freshHTTPS, обаjobsSUCCESS. Пять новых actual API случаев; источник даты/валюты/UTC/разрывы/overlap/каталог/соседние подразделения проверены, PAID не удваивает actual. BUDGET-PAID-ACCEPTANCE-2026-10-30.json. Это не банковский cash-flow. Предыдущий отменённый прогон с ошибкой cleanup не выдан заPASS. Активныйscope19/внешние ограничения сохранены; production не менялся.

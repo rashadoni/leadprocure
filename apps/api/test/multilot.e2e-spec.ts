@@ -43,9 +43,14 @@ describe('multi-lot RFQ', () => {
   });
 
   afterAll(async () => {
-    await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`ML %${tag}%`]);
-    await db.end();
-    await app.close();
+    try {
+      // Delete the buyer/event/awards before suppliers/bids. A single multi-org DELETE
+      // can cascade supplier bids first and hit awards.winning_bid_id's RESTRICT FK.
+      if (buyerOrg) await db.query('DELETE FROM organizations WHERE id = $1', [buyerOrg]);
+      await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`ML %${tag}%`]);
+    } finally {
+      try { await db.end(); } finally { await app.close(); }
+    }
   });
 
   it('buyer builds a 2-lot RFQ and both suppliers bid', async () => {

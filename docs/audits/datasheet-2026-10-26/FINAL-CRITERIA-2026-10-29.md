@@ -4,7 +4,7 @@
 
 Этот документ собирает текущие результаты; исходный план [TASKS.md](TASKS.md) и исторический журнал сохранены. Ранние общие формулировки «все задачи выполнены» не означают полную внешнюю/production приёмку. VERIFIED ниже означает исправление и конкретную изолированную техническую проверку в обозначенных границах. PARTIAL_EXTERNAL оставляет внешний критерий открытым; NOT RUN нигде не считается PASS.
 
-Репозиторий: **rashadoni/leadprocure**. Базовый main `eaef455` прошёл348API; кандидат `2b2ee8d` прошёл полный hosted40938983781, включая native budget filter race/error/retry AZ/RU/EN. Прежние RFP/partial-invoice/open-details сценарии сохранены. Production не изменён.
+Репозиторий: **rashadoni/leadprocure**. Базовый main `0f26b40` прошёл348API; кандидат `754df09` прошёл полный hosted41020041051:30suites/353API,3contention/14native/1freshHTTPS/52RLS. Связанные исправления фильтров/счетов сохранены. Production не изменён.
 
 ## Текущие 19 задач
 
@@ -112,3 +112,9 @@ DB write failure даёт503 и сохраняет возможность пов
 ## LP-A13/A19: актуальность и ошибки бюджетного отчёта — PASS
 
 Код `2b2ee8d6b857cb6419acd98aadc9e184235a6a77`, hosted [40938983781](https://github.com/rashadoni/leadprocure/actions/runs/40938983781): BOTH jobs SUCCESS,29suites/348API,3contention/14nativebrowser/1freshHTTPS,fullbuild/typecheck/4UBL+OCDS/both histories/restore52RLS/fresh signedlicense-private storage-realClamAV PASS. Native finance проверка задерживает реальные list/rollup2031, показывает2032/20002minor, затем отпускает старые ответы и проверяет сохранность фильтра/плана/суммы. Отдельные503fixtures для list/rollup/unbudgeted подтверждают AZ/RU/EN error/retry, скрытие старых данных и запрет CSV до готовности. Для BUYER_USER запрещённые org-report/exports не запрашиваются/не предлагаются; роль проверена source+прежней API regression, новый native USERкейс не заявлен. Это согласованная UI-публикация, не общий DBsnapshot; математика/ACL/scopeотчётов не менялись. Первое падение теста из-за decimalseparator сохранено как FAIL. BUDGET-REPORT-ACCEPTANCE-2026-10-29.json. Активныйscope19 и внешние ограничения не изменены.
+
+## LP-A13/A19: периоды оплаты и доступ к сводке — PASS, 30 октября
+
+Код `754df0958c9b320df7692b75223b6850bfd36637`, hosted [41020041051](https://github.com/rashadoni/leadprocure/actions/runs/41020041051): оба jobs SUCCESS,30suites/353API,3contention/14native/1freshHTTPS и остальные полные gates PASS. Пять новых real HTTP/auth/RLS случаев проверяют периоды обязательств, UTC/смену года, валюту, разрывы/пересечения, дату каталожного заказа и scoped BUYER_USER без оплаты соседей через родителя. Оплата не увеличивает actual/used. Учитывается дата утверждения заявки или дата выпуска/создания заказа по действующей модели бюджетирования; это не банковский cash-flow. Подразделение берётся из сохранённого снимка счёта. Допуск периода определяется собственным/родительским бюджетом, а не бюджетом соседа. AZ/RU/EN tooltip уточнён. Нового native browser кейса периодов оплаты нет; прежние14 проходят.
+
+Первый прогон41018921723 не считается PASS:353assertions прошли, но cleanup многолотовой фикстуры упал на FK и оставил app открытым; зависший прогон отменён. В повторном прогоне cleanup идёт buyer-first и всегда закрывает ресурсы; assertions не ослаблены. Независимое ревью754df09 без блокеров. BUDGET-PAID-ACCEPTANCE-2026-10-30.json. Активныйscope19 и внешние ограничения LP-A19 сохранены.

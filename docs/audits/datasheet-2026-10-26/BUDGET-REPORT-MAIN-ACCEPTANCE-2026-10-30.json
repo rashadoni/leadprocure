@@ -1,0 +1,53 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/27",
+  "testedSourceHead": "2b2ee8d6b857cb6419acd98aadc9e184235a6a77",
+  "status": "PASS",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/41016806163",
+  "apiSuites": 29,
+  "apiTests": 348,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "freshHttpsBrowserTests": 1,
+  "restoredRlsTables": 52,
+  "assertions": [
+    "real approved2031/2032 plans; actual old2031list+rollup responses held until2032 visible then released; selectedyear/newplan/20002minor rollup preserved",
+    "report datasets cleared while loading and only latest completed bundle applied",
+    "explicit503 fixtures independently fail list/rollup/unbudgeted; AZ/RU/EN error/retry/currentyear and hidden stale report/native CSVdisabled checks pass",
+    "older mutation callback reloads current filterref, cleanup invalidates obsolete/unmounted callbacks by source review",
+    "BUYER_USER skips forbidden orgunbudgeted fetch and orgexport controls while retaining scopedlist/rollup; existing API isolation/403 regression passes",
+    "existing native RFPtoPAID/partialinvoice/invoicedetail scenarios remain passing",
+    "fullbuild/typecheck/4UBL+OCDS/both applied histories/restore52RLS/fresh signedlicense-private storage-realClamAV PASS"
+  ],
+  "independentReview": "deadline_boundary_review exactfinald72bb97d1d47a368e59dc5d4f11beb177bb3edc7 no blockers; executable paths equal full-accepted2b2ee8d",
+  "rawLog": "/tmp/leadprocure-budget-report-main-0f26b40-acceptance.log",
+  "freshLog": "/tmp/leadprocure-budget-report-main-0f26b40-fresh.log",
+  "qualification": "Consistent publication in UI is not a shared database transaction/snapshot across endpoints. Real responses used for ordering; failure responses are synthetic503 fixtures. New native coverage uses finance role, not a new native BUYER_USER case; user role source-reviewed against existing API regression. Periodtype/department use same loader; explicit delayed-response native case changes year. CSVdisabled is native, 1C shares source gating. Financial formulas/server ACL/unbudgeted report scope unchanged. Current19-task scope and external/client limits unchanged.",
+  "productionChanged": false,
+  "materialsChanged": false,
+  "priorCandidate": {
+    "head": "9ddfb761bb34f74e3757736ec1aab04daeb0c0f5",
+    "run": 40938391584,
+    "status": "FAIL",
+    "reason": "New test assumed decimalcomma; hosted Chromium rendered decimalpoint. Exact20002minor/currency preserved, revised test accepts either separator."
+  },
+  "date": "2026-10-30",
+  "mergedMain": "0f26b4018bf34a7f068c987050aed2d456577e56",
+  "reviewedFinalHead": "d72bb97d1d47a368e59dc5d4f11beb177bb3edc7",
+  "reviewedTreeEqualsMain": true,
+  "jobs": {
+    "acceptance": 123934879387,
+    "freshInstall": 123934879180
+  },
+  "automaticReview": "40940231146/job123681366224 Anthropic400 insufficient-credit fallback; not semantic review",
+  "redundantDocOnlyRepeats": [
+    {
+      "run": 40940129179,
+      "status": "CANCELLED"
+    },
+    {
+      "run": 40940170330,
+      "status": "CANCELLED"
+    }
+  ]
+}
