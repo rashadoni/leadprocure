@@ -27,7 +27,7 @@ describe('budget rollup: settled obligation periods and department isolation', (
   };
   const budget = async (departmentId: string, year: number, month?: number) => {
     const created = await http().post('/budgets').set(...bearer(buyer)).send({
-      name: `Paid ${tag} ${departmentId} ${year} ${month ?? 'year'}`, category: '*', departmentId,
+      name: `Paid ${tag} ${departmentId} ${year} ${month ?? 'year'}`, category: month ? 'MONTHLY' : '*', departmentId,
       periodYear: year, periodType: month ? 'MONTH' : 'YEAR', ...(month ? { periodMonth: month } : {}), amountMinor: 100_000_000,
     }).expect(201);
     await http().post(`/budgets/${created.body.id}/submit`).set(...bearer(buyer)).expect(201);
