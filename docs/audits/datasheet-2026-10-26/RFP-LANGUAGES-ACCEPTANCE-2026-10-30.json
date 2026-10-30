@@ -1,0 +1,38 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "pullRequest": "https://github.com/rashadoni/leadprocure/pull/30",
+  "status": "PASS",
+  "testedSourceHead": "281ca64a2039dce4a07dc65fdb81d7365818217c",
+  "acceptanceRun": "https://github.com/rashadoni/leadprocure/actions/runs/41023648853",
+  "apiSuites": 30,
+  "apiTests": 353,
+  "contentionTests": 3,
+  "nativeBrowserTests": 14,
+  "freshHttpsBrowserTests": 1,
+  "restoredRlsTables": 52,
+  "nativeBrowserSeconds": 25.8,
+  "assertions": [
+    "Both actual authenticated buyer/supplier contexts select language via visible AZ/RU/EN buttons; initial buyer default no longer overwrites saved language on full navigation.",
+    "RFP AZ,RU,EN each use localized native browser controls through scoring/award/contract/PO issue/supplier delivery/GRN/invoice approval/PAID. Actual downstream writes only browser clicks with exactPOST201.",
+    "Each RFP contract/PO1200; invoice/settled1200net216VAT1416gross, match true and PAID persisted after buyer/supplier reload.",
+    "Each RFP retains open-cardMATCHED→APPROVED→PAID with line details, selected-language labels and invoice comparison checks AZ/RU/EN.",
+    "RFI AZ remains text only/no financial award; real opening now AZ buyer as well as supplier. Closed proposal/amount secrecy and foreign supplier before/after checks retained for all4Rfx scenarios.",
+    "Supplier forbidden buyer controls use help-aware full-leading-label matcher. No extra login/cookie/token injection or timeout increase.",
+    "Existing partial invoice/report/ranking/auction/native cases retained;14 top-level tests, not falsely counted as additional top-level tests.",
+    "Fullbuild/typecheck/4UBL+OCDS/both migration histories/restore52RLS/fresh signedlicense-private storage-realClamAV PASS."
+  ],
+  "independentReview": "rfp_languages_review exact281ca64a2039dce4a07dc65fdb81d7365818217c no blockers",
+  "rawLog": "/tmp/leadprocure-rfp-languages-281ca64-acceptance.log",
+  "freshLog": "/tmp/leadprocure-rfp-languages-281ca64-fresh.log",
+  "qualification": "New evidence is native language workflow coverage, not app feature changes. PAID is recorded application state, not bank payment. Not an exhaustive editorial audit or live client integration. API fixtures prepare event/request and owner connection adjusts deadline only; downstream writes are browser actions. Materials unchanged; no new render/desktopPowerPoint claim. Current19-task scope18VERIFIED/A19PARTIAL_EXTERNAL and external limits remain.",
+  "priorCandidate": {
+    "head": "14b704b77492d1c6724092d6ef19b12ee94da59d",
+    "run": 41022556486,
+    "status": "PRIMARY_BROWSER_FAIL_THEN_REMAINDER_CANCELLED_NOT_PASS",
+    "reason": "Exact shortlabel selector excluded appended accessible data-tip help. Actual AZ button existed; changed to escaped full-leading-label+boundary matching, preserving action/role assertions."
+  },
+  "supersededCancelledRun": 41023477236,
+  "productionChanged": false,
+  "applicationChanged": false,
+  "materialsChanged": false
+}
