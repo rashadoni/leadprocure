@@ -529,7 +529,7 @@ export class BudgetsService {
   }
 
   // Per-department rollup: what finance opens the page for. Plan / commitment / actual come
-  // from the budgets themselves; PAID is cash that actually left, taken from the invoice's
+  // from the budgets themselves; PAID is recorded invoice settlement, taken from the invoice's
   // own department_id (denormalized at submission, so this survives a PO being re-scoped).
   //
   // Paid is reported BESIDE the others, never added into them: an invoice is settlement of
@@ -583,6 +583,9 @@ export class BudgetsService {
     };
 
     const byDep = new Map<string, any>();
+    // Keep the union of selected periods: January + March must not include February,
+    // and overlapping annual/monthly plans must not count an invoice twice.
+    const paidWindows = new Map<string, Array<{ from: string; to: string }>>();
     const add = (key: string, b: any, rolledUp: boolean) => {
       const cur = byDep.get(key) ?? {
         departmentId: key || null,
@@ -603,7 +606,10 @@ export class BudgetsService {
       cur.committedMinor += b.committedMinor;
       cur.actualMinor += b.actualMinor;
       if (rolledUp) cur.includesChildren = true;
-      // widest window the department's budgets cover — the span PAID is measured over
+      const windows = paidWindows.get(key) ?? [];
+      windows.push({ from: b.periodStart, to: b.periodEnd });
+      paidWindows.set(key, windows);
+      // Widest window for pace/forecast; settlement uses the selected period union.
       if (b.periodStart < cur.periodFrom) cur.periodFrom = b.periodStart;
       if (b.periodEnd > cur.periodTo) cur.periodTo = b.periodEnd;
       byDep.set(key, cur);
@@ -616,17 +622,37 @@ export class BudgetsService {
     if (!byDep.size) return [];
 
     const paid = await this.rc.manager.query(
-      `SELECT i.department_id, i.currency, sum(i.gross_minor)::bigint AS paid
-       FROM invoices i
-       WHERE i.status = 'PAID'
-       GROUP BY i.department_id, i.currency`,
+      // Use the same obligation date as budget utilization, not invoice creation or a
+      // claimed bank payment date. Preserve the invoice's department snapshot and apply
+      // the caller's scope before rolling children up to a shared parent.
+      `WITH dated_paid AS (
+         SELECT i.department_id, i.currency, i.gross_minor,
+                CASE WHEN r.status = 'APPROVED' AND r.approved_at IS NOT NULL AND r.currency = o.currency
+                     THEN r.approved_at ELSE COALESCE(o.issued_at, o.created_at) END AS budget_at
+         FROM invoices i
+         JOIN purchase_orders o ON o.id = i.po_id
+         LEFT JOIN procurement_requests r ON r.id = o.request_id
+         WHERE i.status = 'PAID' AND ($3::uuid IS NULL OR i.department_id = $3)
+       )
+       SELECT department_id, currency,
+              to_char(budget_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS budget_day,
+              sum(gross_minor)::bigint AS paid
+       FROM dated_paid
+       WHERE budget_at >= ($1::date::timestamp AT TIME ZONE 'UTC')
+         AND budget_at < (($2::date + 1)::timestamp AT TIME ZONE 'UTC')
+       GROUP BY department_id, currency, to_char(budget_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
+      [budgets.reduce((min: string, b: any) => b.periodStart < min ? b.periodStart : min, budgets[0].periodStart),
+       budgets.reduce((max: string, b: any) => b.periodEnd > max ? b.periodEnd : max, budgets[0].periodEnd),
+       filter.scopeDepartmentId ?? null],
     );
     for (const row of paid) {
       // an invoice counts for its own department AND for everyone above it, like the plan
       for (const key of [row.department_id ?? '', ...ancestors(row.department_id ?? null)]) {
         const cur = byDep.get(key);
         // only AZN settles against an AZN budget; foreign invoices are reported elsewhere
-        if (cur && row.currency === cur.currency) cur.paidMinor += Number(row.paid);
+        if (cur && row.currency === cur.currency && paidWindows.get(key)?.some(
+          (window) => row.budget_day >= window.from && row.budget_day <= window.to,
+        )) cur.paidMinor += Number(row.paid);
       }
     }
 
