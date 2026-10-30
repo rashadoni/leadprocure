@@ -38,7 +38,11 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
     await db.query(`SELECT * FROM close_due_events()`);
   } finally { await db.end(); }
   await call(`/events/${event.id}/open`, {}, buyer.accessToken);
-  await page.addInitScript(() => localStorage.setItem('lp_lang', 'en'));
+  await page.addInitScript(() => {
+    // Set the initial language only: later native language selections must survive
+    // full-page contract navigation and supplier/buyer reloads in the RFP flow.
+    if (!localStorage.getItem('lp_lang')) localStorage.setItem('lp_lang', 'en');
+  });
   await page.goto('/login'); await page.fill('input[type=email]', `buyer-${tag}@audit.invalid`); await page.fill('input[type=password]', password);
   await page.click('form button.btn:not(.ghost):not([type=button])'); await page.waitForURL(/\/buyer\//);
   await page.goto(`/buyer/events/${event.id}`);
