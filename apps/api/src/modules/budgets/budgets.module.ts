@@ -740,6 +740,9 @@ export class BudgetsService {
       // Paid is also not comparable to used as a number: with the default EXCLUSIVE
       // vat_mode an order's total is net while an invoice's gross carries VAT, so 18%
       // spend settles at about 1.18× its actual (INCLUSIVE orders settle at about 1×).
+      // The two sit in ONE table row, so this cannot live only here: the column carries
+      // «incl. VAT» and its hint says it, or a fully paid order reads as arithmetic that
+      // does not add up. Pinned by the 18% case in paid-basis.e2e-spec.ts.
       const org = byDep.get('');
       if (org && row.budget_id && selectedOrgPlans.has(String(row.budget_id))
           && row.currency === org.currency) {

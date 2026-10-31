@@ -66,10 +66,10 @@ describe('paid: the invoice ledger and plan settlement are different measures', 
   // the invoice deliberately recorded in DIFFERENT months. Only those two timestamps are
   // moved, through the fixture owner connection; the order is dated far outside every
   // window under test so it cannot pick a period for either page.
-  const divergentMonths = async (amount: number, approvedAt: string, recordedAt: string) => {
+  const divergentMonths = async (amount: number, approvedAt: string, recordedAt: string, vatRateBp = 0) => {
     const req = (await http().post('/requests').set(...bearer(buyer)).send({
       title: `Basis divergent ${tag}`, departmentId: dep,
-      items: [{ name: 'Paper', qty: 1, estUnitPriceMinor: amount, vatRateBp: 0 }],
+      items: [{ name: 'Paper', qty: 1, estUnitPriceMinor: amount, vatRateBp }],
     }).expect(201)).body;
     await http().post(`/requests/${req.id}/submit`).set(...bearer(buyer)).expect(201);
     await http().post(`/requests/${req.id}/approve`).set(...bearer(approver)).expect(201);
@@ -144,8 +144,11 @@ describe('paid: the invoice ledger and plan settlement are different measures', 
     // A plan whose period covers the withdrawn call-off, so "0" below is the obligation
     // test talking and not a missing budget.
     await budget(null, 2044, '*');
+    // And a plan for the VAT case: an EXCLUSIVE order of 1000 settles at 1180.
+    await budget(dep, 2046, '*');
     await divergentMonths(5500, '2043-03-15T12:00:00Z', '2043-09-20T12:00:00Z');
     await withdrawnAfterPaying(4400, '2044-06-10T12:00:00Z', '2044-06-20T12:00:00Z');
+    await divergentMonths(1000, '2046-05-15T12:00:00Z', '2046-05-20T12:00:00Z', 1800);
   }, 60000);
 
   afterAll(async () => {
@@ -204,6 +207,21 @@ describe('paid: the invoice ledger and plan settlement are different measures', 
     // part (a department plan for another category, so the org-wide plan carried it) is
     // pinned by the 2036 case in budget-paid-period.e2e-spec.ts, and the label on screen
     // is worded for the looser rule because of it.
+  });
+
+  it('reports settlement at invoice gross, beside an order total that is net', async () => {
+    // The default EXCLUSIVE vat_mode makes an order's total the raw sum of its lines, i.e.
+    // NET, while an invoice's gross carries the VAT. So a fully settled order at 18% puts
+    // 1180 next to 1000 in one table row — which is why the column says «incl. VAT».
+    // Gross is the deliberate choice (it is the money that left, and it is what the invoice
+    // list and the analytics tiles report), so it is pinned here: making paid comparable to
+    // used instead is a money computation, and it must not arrive unnoticed.
+    const rows = await rollup({ year: 2046, periodType: 'YEAR' });
+    expect(row(rows, dep).actualMinor).toBe(1000);
+    expect(row(rows, dep).paidMinor).toBe(1180);
+    // Both pages report paid on the SAME basis, which is what keeps them comparable to
+    // each other once each has said what it counts.
+    expect((await ledger('2046-05')).paidMinor).toBe(1180);
   });
 
   it('puts one settlement in different months on the two pages, by design', async () => {

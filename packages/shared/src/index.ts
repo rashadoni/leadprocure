@@ -344,6 +344,17 @@ export interface AccessTokenPayload {
 //   where a department reads used 0 and paid 700). Only the org-wide row is credited
 //   strictly, with what its own plans actually carried. See the loop over `paid` in
 //   rollup().
+//   VAT: this is the invoice's GROSS, while commitment and actual are each order's own
+//   basis — the raw sum of its lines, which taxTotals() makes NET under the default
+//   EXCLUSIVE vat_mode and GROSS under INCLUSIVE. So a fully settled EXCLUSIVE order at
+//   18% reads "used 1000 / paid 1180", and the column must say «incl. VAT» or that reads
+//   as a data error. Gross is deliberate and is kept: it is the money that actually left,
+//   and it is the basis the invoice list and the analytics tiles already report, so
+//   restating it net here would buy comparability with the column beside it at the price
+//   of a THIRD number for the same invoice — the defect this whole section exists to
+//   prevent. Making paid comparable to used instead is a real alternative; it is a money
+//   computation (CASE WHEN o.vat_mode = 'INCLUSIVE' THEN i.gross_minor ELSE i.net_minor
+//   END) and so a decision of its own, not something to slip in behind a label.
 //
 // So the same paid invoice can appear on one page and not the other, and can fall in
 // different months on each. That is the design: one is a ledger of invoices, the other is
