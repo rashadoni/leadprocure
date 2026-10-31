@@ -29,8 +29,10 @@ export default function Suppliers() {
 
   const [scores, setScores] = useState<Record<string, any>>({});
   const loadScore = async (orgId: string) => {
-    const r = await api.get(`/suppliers/${orgId}/scorecard`);
-    setScores((s) => ({ ...s, [orgId]: r.data.averages }));
+    try {
+      const r = await api.get(`/suppliers/${orgId}/scorecard`);
+      setScores((s) => ({ ...s, [orgId]: r.data.averages }));
+    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
   const rate = async (orgId: string) => {
     const raw = prompt('OTIF score 0-100:', '90');
@@ -67,9 +69,14 @@ export default function Suppliers() {
                   {canManage && <>
                     {r.status !== 'APPROVED' && <button className="btn small" data-tip={t('tip_supplier_approve')} onClick={() => setStatus(r.id, 'APPROVED')}>{t('approve')}</button>}{' '}
                     {r.status !== 'BLOCKED' && <button className="btn small ghost" data-tip={t('tip_supplier_block')} onClick={() => setStatus(r.id, 'BLOCKED')}>{t('block')}</button>}{' '}
-                    <button className="btn small ghost" data-tip={t('tip_scorecard')} onClick={() => rate(r.supplier_org_id)}>★ {t('scorecard')}</button>{' '}
                     <button className="btn small ghost" data-tip={t('tip_verify_open')} onClick={() => openVerification(r.supplier_org_id)}>🛡</button>
-                  </>}
+                  </>}{' '}
+                  {/* Rating is an approver's call, but the figures are everyone's to read —
+                      and they only ever appeared as a side effect of rating someone. */}
+                  <button className="btn small ghost" data-tip={t('tip_scorecard')}
+                    onClick={() => (canManage ? rate(r.supplier_org_id) : loadScore(r.supplier_org_id))}>
+                    ★ {t('scorecard')}
+                  </button>
                   {scores[r.supplier_org_id] && (
                     <span className="hint" style={{ marginLeft: 6 }}>
                       {scores[r.supplier_org_id].map((a: any) => `${a.metric}:${a.avg_score}`).join(' ')}

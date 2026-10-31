@@ -63,7 +63,7 @@ export class SuppliersService {
     );
     const averages = await m.query(
       `SELECT metric, round(avg(score))::int AS avg_score, count(*)::int AS n
-       FROM supplier_scorecard_entries WHERE supplier_org_id = $1 GROUP BY metric`,
+       FROM supplier_scorecard_entries WHERE supplier_org_id = $1 GROUP BY metric ORDER BY metric`,
       [supplierOrgId],
     );
     return { entries, averages };

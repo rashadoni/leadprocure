@@ -16,7 +16,7 @@ describe('supplier scorecards (API e2e)', () => {
   const http = () => request(app.getHttpServer());
   const bearer = (t: string) => ['Authorization', `Bearer ${t}`] as [string, string];
   let adminTok: string, userTok: string;
-  let buyerOrgId: string, supplierOrgId: string;
+  let buyerOrgId: string, supplierOrgId: string, foreignPoId: string;
   const plainUserEmail = `sup-user-${tag}@t.test`;
 
   const orgIdOf = async (name: string) =>
@@ -46,6 +46,22 @@ describe('supplier scorecards (API e2e)', () => {
       .expect(201);
     userTok = (await http().post('/auth/login')
       .send({ email: plainUserEmail, password: 'password123' }).expect(201)).body.accessToken;
+
+    // A REAL order with this supplier, belonging to a different buyer. Foreign keys are
+    // not subject to RLS, so before the check this id was accepted and handed straight
+    // back out of GET /scorecard — a random uuid would only have proved the FK still bites.
+    await http().post('/auth/register/buyer')
+      .send({ legalName: `Sup Other ${tag}`, email: `sup-other-${tag}@t.test`, password: 'password123', fullName: 'Other' })
+      .expect(201);
+    const otherOrgId = await orgIdOf(`Sup Other ${tag}`);
+    const otherUser = (await db.query(
+      `SELECT id FROM organization_users WHERE email = $1`, [`sup-other-${tag}@t.test`],
+    )).rows[0].id;
+    foreignPoId = (await db.query(
+      `INSERT INTO purchase_orders(buyer_org_id, supplier_org_id, po_no, total_minor, currency, created_by)
+       VALUES ($1,$2,$3,0,'AZN',$4) RETURNING id`,
+      [otherOrgId, supplierOrgId, `PO-OTHER-${tag}`, otherUser],
+    )).rows[0].id;
   });
 
   afterAll(async () => {
@@ -58,8 +74,10 @@ describe('supplier scorecards (API e2e)', () => {
   it('a plain member cannot move the ranking a rating feeds', async () => {
     // Someone who may not approve a request, invite a supplier or block one may not move
     // 30% of the award recommendation's weight either.
-    await http().post(`/suppliers/${supplierOrgId}/scorecard`).set(...bearer(userTok))
+    const refused = await http().post(`/suppliers/${supplierOrgId}/scorecard`).set(...bearer(userTok))
       .send({ metric: 'OTIF', score: 100 }).expect(403);
+    // pin WHICH guard answered: the roles guard runs before the licence one
+    expect(refused.body.message).toMatch(/Insufficient role/);
     const { rows } = await db.query(
       `SELECT count(*)::int AS n FROM supplier_scorecard_entries WHERE supplier_org_id = $1`,
       [supplierOrgId],
@@ -89,7 +107,7 @@ describe('supplier scorecards (API e2e)', () => {
 
   it('refuses a rating that cites an order which is not yours with this supplier', async () => {
     await http().post(`/suppliers/${supplierOrgId}/scorecard`).set(...bearer(adminTok))
-      .send({ metric: 'COMMS', score: 50, sourcePoId: randomUUID() }).expect(400);
+      .send({ metric: 'COMMS', score: 50, sourcePoId: foreignPoId }).expect(400);
     const { rows } = await db.query(
       `SELECT count(*)::int AS n FROM supplier_scorecard_entries WHERE supplier_org_id = $1`,
       [supplierOrgId],
@@ -97,7 +115,11 @@ describe('supplier scorecards (API e2e)', () => {
     expect(rows[0].n).toBe(1); // only the approver's rating above survived
   });
 
-  it('still lets everyone READ the scorecard they are entitled to', async () => {
+  it('leaves reading alone for a plain member of the buyer organization', async () => {
+    // Deliberately only about the buyer side. The GET carries no @Roles at all, and
+    // sce_select also admits the rated supplier, so a supplier can read its buyers' free
+    // text notes about it — pre-existing, a separate decision, and not something this
+    // test should be read as blessing.
     const asUser = await http().get(`/suppliers/${supplierOrgId}/scorecard`).set(...bearer(userTok)).expect(200);
     expect(asUser.body.averages).toEqual([{ metric: 'OTIF', avg_score: 80, n: 1 }]);
   });
