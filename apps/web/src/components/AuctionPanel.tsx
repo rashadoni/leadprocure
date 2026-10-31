@@ -32,7 +32,10 @@ export function AuctionPanel({ eventId, onChanged }: { eventId: string; onChange
     return () => clearInterval(iv);
   }, [load, denied]);
 
-  if (denied) return null;
+  // Denied before anything loaded: the org is not licensed for reverse auctions and there
+  // is no panel to show. Denied AFTER the figures are up is a different thing — the panel
+  // is on a page someone is bidding on, so it stays, says so, and stops updating.
+  if (denied && !state) return null;
   if (!state) {
     return stale ? (
       <div className="card" style={{ borderColor: 'var(--accent2)' }}>
@@ -55,7 +58,9 @@ export function AuctionPanel({ eventId, onChanged }: { eventId: string; onChange
           <div><div className="hint">{t('my_bid')}</div><b>{fmtMoney(state.my_best_total_minor, state.currency)}</b></div>
         )}
       </div>
-      {stale && <div role="alert" style={{ marginTop: 8 }}>{t('auction_stale')}</div>}
+      {denied
+        ? <div role="alert" style={{ marginTop: 8 }}>{t('auction_denied')}</div>
+        : stale && <div role="alert" style={{ marginTop: 8 }}>{t('auction_stale')}</div>}
       <div className="hint" style={{ marginTop: 8 }}>
         {t('deadline')}: {new Date(state.close_at).toLocaleString()}
       </div>

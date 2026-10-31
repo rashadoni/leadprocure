@@ -35,6 +35,19 @@ export default function Requests() {
   // Both carry only @Roles over the four buyer roles — no licence gate — so on a buyer
   // page every failure of theirs is a real one.
   const [refFailed, setRefFailed] = useState(false);
+  // The budget projection shown between the two approval clicks keeps its OWN flag: on one
+  // shared boolean a successful projection would have cleared a dead /departments (the
+  // page then claims it loaded while the control choosing whose budget pays is broken),
+  // and Retry would have re-run the reference reads instead of the projection that failed.
+  const [impactFailed, setImpactFailed] = useState<string | null>(null);
+  // An org without the budgets licence is denied this and the projection is simply absent.
+  // Any other failure means the approver confirms without the figure they were promised.
+  const loadImpact = (id: string) => api.get(`/budgets/impact/${id}`)
+    .then((r) => {
+      setImpact((m) => ({ ...m, [id]: r.data ?? null }));
+      setImpactFailed((f) => (f === id ? null : f));
+    })
+    .catch((e: any) => { if (!isDenied(e)) setImpactFailed(id); });
   const loadRefs = () => {
     setRefFailed(false);
     const broken = () => setRefFailed(true);
@@ -120,12 +133,7 @@ export default function Requests() {
       const { data } = await api.get(`/requests/${id}`);
       setPreview((p) => ({ ...p, [id]: data }));
       // what this approval does to the budget — shown before the second click, not after
-      // An org without the budgets licence is denied this and the projection is simply
-      // absent. Any other failure means the approver is about to confirm without the
-      // figure they were promised, and silence reads as "no budget impact".
-      api.get(`/budgets/impact/${id}`)
-        .then((r) => { setImpact((m) => ({ ...m, [id]: r.data ?? null })); setRefFailed(false); })
-        .catch((e: any) => { if (!isDenied(e)) setRefFailed(true); });
+      loadImpact(id);
       return;
     }
     try {
@@ -228,7 +236,9 @@ export default function Requests() {
             <> · <a href="/buyer/settings">⚖️ {t('method_policy')}</a></>
           )}
         </div>
-        <ListState of={requests} empty={!rows.length} />
+        <ListState of={[requests,
+          { loading: false, failed: !!impactFailed, reload: () => impactFailed && loadImpact(impactFailed) }]}
+          empty={!rows.length} />
         <table>
           <thead><tr><th>#</th><th>{t('title')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('date')}</th><th>{t('requester')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('method')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
