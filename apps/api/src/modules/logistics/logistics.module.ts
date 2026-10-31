@@ -26,6 +26,19 @@ const PO_TARGET: Partial<Record<ShipmentStatus, string>> = {
   DELIVERED: 'DELIVERED',
 };
 const SUPPLIER_PO_CHAIN = ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'];
+// A delivered shipment cannot become an undelivered one. That single step is what
+// contradicted the order — two clicks apart in the supplier's dropdown, with the purchase
+// order sitting at DELIVERED and the buyer's board reading the delivery — and it is the
+// only one worth refusing. The middle of the timeline is deliberately NOT ordered:
+// clearing customs twice on a cross-border shipment, or arriving at a hub and moving on
+// again, are ordinary freight, and a monotonic rule would have pushed both through
+// EXCEPTION — recording "something went wrong" to describe a leg where nothing did.
+// EXCEPTION stays available everywhere, including after delivery, since that is how a
+// shipment reports a problem with one.
+const SETTLED_PO = ['ACCEPTED', 'REJECTED', 'CANCELLED'];
+// What a supplier may ship against: the same window the UI offers, so the API is not the
+// looser of the two. Outside it the PO is not theirs to act on yet, or not any more.
+const SHIPPABLE_PO = ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'];
 
 @Injectable()
 export class LogisticsService {
@@ -41,9 +54,12 @@ export class LogisticsService {
   ) {
     const m = this.rc.manager;
     // RLS shows the PO to this supplier only if they own it.
-    const po = await m.query(`SELECT id, buyer_org_id, supplier_org_id FROM purchase_orders WHERE id = $1`, [poId]);
+    const po = await m.query(`SELECT id, buyer_org_id, supplier_org_id, status FROM purchase_orders WHERE id = $1`, [poId]);
     if (!po.length) throw new NotFoundException('Order not found');
     if (po[0].supplier_org_id !== auth.org_id) throw new BadRequestException('Only the awarded supplier ships this order');
+    if (!SHIPPABLE_PO.includes(po[0].status)) {
+      throw new BadRequestException(`The order is ${po[0].status}; confirm it before shipping against it`);
+    }
 
     const rows = await m.query(
       `INSERT INTO shipments(po_id, buyer_org_id, supplier_org_id, carrier, tracking_no, origin, destination, eta)
@@ -63,9 +79,26 @@ export class LogisticsService {
     auth: AccessTokenPayload,
   ) {
     const m = this.rc.manager;
-    const ship = await m.query(`SELECT id, supplier_org_id, buyer_org_id FROM shipments WHERE po_id = $1`, [poId]);
+    const ship = await m.query(
+      `SELECT id, supplier_org_id, buyer_org_id, status FROM shipments WHERE po_id = $1`,
+      [poId],
+    );
     if (!ship.length) throw new NotFoundException('No shipment for this order');
     if (ship[0].supplier_org_id !== auth.org_id) throw new BadRequestException('Only the supplier updates tracking');
+
+    // Once the order is settled the delivery is settled with it. REJECTED comes from the
+    // same place as ACCEPTED — the buyer's decision on DELIVERED goods — and is the one
+    // outcome a supplier has the most reason to re-narrate; a shipment opened on an
+    // unconfirmed order can still be running when the buyer cancels it.
+    const po = (await m.query(`SELECT status FROM purchase_orders WHERE id = $1`, [poId]))[0];
+    if (po && SETTLED_PO.includes(po.status)) {
+      throw new BadRequestException(`The order is ${po.status}; its tracking is closed`);
+    }
+    if (ship[0].status === 'DELIVERED' && dto.status !== 'DELIVERED' && dto.status !== 'EXCEPTION') {
+      throw new BadRequestException(
+        `Delivery is already DELIVERED; record EXCEPTION to report a problem instead of moving it back to ${dto.status}`,
+      );
+    }
 
     await m.query(
       `INSERT INTO shipment_events(shipment_id, buyer_org_id, supplier_org_id, status, location, note)
@@ -98,19 +131,23 @@ export class LogisticsService {
 
   async get(poId: string) {
     const m = this.rc.manager;
+    // The order's own status travels with the timeline. Walking the PO forward is
+    // best-effort by design — a milestone on an order the supplier never confirmed moves
+    // nothing — and without this the two screens simply disagreed in silence.
+    const po = (await m.query(`SELECT status FROM purchase_orders WHERE id = $1`, [poId]))[0];
     const ship = await m.query(`SELECT * FROM shipments WHERE po_id = $1`, [poId]);
-    if (!ship.length) return { shipment: null, events: [] };
+    if (!ship.length) return { shipment: null, events: [], poStatus: po?.status ?? null };
     const events = await m.query(
       `SELECT status, location, note, occurred_at FROM shipment_events WHERE shipment_id=$1 ORDER BY occurred_at`,
       [ship[0].id],
     );
-    return { shipment: ship[0], events };
+    return { shipment: ship[0], events, poStatus: po?.status ?? null };
   }
 
   // All in-flight shipments for the acting org (buyer or supplier).
   async board() {
     return this.rc.manager.query(
-      `SELECT s.*, p.po_no, ob.legal_name AS buyer_name, os.legal_name AS supplier_name
+      `SELECT s.*, p.po_no, p.status AS po_status, ob.legal_name AS buyer_name, os.legal_name AS supplier_name
        FROM shipments s
        JOIN purchase_orders p ON p.id = s.po_id
        JOIN organizations ob ON ob.id = s.buyer_org_id

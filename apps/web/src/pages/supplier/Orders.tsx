@@ -9,6 +9,7 @@ import { ListState, useLoad } from '../../components/ListState';
 
 const PAGE_SIZE = 20;
 
+
 // "Заказы в работе" — the supplier's delivery pipeline. Each PO advances through
 // CONFIRMED → PACKED → SHIPPED → DELIVERED; transitions are validated by the DB seam.
 export default function Orders() {
@@ -65,22 +66,31 @@ export default function Orders() {
     } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
+  // All three used to reject unhandled: the shipment simply did not appear, or the
+  // timeline did not move, with nothing said.
   const loadShip = async (poId: string) => {
-    const r = await api.get(`/logistics/po/${poId}`);
-    setShip((s) => ({ ...s, [poId]: r.data }));
+    try {
+      const r = await api.get(`/logistics/po/${poId}`);
+      setShip((s) => ({ ...s, [poId]: r.data }));
+    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
   const startShipment = async (poId: string) => {
     const carrier = prompt(`${t('carrier')}:`, 'AzərPost');
     if (carrier == null) return;
     const trackingNo = prompt(`${t('tracking_no')}:`, 'AZ' + Math.floor(Math.random() * 1e8));
-    await api.post(`/logistics/po/${poId}/shipment`, { carrier, trackingNo });
-    loadShip(poId);
+    try {
+      await api.post(`/logistics/po/${poId}/shipment`, { carrier, trackingNo });
+      await loadShip(poId);
+    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
   const addEvent = async (poId: string, status: string) => {
     const location = prompt(`Location for ${status}:`, 'Baku');
     if (location == null) return;
-    await api.post(`/logistics/po/${poId}/events`, { status, location });
-    loadShip(poId); load();
+    try {
+      await api.post(`/logistics/po/${poId}/events`, { status, location });
+      await loadShip(poId);
+      load();
+    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
   return (
@@ -135,7 +145,14 @@ export default function Orders() {
                         <div className="hint">{s.events.map((e: any) => `${e.status}@${e.location ?? '—'}`).join(' → ')}</div>
                         <select style={{ width: 150, marginTop: 4 }} value="" onChange={(e) => e.target.value && addEvent(p.id, e.target.value)}>
                           <option value="">+ {t('history')}…</option>
-                          {SHIPMENT_STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}
+                          {/* The same rule the API enforces, and only that one: a
+                              delivered shipment cannot become an undelivered one, which
+                              was two clicks away here. Everything else stays offerable —
+                              clearing customs twice or leaving a hub is ordinary freight. */}
+                          {SHIPMENT_STATUSES
+                            .filter((st) => s.shipment.status !== 'DELIVERED'
+                              || st === 'DELIVERED' || st === 'EXCEPTION')
+                            .map((st) => <option key={st} value={st}>{st}</option>)}
                         </select>
                       </div>
                     )}

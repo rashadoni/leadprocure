@@ -20,7 +20,8 @@ export default function Logistics() {
         <table>
           <thead><tr>
             <th>PO</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th>
-            <th>{t('carrier')}</th><th>{t('tracking_no')}</th><th>{t('status')}</th><th>{t('eta')}</th>
+            <th>{t('carrier')}</th><th>{t('tracking_no')}</th><th>{t('status')}</th>
+            <th>{t('po_status_col')}</th><th>{t('eta')}</th>
           </tr></thead>
           <tbody>
             {rows.map((s) => (
@@ -30,6 +31,10 @@ export default function Logistics() {
                 <td>{s.carrier ?? '—'}</td>
                 <td>{s.tracking_no ?? '—'}</td>
                 <td><Badge status={s.status} /></td>
+                {/* The delivery status is the supplier's claim; the order's own status is
+                    what the buyer acts on. Walking the order forward is best-effort, so
+                    these two can legitimately differ — but only if you can see both. */}
+                <td><Badge status={s.po_status} /></td>
                 <td>{s.eta ? new Date(s.eta).toLocaleDateString() : '—'}</td>
               </tr>
             ))}
