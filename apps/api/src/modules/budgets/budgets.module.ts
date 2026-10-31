@@ -658,7 +658,7 @@ export class BudgetsService {
     // The org-wide plans in this selection, with the category each one claims. This row is
     // not an ancestor of anything, so it is the only one that needs MATCHED_CTE's own
     // test — period AND category — rather than the department tree's period-only rule.
-    const orgPlans = budgets
+    const orgPlans: Array<{ from: string; to: string; category: string }> = budgets
       .filter((b: any) => !b.departmentId)
       .map((b: any) => ({ from: b.periodStart, to: b.periodEnd, category: b.category }));
     const orgCarried = (day: string, category: string | null) => orgPlans.some(
