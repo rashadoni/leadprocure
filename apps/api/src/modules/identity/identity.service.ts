@@ -127,6 +127,7 @@ export class IdentityService {
     } else {
       await m.query(`INSERT INTO supplier_profiles(org_id) VALUES ($1)`, [org.id]);
     }
+    await this.rc.setActor(user.id);
     await this.audit.record('ORG_REGISTERED', 'organization', org.id, { kind, email: dto.email });
 
     return this.issue(
@@ -161,6 +162,12 @@ export class IdentityService {
     const membership =
       (dto.orgId && memberships.find((x) => x.org_id === dto.orgId)) || memberships[0];
 
+    // Attribute the login before recording it. Without this the row is written with no
+    // organization — and audit_select is org_id = app_org_id(), so no per-organization
+    // query can ever reach it, nor can it join that organization's hash chain. The most
+    // frequent action in the table was also the least accountable one.
+    await this.rc.setOrg(membership.org_id, membership.role);
+    await this.rc.setActor(user.id);
     await this.audit.record('USER_LOGGED_IN', 'user', user.id, { org_id: membership.org_id });
     return this.issue(user, membership);
   }

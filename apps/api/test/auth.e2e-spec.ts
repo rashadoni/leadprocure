@@ -2,6 +2,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
+import { Client } from 'pg';
 import { randomUUID } from 'crypto';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
@@ -11,6 +12,7 @@ import { MailProvider, Mail } from '../src/common/mail/mail.module';
 // and exercises the auth flow over HTTP against the live dev database.
 describe('auth flow (API e2e)', () => {
   let app: INestApplication;
+  let db: Client;
   const email = `e2e-${randomUUID().slice(0, 8)}@acme.test`;
   let accessToken: string;
   let refreshCookie: string;
@@ -25,9 +27,12 @@ describe('auth flow (API e2e)', () => {
     app.use(cookieParser());
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
+    db = new Client({ connectionString: process.env.DATABASE_OWNER_URL ?? process.env.DATABASE_URL });
+    await db.connect();
   });
 
   afterAll(async () => {
+    await db.end();
     await app.close();
   });
 
@@ -176,5 +181,32 @@ describe('auth flow (API e2e)', () => {
 
     // token is single-use
     await request(app.getHttpServer()).post('/auth/reset-password').send({ token, password: 'Another1!' }).expect(400);
+  });
+
+  it('attributes registration and login, and both land in the org chain', async () => {
+    const org = (await db.query(
+      `SELECT m.org_id FROM memberships m JOIN organization_users u ON u.id = m.user_id WHERE u.email = $1`,
+      [email],
+    )).rows[0].org_id;
+    const user = (await db.query(`SELECT id FROM organization_users WHERE email = $1`, [email])).rows[0].id;
+    const rows = (await db.query(
+      `SELECT action, org_id, actor_id, prev_hash, hash,
+              hash = encode(sha256(convert_to(coalesce(prev_hash,'') ||
+                audit_body(org_id, actor_id, action, entity_type, entity_id, payload, created_at),
+                'UTF8')), 'hex') AS verifies
+         FROM audit_events WHERE org_id = $1 ORDER BY seq`, [org],
+    )).rows;
+
+    // USER_LOGGED_IN used to be written before the request had an organization, so it
+    // carried none — and audit_select is org_id = app_org_id(), which no NULL can satisfy.
+    // The most frequent action in the table could not be read by any per-organization
+    // query and could not join that organization's chain. ORG_REGISTERED had the org but
+    // no actor, which on these two rows is most of the content.
+    expect(rows.map((r) => r.action)).toEqual(expect.arrayContaining(['ORG_REGISTERED', 'USER_LOGGED_IN']));
+    for (const r of rows) {
+      expect(r.actor_id).toBe(user);
+      expect(r.verifies).toBe(true);
+    }
+    for (let i = 1; i < rows.length; i++) expect(rows[i].prev_hash).toBe(rows[i - 1].hash);
   });
 });
