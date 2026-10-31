@@ -639,7 +639,13 @@ export class BudgetsService {
          FROM invoices i
          JOIN purchase_orders o ON o.id = i.po_id
          LEFT JOIN procurement_requests r ON r.id = o.request_id
-         WHERE i.status = 'PAID' AND ($3::uuid IS NULL OR i.department_id = $3)
+         -- The same orders MATCHED_CTE counts. A cancelled or rejected order is in
+         -- neither of its branches, so it carries no commitment and is not even in the
+         -- unbudgeted report; its settlement must not stand against a plan either.
+         -- (A request can only be cancelled once every order of it is gone, so this one
+         -- condition covers that case too.)
+         WHERE i.status = 'PAID' AND o.status NOT IN ('CANCELLED','REJECTED')
+           AND ($3::uuid IS NULL OR i.department_id = $3)
        ),
        -- Which plan carried this obligation, by MATCHED_CTE's own choice (same
        -- predicates, same ORDER BY) over EVERY plan of the org — not only the ones
@@ -648,7 +654,11 @@ export class BudgetsService {
        -- its period-only rule, which is what the accepted matrix reports.
        settled AS (
          SELECT d.*, mb.budget_id
-         FROM dated_paid d
+         -- Narrowed to the reported window BEFORE the lookup: one plan search per
+         -- settlement in the period, not per settlement the org has ever made.
+         FROM (SELECT * FROM dated_paid
+               WHERE budget_at >= ($1::date::timestamp AT TIME ZONE 'UTC')
+                 AND budget_at < (($2::date + 1)::timestamp AT TIME ZONE 'UTC')) d
          LEFT JOIN LATERAL (
            SELECT b.id AS budget_id
            FROM budgets b
@@ -667,8 +677,6 @@ export class BudgetsService {
               to_char(budget_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS budget_day,
               sum(gross_minor)::bigint AS paid
        FROM settled
-       WHERE budget_at >= ($1::date::timestamp AT TIME ZONE 'UTC')
-         AND budget_at < (($2::date + 1)::timestamp AT TIME ZONE 'UTC')
        GROUP BY department_id, currency, budget_id, to_char(budget_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
       [budgets.reduce((min: string, b: any) => b.periodStart < min ? b.periodStart : min, budgets[0].periodStart),
        budgets.reduce((max: string, b: any) => b.periodEnd > max ? b.periodEnd : max, budgets[0].periodEnd),
@@ -696,8 +704,9 @@ export class BudgetsService {
       // The org-wide row is nobody's ancestor, so a period that merely overlaps says
       // nothing: it is credited exactly when the plan that carried this obligation IS one
       // of its plans. Anything a department plan carried, or that no plan carried at all
-      // (the unbudgeted report's job), leaves it alone — so paid never exceeds the used it
-      // stands beside, and nothing is counted twice.
+      // (the unbudgeted report's job), leaves it alone, so no settlement is counted twice.
+      // Paid is still not comparable to used as a number: an order's total is net, an
+      // invoice's gross includes VAT, so 18% spend settles at about 1.18× its actual.
       const org = byDep.get('');
       if (org && row.budget_id && selectedOrgPlans.has(String(row.budget_id))
           && row.currency === org.currency) {

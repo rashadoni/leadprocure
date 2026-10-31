@@ -192,10 +192,11 @@ describe('budget rollup: settled obligation periods and department isolation', (
   });
 });
 
-// The org-wide plan (no department) is MATCHED_CTE's last resort, so its settlement follows
-// the same test as its commitment: the invoice's OWN department has no plan for the day —
-// an ancestor's plan does not stand in, because matching never walks up the tree — and the
-// plan's category claims it. Its own orgs and departments, so the matrix above is untouched.
+// The org-wide plan (no department) is MATCHED_CTE's last resort, and its settlement is
+// reported by the same choice: credited exactly when the plan that CARRIED the obligation
+// is one of this report's org-wide plans — not when a period happens to overlap. The
+// department tree keeps its own period-based rule, which the matrix above pins. Its own
+// orgs and departments, so that matrix is untouched.
 describe('budget rollup: settlement of the org-wide plan', () => {
   let app: INestApplication, db: Client;
   const tag = randomUUID().slice(0, 8);
@@ -272,6 +273,30 @@ describe('budget rollup: settlement of the org-wide plan', () => {
     return po.po_no as string;
   };
 
+  // Paid, then the order cancelled: MATCHED_CTE drops such an order from both of its
+  // branches, so it carries no commitment and the unbudgeted report does not list it
+  // either. Invoiced without a receipt, so it is DISPUTED and takes a written override.
+  const cancelledAfterPaying = async (amount: number, date: string) => {
+    const cat = (await http().post('/catalogs').set(...bearer(buyer))
+      .send({ supplierOrgId: supplierOrg, title: `Org cancelled ${tag} ${amount}`, currency: 'AZN' }).expect(201)).body;
+    const item = (await http().post(`/catalogs/${cat.id}/items`).set(...bearer(buyer))
+      .send({ name: 'Paper', unitPriceMinor: amount, vatRateBp: 0 }).expect(201)).body.items[0];
+    await http().post(`/catalogs/${cat.id}/activate`).set(...bearer(buyer)).expect(201);
+    const order = (await http().post(`/catalogs/${cat.id}/order`).set(...bearer(buyer))
+      .send({ items: [{ catalogItemId: item.id, qty: 1 }] }).expect(201)).body;
+    const po = (await http().get(`/orders/${order.id}`).set(...bearer(buyer)).expect(200)).body;
+    await http().post(`/orders/${po.id}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
+    const inv = (await http().post(`/invoices/from-po/${po.id}`).set(...bearer(supplier))
+      .send({ items: [{ poItemId: po.items[0].id, qty: 1, unitPriceMinor: amount }] }).expect(201)).body;
+    expect(inv.status).toBe('DISPUTED'); // nothing was received
+    await http().post(`/invoices/${inv.id}/approve`).set(...bearer(buyer))
+      .send({ reason: 'Paid in advance, order withdrawn afterwards' }).expect(201);
+    await http().post(`/invoices/${inv.id}/pay`).set(...bearer(buyer)).expect(201);
+    await http().post(`/orders/${po.id}/status`).set(...bearer(buyer)).send({ status: 'CANCELLED' }).expect(201);
+    expect((await http().get(`/invoices/${inv.id}`).set(...bearer(buyer)).expect(200)).body.status).toBe('PAID');
+    await db.query('UPDATE purchase_orders SET issued_at = $2, created_at = $2 WHERE id = $1', [po.id, date]);
+  };
+
   beforeAll(async () => {
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = mod.createNestApplication();
@@ -304,11 +329,13 @@ describe('budget rollup: settlement of the org-wide plan', () => {
     await budget(null, 2037, 'FACILITIES'); // and nothing claims an unclassified call-off
     await budget(leaf, 2038, '*', 3);   // a monthly plan, outside a yearly selection
     await budget(null, 2038, '*');
+    await budget(null, 2039, '*');      // and nothing is owed on a withdrawn order
     await settled(1300, leaf, '*', '2034-06-15T00:00:00Z');
     await settled(2600, top, 'IT', '2035-06-15T00:00:00Z');
     await settled(700, leaf, 'OFFICE', '2036-06-15T00:00:00Z');
     callOffNo = await callOff(500, '2037-06-15T00:00:00Z');
     await settled(900, leaf, '*', '2038-03-10T00:00:00Z');
+    await cancelledAfterPaying(400, '2039-06-15T00:00:00Z');
   }, 60000);
 
   afterAll(async () => {
@@ -347,7 +374,11 @@ describe('budget rollup: settlement of the org-wide plan', () => {
     // MATCHED_CTE charged the org-wide plan — and its settlement belongs there too.
     expect(dep(rows, null).usedMinor).toBe(700);
     expect(dep(rows, null).paidMinor).toBe(700);
+    // leaf's own plan carries none of it, and the department tree still reports the
+    // settlement of its own period: that pairing is the accepted convention, not an
+    // oversight, so it is pinned here rather than left to be rediscovered.
     expect(dep(rows, leaf).usedMinor).toBe(0);
+    expect(dep(rows, leaf).paidMinor).toBe(700);
   });
 
   it('does not claim an unclassified call-off for a plan that could not have carried it', async () => {
@@ -356,8 +387,18 @@ describe('budget rollup: settlement of the org-wide plan', () => {
     expect(dep(rows, null).paidMinor).toBe(0);
     const outside = (await http().get('/budgets/unbudgeted').query({ from: '2037-01-01', to: '2037-12-31' })
       .set(...bearer(buyer)).expect(200)).body;
-    expect(outside.map((r: any) => [r.kind, r.amountMinor])).toEqual([['ORDER', 500]]);
-    expect(outside[0].docNo ?? callOffNo).toBe(callOffNo);
+    expect(outside.map((r: any) => [r.kind, r.docNo, r.amountMinor])).toEqual([['ORDER', callOffNo, 500]]);
+  });
+
+  it('does not report settlement of an order that carries no commitment at all', async () => {
+    const rows = await rollup({ year: 2039, periodType: 'YEAR' });
+    expect(dep(rows, null).usedMinor).toBe(0);
+    expect(dep(rows, null).paidMinor).toBe(0);
+    // and it is not hidden in the other report either: a cancelled order is in neither
+    // branch of MATCHED_CTE, which is exactly why its settlement stands against nothing
+    const outside = (await http().get('/budgets/unbudgeted').query({ from: '2039-01-01', to: '2039-12-31' })
+      .set(...bearer(buyer)).expect(200)).body;
+    expect(outside).toEqual([]);
   });
 
   it('does not move settlement onto the org plan because the carrying plan is out of the filter', async () => {
