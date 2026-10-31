@@ -11,6 +11,9 @@ COPY apps/web apps/web
 # Baked into the bundle at build time — point it at your public API URL.
 ARG VITE_API_BASE_URL=http://localhost:3000
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+# Opt-in demo-credentials hint on the login page (demo stands only; default off).
+ARG VITE_DEMO_HINT=
+ENV VITE_DEMO_HINT=$VITE_DEMO_HINT
 # Build shared first so `tsc -b` can resolve @leadprocure/shared types (its dist).
 RUN pnpm --filter @leadprocure/shared build && pnpm --filter web build
 

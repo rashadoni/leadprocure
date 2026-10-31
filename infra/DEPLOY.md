@@ -40,14 +40,8 @@ from the repository root.
 
 Set HTTPS `WEB_ORIGIN`, `PUBLIC_API_URL` and `S3_PUBLIC_URL` to addresses reachable
 by the browser. SigV4 binds the storage host: rewriting a signed URL breaks it.
-Configure SMTP/Meta only when connections exist; console output does not prove delivery.
-
-There is no `VITE_DEMO_HINT` any more. It gated a line on the login page that printed
-seeded logins and their password, this file said to keep it empty, and a production image
-was built with it on regardless — so the live login page handed a working supplier
-password to anyone who opened it. The line is gone from the code rather than re-guarded.
-Credentials for a freshly seeded database come from `pnpm --filter api seed`, which prints
-them.
+Keep `VITE_DEMO_HINT` empty. Configure SMTP/Meta only when connections exist;
+console output does not prove delivery.
 
 ## Build and start a fresh, isolated stand
 
