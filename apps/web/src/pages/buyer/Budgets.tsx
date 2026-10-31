@@ -342,10 +342,11 @@ export default function Budgets() {
               {/* Not the invoice figure on /buyer/analytics: a different measure, so it
                   carries its own name — taken from the basis the endpoint declares rather
                   than hard-coded here. See PAID_BASES in @leadprocure/shared.
-                  «incl. VAT» is not decoration: this is invoice gross while the columns
-                  to its left follow each order's own VAT mode, so a fully paid order at
-                  18% shows 1180 beside 1000 and must not read as a data error. */}
-              <th>{t(paidBasis)} · {t('gross_label')}</th><th>{t('remaining')}</th><th>{t('forecast')}</th><th style={{ width: 180 }}>{t('utilization')}</th>
+                  No VAT label, and that is correct: this figure is on the same basis as
+                  the columns to its left — each order's own vat_mode — so it needs no
+                  separate one. The analytics tile keeps its «incl. VAT» because it reports
+                  the invoice as billed. */}
+              <th>{t(paidBasis)}</th><th>{t('remaining')}</th><th>{t('forecast')}</th><th style={{ width: 180 }}>{t('utilization')}</th>
             </tr></thead>
             <tbody>
               {depSummary.map((d) => {

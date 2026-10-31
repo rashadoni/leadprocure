@@ -66,9 +66,12 @@ describe('paid: the invoice ledger and plan settlement are different measures', 
   // the invoice deliberately recorded in DIFFERENT months. Only those two timestamps are
   // moved, through the fixture owner connection; the order is dated far outside every
   // window under test so it cannot pick a period for either page.
-  const divergentMonths = async (amount: number, approvedAt: string, recordedAt: string, vatRateBp = 0) => {
+  const divergentMonths = async (
+    amount: number, approvedAt: string, recordedAt: string,
+    vatRateBp = 0, vatMode: 'EXCLUSIVE' | 'INCLUSIVE' = 'EXCLUSIVE',
+  ) => {
     const req = (await http().post('/requests').set(...bearer(buyer)).send({
-      title: `Basis divergent ${tag}`, departmentId: dep,
+      title: `Basis divergent ${tag}`, departmentId: dep, vatMode,
       items: [{ name: 'Paper', qty: 1, estUnitPriceMinor: amount, vatRateBp }],
     }).expect(201)).body;
     await http().post(`/requests/${req.id}/submit`).set(...bearer(buyer)).expect(201);
@@ -144,11 +147,13 @@ describe('paid: the invoice ledger and plan settlement are different measures', 
     // A plan whose period covers the withdrawn call-off, so "0" below is the obligation
     // test talking and not a missing budget.
     await budget(null, 2044, '*');
-    // And a plan for the VAT case: an EXCLUSIVE order of 1000 settles at 1180.
+    // Plans for the two VAT cases: an EXCLUSIVE order of 1000 and an INCLUSIVE one of 1180.
     await budget(dep, 2046, '*');
+    await budget(dep, 2047, '*');
     await divergentMonths(5500, '2043-03-15T12:00:00Z', '2043-09-20T12:00:00Z');
     await withdrawnAfterPaying(4400, '2044-06-10T12:00:00Z', '2044-06-20T12:00:00Z');
     await divergentMonths(1000, '2046-05-15T12:00:00Z', '2046-05-20T12:00:00Z', 1800);
+    await divergentMonths(1180, '2047-05-15T12:00:00Z', '2047-05-20T12:00:00Z', 1800, 'INCLUSIVE');
   }, 60000);
 
   afterAll(async () => {
@@ -209,19 +214,26 @@ describe('paid: the invoice ledger and plan settlement are different measures', 
     // is worded for the looser rule because of it.
   });
 
-  it('reports settlement at invoice gross, beside an order total that is net', async () => {
+  it('settles an EXCLUSIVE order on its own net basis, while the ledger stays gross', async () => {
     // The default EXCLUSIVE vat_mode makes an order's total the raw sum of its lines, i.e.
-    // NET, while an invoice's gross carries the VAT. So a fully settled order at 18% puts
-    // 1180 next to 1000 in one table row — which is why the column says «incl. VAT».
-    // Gross is the deliberate choice (it is the money that left, and it is what the invoice
-    // list and the analytics tiles report), so it is pinned here: making paid comparable to
-    // used instead is a money computation, and it must not arrive unnoticed.
+    // NET, while the invoice's gross carries the VAT. The plan figure follows the ORDER, so
+    // it lands on 1000 beside an actual of 1000 instead of the 1180 it used to report in
+    // the same table row. The ledger is unchanged: an accounts-payable view reports the
+    // invoice as billed. This is the pair that pins the two bases apart on VAT.
     const rows = await rollup({ year: 2046, periodType: 'YEAR' });
     expect(row(rows, dep).actualMinor).toBe(1000);
-    expect(row(rows, dep).paidMinor).toBe(1180);
-    // Both pages report paid on the SAME basis, which is what keeps them comparable to
-    // each other once each has said what it counts.
+    expect(row(rows, dep).paidMinor).toBe(1000);
     expect((await ledger('2046-05')).paidMinor).toBe(1180);
+  });
+
+  it('settles an INCLUSIVE order on its gross, because that is what its order total is', async () => {
+    // INCLUSIVE puts the VAT inside the line, so the order's total IS the gross and the
+    // two bases coincide — the CASE must pick gross here, not net, or an INCLUSIVE order
+    // would report 1000 against an actual of 1180 and the defect would simply change sign.
+    const rows = await rollup({ year: 2047, periodType: 'YEAR' });
+    expect(row(rows, dep).actualMinor).toBe(1180);
+    expect(row(rows, dep).paidMinor).toBe(1180);
+    expect((await ledger('2047-05')).paidMinor).toBe(1180);
   });
 
   it('puts one settlement in different months on the two pages, by design', async () => {

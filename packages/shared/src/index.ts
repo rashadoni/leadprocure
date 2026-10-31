@@ -327,7 +327,8 @@ export interface AccessTokenPayload {
 //   accounts-payable view that hid it would hide exactly the leak it exists to show. Dated
 //   by the invoice's own created_at — the day the organisation recorded the liability. (No
 //   bank settlement date is stored anywhere, so this is not, and must not be labelled, the
-//   day the money moved.)
+//   day the money moved.) The amount is the invoice GROSS, as billed: an accounts-payable
+//   view reports what is owed and what was handed over, and VAT is part of both.
 //
 // 'budget_obligation' — GET /budgets/rollup → paidMinor
 //   Settlement of obligations the budget engine still counts (MATCHED_CTE), dated by the
@@ -344,17 +345,22 @@ export interface AccessTokenPayload {
 //   where a department reads used 0 and paid 700). Only the org-wide row is credited
 //   strictly, with what its own plans actually carried. See the loop over `paid` in
 //   rollup().
-//   VAT: this is the invoice's GROSS, while commitment and actual are each order's own
-//   basis — the raw sum of its lines, which taxTotals() makes NET under the default
-//   EXCLUSIVE vat_mode and GROSS under INCLUSIVE. So a fully settled EXCLUSIVE order at
-//   18% reads "used 1000 / paid 1180", and the column must say «incl. VAT» or that reads
-//   as a data error. Gross is deliberate and is kept: it is the money that actually left,
-//   and it is the basis the invoice list and the analytics tiles already report, so
-//   restating it net here would buy comparability with the column beside it at the price
-//   of a THIRD number for the same invoice — the defect this whole section exists to
-//   prevent. Making paid comparable to used instead is a real alternative; it is a money
-//   computation (CASE WHEN o.vat_mode = 'INCLUSIVE' THEN i.gross_minor ELSE i.net_minor
-//   END) and so a decision of its own, not something to slip in behind a label.
+//   VAT: the amount is the ORDER's own basis, not the invoice as billed —
+//   CASE WHEN o.vat_mode = 'INCLUSIVE' THEN i.gross_minor ELSE i.net_minor END. The reason
+//   is that this figure is read against the commitment and actual next to it, and those
+//   are each document's total, i.e. the raw sum of its lines, which taxTotals() makes NET
+//   under the default EXCLUSIVE vat_mode and GROSS under INCLUSIVE. Reporting the gross
+//   here put 1180 beside an actual of 1000 for one fully settled 18% order, in one table
+//   row. It is a comparable basis, NOT a guarantee that paid <= used: a DISPUTED invoice
+//   can be approved over its order with a written reason, and a cancelled order hands the
+//   commitment back to the request's estimate.
+//   So the two bases also differ on VAT, and deliberately: the ledger answers "what were
+//   we billed and what did we hand over", where VAT is part of the money, while this one
+//   answers "how much of this plan's spend is settled", where the plan is kept in the same
+//   basis as the orders. One invoice therefore shows two amounts across the product — the
+//   gross on the invoice list and on analytics, the order basis here — and each screen says
+//   which it is. (Owner's decision, 2026-10-31; the reasoning for both options is in
+//   docs/budget-by-department-decisions.md.)
 //
 // So the same paid invoice can appear on one page and not the other, and can fall in
 // different months on each. That is the design: one is a ledger of invoices, the other is

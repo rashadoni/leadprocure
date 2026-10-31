@@ -547,7 +547,9 @@ export class BudgetsService {
   // approved_at, a requestless order's issue/creation). There: every invoice recorded in
   // the window, dated by the invoice. So a paid invoice whose order was withdrawn shows up
   // on analytics and not here, and an invoice recorded in a month other than its
-  // obligation's falls in a different month on each page. Both are correct answers to
+  // obligation's falls in a different month on each page. They also differ on VAT: there
+  // the invoice as billed (gross), here the order's own basis, so that this figure can be
+  // read against the commitment and actual beside it. Both are correct answers to
   // different questions; the rows below carry `paidBasis` so the page can say which.
   //
   // Which ROW gets a settlement is two rules, not one — a department's period covers it,
@@ -648,7 +650,20 @@ export class BudgetsService {
       // claimed bank payment date. Preserve the invoice's department snapshot and apply
       // the caller's scope before rolling children up to a shared parent.
       `WITH dated_paid AS (
-         SELECT i.department_id, i.currency, i.gross_minor,
+         -- The order's OWN VAT basis, not the invoice as billed. taxTotals() makes a
+         -- document's total the raw sum of its lines, which is NET under the default
+         -- EXCLUSIVE vat_mode and GROSS under INCLUSIVE — and commitment and actual are
+         -- exactly those totals. Taking i.gross_minor made a settled EXCLUSIVE order at
+         -- 18% report 1180 against an actual of 1000, in one table row. The invoice's
+         -- vat_mode IS the order's (invoices.submit computes net/vat/gross from po.vat_mode
+         -- and the invoice carries no mode of its own), so o.vat_mode selects the matching
+         -- column. This is NOT an invariant that paid <= used — a DISPUTED invoice may be
+         -- approved over its order with a written reason, and a cancelled order hands the
+         -- commitment back to the request's estimate — it is the same basis, so the two
+         -- figures can be read against each other at all.
+         SELECT i.department_id, i.currency,
+                CASE WHEN o.vat_mode = 'INCLUSIVE' THEN i.gross_minor ELSE i.net_minor END
+                  AS settled_minor,
                 CASE WHEN r.status = 'APPROVED' AND r.approved_at IS NOT NULL AND r.currency = o.currency
                      THEN r.approved_at ELSE COALESCE(o.issued_at, o.created_at) END AS budget_at,
                 -- The same split as matched / matched_orders: a request dates and classifies
@@ -703,7 +718,7 @@ export class BudgetsService {
        )
        SELECT department_id, currency, budget_id,
               to_char(budget_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS budget_day,
-              sum(gross_minor)::bigint AS paid
+              sum(settled_minor)::bigint AS paid
        FROM settled
        GROUP BY department_id, currency, budget_id, to_char(budget_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
       [budgets.reduce((min: string, b: any) => b.periodStart < min ? b.periodStart : min, budgets[0].periodStart),
@@ -737,12 +752,11 @@ export class BudgetsService {
       // plan figures do, and each row counts it at most once. Only this row's appearance
       // means "the plan here carried it"; a department's means "my period covers it",
       // which is the looser rule the accepted matrix reports (see the 2036 case).
-      // Paid is also not comparable to used as a number: with the default EXCLUSIVE
-      // vat_mode an order's total is net while an invoice's gross carries VAT, so 18%
-      // spend settles at about 1.18× its actual (INCLUSIVE orders settle at about 1×).
-      // The two sit in ONE table row, so this cannot live only here: the column carries
-      // «incl. VAT» and its hint says it, or a fully paid order reads as arithmetic that
-      // does not add up. Pinned by the 18% case in paid-basis.e2e-spec.ts.
+      // Paid IS on the same basis as used (dated_paid takes the order's own VAT basis, see
+      // there), so the two can be read against each other — but being comparable is not
+      // the same as being bounded: a DISPUTED invoice approved over its order, or a
+      // cancelled order whose commitment reverts to the request's estimate, can still put
+      // paid above used. Pinned by the 18% and INCLUSIVE cases in paid-basis.e2e-spec.ts.
       const org = byDep.get('');
       if (org && row.budget_id && selectedOrgPlans.has(String(row.budget_id))
           && row.currency === org.currency) {
