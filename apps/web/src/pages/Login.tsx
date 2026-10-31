@@ -73,11 +73,15 @@ export default function Login() {
             <a href="#" onClick={(e) => { e.preventDefault(); forgot(); }} className="hint">{t('forgot')}</a>
           </div>
         )}
-        {/* Demo credentials are shown only when the build opts in (dev / demo stand) —
-            a production build must never advertise seeded logins. */}
-        {(import.meta.env.DEV || import.meta.env.VITE_DEMO_HINT === '1') && (
-          <div className="hint">demo: admin@acme.test / seller@supply-one.test · Passw0rd!</div>
-        )}
+        {/* A sign-in page does not print a password. There used to be a seeded-credentials
+            line here behind `import.meta.env.DEV || VITE_DEMO_HINT === '1'`, with a comment
+            promising that a production build would never advertise seeded logins — and the
+            production image shipped with the flag on anyway, so the live login page handed
+            out a working supplier password to anyone who opened it. The guard was the whole
+            defence and it failed silently; the flag is documented as "keep empty" in both
+            infra/DEPLOY.md and docs/LAUNCH-CHECKLIST.md, which did not help either.
+            Whoever seeds a database gets the credentials from `pnpm --filter api seed`,
+            which prints them, so nothing is lost by refusing to render them here. */}
       </form>
     </div>
   );
