@@ -14,7 +14,7 @@ trap 'rm -rf "$inspect_dir"' EXIT
 for service in api web; do
   build_args=()
   if [[ "$service" == web ]]; then
-    build_args+=(--build-arg "VITE_API_BASE_URL=$public_api_url" --build-arg 'VITE_DEMO_HINT=')
+    build_args+=(--build-arg "VITE_API_BASE_URL=$public_api_url")
   fi
   docker build --platform linux/amd64 --label "org.opencontainers.image.revision=$source_sha" \
     --label 'org.opencontainers.image.source=https://github.com/rashadoni/leadprocure' \
