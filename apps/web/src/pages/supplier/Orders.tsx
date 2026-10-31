@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { PO_SUPPLIER_TRANSITIONS, SHIPMENT_STATUSES } from '@leadprocure/shared';
 import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
+import { ListState, useLoad } from '../../components/ListState';
 
 const PAGE_SIZE = 20;
 
@@ -13,13 +14,17 @@ const PAGE_SIZE = 20;
 export default function Orders() {
   const { t } = useI18n();
   const nav = useNavigate();
-  const [orders, setOrders] = useState<any[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
 
-  const load = () => api.get('/orders', { params: { page, pageSize: PAGE_SIZE } })
-    .then((r) => { setOrders(r.data.items); setTotal(r.data.total); });
-  useEffect(() => { load(); }, [page]);
+  const orderList = useLoad(
+    () => api.get('/orders', { params: { page, pageSize: PAGE_SIZE } }).then((r) => r.data),
+    [page], { items: [] as any[], total: 0 },
+  );
+  // A failed page change must not leave the PREVIOUS page's rows sitting under the new
+  // page number: on failure the alert stands alone.
+  const orders: any[] = orderList.failed ? [] : (orderList.data.items ?? []);
+  const total: number = orderList.data.total ?? 0;
+  const load = () => orderList.reload();
 
   const [ship, setShip] = useState<Record<string, any>>({});
 
@@ -82,6 +87,7 @@ export default function Orders() {
     <>
       <h1>{t('my_orders')}</h1>
       <div className="card">
+        <ListState of={orderList} empty={!orders.length} />
         <table>
           <thead><tr><th>#</th><th>{t('buyer_org')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th><th>{t('logistics')}</th></tr></thead>
           <tbody>

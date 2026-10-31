@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { api } from '../api/client';
 import { useAuth } from '../auth/auth';
 import { useI18n } from '../i18n';
 import { VERIFICATION_DOC_TYPES } from '@leadprocure/shared';
 import { Badge } from '../components/Badge';
+import { ListState, useLoad } from '../components/ListState';
 
 async function sha256(file: File): Promise<string> {
   const buf = await file.arrayBuffer();
@@ -15,13 +16,13 @@ export default function Verification() {
   const { t } = useI18n();
   const { session } = useAuth();
   const isBuyer = session?.org.kind !== 'SUPPLIER';
-  const [cases, setCases] = useState<any[]>([]);
   const [open, setOpen] = useState<Record<string, any>>({});
   const [docType, setDocType] = useState('VOEN');
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const load = () => api.get('/verification/cases').then((r) => setCases(r.data));
-  useEffect(() => { load(); }, []);
+  const caseList = useLoad(() => api.get('/verification/cases').then((r) => r.data), [], [] as any[]);
+  const cases = caseList.data;
+  const load = () => caseList.reload();
 
   const expand = async (id: string) => {
     if (open[id]) { setOpen((o) => ({ ...o, [id]: null })); return; }
@@ -55,6 +56,7 @@ export default function Verification() {
     <>
       <h1>🛡 {t('verification')}</h1>
       <div className="card">
+        <ListState of={caseList} />
         <table>
           <thead><tr><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th>{t('status')}</th><th>{t('attachments')}</th></tr></thead>
           <tbody>
@@ -67,7 +69,7 @@ export default function Verification() {
             ))}
           </tbody>
         </table>
-        {cases.length === 0 && <div className="hint">—{isBuyer ? ` ${t('hint_verification_empty')}` : ''}</div>}
+        {!caseList.loading && !caseList.failed && cases.length === 0 && <div className="hint">—{isBuyer ? ` ${t('hint_verification_empty')}` : ''}</div>}
       </div>
 
       {Object.entries(open).filter(([, v]) => v).map(([id, c]) => (

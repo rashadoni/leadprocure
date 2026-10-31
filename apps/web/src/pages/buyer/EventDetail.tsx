@@ -8,6 +8,7 @@ import { AuctionPanel } from '../../components/AuctionPanel';
 import { QnaCard } from '../../components/QnaCard';
 import { BidDocs } from '../../components/BidDocs';
 import { Badge } from '../../components/Badge';
+import { ListState } from '../../components/ListState';
 
 export default function EventDetail() {
   const { id } = useParams();
@@ -20,8 +21,12 @@ export default function EventDetail() {
   const [scores, setScores] = useState<Record<string, Record<string, number>>>({});
   const [ai, setAi] = useState<any>(null);
 
-  const load = useCallback(() => api.get(`/events/${id}`).then((r) => setEv(r.data)), [id]);
-  useEffect(() => { load(); api.get('/suppliers/directory').then((r) => setSuppliers(r.data)); }, [load]);
+  const [evFailed, setEvFailed] = useState(false);
+  const load = useCallback(
+    () => { setEvFailed(false); return api.get(`/events/${id}`).then((r) => setEv(r.data)).catch(() => setEvFailed(true)); },
+    [id],
+  );
+  useEffect(() => { load(); api.get('/suppliers/directory').then((r) => setSuppliers(r.data)).catch(() => {}); }, [load]);
 
   // Follow-up chains: reminder status per invited supplier (email → … → WhatsApp).
   const [fups, setFups] = useState<any[]>([]);
@@ -114,7 +119,9 @@ export default function EventDetail() {
     catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
-  if (!ev) return <div className="center">…</div>;
+  // Until the event is here this page is only a spinner, and a failed load used to
+  // leave that spinner on screen for ever instead of saying what happened.
+  if (!ev) return <div className="card"><ListState of={{ loading: !evFailed, failed: evFailed, reload: load }} /></div>;
   const lot = ev.lots?.[0];
   const activeAwards = (ev.awards ?? []).filter((a: any) => !a.cancelled_at);
   const winningBidIds = new Set(activeAwards.map((a: any) => a.winning_bid_id));
@@ -126,6 +133,8 @@ export default function EventDetail() {
 
   return (
     <>
+      {/* a reload that failed after the page was drawn: the figures below are stale */}
+      <ListState of={{ loading: false, failed: evFailed, reload: load }} />
       <h1>
         {ev.title} <span className="badge INVITED">{ev.type}</span>{' '}
         <Badge status={ev.status} />

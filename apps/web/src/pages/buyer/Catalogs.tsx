@@ -4,13 +4,13 @@ import { api, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import { Badge } from '../../components/Badge';
+import { ListState, useLoad } from '../../components/ListState';
 
 export default function Catalogs() {
   const { t } = useI18n();
   const { session } = useAuth();
   const nav = useNavigate();
   const isBuyer = session?.org.kind !== 'SUPPLIER';
-  const [rows, setRows] = useState<any[]>([]);
   const [open, setOpen] = useState<Record<string, any>>({});
   const [qty, setQty] = useState<Record<string, string>>({});
   // A call-off has no request behind it, so this select is the only place it can be told
@@ -18,8 +18,9 @@ export default function Catalogs() {
   const [deps, setDeps] = useState<any[]>([]);
   const [orderDep, setOrderDep] = useState('');
 
-  const load = () => api.get('/catalogs').then((r) => setRows(r.data));
-  useEffect(() => { load(); }, []);
+  const catalogs = useLoad(() => api.get('/catalogs').then((r) => r.data), [], [] as any[]);
+  const rows = catalogs.data;
+  const load = () => catalogs.reload();
   useEffect(() => { if (isBuyer) api.get('/departments').then((r) => setDeps(r.data)).catch(() => {}); }, [isBuyer]);
 
   const run = async (fn: () => Promise<unknown>) => {
@@ -44,6 +45,7 @@ export default function Catalogs() {
     <>
       <h1>📖 {t('catalogs')}</h1>
       <div className="card">
+        <ListState of={catalogs} />
         <table>
           <thead><tr><th>{t('title')}</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th>{t('status')}</th><th>{t('items')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
@@ -62,7 +64,7 @@ export default function Catalogs() {
             ))}
           </tbody>
         </table>
-        {rows.length === 0 && <div className="hint">— {isBuyer ? t('hint_catalogs_empty') : ''}</div>}
+        {!catalogs.loading && !catalogs.failed && rows.length === 0 && <div className="hint">— {isBuyer ? t('hint_catalogs_empty') : ''}</div>}
       </div>
 
       {Object.entries(open).filter(([, v]) => v).map(([id, cat]) => (

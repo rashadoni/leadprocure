@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, fmtDate, fmtDateTime, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { Badge } from '../../components/Badge';
 import { notifText, taskLabel } from '../../components/humanize';
+import { ListState, useLoad } from '../../components/ListState';
 
 const TASK_LINK: Record<string, (id: string) => string> = {
   BID: (id) => `/supplier/events/${id}`,
@@ -13,21 +13,18 @@ const TASK_LINK: Record<string, (id: string) => string> = {
 
 export default function SupplierDashboard() {
   const { t } = useI18n();
-  const [kpi, setKpi] = useState<any>(null);
-  const [notes, setNotes] = useState<any[]>([]);
+  const kpi = useLoad<any>(() => api.get('/dashboard/supplier').then((r) => r.data), [], null);
+  const notes = useLoad(() => api.get('/notifications').then((r) => r.data.slice(0, 8)), [], [] as any[]);
 
-  useEffect(() => {
-    api.get('/dashboard/supplier').then((r) => setKpi(r.data));
-    api.get('/notifications').then((r) => setNotes(r.data.slice(0, 8)));
-  }, []);
-
-  if (!kpi) return <div className="center">…</div>;
+  // Without the KPI there is no page. A failed load used to leave "…" on screen for ever;
+  // now it says what happened and offers the retry.
+  if (!kpi.data) return <><h1>{t('dashboard')}</h1><div className="card"><ListState of={kpi} /></div></>;
   const cards = [
-    { label: t('market'), value: kpi.openTenders },
-    { label: t('my_bids'), value: kpi.myActiveBids },
-    { label: t('contracts'), value: kpi.contractsWon },
-    { label: t('my_orders'), value: kpi.ordersInProgress },
-    { label: t('invoices'), value: kpi.invoicesPending },
+    { label: t('market'), value: kpi.data.openTenders },
+    { label: t('my_bids'), value: kpi.data.myActiveBids },
+    { label: t('contracts'), value: kpi.data.contractsWon },
+    { label: t('my_orders'), value: kpi.data.ordersInProgress },
+    { label: t('invoices'), value: kpi.data.invoicesPending },
   ];
 
   return (
@@ -43,18 +40,18 @@ export default function SupplierDashboard() {
         <div className="card" style={{ marginBottom: 0 }}>
           <div style={{ color: 'var(--muted)', fontSize: 12 }}>{t('verification')}</div>
           <div style={{ marginTop: 10 }}>
-            <Badge status={kpi.verificationStatus}
-              cls={kpi.verificationStatus === 'APPROVED' ? 'APPROVED' : kpi.verificationStatus === 'REJECTED' ? 'REJECTED' : 'INVITED'} />
+            <Badge status={kpi.data.verificationStatus}
+              cls={kpi.data.verificationStatus === 'APPROVED' ? 'APPROVED' : kpi.data.verificationStatus === 'REJECTED' ? 'REJECTED' : 'INVITED'} />
           </div>
         </div>
       </div>
 
       <div className="card" style={{ marginTop: 16 }}>
         <h3>{t('tasks')}</h3>
-        {kpi.tasks.length === 0 && <div className="hint">—</div>}
+        {kpi.data.tasks.length === 0 && <div className="hint">—</div>}
         <table>
           <tbody>
-            {kpi.tasks.map((task: any, i: number) => (
+            {kpi.data.tasks.map((task: any, i: number) => (
               <tr key={i}>
                 <td><span className="badge INVITED">{taskLabel(t, task.kind)}</span></td>
                 <td>
@@ -71,10 +68,10 @@ export default function SupplierDashboard() {
 
       <div className="card">
         <h3>{t('notifications')}</h3>
-        {notes.length === 0 && <div className="hint">—</div>}
+        <ListState of={notes} empty={!notes.data.length} />
         <table>
           <tbody>
-            {notes.map((n) => (
+            {notes.data.map((n) => (
               <tr key={n.id} style={{ opacity: n.read_at ? 0.5 : 1 }}>
                 <td>{notifText(t, n)}</td>
                 <td className="hint">{fmtDateTime(n.created_at)}</td>

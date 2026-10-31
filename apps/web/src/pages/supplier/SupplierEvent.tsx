@@ -6,6 +6,7 @@ import { AuctionPanel } from '../../components/AuctionPanel';
 import { QnaCard } from '../../components/QnaCard';
 import { BidDocs } from '../../components/BidDocs';
 import { Badge } from '../../components/Badge';
+import { ListState } from '../../components/ListState';
 
 export default function SupplierEvent() {
   const { id } = useParams();
@@ -16,7 +17,11 @@ export default function SupplierEvent() {
   const [proposalText, setProposalText] = useState('');
   const [msg, setMsg] = useState('');
 
-  const load = useCallback(() => api.get(`/events/${id}`).then((r) => setEv(r.data)), [id]);
+  const [evFailed, setEvFailed] = useState(false);
+  const load = useCallback(
+    () => { setEvFailed(false); return api.get(`/events/${id}`).then((r) => setEv(r.data)).catch(() => setEvFailed(true)); },
+    [id],
+  );
   useEffect(() => { load(); }, [load]);
 
   const submit = async () => {
@@ -47,7 +52,9 @@ export default function SupplierEvent() {
     catch (e: any) { setMsg(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
-  if (!ev) return <div className="center">…</div>;
+  // Until the event is here this page is only a spinner, and a failed load used to
+  // leave that spinner on screen for ever instead of saying what happened.
+  if (!ev) return <div className="card"><ListState of={{ loading: !evFailed, failed: evFailed, reload: load }} /></div>;
   const total = ev.items.reduce(
     (s: number, i: any) => s + (Number(prices[i.id] || 0) * Number(i.qty)), 0,
   );
@@ -59,6 +66,8 @@ export default function SupplierEvent() {
 
   return (
     <>
+      {/* a reload that failed after the page was drawn: the figures below are stale */}
+      <ListState of={{ loading: false, failed: evFailed, reload: load }} />
       <h1>{ev.title} <Badge status={ev.status} /></h1>
       {won && (
         <div className="card" style={{ borderColor: 'var(--ok)' }}>
