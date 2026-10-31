@@ -130,6 +130,16 @@ describe('LP-A08/A18 safe money and sealed deadline boundaries', () => {
     expect(closedRow[0].org_id).toBe(closedRow[0].owner);
     expect(closedRow[0].verifies).toBe(true);
     expect(closedRow[0].hash).toHaveLength(64); // sha256 hex, not the old 32-char md5
+    // Recomputing with the same body builder only proves self-consistency: it would still
+    // say "verifies" if the body left the payload out entirely. Move one field and the
+    // digest has to move with it, or the chain covers nothing.
+    const mutated = (await clock.query(
+      `SELECT a.hash = encode(sha256(convert_to(coalesce(a.prev_hash,'') ||
+                audit_body(a.org_id, a.actor_id, a.action, a.entity_type, a.entity_id,
+                           a.payload || '{"by":"somebody else"}'::jsonb, a.created_at),
+                'UTF8')), 'hex') AS still_matches
+         FROM audit_events a WHERE a.action='EVENT_CLOSED' AND a.entity_id=$1`, [ev.eventId])).rows[0];
+    expect(mutated.still_matches).toBe(false);
 
     const audit = (await clock.query(`SELECT action,payload FROM audit_events WHERE entity_id=ANY($1::uuid[])`, [[ev.eventId, ev.bidId]])).rows;
     expect(audit.filter(r => r.action === 'BID_SUBMITTED')).toHaveLength(1);

@@ -512,7 +512,7 @@ describe('sealed RFQ end-to-end flow', () => {
              FROM audit_events WHERE org_id = $1
          )
          SELECT count(*)::int AS total,
-                count(*) FILTER (WHERE hash <> recomputed)::int AS bad_hash,
+                count(*) FILTER (WHERE hash IS DISTINCT FROM recomputed)::int AS bad_hash,
                 count(*) FILTER (WHERE seq > (SELECT min(seq) FROM c)
                                    AND prev_hash IS DISTINCT FROM expected_prev)::int AS bad_link
            FROM c`,

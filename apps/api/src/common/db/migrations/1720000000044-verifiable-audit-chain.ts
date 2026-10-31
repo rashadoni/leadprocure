@@ -31,7 +31,7 @@ export class VerifiableAuditChain1720000000044 implements MigrationInterface {
       CREATE OR REPLACE FUNCTION audit_body(p_org uuid, p_actor uuid, p_action text,
                                             p_entity_type text, p_entity_id uuid,
                                             p_payload jsonb, p_at timestamptz)
-      RETURNS text LANGUAGE sql IMMUTABLE AS $$
+      RETURNS text LANGUAGE sql STABLE AS $$
         SELECT jsonb_build_object(
           'action', p_action, 'entityType', p_entity_type, 'entityId', p_entity_id,
           'orgId', p_org, 'actorId', p_actor, 'payload', coalesce(p_payload, '{}'::jsonb),
@@ -45,8 +45,14 @@ export class VerifiableAuditChain1720000000044 implements MigrationInterface {
       RETURNS text LANGUAGE plpgsql AS $$
       DECLARE v_prev text; v_at timestamptz := now(); v_hash text;
       BEGIN
+        -- Per organization. A row with no organization has no chain and cannot have one:
+        -- audit_select is org_id = app_org_id(), and NULL = NULL is not true, so nothing
+        -- running as app_user can read such a row at all — the lookup below finds nothing
+        -- and every NULL-org row stays its own root. That was already true of the code
+        -- this replaces; it is written down here rather than implied away. The rows that
+        -- land there are the ones recorded before a context exists, login above all.
         SELECT a.hash INTO v_prev FROM audit_events a
-          WHERE a.org_id IS NOT DISTINCT FROM p_org ORDER BY a.seq DESC LIMIT 1;
+          WHERE a.org_id = p_org ORDER BY a.seq DESC LIMIT 1;
         v_hash := encode(sha256(convert_to(
           coalesce(v_prev, '') || audit_body(p_org, p_actor, p_action, p_entity_type,
                                              p_entity_id, p_payload, v_at), 'UTF8')), 'hex');
@@ -81,6 +87,11 @@ export class VerifiableAuditChain1720000000044 implements MigrationInterface {
         END LOOP;
         PERFORM set_config('app.org_id', v_caller_org, true);
       END $$`);
+
+    // Where verifiability begins. Rows written before this migration hashed a timestamp
+    // that was never stored, so they cannot be recomputed under any scheme and a verifier
+    // must not report them as tampered — it has to know the boundary.
+    await q.query(`INSERT INTO release_versions(version) VALUES ('1.21.0-verifiable-audit')`);
   }
 
   // Forward-only, like every migration since 0028: going back would reinstate a chain
