@@ -313,3 +313,32 @@ export interface AccessTokenPayload {
   role: MembershipRole;
   token_version: number;
 }
+
+// ---------------- Settlement reporting: the two meanings of "paid" ----------------
+// Two screens report settled invoices, and they deliberately report DIFFERENT numbers.
+// This is the one place that says what each one means; both endpoints tag their payload
+// with the basis below and both pages label the figure from it, so the difference is
+// stated rather than left to be rediscovered as a defect.
+//
+// 'invoice_ledger' — GET /dashboard/spend-analytics → invoices.{paidMinor,outstandingMinor}
+//   Every invoice RECORDED in the selected window, split into what has since been settled
+//   and what is still owed. It asks nothing about budgets and nothing about what became of
+//   the order: money paid out on a call-off withdrawn afterwards is money paid out, and an
+//   accounts-payable view that hid it would hide exactly the leak it exists to show. Dated
+//   by the invoice's own created_at — the day the organisation recorded the liability. (No
+//   bank settlement date is stored anywhere, so this is not, and must not be labelled, the
+//   day the money moved.)
+//
+// 'budget_obligation' — GET /budgets/rollup → paidMinor
+//   Settlement attributed to the PLAN that carried the obligation, counted only while the
+//   budget engine still counts that obligation (MATCHED_CTE), and dated by the obligation
+//   itself: the request's approved_at, or a requestless order's issue/creation. A paid
+//   invoice whose order was withdrawn and whose request is gone carries no commitment, is
+//   absent from the unbudgeted report too, and must not stand against any plan.
+//
+// So the same paid invoice can appear on one page and not the other, and can fall in
+// different months on each. That is the design: one is a ledger of invoices, the other is
+// settlement of commitments. Neither figure is comparable to the other, and neither is
+// summed into actual spend.
+export const PAID_BASES = ['invoice_ledger', 'budget_obligation'] as const;
+export type PaidBasis = (typeof PAID_BASES)[number];
