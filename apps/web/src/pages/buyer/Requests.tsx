@@ -75,16 +75,26 @@ export default function Requests() {
   const load = () => requests.reload();
 
   // Which procedure each row's dropdown is showing, keyed by request id; unset means "the
-  // one the server resolved". NOTE: procurement_method only has DIRECT / RFQ / OPEN_TENDER,
-  // so the server never answers RFP or RFI and this default is RFQ in practice — including
-  // for an OPEN_TENDER request, where the Method column and this control then disagree.
-  // Announcing an open tender as a PUBLIC event is a procurement decision, not a UI one, so
-  // it is written up for the owner rather than guessed at here.
+  // one the method policy resolved".
+  //
+  // OPEN is the open procedure: the same sealed-price event as RFQ, published to every
+  // supplier instead of a named list. It exists because procurement_method bands a request
+  // into DIRECT / RFQ / OPEN_TENDER, and OPEN_TENDER had nothing to announce it with — the
+  // Method column said OPEN_TENDER while the control beside it offered RFQ, and one click
+  // produced an invitation-only tender. For a product sold against UNCITRAL and exporting
+  // OCDS (where visibility === 'PUBLIC' is what makes procurementMethod "open") that is the
+  // central procedure, so it was reachable on the server and missing from the product.
   const [procedure, setProcedure] = useState<Record<string, string>>({});
-  const defaultProcedure = (r: any) => (['RFQ', 'RFP', 'RFI'].includes(r.method_resolved) ? r.method_resolved : 'RFQ');
+  const defaultProcedure = (r: any) =>
+    (r.method_resolved === 'OPEN_TENDER' ? 'OPEN'
+      : ['RFQ', 'RFP', 'RFI'].includes(r.method_resolved) ? r.method_resolved : 'RFQ');
   const announce = (r: any) => {
     const pick = procedure[r.id] ?? defaultProcedure(r);
-    return pick === 'AUCTION' ? makeAuction(r) : makeRfq(r.id, pick as 'RFQ' | 'RFP' | 'RFI');
+    if (pick === 'AUCTION') return makeAuction(r);
+    // Only the open procedure publishes to everyone; the other three are addressed to the
+    // suppliers the buyer invites, which is what their labels say.
+    if (pick === 'OPEN') return makeRfq(r.id, 'RFQ', 'PUBLIC');
+    return makeRfq(r.id, pick as 'RFQ' | 'RFP' | 'RFI');
   };
 
   // The chosen supplier used to be read back out of the DOM by element id at click time.
@@ -174,10 +184,10 @@ export default function Requests() {
     setImpact((m) => { const q = { ...m }; delete q[id]; return q; });
   };
 
-  const makeRfq = async (id: string, type: 'RFQ' | 'RFP' | 'RFI' = 'RFQ') => {
+  const makeRfq = async (id: string, type: 'RFQ' | 'RFP' | 'RFI' = 'RFQ', visibility: 'PUBLIC' | 'INVITED' = 'INVITED') => {
     try {
       const closeAt = new Date(Date.now() + 24 * 3600_000).toISOString();
-      const ev = await api.post(`/events/from-request/${id}`, { closeAt, visibility: 'INVITED', type });
+      const ev = await api.post(`/events/from-request/${id}`, { closeAt, visibility, type });
       nav(`/buyer/events/${ev.data.id}`);
     } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
@@ -279,7 +289,9 @@ export default function Requests() {
                     <div className="hint">✔ {r.steps_done}/{r.steps_total} · {r.current_role}</div>
                   )}
                 </td>
-                <td>{r.method_resolved ?? '—'}</td>
+                {/* RFQ and DIRECT read as themselves; OPEN_TENDER read as a database
+                    code sitting next to a control that now says "open tender" in words. */}
+                <td className="nowrap">{r.method_resolved === 'OPEN_TENDER' ? t('open_tender') : (r.method_resolved ?? '—')}</td>
                 <td>
                   {/* Cancelling releases the budget this request is holding and demands a
                       written reason, so it is the one destructive action here and sits at the
@@ -311,6 +323,7 @@ export default function Requests() {
                         <select aria-label={t('method_pick')} value={procedure[r.id] ?? defaultProcedure(r)}
                           onChange={(e) => setProcedure((m) => ({ ...m, [r.id]: e.target.value }))}>
                           <option value="RFQ">🔒 RFQ</option>
+                          <option value="OPEN">🌐 {t('open_tender')}</option>
                           <option value="RFP">📄 RFP</option>
                           <option value="RFI">❓ RFI</option>
                           <option value="AUCTION">⚡ {t('auction')}</option>
