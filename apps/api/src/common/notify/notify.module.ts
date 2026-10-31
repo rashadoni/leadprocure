@@ -137,6 +137,15 @@ export class NotifyController {
     );
   }
 
+  // A PO walking its own lifecycle emits one notification per step, so a handful of orders
+  // puts dozens on the page and clearing them one at a time is not a real option.
+  // RLS scopes the UPDATE to the reader's own organisation.
+  @Post('read-all')
+  async readAll() {
+    await this.rc.manager.query(`UPDATE notifications SET read_at = now() WHERE read_at IS NULL`);
+    return { ok: true };
+  }
+
   @Post(':id/read')
   async read(@Param('id') id: string) {
     await this.rc.manager.query(`UPDATE notifications SET read_at = now() WHERE id = $1`, [id]);
