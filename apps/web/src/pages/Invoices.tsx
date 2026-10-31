@@ -3,6 +3,7 @@ import { api, fmtDate, fmtMoney } from '../api/client';
 import { useAuth } from '../auth/auth';
 import { useI18n } from '../i18n';
 import { Badge } from '../components/Badge';
+import { Actions } from '../components/Actions';
 import { isDenied } from '../components/ListState';
 
 export default function Invoices() {
@@ -115,27 +116,29 @@ export default function Invoices() {
           <button className="btn small ghost" onClick={() => load()}>{t('invoice_list_retry')}</button>
         </div>}
         <table>
-          <thead><tr><th>#</th><th>PO</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th>{t('date')}</th><th>{t('due_date')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>#</th><th>PO</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="nowrap">{t('due_date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
             {rows.map((i) => (
               <tr key={i.id}>
                 <td><a href="#" onClick={(e) => { e.preventDefault(); expand(i.id); }}>{i.invoice_no}</a></td>
-                <td>{i.po_no}</td>
+                <td className="nowrap">{i.po_no}</td>
                 <td>{isBuyer ? i.supplier_name : i.buyer_name}</td>
-                <td className="hint">{fmtDate(i.issued_at ?? i.created_at)}</td>
-                <td className="hint">{fmtDate(i.due_date)}</td>
-                <td>{fmtMoney(i.gross_minor, i.currency)}</td>
+                <td className="hint nowrap">{fmtDate(i.issued_at ?? i.created_at)}</td>
+                <td className="hint nowrap">{fmtDate(i.due_date)}</td>
+                <td className="num">{fmtMoney(i.gross_minor, i.currency)}</td>
                 <td><Badge status={i.status} /></td>
                 <td>
-                  {isBuyer && ['MATCHED', 'DISPUTED', 'SUBMITTED'].includes(i.status) && (
-                    <>
-                      <button className="btn small" data-tip={t('tip_inv_approve')} onClick={() => approveInvoice(i)}>{t('approve')}</button>{' '}
-                      <button className="btn small ghost" data-tip={t('tip_inv_reject')} onClick={() => act(i.id, () => api.post(`/invoices/${i.id}/reject`))}>{t('reject')}</button>
-                    </>
-                  )}
-                  {isBuyer && i.status === 'APPROVED' && (
-                    <button className="btn small" data-tip={t('tip_pay')} onClick={() => act(i.id, () => api.post(`/invoices/${i.id}/pay`))}>💳 {t('pay')}</button>
-                  )}
+                  <Actions>
+                    {isBuyer && ['MATCHED', 'DISPUTED', 'SUBMITTED'].includes(i.status) && (
+                      <>
+                        <button className="btn small" data-tip={t('tip_inv_approve')} onClick={() => approveInvoice(i)}>{t('approve')}</button>
+                        <button className="btn small ghost" data-tip={t('tip_inv_reject')} onClick={() => act(i.id, () => api.post(`/invoices/${i.id}/reject`))}>{t('reject')}</button>
+                      </>
+                    )}
+                    {isBuyer && i.status === 'APPROVED' && (
+                      <button className="btn small" data-tip={t('tip_pay')} onClick={() => act(i.id, () => api.post(`/invoices/${i.id}/pay`))}>💳 {t('pay')}</button>
+                    )}
+                  </Actions>
                 </td>
               </tr>
             ))}
@@ -154,8 +157,8 @@ export default function Invoices() {
             <tbody>
               {(inv.match?.lines ?? []).map((l: any, idx: number) => (
                 <tr key={idx}>
-                  <td>{fmtMoney(l.invoice_price, inv.currency)}</td>
-                  <td>{fmtMoney(l.po_price, inv.currency)}</td>
+                  <td className="num">{fmtMoney(l.invoice_price, inv.currency)}</td>
+                  <td className="num">{fmtMoney(l.po_price, inv.currency)}</td>
                   <td>{l.invoice_qty}</td>
                   <td>{l.received}</td>
                   <td>{l.price_ok && l.qty_ok ? '✅' : '⚠️'}</td>

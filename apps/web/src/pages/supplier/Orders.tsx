@@ -5,6 +5,7 @@ import { useI18n } from '../../i18n';
 import { PO_SUPPLIER_TRANSITIONS, SHIPMENT_STATUSES } from '@leadprocure/shared';
 import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
+import { Actions } from '../../components/Actions';
 import { ListState, useLoad } from '../../components/ListState';
 
 const PAGE_SIZE = 20;
@@ -106,18 +107,20 @@ export default function Orders() {
               const s = ship[p.id];
               return (
                 <tr key={p.id}>
-                  <td>{p.po_no}</td>
+                  <td className="nowrap">{p.po_no}</td>
                   <td>{p.buyer_name}</td>
-                  <td>{fmtMoney(p.total_minor, p.currency)}</td>
+                  <td className="num">{fmtMoney(p.total_minor, p.currency)}</td>
                   <td><Badge status={p.status} /></td>
                   <td>
-                    {next && <button className="btn small" onClick={() => advance(p.id, next)}>→ {t(`po_act_${next}`)}</button>}{' '}
+                    <Actions>
+                    {next && <button className="btn small" onClick={() => advance(p.id, next)}>→ {t(`po_act_${next}`)}</button>}
                     {['DELIVERED', 'ACCEPTED'].includes(p.status) && (
                       <button className="btn small ghost" onClick={() => submitInvoice(p.id)}>🧾 {t('invoice')}</button>
-                    )}{' '}
+                    )}
                     {['ISSUED', 'CONFIRMED'].includes(p.status) && (
                       <button className="btn small ghost" onClick={() => loadAmends(p.id)}>✎ {t('amendments')}</button>
                     )}
+                    </Actions>
                     {(amends[p.id] ?? []).filter((a) => a.status === 'PROPOSED').map((a) => (
                       <div key={a.id} className="card" style={{ marginTop: 8, padding: 10 }}>
                         <div className="hint">✎ {t('amendments')} #{a.amendment_no} · {a.reason}</div>
@@ -129,13 +132,16 @@ export default function Orders() {
                         <div style={{ fontSize: 12, marginBottom: 6 }}>
                           {t('total')}: {fmtMoney(a.old_total_minor)} → <b>{fmtMoney(a.new_total_minor)}</b>
                         </div>
-                        <button className="btn small" onClick={() => decideAmend(p.id, a.id, true)}>✓ {t('accept')}</button>{' '}
-                        <button className="btn small ghost" onClick={() => decideAmend(p.id, a.id, false)}>✕ {t('reject')}</button>
+                        <Actions>
+                          <button className="btn small" onClick={() => decideAmend(p.id, a.id, true)}>✓ {t('accept')}</button>
+                          <button className="btn small ghost" onClick={() => decideAmend(p.id, a.id, false)}>✕ {t('reject')}</button>
+                        </Actions>
                       </div>
                     ))}
                   </td>
                   <td>
-                    {s === undefined && <button className="btn small ghost" data-tip={t('logistics')} onClick={() => loadShip(p.id)}>🚚</button>}
+                    {/* was a bare 🚚 — an icon on its own does not say what pressing it does */}
+                    {s === undefined && <button className="btn small ghost" data-tip={t('tip_logistics_open')} onClick={() => loadShip(p.id)}>🚚 {t('logistics')}</button>}
                     {s && !s.shipment && ['CONFIRMED', 'PACKED', 'SHIPPED'].includes(p.status) && (
                       <button className="btn small" onClick={() => startShipment(p.id)}>{t('create_shipment')}</button>
                     )}

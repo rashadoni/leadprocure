@@ -34,7 +34,7 @@ export default function Market() {
                 <td><Link to={`/supplier/events/${r.id}`}>{r.title}</Link></td>
                 <td>{r.buyer_name}</td>
                 <td><Badge status={r.status} /></td>
-                <td>{fmtDateTime(r.close_at)}</td>
+                <td className="nowrap">{fmtDateTime(r.close_at)}</td>
                 <td><Badge status={r.my_bid_state} /></td>
               </tr>
             ))}

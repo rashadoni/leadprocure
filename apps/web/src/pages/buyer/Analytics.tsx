@@ -216,8 +216,8 @@ export default function Analytics() {
                 return (
                   <tr key={p.departmentCode ?? 'org'}>
                     <td><b>{p.departmentCode ?? t('bud_org_wide')}</b></td>
-                    <td>{fmtMoney(p.amountMinor, p.currency)}</td>
-                    <td>{fmtMoney(p.usedMinor, p.currency)} · {p.utilizationPct}%</td>
+                    <td className="num">{fmtMoney(p.amountMinor, p.currency)}</td>
+                    <td className="num">{fmtMoney(p.usedMinor, p.currency)} · {p.utilizationPct}%</td>
                     <td className="hint">{p.elapsedPct}%</td>
                     <td className={ahead ? 'error' : ''}>
                       {p.paceDeltaPct > 0 ? '+' : ''}{p.paceDeltaPct}%

@@ -73,7 +73,7 @@ export default function SupplierDashboard() {
             {notes.data.map((n) => (
               <tr key={n.id} style={{ opacity: n.read_at ? 0.5 : 1 }}>
                 <td>{notifText(t, n)}</td>
-                <td className="hint">{fmtDateTime(n.created_at)}</td>
+                <td className="hint nowrap">{fmtDateTime(n.created_at)}</td>
               </tr>
             ))}
           </tbody>

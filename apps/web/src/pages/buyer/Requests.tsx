@@ -6,6 +6,7 @@ import { useI18n } from '../../i18n';
 import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
 import { isDenied, ListState, useLoad } from '../../components/ListState';
+import { Actions } from '../../components/Actions';
 
 const PAGE_SIZE = 20;
 
@@ -73,9 +74,21 @@ export default function Requests() {
   const total: number = requests.data.total ?? 0;
   const load = () => requests.reload();
 
+  // Which procedure the row's dropdown is showing. Unset means "whatever the method policy
+  // resolved" — kept out of state so a reload of the list cannot strand a stale choice.
+  const [procedure, setProcedure] = useState<Record<string, string>>({});
+  const defaultProcedure = (r: any) => (['RFQ', 'RFP', 'RFI'].includes(r.method_resolved) ? r.method_resolved : 'RFQ');
+  const announce = (r: any) => {
+    const pick = procedure[r.id] ?? defaultProcedure(r);
+    return pick === 'AUCTION' ? makeAuction(r) : makeRfq(r.id, pick as 'RFQ' | 'RFP' | 'RFI');
+  };
+
+  // The chosen supplier used to be read back out of the DOM by element id at click time.
+  const [directSupplier, setDirectSupplier] = useState('');
   const openDirect = async (id: string) => {
     const r = await api.get('/suppliers');
     setApprovedSuppliers(r.data.filter((x: any) => x.status === 'APPROVED'));
+    setDirectSupplier('');
     setDirectFor(id);
   };
   const placeDirect = async (requestId: string, supplierOrgId: string) => {
@@ -244,18 +257,18 @@ export default function Requests() {
             reload: () => impactFailed.forEach((id) => loadImpact(id)) }]}
           empty={!rows.length} />
         <table>
-          <thead><tr><th>#</th><th>{t('title')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('date')}</th><th>{t('requester')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('method')}</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>#</th><th>{t('title')}</th><th>{t('category')}</th><th>{t('department')}</th><th className="nowrap">{t('date')}</th><th>{t('requester')}</th><th className="num">{t('total')}</th><th>{t('status')}</th><th>{t('method')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <Fragment key={r.id}>
               <tr>
-                <td>{r.request_no}</td>
+                <td className="nowrap">{r.request_no}</td>
                 <td>{r.title}</td>
                 <td>{r.category && r.category !== '*' ? r.category : '—'}</td>
                 <td>{r.department_code ?? '—'}</td>
-                <td className="hint">{fmtDate(r.created_at)}</td>
+                <td className="hint nowrap">{fmtDate(r.created_at)}</td>
                 <td className="hint">{r.created_by_name ?? '—'}</td>
-                <td>{fmtMoney(r.estimated_total_minor, r.currency)}</td>
+                <td className="num">{fmtMoney(r.estimated_total_minor, r.currency)}</td>
                 <td>
                   <Badge status={r.status} />
                   {r.status === 'SUBMITTED' && r.steps_total > 0 && (
@@ -264,45 +277,57 @@ export default function Requests() {
                 </td>
                 <td>{r.method_resolved ?? '—'}</td>
                 <td>
-                  {r.status === 'DRAFT' && !isFinance && <button className="btn small" data-tip={t('tip_submit')} onClick={() => act(r.id, 'submit')}>{t('submit')}</button>}{' '}
-                  {r.status === 'SUBMITTED' && (canApprove || (isFinance && r.current_role === 'BUYER_FINANCE')) && (
-                    <>
-                      <button className="btn small" aria-label={preview[r.id] ? t('confirm_approve') : t('approve')} data-tip={t('tip_approve')} onClick={() => approveGuard(r.id)}>
-                        {preview[r.id] ? `✔ ${t('confirm_approve')}` : t('approve')}
-                      </button>{' '}
-                      <button className="btn small ghost" data-tip={t('tip_reject')} onClick={() => act(r.id, 'reject')}>{t('reject')}</button>
-                    </>
-                  )}
-                  {/* an abandoned approval keeps holding budget until it is cancelled */}
-                  {r.status === 'APPROVED' && isAdmin && (
-                    <button className="btn small ghost" data-tip={t('tip_cancel_request')} onClick={() => cancelRequest(r.id)}>
-                      {t('cancel')}
-                    </button>
-                  )}{' '}
-                  {r.status === 'APPROVED' && r.method_resolved !== 'DIRECT' && canApprove && (
-                    <>
-                      <button className="btn small" data-tip={t('tip_rfq')} onClick={() => makeRfq(r.id)}>RFQ 🔒</button>{' '}
-                      <button className="btn small ghost" data-tip={t('tip_rfp')} onClick={() => makeRfq(r.id, 'RFP')}>RFP 📄</button>{' '}
-                      <button className="btn small ghost" data-tip={t('tip_rfi')} onClick={() => makeRfq(r.id, 'RFI')}>RFI ❓</button>{' '}
-                      <button className="btn small ghost" data-tip={t('tip_auction')} onClick={() => makeAuction(r)}>{t('auction')} ⚡</button>
-                    </>
-                  )}
-                  {r.status === 'APPROVED' && r.method_resolved === 'DIRECT' && canApprove && (
-                    directFor === r.id ? (
-                      <span style={{ display: 'inline-flex', gap: 6 }}>
-                        <select id={`sup-${r.id}`} defaultValue="">
-                          <option value="" disabled>{t('supplier_org')}…</option>
-                          {approvedSuppliers.map((s) => <option key={s.supplier_org_id} value={s.supplier_org_id}>{s.legal_name}</option>)}
+                  {/* Cancelling releases the budget this request is holding and demands a
+                      written reason, so it is the one destructive action here and sits at the
+                      end. Rejecting is not destructive — it is one half of a binary decision —
+                      so it stays beside Approve where an approver expects it. */}
+                  <Actions
+                    danger={r.status === 'APPROVED' && isAdmin && (
+                      <button className="btn small ghost danger" data-tip={t('tip_cancel_request')} onClick={() => cancelRequest(r.id)}>
+                        {t('cancel')}
+                      </button>
+                    )}
+                  >
+                    {r.status === 'DRAFT' && !isFinance && <button className="btn small" data-tip={t('tip_submit')} onClick={() => act(r.id, 'submit')}>{t('submit')}</button>}
+                    {r.status === 'SUBMITTED' && (canApprove || (isFinance && r.current_role === 'BUYER_FINANCE')) && (
+                      <>
+                        <button className="btn small" aria-label={preview[r.id] ? t('confirm_approve') : t('approve')} data-tip={t('tip_approve')} onClick={() => approveGuard(r.id)}>
+                          {preview[r.id] ? `✔ ${t('confirm_approve')}` : t('approve')}
+                        </button>
+                        <button className="btn small ghost" data-tip={t('tip_reject')} onClick={() => act(r.id, 'reject')}>{t('reject')}</button>
+                      </>
+                    )}
+                    {/* One decision, one control. These four are mutually exclusive ways of
+                        running the same purchase, and as four equal buttons they read as
+                        four commands — which is why they needed a legend underneath to be
+                        understood at all. The method policy already resolved the right one,
+                        so it is preselected and the common case stays a single click. */}
+                    {r.status === 'APPROVED' && r.method_resolved !== 'DIRECT' && canApprove && (
+                      <>
+                        <select aria-label={t('method_pick')} value={procedure[r.id] ?? defaultProcedure(r)}
+                          onChange={(e) => setProcedure({ ...procedure, [r.id]: e.target.value })}>
+                          <option value="RFQ">🔒 RFQ</option>
+                          <option value="RFP">📄 RFP</option>
+                          <option value="RFI">❓ RFI</option>
+                          <option value="AUCTION">⚡ {t('auction')}</option>
                         </select>
-                        <button className="btn small" onClick={() => {
-                          const v = (document.getElementById(`sup-${r.id}`) as HTMLSelectElement).value;
-                          if (v) placeDirect(r.id, v);
-                        }}>OK</button>
-                      </span>
-                    ) : (
-                      <button className="btn small" data-tip={t('tip_direct')} onClick={() => openDirect(r.id)}>{t('direct_order')} 📦</button>
-                    )
-                  )}
+                        <button className="btn small" data-tip={t('tip_announce')} onClick={() => announce(r)}>{t('announce')}</button>
+                      </>
+                    )}
+                    {r.status === 'APPROVED' && r.method_resolved === 'DIRECT' && canApprove && (
+                      directFor === r.id ? (
+                        <>
+                          <select aria-label={t('supplier_org')} value={directSupplier} onChange={(e) => setDirectSupplier(e.target.value)}>
+                            <option value="" disabled>{t('supplier_org')}…</option>
+                            {approvedSuppliers.map((s) => <option key={s.supplier_org_id} value={s.supplier_org_id}>{s.legal_name}</option>)}
+                          </select>
+                          <button className="btn small" disabled={!directSupplier} onClick={() => placeDirect(r.id, directSupplier)}>{t('confirm')}</button>
+                        </>
+                      ) : (
+                        <button className="btn small" data-tip={t('tip_direct')} onClick={() => openDirect(r.id)}>📦 {t('direct_order')}</button>
+                      )
+                    )}
+                  </Actions>
                 </td>
               </tr>
               {preview[r.id] && (
@@ -316,8 +341,8 @@ export default function Requests() {
                           <tr key={it.id}>
                             <td>{it.name}</td>
                             <td>{Number(it.qty)} {it.uom}</td>
-                            <td>{fmtMoney(it.est_unit_price_minor, r.currency)}</td>
-                            <td>{fmtMoney(it.est_total_minor, r.currency)}</td>
+                            <td className="num">{fmtMoney(it.est_unit_price_minor, r.currency)}</td>
+                            <td className="num">{fmtMoney(it.est_total_minor, r.currency)}</td>
                           </tr>
                         ))}
                       </tbody>

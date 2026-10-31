@@ -26,7 +26,7 @@ export default function Logistics() {
           <tbody>
             {rows.map((s) => (
               <tr key={s.id}>
-                <td>{s.po_no}</td>
+                <td className="nowrap">{s.po_no}</td>
                 <td>{isBuyer ? s.supplier_name : s.buyer_name}</td>
                 <td>{s.carrier ?? '—'}</td>
                 <td>{s.tracking_no ?? '—'}</td>
@@ -35,7 +35,7 @@ export default function Logistics() {
                     what the buyer acts on. Walking the order forward is best-effort, so
                     these two can legitimately differ — but only if you can see both. */}
                 <td><Badge status={s.po_status} /></td>
-                <td>{fmtDate(s.eta)}</td>
+                <td className="nowrap">{fmtDate(s.eta)}</td>
               </tr>
             ))}
           </tbody>

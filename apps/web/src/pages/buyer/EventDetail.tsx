@@ -382,7 +382,7 @@ export default function EventDetail() {
           <tbody>
             {ev.items.map((i: any) => (
               <tr key={i.id}>
-                <td>{i.name}</td><td>{Number(i.qty)}</td><td>{fmtMoney(i.est_unit_price_minor, ev.evaluation_currency)}</td>
+                <td>{i.name}</td><td>{Number(i.qty)}</td><td className="num">{fmtMoney(i.est_unit_price_minor, ev.evaluation_currency)}</td>
                 <td>
                   {ev.status === 'DRAFT' && ev.lots.length > 1 ? (
                     <select value={i.lot_id ?? ''} onChange={async (e) => { await api.put(`/events/${id}/items/${i.id}/lot`, { lotId: e.target.value }); load(); }}>

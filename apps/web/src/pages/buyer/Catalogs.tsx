@@ -86,7 +86,7 @@ export default function Catalogs() {
                 <tr key={i.id}>
                   <td>{i.name}</td>
                   <td>{Number(i.moq)}</td>
-                  <td>{fmtMoney(i.unit_price_minor, cat.currency)}</td>
+                  <td className="num">{fmtMoney(i.unit_price_minor, cat.currency)}</td>
                   {isBuyer && cat.status === 'ACTIVE' && (
                     <td><input style={{ width: 80 }} type="number" min={0} value={qty[i.id] ?? ''} onChange={(e) => setQty({ ...qty, [i.id]: e.target.value })} /></td>
                   )}

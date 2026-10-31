@@ -6,9 +6,14 @@ import { useI18n } from '../../i18n';
 import { PO_BUYER_NEXT } from '@leadprocure/shared';
 import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
+import { Actions } from '../../components/Actions';
 import { ListState, useLoad } from '../../components/ListState';
 
 const PAGE_SIZE = 20;
+
+// Of the transitions the API offers a buyer, these two end the order rather than move it
+// along. They are the destructive slot of the action cell, wherever the enum lists them.
+const STOP_PO = new Set(['CANCELLED', 'REJECTED']);
 
 export default function Contracts() {
   const { t } = useI18n();
@@ -98,33 +103,35 @@ export default function Contracts() {
       <div className="card">
         <ListState of={contractList} empty={!contracts.length} />
         <table>
-          <thead><tr><th>#</th><th>{t('title')}</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th>{t('validity')}</th><th>{t('total')}</th><th>{t('drawn')}</th><th>{t('status')}</th><th>PO</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>#</th><th>{t('title')}</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('validity')}</th><th className="num">{t('total')}</th><th className="num">{t('drawn')}</th><th>{t('status')}</th><th>PO</th><th>{t('actions')}</th></tr></thead>
           <tbody>
             {contracts.map((c) => {
               const over = Number(c.drawn_minor) > Number(c.total_minor);
               return (
               <tr key={c.id}>
-                <td>{c.contract_no}</td>
+                <td className="nowrap">{c.contract_no}</td>
                 <td>{c.title}</td>
                 <td>{isBuyerSide ? c.supplier_name : c.buyer_name}</td>
-                <td className="hint">{fmtDate(c.valid_from)} – {fmtDate(c.valid_to)}</td>
-                <td>{fmtMoney(c.total_minor, c.currency)}</td>
-                <td style={over ? { color: 'var(--bad, #e5484d)' } : undefined}
+                <td className="hint nowrap">{fmtDate(c.valid_from)} – {fmtDate(c.valid_to)}</td>
+                <td className="num">{fmtMoney(c.total_minor, c.currency)}</td>
+                <td className="num" style={over ? { color: 'var(--bad, #e5484d)' } : undefined}
                     title={over ? t('over_ceiling') : undefined}>
                   {fmtMoney(c.drawn_minor, c.currency)}{over ? ' ⚠' : ''}
                 </td>
                 <td><Badge status={c.status} /></td>
-                <td>{c.po_count}</td>
+                <td className="num">{c.po_count}</td>
                 <td>
-                  {isBuyerSide && c.status === 'DRAFT' && (
-                    <button className="btn small" data-tip={t('tip_activate')} onClick={() => act(() => api.post(`/contracts/${c.id}/activate`), () => ({ text: t('note_activated') }))}>{t('activate')}</button>
-                  )}{' '}
-                  {isBuyerSide && c.status === 'ACTIVE' && (
-                    <>
-                      <button className="btn small" data-tip={t('tip_create_po')} onClick={() => act(() => api.post(`/contracts/${c.id}/orders`), (r) => ({ text: `${t('note_po_made')}: ${r.data.po_no}` }))}>{t('create_po')}</button>{' '}
-                      <button className="btn small ghost" data-tip={t('tip_catalog_from')} onClick={() => act(() => api.post(`/catalogs/from-contract/${c.id}`), () => ({ text: t('note_catalog_made'), to: '/buyer/catalogs', toLabel: t('catalogs') }))}>📖 {t('catalogs')}</button>
-                    </>
-                  )}
+                  <Actions>
+                    {isBuyerSide && c.status === 'DRAFT' && (
+                      <button className="btn small" data-tip={t('tip_activate')} onClick={() => act(() => api.post(`/contracts/${c.id}/activate`), () => ({ text: t('note_activated') }))}>{t('activate')}</button>
+                    )}
+                    {isBuyerSide && c.status === 'ACTIVE' && (
+                      <>
+                        <button className="btn small" data-tip={t('tip_create_po')} onClick={() => act(() => api.post(`/contracts/${c.id}/orders`), (r) => ({ text: `${t('note_po_made')}: ${r.data.po_no}` }))}>{t('create_po')}</button>
+                        <button className="btn small ghost" data-tip={t('tip_catalog_from')} onClick={() => act(() => api.post(`/catalogs/from-contract/${c.id}`), () => ({ text: t('note_catalog_made'), to: '/buyer/catalogs', toLabel: t('catalogs') }))}>📖 {t('catalogs')}</button>
+                      </>
+                    )}
+                  </Actions>
                 </td>
               </tr>
             );})}
@@ -137,28 +144,40 @@ export default function Contracts() {
       <div className="card">
         <ListState of={orderList} empty={!orders.length} />
         <table>
-          <thead><tr><th>#</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th>{t('date')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>#</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
             {orders.map((p) => (
               <tr key={p.id}>
-                <td>{p.po_no}</td>
+                <td className="nowrap">{p.po_no}</td>
                 <td>{isBuyerSide ? p.supplier_name : p.buyer_name}</td>
-                <td className="hint">{fmtDate(p.created_at)}</td>
-                <td>{fmtMoney(p.total_minor, p.currency)}</td>
+                <td className="hint nowrap">{fmtDate(p.created_at)}</td>
+                <td className="num">{fmtMoney(p.total_minor, p.currency)}</td>
                 <td><Badge status={p.status} /></td>
                 <td>
-                  {isBuyerSide && (PO_BUYER_NEXT[p.status] ?? []).map((next) => (
-                    <button key={next} className={`btn small ${next === 'CANCELLED' || next === 'REJECTED' ? 'ghost' : ''}`}
-                      onClick={() => act(() => api.post(`/orders/${p.id}/status`, { status: next }))}>
-                      {t(`po_act_${next}`)}
-                    </button>
-                  ))}{' '}
-                  {isBuyerSide && ['SHIPPED', 'DELIVERED'].includes(p.status) && (
-                    <button className="btn small" data-tip={t('tip_receive')} onClick={() => receiveAll(p.id)}>{t('receive')} 📥</button>
-                  )}{' '}
-                  {isBuyerSide && ['ISSUED', 'CONFIRMED'].includes(p.status) && (
-                    <button className="btn small ghost" data-tip={t('tip_amend')} onClick={() => openAmend(p.id)}>✎ {t('amend')}</button>
-                  )}
+                  {/* Stopping an order is the destructive end of the same status list, so it
+                      is split out rather than sitting first because the enum happened to
+                      list it first. */}
+                  <Actions
+                    danger={isBuyerSide && (PO_BUYER_NEXT[p.status] ?? []).filter((n) => STOP_PO.has(n)).map((next) => (
+                      <button key={next} className="btn small ghost danger"
+                        onClick={() => act(() => api.post(`/orders/${p.id}/status`, { status: next }))}>
+                        {t(`po_act_${next}`)}
+                      </button>
+                    ))}
+                  >
+                    {isBuyerSide && (PO_BUYER_NEXT[p.status] ?? []).filter((n) => !STOP_PO.has(n)).map((next) => (
+                      <button key={next} className="btn small"
+                        onClick={() => act(() => api.post(`/orders/${p.id}/status`, { status: next }))}>
+                        {t(`po_act_${next}`)}
+                      </button>
+                    ))}
+                    {isBuyerSide && ['SHIPPED', 'DELIVERED'].includes(p.status) && (
+                      <button className="btn small" data-tip={t('tip_receive')} onClick={() => receiveAll(p.id)}>📥 {t('receive')}</button>
+                    )}
+                    {isBuyerSide && ['ISSUED', 'CONFIRMED'].includes(p.status) && (
+                      <button className="btn small ghost" data-tip={t('tip_amend')} onClick={() => openAmend(p.id)}>✎ {t('amend')}</button>
+                    )}
+                  </Actions>
                 </td>
               </tr>
             ))}

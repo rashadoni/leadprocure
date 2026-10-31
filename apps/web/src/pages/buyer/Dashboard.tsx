@@ -109,10 +109,10 @@ export default function Dashboard() {
             {notes.data.map((n) => (
               <tr key={n.id} style={{ opacity: n.read_at ? 0.5 : 1 }}>
                 <td>{notifText(t, n)}</td>
-                <td className="hint">{fmtDateTime(n.created_at)}</td>
+                <td className="hint nowrap">{fmtDateTime(n.created_at)}</td>
                 <td>
                   {!n.read_at && (
-                    <button className="btn small ghost" onClick={() => readNote(n.id)}>✓</button>
+                    <button className="btn small ghost" data-tip={t('mark_read')} onClick={() => readNote(n.id)}>✓ {t('mark_read')}</button>
                   )}
                 </td>
               </tr>
