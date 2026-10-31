@@ -385,9 +385,12 @@ export default function Settings() {
         ))}
         {!policyList.loading && !policyList.failed && policies.length === 0 && <p className="hint">— {isAdmin ? t('mp_empty_admin') : t('mp_empty')}</p>}
 
-        {isAdmin && !mpEditing && (
+        {isAdmin && !mpEditing && !policyList.loading && !policyList.failed && (
           <button className="btn small ghost" style={{ marginTop: 6 }}
             onClick={() => {
+              // policies is [] here only because the org really has none: a failed load
+              // cannot reach this button, so the stock bands below are never mistaken for
+              // the org's own and saved over them.
               setMpDraft(policies.length
                 ? policies.map((p: any) => ({
                     category: p.category,
@@ -504,9 +507,9 @@ export default function Settings() {
                 return (
                   <div key={key} role="button" tabIndex={0}
                     onClick={() => chainKnown && !active && setChain(key)}
-                    onKeyDown={(e) => e.key === 'Enter' && !active && setChain(key)}
+                    onKeyDown={(e) => e.key === 'Enter' && chainKnown && !active && setChain(key)}
                     style={{
-                      cursor: active ? 'default' : 'pointer', minWidth: 220, flex: '1 1 220px', maxWidth: 340,
+                      cursor: active || !chainKnown ? 'default' : 'pointer', minWidth: 220, flex: '1 1 220px', maxWidth: 340,
                       border: `2px solid ${active ? 'var(--accent, #2f7050)' : '#e2e6ea'}`,
                       background: active ? '#f2faf5' : '#fff', borderRadius: 10, padding: '10px 12px',
                     }}>
