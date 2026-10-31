@@ -112,7 +112,7 @@ export default function Dashboard() {
                 <td className="hint nowrap">{fmtDateTime(n.created_at)}</td>
                 <td>
                   {!n.read_at && (
-                    <button className="btn small ghost" data-tip={t('mark_read')} onClick={() => readNote(n.id)}>✓ {t('mark_read')}</button>
+                    <button className="btn small ghost" onClick={() => readNote(n.id)}>✓ {t('mark_read')}</button>
                   )}
                 </td>
               </tr>

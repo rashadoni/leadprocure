@@ -12,7 +12,7 @@ export const taskLabel = (t: (k: string) => string, kind: string): string => {
 const statusLabel = (t: (k: string) => string, v: unknown): string => {
   const key = `st_${v}`;
   const full = t(key);
-  return full === key ? String(v) : full.split(' — ')[0].split(' (')[0];
+  return full === key ? String(v) : full.split(' — ')[0].split(' / ')[0].split(' (')[0];
 };
 
 export const notifText = (t: (k: string) => string, n: { type: string; payload?: Record<string, unknown> }): string => {

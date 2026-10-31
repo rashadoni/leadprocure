@@ -77,3 +77,7 @@ export const fmtDate = (iso: string | Date | null | undefined): string =>
   iso ? new Date(iso).toLocaleDateString(uiLocale()) : '—';
 export const fmtDateTime = (iso: string | Date | null | undefined): string =>
   iso ? new Date(iso).toLocaleString(uiLocale(), { dateStyle: 'short', timeStyle: 'short' }) : '—';
+// Anti-sniping moves an auction's close_at by seconds, so the one clock on that panel has
+// to show them. Everywhere else seconds are noise.
+export const fmtDateTimeSec = (iso: string | Date | null | undefined): string =>
+  iso ? new Date(iso).toLocaleString(uiLocale(), { dateStyle: 'short', timeStyle: 'medium' }) : '—';

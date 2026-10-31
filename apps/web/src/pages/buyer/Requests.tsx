@@ -74,8 +74,12 @@ export default function Requests() {
   const total: number = requests.data.total ?? 0;
   const load = () => requests.reload();
 
-  // Which procedure the row's dropdown is showing. Unset means "whatever the method policy
-  // resolved" — kept out of state so a reload of the list cannot strand a stale choice.
+  // Which procedure each row's dropdown is showing, keyed by request id; unset means "the
+  // one the server resolved". NOTE: procurement_method only has DIRECT / RFQ / OPEN_TENDER,
+  // so the server never answers RFP or RFI and this default is RFQ in practice — including
+  // for an OPEN_TENDER request, where the Method column and this control then disagree.
+  // Announcing an open tender as a PUBLIC event is a procurement decision, not a UI one, so
+  // it is written up for the owner rather than guessed at here.
   const [procedure, setProcedure] = useState<Record<string, string>>({});
   const defaultProcedure = (r: any) => (['RFQ', 'RFP', 'RFI'].includes(r.method_resolved) ? r.method_resolved : 'RFQ');
   const announce = (r: any) => {
@@ -305,7 +309,7 @@ export default function Requests() {
                     {r.status === 'APPROVED' && r.method_resolved !== 'DIRECT' && canApprove && (
                       <>
                         <select aria-label={t('method_pick')} value={procedure[r.id] ?? defaultProcedure(r)}
-                          onChange={(e) => setProcedure({ ...procedure, [r.id]: e.target.value })}>
+                          onChange={(e) => setProcedure((m) => ({ ...m, [r.id]: e.target.value }))}>
                           <option value="RFQ">🔒 RFQ</option>
                           <option value="RFP">📄 RFP</option>
                           <option value="RFI">❓ RFI</option>

@@ -206,7 +206,7 @@ export default function Analytics() {
           <div className="hint" style={{ marginBottom: 10 }}>{t('budget_pace_hint')}</div>
           <table>
             <thead><tr>
-              <th>{t('department')}</th><th>{t('amount')}</th><th>{t('utilization')}</th>
+              <th>{t('department')}</th><th className="num">{t('amount')}</th><th className="num">{t('utilization')}</th>
               <th>{t('period_elapsed')}</th><th>{t('pace')}</th>
             </tr></thead>
             <tbody>

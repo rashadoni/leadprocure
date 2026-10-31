@@ -131,6 +131,8 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 .actions .btn { min-width: 92px; justify-content: center; }
 /* Inputs are width:100% globally, which inside a flex row means "take the whole cell". */
 .actions select, .actions input { width: auto; min-width: 124px; padding: 4px 8px; font-size: 12px; }
+/* Six buttons in one cell: the width floor stops helping and starts forcing a wrap. */
+.actions-dense .btn { min-width: 0; }
 .actions-sep { width: 1px; align-self: stretch; min-height: 20px; background: var(--border); margin: 0 2px; }
 /* Pushed to the end AND toned down: it should be reachable, not inviting. */
 .btn.danger { color: var(--bad); border-color: rgba(220, 38, 38, .35); }

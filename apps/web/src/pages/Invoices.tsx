@@ -153,7 +153,7 @@ export default function Invoices() {
           <div className="hint">{t('inv_net')} {fmtMoney(inv.net_minor, inv.currency)} + {t('inv_vat')} {fmtMoney(inv.vat_minor, inv.currency)}</div>
           <h3 style={{ marginTop: 10 }}>{t('inv_match')} {inv.match?.ok ? '✅' : '⚠️'}</h3>
           <table>
-            <thead><tr><th>{t('inv_price')}</th><th>{t('inv_po_price')}</th><th>{t('inv_qty')}</th><th>{t('inv_received')}</th><th>{t('inv_ok')}</th></tr></thead>
+            <thead><tr><th className="num">{t('inv_price')}</th><th className="num">{t('inv_po_price')}</th><th className="num">{t('inv_qty')}</th><th>{t('inv_received')}</th><th>{t('inv_ok')}</th></tr></thead>
             <tbody>
               {(inv.match?.lines ?? []).map((l: any, idx: number) => (
                 <tr key={idx}>

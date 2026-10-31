@@ -80,7 +80,7 @@ export default function Catalogs() {
         <div className="card" key={id}>
           <h3>{cat.title} <Badge status={cat.status} /></h3>
           <table>
-            <thead><tr><th>{t('name')}</th><th>MOQ</th><th>{t('unit_price')}</th>{isBuyer && cat.status === 'ACTIVE' && <th>{t('qty')}</th>}</tr></thead>
+            <thead><tr><th>{t('name')}</th><th>MOQ</th><th className="num">{t('unit_price')}</th>{isBuyer && cat.status === 'ACTIVE' && <th>{t('qty')}</th>}</tr></thead>
             <tbody>
               {cat.items.map((i: any) => (
                 <tr key={i.id}>

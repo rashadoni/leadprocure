@@ -14,16 +14,22 @@ import { useI18n } from '../i18n';
 const GROUP: Record<string, string> = {};
 const group = (names: string[], cls: string) => names.forEach((n) => (GROUP[n] = cls));
 
-// nothing has happened yet, or it is over and filed away
-group(['DRAFT', 'CREATED', 'NEW', 'ARCHIVED', 'SUPERSEDED'], 'is-neutral');
+// nothing has happened yet, or it is over and filed away. CLOSED belongs here and not in
+// is-warn: a signed-off budget period and a finished contract term are terminal and quiet.
+// On main `.badge.CLOSED` was declared twice and the later, slate rule won, so every CLOSED
+// pill in the product was already grey — painting them amber would be a regression dressed
+// as a fix, and the same mistake as DISPUTED borrowing REJECTED's red.
+group(['DRAFT', 'CREATED', 'NEW', 'ARCHIVED', 'SUPERSEDED', 'CLOSED'], 'is-neutral');
 // under way — someone is working on it, no action owed by the reader
-group(['SUBMITTED', 'PENDING', 'IN_REVIEW', 'PUBLISHED', 'OPEN', 'OPENING', 'OPENED',
+group(['SUBMITTED', 'IN_REVIEW', 'PUBLISHED', 'OPEN', 'OPENING', 'OPENED',
   'EVALUATION', 'INVITED', 'ISSUED', 'CONFIRMED', 'PACKED', 'SHIPPED', 'IN_TRANSIT',
   'PICKED_UP', 'ARRIVED', 'CUSTOMS'], 'is-progress');
 // the good terminal states
 group(['APPROVED', 'AWARDED', 'ACCEPTED', 'DELIVERED', 'PAID', 'MATCHED', 'ACTIVE'], 'is-good');
-// not broken, but someone has to look: a deadline passed, a shipment is stuck, a bill disagrees
-group(['CLOSED', 'DISPUTED', 'EXCEPTION', 'LATE'], 'is-warn');
+// not broken, but someone has to look: a deadline passed, a shipment is stuck, a bill
+// disagrees, a plan is sitting on somebody's desk. PENDING is here rather than in-progress
+// because it is waiting on a person — which is the colour it had before this table existed.
+group(['PENDING', 'DISPUTED', 'EXCEPTION', 'LATE'], 'is-warn');
 // stopped on purpose
 group(['REJECTED', 'BLOCKED', 'CANCELLED', 'WITHDRAWN', 'DISQUALIFIED'], 'is-bad');
 

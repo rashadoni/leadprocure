@@ -284,7 +284,7 @@ export default function EventDetail() {
                           <td>{f.supplier_name}</td>
                           <td>
                             {f.has_bid && !f.enrolled && <span className="badge is-good">✓ {t('fu_has_bid')}</span>}
-                            {!f.has_bid && !f.enrolled && <span className="badge" style={{ opacity: 0.6 }}>{t('fu_NOT_ENROLLED')}</span>}
+                            {!f.has_bid && !f.enrolled && <span className="badge is-neutral">{t('fu_NOT_ENROLLED')}</span>}
                             {f.enrolled && (
                               <span className={`badge ${f.status === 'RESPONDED' ? 'is-good' : f.status === 'ACTIVE' ? 'is-progress' : 'is-bad'} ${f.status}`}
                                 data-tip={t(`tip_fu_${f.status}`) !== `tip_fu_${f.status}` ? t(`tip_fu_${f.status}`) : undefined}>
@@ -378,7 +378,7 @@ export default function EventDetail() {
           </button>
         )}
         <table>
-          <thead><tr><th>{t('name')}</th><th>{t('qty')}</th><th>{t('unit_price')} (est.)</th><th>{t('lots')}</th></tr></thead>
+          <thead><tr><th>{t('name')}</th><th>{t('qty')}</th><th className="num">{t('unit_price')} (est.)</th><th>{t('lots')}</th></tr></thead>
           <tbody>
             {ev.items.map((i: any) => (
               <tr key={i.id}>
@@ -445,7 +445,7 @@ export default function EventDetail() {
       <div className="card">
         <h3>{t('bids')} {!ev.amounts_visible && <span className="sealed">🔒 {t('amounts_hidden')}</span>}</h3>
         <table>
-          <thead><tr><th>{t('supplier_org')}</th><th>{t('status')}</th><th>{t('total')}</th><th>{t('delivery_days')}</th><th>{t('score')}</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>{t('supplier_org')}</th><th>{t('status')}</th><th className="num">{t('total')}</th><th>{t('delivery_days')}</th><th>{t('score')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
             {(ev.bids ?? []).map((b: any) => (
               <tr key={b.id} style={winningBidIds.has(b.id) ? { outline: '1px solid var(--ok)' } : undefined}>
@@ -459,7 +459,7 @@ export default function EventDetail() {
                   {ev.amounts_visible && <BidDocs bidId={b.id} canUpload={false} />}
                 </td>
                 <td><Badge status={b.state} /></td>
-                <td>{ev.amounts_visible ? fmtMoney(b.total_minor, b.currency) : '🔒'}</td>
+                <td className="num">{ev.amounts_visible ? fmtMoney(b.total_minor, b.currency) : '🔒'}</td>
                 <td>{ev.amounts_visible ? (b.delivery_days ?? '—') : '🔒'}</td>
                 <td>{weightedByBid.has(b.id) ? weightedByBid.get(b.id)!.toFixed(1) : '—'}</td>
                 <td>
@@ -471,7 +471,7 @@ export default function EventDetail() {
                           value={scores[b.id]?.[c.key] ?? ''}
                           onChange={e => setScores({...scores,[b.id]:{...scores[b.id],[c.key]:e.target.value === '' ? NaN : Number(e.target.value)}})} />
                       </label>)}
-                      {!winningBidIds.has(b.id) && <button className="btn small ghost" data-tip={t('disqualify')} onClick={() => disqualify(b.id)}>⛔</button>}
+                      {!winningBidIds.has(b.id) && <button className="btn small ghost danger" data-tip={t('disqualify_prompt')} onClick={() => disqualify(b.id)}>⛔ {t('disqualify')}</button>}
                     </span>
                   )}
                   {b.state === 'DISQUALIFIED' && b.disqualified_reason && (

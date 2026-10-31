@@ -340,7 +340,7 @@ export default function Budgets() {
           <h3>{t('bud_by_department')}</h3>
           <table>
             <thead><tr>
-              <th>{t('department')}</th><th>{t('amount')}</th><th>{t('committed')}</th><th>{t('actual')}</th>
+              <th>{t('department')}</th><th className="num">{t('amount')}</th><th className="num">{t('committed')}</th><th className="num">{t('actual')}</th>
               {/* Not the invoice figure on /buyer/analytics: a different measure, so it
                   carries its own name — taken from the basis the endpoint declares rather
                   than hard-coded here. See PAID_BASES in @leadprocure/shared.
@@ -348,7 +348,7 @@ export default function Budgets() {
                   the columns to its left — each order's own vat_mode — so it needs no
                   separate one. The analytics tile keeps its «incl. VAT» because it reports
                   the invoice as billed. */}
-              <th>{t(paidBasis)}</th><th>{t('remaining')}</th><th>{t('forecast')}</th><th style={{ width: 180 }}>{t('utilization')}</th>
+              <th className="num">{t(paidBasis)}</th><th className="num">{t('remaining')}</th><th className="num">{t('forecast')}</th><th style={{ width: 180 }}>{t('utilization')}</th>
             </tr></thead>
             <tbody>
               {depSummary.map((d) => {
@@ -364,10 +364,10 @@ export default function Budgets() {
                     <td className="num">{fmtMoney(d.committedMinor, d.currency)}</td>
                     <td className="num">{fmtMoney(d.actualMinor, d.currency)}</td>
                     {/* settlement of orders already counted as actual — shown beside, never summed in */}
-                    <td className="hint" data-tip={t(paidBasisTip)}>{fmtMoney(d.paidMinor, d.currency)}</td>
-                    <td className={over ? 'error' : ''}>{fmtMoney(d.remainingMinor, d.currency)}</td>
+                    <td className="hint num" data-tip={t(paidBasisTip)}>{fmtMoney(d.paidMinor, d.currency)}</td>
+                    <td className={`num ${over ? 'error' : ''}`}>{fmtMoney(d.remainingMinor, d.currency)}</td>
                     {/* where the period lands at the current rate — the question that follows "how much is left" */}
-                    <td className={d.forecastOverMinor > 0 ? 'error' : 'hint'} data-tip={t('forecast_hint')}>
+                    <td className={`num ${d.forecastOverMinor > 0 ? 'error' : 'hint'}`} data-tip={t('forecast_hint')}>
                       {fmtMoney(d.forecastMinor, d.currency)}
                       {d.forecastOverMinor > 0 && <span> · +{fmtMoney(d.forecastOverMinor, d.currency)}</span>}
                     </td>
@@ -441,7 +441,7 @@ export default function Budgets() {
         {!reportLoading && !reportError && <table data-testid="budget-list">
           <thead><tr>
             <th>{t('name')}</th><th>{t('status')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('period')}</th>
-            <th>{t('amount')}</th><th>{t('committed')}</th><th>{t('actual')}</th><th>{t('remaining')}</th>
+            <th className="num">{t('amount')}</th><th className="num">{t('committed')}</th><th className="num">{t('actual')}</th><th className="num">{t('remaining')}</th>
             <th style={{ width: 180 }}>{t('utilization')}</th>{canManagePlans && <th>{t('actions')}</th>}
           </tr></thead>
           <tbody>
@@ -456,13 +456,13 @@ export default function Budgets() {
                   <td data-tip={b.departmentName || undefined}>{b.departmentCode ?? t('bud_org_wide')}</td>
                   <td data-tip={`${b.periodStart} → ${b.periodEnd}`}>{b.periodLabel}</td>
                   <td className="num">{fmtMoney(b.amountMinor, b.currency)}</td>
-                  <td data-tip={t('drill_hint')}>
+                  <td className="num" data-tip={t('drill_hint')}>
                     <button className="linklike" onClick={() => toggleDocs(b.id, 'committed')}>{fmtMoney(b.committedMinor, b.currency)}</button>
                   </td>
-                  <td data-tip={t('drill_hint')}>
+                  <td className="num" data-tip={t('drill_hint')}>
                     <button className="linklike" onClick={() => toggleDocs(b.id, 'actual')}>{fmtMoney(b.actualMinor, b.currency)}</button>
                   </td>
-                  <td className={over ? 'error' : ''}>{fmtMoney(b.remainingMinor, b.currency)}</td>
+                  <td className={`num ${over ? 'error' : ''}`}>{fmtMoney(b.remainingMinor, b.currency)}</td>
                   <td>
                     <div className="budget-bar">
                       <div className={`budget-fill ${over ? 'over' : ''}`} style={{ width: `${Math.min(100, b.utilizationPct)}%` }} />
@@ -475,6 +475,7 @@ export default function Budgets() {
                           labelled button joined them. Every one of them says what it does now,
                           and deleting the plan sits apart at the end. */}
                       <Actions
+                        dense
                         danger={b.status === 'DRAFT' && (
                           <button className="btn small ghost danger" data-tip={t('tip_delete')} onClick={() => remove(b.id)}>🗑 {t('delete')}</button>
                         )}
@@ -542,7 +543,7 @@ export default function Budgets() {
                       <b>{t('bud_history')}</b>
                       <table style={{ margin: '6px 0' }}>
                         <thead><tr>
-                          <th>{t('date')}</th><th>{t('amount')}</th><th>{t('bud_delta')}</th>
+                          <th>{t('date')}</th><th className="num">{t('amount')}</th><th>{t('bud_delta')}</th>
                           <th>{t('reason')}</th><th>{t('requester')}</th>
                         </tr></thead>
                         <tbody>
@@ -618,7 +619,7 @@ export default function Budgets() {
           <table>
             <thead><tr>
               <th>#</th><th>{t('title')}</th><th>{t('category')}</th><th>{t('department')}</th>
-              <th>{t('date')}</th><th>{t('amount')}</th><th>{t('currency')}</th>
+              <th>{t('date')}</th><th className="num">{t('amount')}</th><th>{t('currency')}</th>
             </tr></thead>
             <tbody>
               {unbudgeted.map((u) => (

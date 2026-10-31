@@ -13,15 +13,16 @@ import { ReactNode } from 'react';
 //
 // `danger` is a separate slot rather than a flag on a button so a page cannot accidentally
 // put "Cancel" first again. Giving it its own slot is also what lets the divider exist.
-export function Actions({ children, danger }: { children?: ReactNode; danger?: ReactNode }) {
+export function Actions({ children, danger, dense }: { children?: ReactNode; danger?: ReactNode; dense?: boolean }) {
   // A slot fed by `rows.filter(...).map(...)` arrives as an array, and an EMPTY array is
   // still truthy — without this the divider would draw with nothing behind it.
   const has = (n: ReactNode): boolean =>
-    Array.isArray(n) ? n.some(has) : n != null && n !== false && n !== '';
+    Array.isArray(n) ? n.some(has)
+      : n != null && n !== false && n !== true && n !== '' && n !== 0;
   // An empty action cell reads as a hole in the table; every other column says "—".
   if (!has(children) && !has(danger)) return <span className="hint">—</span>;
   return (
-    <div className="actions">
+    <div className={`actions${dense ? ' actions-dense' : ''}`}>
       {children}
       {has(danger) && <span className="actions-sep" aria-hidden="true" />}
       {danger}
