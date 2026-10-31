@@ -26,6 +26,13 @@ const PO_TARGET: Partial<Record<ShipmentStatus, string>> = {
   DELIVERED: 'DELIVERED',
 };
 const SUPPLIER_PO_CHAIN = ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'];
+// Delivery progress only runs one way. The timeline is the supplier's own claim and the
+// buyer's board reads it, so letting it slide back turned a delivered order into one in
+// transit — two clicks apart in the dropdown, and flatly contradicting a purchase order
+// already at DELIVERED or ACCEPTED. EXCEPTION is deliberately outside the order: it is
+// how a shipment says something went wrong, and it stays available at every point.
+const SHIPMENT_PROGRESS = ['CREATED', 'PICKED_UP', 'IN_TRANSIT', 'CUSTOMS', 'ARRIVED', 'DELIVERED'];
+const progressOf = (status: string) => SHIPMENT_PROGRESS.indexOf(status);
 
 @Injectable()
 export class LogisticsService {
@@ -63,9 +70,24 @@ export class LogisticsService {
     auth: AccessTokenPayload,
   ) {
     const m = this.rc.manager;
-    const ship = await m.query(`SELECT id, supplier_org_id, buyer_org_id FROM shipments WHERE po_id = $1`, [poId]);
+    const ship = await m.query(
+      `SELECT id, supplier_org_id, buyer_org_id, status FROM shipments WHERE po_id = $1`,
+      [poId],
+    );
     if (!ship.length) throw new NotFoundException('No shipment for this order');
     if (ship[0].supplier_org_id !== auth.org_id) throw new BadRequestException('Only the supplier updates tracking');
+
+    // Once the buyer has accepted the goods the delivery is settled; rewriting the
+    // timeline after that only makes the two screens disagree.
+    const po = (await m.query(`SELECT status FROM purchase_orders WHERE id = $1`, [poId]))[0];
+    if (po?.status === 'ACCEPTED') {
+      throw new BadRequestException('The buyer has accepted this delivery; its tracking is closed');
+    }
+    if (dto.status !== 'EXCEPTION' && progressOf(dto.status) < progressOf(ship[0].status)) {
+      throw new BadRequestException(
+        `Delivery is already at ${ship[0].status}; record EXCEPTION to report a problem instead of moving it back to ${dto.status}`,
+      );
+    }
 
     await m.query(
       `INSERT INTO shipment_events(shipment_id, buyer_org_id, supplier_org_id, status, location, note)
@@ -98,19 +120,23 @@ export class LogisticsService {
 
   async get(poId: string) {
     const m = this.rc.manager;
+    // The order's own status travels with the timeline. Walking the PO forward is
+    // best-effort by design — a milestone on an order the supplier never confirmed moves
+    // nothing — and without this the two screens simply disagreed in silence.
+    const po = (await m.query(`SELECT status FROM purchase_orders WHERE id = $1`, [poId]))[0];
     const ship = await m.query(`SELECT * FROM shipments WHERE po_id = $1`, [poId]);
-    if (!ship.length) return { shipment: null, events: [] };
+    if (!ship.length) return { shipment: null, events: [], poStatus: po?.status ?? null };
     const events = await m.query(
       `SELECT status, location, note, occurred_at FROM shipment_events WHERE shipment_id=$1 ORDER BY occurred_at`,
       [ship[0].id],
     );
-    return { shipment: ship[0], events };
+    return { shipment: ship[0], events, poStatus: po?.status ?? null };
   }
 
   // All in-flight shipments for the acting org (buyer or supplier).
   async board() {
     return this.rc.manager.query(
-      `SELECT s.*, p.po_no, ob.legal_name AS buyer_name, os.legal_name AS supplier_name
+      `SELECT s.*, p.po_no, p.status AS po_status, ob.legal_name AS buyer_name, os.legal_name AS supplier_name
        FROM shipments s
        JOIN purchase_orders p ON p.id = s.po_id
        JOIN organizations ob ON ob.id = s.buyer_org_id
