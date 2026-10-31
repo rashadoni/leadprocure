@@ -1,0 +1,328 @@
+{
+  "date": "2026-10-31",
+  "timezone": "Asia/Baku",
+  "repository": "rashadoni/leadprocure",
+  "origin": "https://github.com/rashadoni/leadprocure.git",
+  "worktree": "/mnt/HC_Volume_106454338/codex-alt-data/worktrees/leadprocure-budget-audit-integration",
+  "branch": "codex/leadprocure-budget-audit-integration",
+  "preHandoffCheckpoint": "58672e4",
+  "acceptedApplicationMain": "5782aba3e1a03459bea4971ced856720c61359f2",
+  "acceptedMainRun": "https://github.com/rashadoni/leadprocure/actions/runs/41112571528",
+  "summary": {
+    "originalTaskCount": 20,
+    "activeTaskCount": 19,
+    "technicalVerified": 18,
+    "partialExternal": [
+      "LP-A19"
+    ],
+    "removedByOwner": [
+      "LP-A17"
+    ],
+    "whollyUnstartedActiveTasks": [],
+    "allActiveTasksFullyAccepted": false
+  },
+  "tasks": [
+    {
+      "id": "LP-A00",
+      "title": "Изолированная приёмка",
+      "status": "VERIFIED",
+      "evidence": "acceptance.yml; assert-isolated.cjs; upgrade-branches.cjs; upgrade-check.cjs; backup-restore.sh",
+      "assertions": "Отдельные PostgreSQL/MinIO, app_user без BYPASSRLS, защита от production URL, миграции с нуля и обеих применённых историй, восстановление с 52 RLS-таблицей. Полные проверки только hosted CI.",
+      "limits": "Не доказывает готовность любого клиентского окружения.",
+      "originalCriteria": "## LP-A00 · Подготовить изолированную среду приёмки\n\n- Подготовить отдельные PostgreSQL и MinIO, тестовых покупателей/поставщиков, безопасные ключи и заглушки внешней отправки. Не использовать рабочую БД и клиентские данные.\n- Добавить защиту запуска тестов от production connection string. Применять миграции с нуля; отдельно проверять обновление схемы с текущей версии.\n- Тяжёлые E2E/build запускать на GitHub CI или выделенном ephemeral worker, не Contabo. Существующие проверки безопасности сохранить.\n- Сохранить команды воспроизведения, версию кода и машинный результат.\n- **Готово:** тесты создают/удаляют только свои данные, полный прогон запускается воспроизводимо; недоступные проверки явно NOT RUN.\n- **Зависимости:** нет. Подготовку кода исправлений можно вести до готовности среды, закрывать задачи — после соответствующих проверок.",
+      "statusMeaning": "Технически выполнено в указанном покрытии, не production/внешняя сертификация"
+    },
+    {
+      "id": "LP-A01",
+      "title": "Файлы и KYC",
+      "status": "VERIFIED",
+      "evidence": "audit-regressions; clamav; verification; sourcing-flow; DocumentsService.consumeUpload/assertDownloadable",
+      "assertions": "Одноразовый grant своей организации, фактические bytes/hash, неизменяемая подтверждённая копия. Общий lifecycle для document/bid/KYC. HTTP foreign-grant/foreign-download и buyer-before/after-opening; реальный MinIO и ClamAV clean/EICAR. Исторический read-only анализ namespace: 0 несовпадений, файлы не удалялись.",
+      "limits": "Отрицательные проверки разных типов опираются также на общий consumeUpload/download seam; это не внешний pentest.",
+      "originalCriteria": "## LP-A01 · P1 · Закрыть доступ к файлам через чужой storageKey — F07\n\n- Связать выданную загрузку с организацией, объектом и одноразовым идентификатором; confirm должен принимать только принадлежащую пользователю загрузку.\n- Применить правило к обычным документам, bid attachments и KYC; одной проверки строки-префикса недостаточно для полного upload lifecycle.\n- Проверять существование/завершение загрузки и фактические метаданные/хеш. Подключить KYC к согласованному AV lifecycle и правилам скачивания.\n- Для старых записей выполнить безопасный read-only анализ подозрительных ссылок; не удалять файлы автоматически.\n- **Готово:** две тестовые организации не могут подтвердить/скачать объекты друг друга даже при известном ключе; легальные загрузки и доступ покупателя после открытия сохранены; заражённый файл не скачивается.",
+      "statusMeaning": "Технически выполнено в указанном покрытии, не production/внешняя сертификация"
+    },
+    {
+      "id": "LP-A02",
+      "title": "Сверка количеств и R01",
+      "status": "VERIFIED",
+      "evidence": "audit-regressions; invoices; amendments; procurement.stress-spec; common/procurement/invariants.ts; PARTIAL-INVOICE-ACCEPTANCE-2026-10-29.json; web/tests/helpers/partial-invoice.ts",
+      "assertions": "Дубли poItemId отклоняются; совокупный billable остаток и rematch пересчитываются под общей блокировкой PO. Повторные invoices/GRN, частичная приёмка и disputed→matched проверены. Новые 4 теста явно наблюдают queued HTTP в PostgreSQL: два счёта, две приёмки и оба порядка счёт/приёмка. Интерфейс поставщика выставляет только принятый невыставленный остаток; после4болтов+5шайб следующий счёт содержит только6болтов. При нуле нет нового POST, пояснение AZ/RU/EN. Реальные API-проверки статусов резерва/отклонения/поздней приёмки и foreign buyer/supplier.",
+      "limits": "Стресс 12×8 не является capacity/SLA тестом. Остаток чтения — подсказка; при конкурентном изменении сервер повторяет сверку под блокировкой PO.",
+      "originalCriteria": "## LP-A02 · P1 · Исправить сверку количества и конкурентный учёт — F01, R01\n\n- Дубли poItemId в invoice отклонять либо агрегировать до сверки; одно правило для submit и rematch.\n- Проверять суммарно выставленное количество с учётом всех действующих счетов, принятого товара и выбранной политики спорных/отклонённых счетов.\n- Воспроизвести R01 на двух PostgreSQL-соединениях с управляемыми барьерами. Согласовать блокировки для invoice, receipt, amendment и rematch; повторять сверку под блокировкой.\n- Проверить одновременную приёмку: сумма GRN не превышает заказ. Ограничения БД вводить новыми миграциями после анализа существующих дублей.\n- **Готово:** при приёмке 10 единиц дубли 10+10 не получают MATCHED; два параллельных счёта не расходуют один остаток; две параллельные приёмки не превышают PO; частичная поставка и повторная сверка работают.",
+      "statusMeaning": "Технически выполнено в указанном покрытии, не production/внешняя сертификация"
+    },
+    {
+      "id": "LP-A03",
+      "title": "Границы лота",
+      "status": "VERIFIED",
+      "evidence": "multilot; integrity; award-contract-concurrency; web/evaluation.spec.ts",
+      "assertions": "Два поставщика на два лота: договор/PO/catalog содержат только выигранные строки. Восемь реально ожидающих повторов дают один договор и audit. Cancel/create проверены в обоих порядках; UI действия и победители по каждому award.",
+      "limits": "Отменить award с уже созданным договором нельзя; это выбранное правило защиты обязательства.",
+      "originalCriteria": "## LP-A03 · P1 · Сохранить границы лота во всей цепочке — F08\n\n- Рассчитывать сумму договора и копировать позиции в PO/каталог только по выигранному лоту.\n- Запретить создание договора из отменённого award; проверить конкурентные cancel/create-contract и повторные запросы.\n- В UI показывать действия по каждому действующему award, убрать зависимость от awards[0].\n- **Готово:** два поставщика, каждый подавший на два лота и выигравший один, получают договоры/PO/каталоги только на свои выигранные позиции; отменённый результат не создаёт обязательство.",
+      "statusMeaning": "Технически выполнено в указанном покрытии, не production/внешняя сертификация"
+    },
+    {
+      "id": "LP-A04",
+      "title": "Аукцион до счёта",
+      "status": "VERIFIED",
+      "evidence": "auction-flow; procurement.stress-spec; web/evaluation.spec.ts",
+      "assertions": "Принятые tick-строки материализуются в bid; повторная финализация не дублирует строки. Native finalize→award→contract, реальные PO→GRN→MATCHED invoice сохраняют цену победителя 80000 minor.",
+      "limits": "Это проверенный пример, не обещание процента экономии.",
+      "originalCriteria": "## LP-A04 · P1 · Довести аукцион до договора, PO и счёта — F10\n\n- Материализовать согласованный набор ценовых строк принятой ставки при финализации; брать именно нужную последнюю принятую ставку, не произвольный tick.\n- Обеспечить идемпотентность повторной финализации и соответствие суммы строк итогу ставки.\n- Проверить отображение результатов и переходы в UI.\n- **Готово:** auction → award → contract → PO → GRN → invoice проходит со ставкой победителя; повторный запрос не дублирует позиции.\n- **Зависимости:** общий механизм договора/PO из LP-A03.",
+      "statusMeaning": "Технически выполнено в указанном покрытии, не production/внешняя сертификация"
+    },
+    {
+      "id": "LP-A05",
+      "title": "Серверный победитель аукциона",
+      "status": "VERIFIED",
+      "evidence": "auction-flow; SourcingService.award; procurement.stress-spec",
+      "assertions": "Худшая ставка/чужая принадлежность не принимается. Сервер определяет лучшую допустимую ставку, сохраняет цену/обоснование в аудите; повтор award идемпотентен. Положительный decrement не допускает равный следующий tick.",
+      "limits": "Исключение с выбором худшей ставки не обещается. Для исторических равных сумм применяется серверный порядок.",
+      "originalCriteria": "## LP-A05 · P1 · Контролировать победителя аукциона на сервере — F03\n\n- Определять лучшую допустимую ставку на сервере, проверять принадлежность bid и lot событию.\n- Явно выбрать правило равных цен и исключений. Без утверждённого правила исключений отклонять выбор худшей ставки; если исключения нужны — требовать полномочие и обоснование.\n- Зафиксировать решение и цену в аудите; не полагаться на сортировку клиента.\n- **Готово:** запрос с худшим bidId или чужим lotId отклонён; победитель/равные цены обрабатываются детерминированно; повтор award идемпотентен.",
+      "statusMeaning": "Технически выполнено в указанном покрытии, не production/внешняя сертификация"
+    },
+    {
+      "id": "LP-A06",
+      "title": "Полная актуальная оценка",
+      "status": "VERIFIED",
+      "evidence": "integrity; audit-regressions; award-contract-concurrency; migrations",
+      "assertions": "Пустые/неполные/дублированные scores и неизвестные criteria отклоняются; DB uniqueness. Locked criteria, допустимые диапазоны и актуальная evaluation у award. Реально queued reevaluate/award и disqualify/award проверены в обоих порядках.",
+      "limits": "Формальная оценка и AI recommendation — отдельные механизмы.",
+      "originalCriteria": "## LP-A06 · P1 · Сделать формальную оценку полной и уникальной — F04\n\n- Запретить пустую, неполную и повторную оценку bid/criterion; сверять с критериями, зафиксированными на событии.\n- Определить область оценки для лотов; award должен ссылаться на завершённую актуальную evaluation для допустимой заявки.\n- Добавить ограничения БД там, где они выражают инвариант, и проверку существующих данных перед миграцией.\n- Сериализовать evaluate/award/disqualify/cancel так, чтобы решение не опиралось на меняющуюся оценку.\n- **Готово:** scores=[] и повтор price=100 не создают допустимое основание выбора; баллы не превышают шкалу; отсутствие оценки не превращается в top=-1; исключения требуют обоснования.",
+      "statusMeaning": "Технически выполнено в указанном покрытии, не production/внешняя сертификация"
+    },
+    {
+      "id": "LP-A07",
+      "title": "Экран оценки",
+      "status": "VERIFIED",
+      "evidence": "web/evaluation.spec.ts; EventDetail.tsx",
+      "assertions": "Поля из locked criteria; текущая оценка отдельно от истории. Переоценка 62/68 меняет лидера, самая низкая цена его не подменяет; ничья не рисует единственного лидера. Выбор после частичного award работает по оставшемуся лоту.",
+      "limits": "Native сценарий проверяет конкретный custom-набор, не все возможные наборы.",
+      "originalCriteria": "## LP-A07 · P2 · Привести экран оценки в соответствие с API — F16\n\n- Строить поля и подписи из locked criteria, убрать жёсткие price/delivery и 70/30.\n- Показывать актуальную версию оценки, историю отдельно; не суммировать старые и новые баллы.\n- Использовать ту же актуальную оценку в отображении рейтинга и выборе победителя.\n- **Готово:** нестандартный набор критериев можно заполнить; после переоценки UI и сервер показывают один рейтинг и одно основание award.\n- **Зависимости:** LP-A06.",
+      "statusMeaning": "Технически выполнено в указанном покрытии, не production/внешняя сертификация"
+    },
+    {
+      "id": "LP-A08",
+      "title": "Валюта, объём, safe money",
+      "status": "VERIFIED",
+      "evidence": "audit-regressions; integrity; multilot; ai-provider; deadline-boundaries; invariants.ts",
+      "assertions": "Разная валюта bid/event отклоняется. Сравнение и downstream по одному лоту/объёму; внешний AI не заменяет исходные суммы/имена/срок. Safe integer guards на цену/произведение/итог; новые HTTP отрицательные сценарии подтверждают rollback заявки и сохранность старого sealed bid.",
+      "limits": "Автоматический FX не реализован в этом потоке и не обещается.",
+      "originalCriteria": "## LP-A08 · P1 · Обеспечить сопоставимость валют и объёмов — F06\n\n- До полноценного FX запретить валюту bid, отличную от валюты события, либо реализовать явную нормализацию с источником/датой/фиксацией курса. Не переименовывать валюту исходной суммы.\n- Передавать корректную валюту и нормализованные суммы в договоры и AI, включая внешний scorer.\n- Сравнивать цены по одному лоту/одинаковому объёму; не ранжировать частичный и полный bid как одинаковую закупку.\n- Установить безопасные пределы денежных значений и проверить отсутствие потери точности в серверной арифметике.\n- **Готово:** mixed-currency запрос либо явно отклоняется, либо сравнивается по проверяемому курсу; частичный объём не получает искусственное преимущество; сумма договора сохраняет валютный смысл.",
+      "statusMeaning": "Технически выполнено в указанном покрытии, не production/внешняя сертификация"
+    },
+    {
+      "id": "LP-A09",
+      "title": "НДС и денежные snapshots",
+      "status": "VERIFIED",
+      "evidence": "audit-regressions; invoices; amendments; catalogs; common/procurement/invariants.ts",
+      "assertions": "Целые minor units, integer VAT rounding. INCLUSIVE/EXCLUSIVE, 0% и смешанные 0/18% проходят реальные GRN/invoice цепочки; net/tax/gross 20000/1800/21800. Режим и ставки сохраняются в snapshots.",
+      "limits": "Исторические invoices без достоверного snapshot не пересчитываются автоматически.",
+      "originalCriteria": "## LP-A09 · P1 · Исправить inclusive/exclusive НДС — F14\n\n- Определить единые правила net/tax/gross, ставок по строкам и округления.\n- Сохранить налоговый режим и значения в snapshot на пути request → event → contract → PO → invoice.\n- Учесть прямые заказы и каталоги; не менять ранее выпущенные финансовые документы задним числом без отдельного процесса коррекции.\n- **Готово:** 118.00 с включённым НДС 18% даёт net=100.00, tax=18.00, gross=118.00; exclusive 100.00 даёт gross=118.00; 0% и смешанные ставки сохраняются.",
+      "statusMeaning": "Технически выполнено в указанном покрытии, не production/внешняя сертификация"
+    },
+    {
+      "id": "LP-A10",
+      "title": "UBL",
+      "status": "VERIFIED",
+      "evidence": "audit-regressions; scripts/acceptance/validate_exports.py",
+      "assertions": "Четыре реально выгруженных XML, включая смешанные ставки обоих режимов, проходят официальную OASIS UBL 2.1 XSD. Категории/ставки/валюта/итоги берутся из snapshot.",
+      "limits": "Generic UBL: не Peppol BIS/Schematron, Access Point или подтверждённая доставка по сети.",
+      "originalCriteria": "## LP-A10 · P1 · Исправить UBL — F02\n\n- Экспортировать реальные ставки/категории и налоговые итоги из snapshot invoice, убрать фиксированные S/18%.\n- Выбрать и документировать поддерживаемый профиль; не заявлять Peppol-совместимость без его проверок.\n- Валидировать экспорт выбранными XSD/правилами профиля, включая обязательные реквизиты, единицы и суммы.\n- **Готово:** 0%, 18%, смешанные ставки и оба налоговых режима согласованы со счётом; выбранные проверки формата пройдены. Передача по Peppol остаётся отдельной интеграцией.\n- **Зависимости:** LP-A09; валютные поля — LP-A08.",
+      "statusMeaning": "Технически выполнено в указанном покрытии, не production/внешняя сертификация"
+    },
+    {
+      "id": "LP-A11",
+      "title": "BLOCKED поставщик",
+      "status": "VERIFIED",
+      "evidence": "audit-regressions; catalogs; assertSupplierAllowed call sites",
+      "assertions": "Общий guard новых приглашений, bids/ticks, awards, договоров/PO и catalog orders. HTTP блокировка уже активного каталога; ранее подтверждённый PO доходит до приёмки. Статус и audit IDs проверены на PostgreSQL.",
+      "limits": "Старые обязательства не прекращаются автоматически.",
+      "originalCriteria": "## LP-A11 · P1 · Сделать блокировку поставщика действующей — F11\n\n- Зафиксировать бизнес-правила BLOCKED: новые приглашения, заявки, ставки, awards и заказы из каталога; отдельно судьба ранее принятых обязательств.\n- Применить единое правило в сервисах, а не только фильтр UI. Проверить публичные и приглашённые события.\n- Действующие договоры/доставки не отменять автоматически без явно выбранного правила.\n- **Готово:** заблокированный поставщик не обходит запрет через другой endpoint, публичный tender или каталог; разрешённое завершение старых обязательств сохраняется; действия отражены в аудите.",
+      "statusMeaning": "Технически выполнено в указанном покрытии, не production/внешняя сертификация"
+    },
+    {
+      "id": "LP-A12",
+      "title": "AI edge cases и fallback",
+      "status": "VERIFIED",
+      "evidence": "ai-provider; audit-regressions; ai-scorer.ts; recommendationCopy",
+      "assertions": "Нулевая цена/доставка в тот же день, neutral reliability=60, finite scores. 18 реальных HTTP boundary тестов: структура/фиксированные веса/порядок/weighted total/IDs, malformed JSON/503/disconnect, secrecy/foreign buyer. Facts берутся из открытых локальных строк; invalid response→heuristic fallback.",
+      "limits": "Живой внешний LLM и качество его объяснений NOT RUN. Loopback HTTP fixture не выдан за внешнюю приёмку; AI не назначает winner.",
+      "originalCriteria": "## LP-A12 · P2 · Исправить AI на крайних значениях — F05\n\n- Определить обработку нулевой цены, доставки в день заказа, отсутствующей истории и ничьих.\n- Гарантировать конечные значения и диапазоны баллов; проверять ответы внешнего orchestrator перед использованием.\n- Согласовать семантику fallback и внешнего scorer; явно обозначать эвристическую модель в UI.\n- **Готово:** нет NaN/Infinity/null вместо баллов; нулевые значения имеют объяснимый результат, недоступность/некорректный ответ orchestrator обрабатываются; AI не назначает победителя самостоятельно.\n- **Зависимости:** LP-A08 для валют/лотов.",
+      "statusMeaning": "Технически выполнено в указанном покрытии, не production/внешняя сертификация"
+    },
+    {
+      "id": "LP-A13",
+      "title": "Аналитика и бюджет",
+      "status": "VERIFIED",
+      "evidence": "analytics; budgets; budget-integration; departments; web/analytics,finance,budget-approval; BUDGET-REPORT-ACCEPTANCE-2026-10-29.json; web/tests/helpers/budget-report.ts; budget-paid-period; BUDGET-PAID-ACCEPTANCE-2026-10-30.json",
+      "assertions": "Активные award totals по лоту, cancel/reaward, net basis, валюты отдельно. Принятые PO считаются по дате создания заказа; обязательства/приёмка/оплата различены. Stale response/31-е число, AZ/RU/EN и текущая budget policy/SoD проверены. AZN бюджеты, подразделения/периоды, exact limits, finance role и concurrent approvals сохранены. Native budget report: задержанные list/rollup старого2031 не заменяют выбранный2032/20002minor. При отказе любого из3reportendpoint данные скрыты, локализованные AZ/RU/EN retry загружают выбранный год; CSV выключен до готовности. BUYER_USER не запрашивает запрещённый org-report. Оплата в rollup отбирается по бюджетной дате обязательства и выбранным периодам без разрывов/повторного счёта; чужой период соседнего подразделения не расширяет доступ. Проверены UTC/смена года/валюта/каталог и BUYER_USER/foreign buyer; PAID не увеличивает actual/used.",
+      "limits": "Это не баланс банковского счёта и не автоматический FX. Согласованное UI-обновление не является общим DB snapshot. Новый native кейс роли finance и смены года; BUYER_USER source+прежние API checks, остальные фильтры используют общий loader. Это оплата обязательств выбранного периода, не движение денег по дате банковского платежа. Новые period/scope кейсы — actual API; отдельный native browser кейс периода оплаты не заявлен.",
+      "originalCriteria": "## LP-A13 · P2 · Исправить финансовую аналитику — F12\n\n- Суммировать действующие awards по выигранным лотам, исключать отменённые результаты.\n- Разделить валюты либо нормализовать по принятой модели; исправить dashboard, savings, spend и invoice aggregates согласованно.\n- Выбрать дату признания расхода и явно подписать её в интерфейсе; отделить обязательства/приёмку/оплату.\n- **Готово:** заранее рассчитанный пример с несколькими лотами, cancel/reaward и валютами даёт точные итоги; одно предложение не удваивается из-за двух awards.\n- **Зависимости:** LP-A03, LP-A08, LP-A09.",
+      "statusMeaning": "Технически выполнено в указанном покрытии, не production/внешняя сертификация"
+    },
+    {
+      "id": "LP-A14",
+      "title": "OCDS",
+      "status": "VERIFIED",
+      "evidence": "sourcing-flow; audit-regressions; validate_exports.py",
+      "assertions": "Корректные active/cancelled awards, lot value/currency/supplier и release data; canonical OCDS 1.1.5 schema. Отдельный actual HTTP негативный тест до opening исключает bid ID/цены/payload и tender value; foreign supplier 404.",
+      "limits": "Реальный downstream потребитель NOT RUN; schema validation не является его интеграционной приёмкой.",
+      "originalCriteria": "## LP-A14 · P2 · Исправить OCDS — F13\n\n- Передавать правильный статус отменённых/действующих awards, победителя и стоимость по лоту/валюте.\n- Проверить идентификаторы/версии release, связи с лотами и применяемый формат расширений.\n- Валидировать выбранной схемой OCDS; не публиковать закрытые данные до разрешённого этапа.\n- **Готово:** cancel/reaward отражены достоверно; поставщик и сумма соответствуют продукту; schema validation и отрицательный тест раннего раскрытия пройдены.\n- **Зависимости:** LP-A03, LP-A08.",
+      "statusMeaning": "Технически выполнено в указанном покрытии, не production/внешняя сертификация"
+    },
+    {
+      "id": "LP-A15",
+      "title": "TypeORM RETURNING",
+      "status": "VERIFIED",
+      "evidence": "returnedRows; followups; audit-regressions; budget-integration; settings/categories/catalogs/contracts call sites",
+      "assertions": "UPDATE/DELETE rows отделены от affected count. Проверены реальные supplier status, followup stop и audit entity ID, отсутствующая membership. Все найденные аналогичные RETURNING-пути используют helper либо предварительный SELECT.",
+      "limits": "Source inspection дополняет реальные PostgreSQL тесты; не утверждается отдельный новый тест каждого SQL выражения.",
+      "originalCriteria": "## LP-A15 · P2 · Исправить обработку UPDATE RETURNING — F09\n\n- Найти все аналогичные вызовы, корректно разобрать rows/affected count TypeORM.\n- Исправить followup stop, supplier status и остальные подтверждённые места; сохранять реальный entityId аудита.\n- **Готово:** успешный UPDATE возвращает ожидаемый объект, отсутствующая запись — корректную ошибку; аудит содержит ID; проверки выполняются с настоящим PostgreSQL/TypeORM.",
+      "statusMeaning": "Технически выполнено в указанном покрытии, не production/внешняя сертификация"
+    },
+    {
+      "id": "LP-A16",
+      "title": "Лицензирование",
+      "status": "VERIFIED",
+      "evidence": "audit-license; scripts/acceptance/fresh-install.sh",
+      "assertions": "Production missing-license restricted; dev fallback явно отделён. Реальная PASETO подпись, valid_from, valid→grace→restricted без рестарта, renewal, revoked/tampered. Fresh production Compose использует signed file license и проверяет завершение разрешённых операций.",
+      "limits": "Клиентская коммерческая лицензия/установка NOT RUN; выпуск такой лицензии не подменяет разработку.",
+      "originalCriteria": "## LP-A16 · P2 · Сделать лицензирование пригодным для эксплуатации — F17\n\n- Разделить demo/dev fallback и production; отсутствие/невалидность лицензии обрабатывать согласно явно выбранной продуктовой политике.\n- Пересчитывать срок действия без обязательного перезапуска; проверить valid_from, expiry, grace, revoke и обновление.\n- Проверять ограничения новых операций, сохраняя согласованный режим завершения уже начатых закупок.\n- **Готово:** тесты с управляемыми часами проходят valid → grace → restricted; health не выдаёт dev fallback за установленную лицензию; ограничения и разрешённые продолжения выполняются.",
+      "statusMeaning": "Технически выполнено в указанном покрытии, не production/внешняя сертификация"
+    },
+    {
+      "id": "LP-A17",
+      "title": "SMTP/Meta — историческая задача, исключена владельцем",
+      "status": "REMOVED_BY_OWNER",
+      "historicalWork": "Ранее внесены исправления callback batches/status monotonicity, durable early callback persistence, dispatch lease ownership/provider evidence и обязательного Meta message ID (PR20–23). Это история уже включённого кода, не активная задача.",
+      "notDone": "Реальная внешняя SMTP/Meta отправка, получение и callbacks на разрешённые реальные адреса/номера NOT RUN; настроенных подключений не было по ответу владельца.",
+      "instruction": "Не возобновлять, не предлагать настройку и не включать в блокеры текущих19задач без нового явного поручения."
+    },
+    {
+      "id": "LP-A18",
+      "title": "Дедлайны и конкуренция",
+      "status": "VERIFIED",
+      "evidence": "deadline-boundaries; auction-flow; procurement.stress-spec; audit-regressions",
+      "assertions": "Время сервера, withdrawal после close_at отклонён. Auction tick/extension/closer сериализованы. Новые реальные queued resubmit/withdraw при TRY-lock skip сохраняют исходный sealed payload; два opening дают 201/400 и один audit; положительный withdrawal/replacement сохранён.",
+      "limits": "Отклонённая транзакция не сохраняет domain audit/tick; журнал принятых изменений не выдаётся за журнал всех атак/отклонённых запросов.",
+      "originalCriteria": "## LP-A18 · P2 · Закрыть пограничные операции по дедлайну\n\n- Проверять close_at при withdraw, а не только status OPEN.\n- Проверить submit/withdraw/open/close и auction extension при одновременных запросах; использовать согласованные время и блокировки.\n- Проверить отклонённые auction ticks: запись перед throw сейчас откатывается вместе с транзакцией; определить, обязателен ли журнал отклонённых попыток, и обеспечить выбранное поведение.\n- **Готово:** после дедлайна нельзя изменить состав действительных предложений из-за задержки cron; принятие ставки/продление/закрытие не противоречат друг другу; аудит соответствует выбранной политике.",
+      "statusMeaning": "Технически выполнено в указанном покрытии, не production/внешняя сертификация"
+    },
+    {
+      "id": "LP-A19",
+      "title": "Общая приёмка, языки, материалы",
+      "status": "PARTIAL_EXTERNAL",
+      "evidence": "full acceptance.yml; web tests/helpers/rfx.ts; rfi-rfp; render-presentations; v3/output; CLAIMS.md; RFP-NATIVE-PAYMENT-ACCEPTANCE-2026-10-29.json; INVOICE-DETAIL-ACCEPTANCE-2026-10-29.json; RFP-LANGUAGES-ACCEPTANCE-2026-10-30.json; INVOICE-NEGATIVE-ACCEPTANCE-2026-10-30.json; web/tests/helpers/invoice-negative.ts; INVOICE-READ-ACCEPTANCE-2026-10-30.json; web/tests/helpers/invoice-detail-race.ts; INVOICE-NEWER-ACCEPTANCE-2026-10-30.json; INVOICE-NEWER-MAIN-ACCEPTANCE-2026-10-30.json; INVOICE-LIST-ACCEPTANCE-2026-10-30.json; web/tests/helpers/invoice-list-retry.ts",
+      "assertions": "Full API/security/build/native browser и fresh isolated install, upgrade/restore. RFQ и auction downstream до GRN/invoice, direct/catalog и payment-status API. RFI AZ/RFP AZ/RU/EN: own response после reload/close, buyer secrecy/opening, foreign supplier deny, RFI без цен/award. Текущие PPTX/PDF/notes синхронизированы; независимый render 15 страниц, 100% текста. AZ/RU/EN RFP native flow: оценка→победитель→договор→PO→доставка→GRN→MATCHED→APPROVED→PAID; все downstream записи реальными browser controls. Net/VAT/gross1200/216/1416; PAID после reload у обеих сторон. Детали оплаченного счёта AZ/RU/EN проверены переключателем языка. Открытая карточка счёта синхронно со строкой показывает APPROVED/PAID после фактического успеха без переоткрытия/reload; таблица сверки сохраняется. Оба browser context выбирают язык через UI, он сохраняется при полной навигации/reload; все3RFP проходят1200net/216VAT/1416gross и открытые деталиMATCHED→APPROVED→PAID. RFI buyer opening также AZ. Native approve/pay controlled503AZ/RU/EN сохраняют строку/карточку и реальные status/net/VAT/gross/match; после unroute реальный повтор успешен. Отмена override AZ/RU/EN не отправляет POST и сохраняет DISPUTED/gross201. Reject503 сохраняет данные; реальный reject201EN обновляет строку/карточку и сохраняется после reload у покупателя/поставщика. Поздний реальный detailGET не возвращает старые MATCHED/APPROVED после native approveAZ/payRU; отмена ожидающего открытия не запускает второйGET/не открывает карточку повторно. DetailGET503 даёт локализованный AZ/RU/EN alert, затем реальный retry открываетPAID. Прежние nativeRFP/negative/partial сценарии сохранены. Новый nativeEN сценарий: detailGET начат до approve, выполнен после оплаты отдельным авторизованным APIклиентом и реально возвращаетPAID; строка/карточка остаютсяPAID также после позднего реального спискаAPPROVED. Пересекающийся с локальной успешной операцией GET перечитывается; кеш больше не перекрывает новый серверный ответ. Первоначальный GETсписка503 и реальный повтор200 провереныAZ/RU/EN дляbuyer/supplier (6случаев): loading/локализованныйerror/retry, затемреальныйPAID1200/216/1416 и отсутствиеpageerror. Ошибка не выдаётся за успешно пустой список.",
+      "limits": "Full native RFP downstream подтверждён для AZ/RU/EN в выбранных сценариях. RFI не имеет финансового downstream по модели. PAID не означает банковский платёж. Не исчерпывающий редакторский аудит всех строк. Внешние/клиентские ограничения из externalNotRun остаются NOT RUN. Новые controlled503 подтверждают обработку HTTP-ошибки UI, не серверный rollback/transport disconnect. Cancellation проверяет noPOST/status/gross/UI; не полный аудит всех полей. Реальное отклонение проверено наEN; отмена и approve/pay503 — AZ/RU/EN. Новые detail-race сценарии: approveAZ/payRU; pendingclose/loaderrorretryAZ/RU/EN. Новый внешний PAID проверен actualauthorized APIклиентом и nativeUI; не иной пользователь и не новый полностью nativeпоток. Unmount/устаревшие ошибки дополнительно source-reviewed; отдельный новый unmounttest не заявлен. Новый listretrytest проверяет первоначальную загрузку; postmutation refresh503/stalefailure/unmount дополнительно source-reviewed, не новые nativeкейсы.",
+      "originalCriteria": "## LP-A19 · Финальная приёмка, локализация и обновление материалов\n\n- Выполнить build, полный API security/regression suite и согласованные браузерные сценарии на выделенном worker.\n- Сквозные сценарии: RFQ, RFP, RFI, multi-lot, reverse auction, direct/catalog purchase; соответствующие цепочки до GRN/invoice/payment-status.\n- Отдельно проверить роли/изоляцию двух покупателей и поставщиков, AZ/RU/EN; убрать значимые жёстко заданные/смешанные строки из UI, рекомендаций и сообщений.\n- Проверить deployment/on-prem и signed license на отдельном стенде, backup/restore и upgrade; не считать существование Compose доказательством готового клиентского внедрения.\n- Подтвердить заявленные интеграции согласованными тестами. Для непроверенных оставить точные ограничения: CSV не live ERP, статус PAID не банковский платёж, dev signature не ASAN.\n- Обновить матрицу claims: verified / conditional / not verified; затем синхронно исправить data sheet, презентацию и заметки докладчика.\n- **Готово:** нет открытых P1 в продаваемом объёме; каждый оставшийся пункт имеет подтверждение или явно согласованное ограничение; материалы соответствуют принятой версии, NOT RUN нигде не превращён в PASS.\n- **Зависимости:** все применимые исправления и LP-A00. Закрытие аудита не является разрешением на deploy.",
+      "statusMeaning": "Техническая часть выполнена; внешняя приёмка частично NOT RUN"
+    }
+  ],
+  "additionalWork": [
+    {
+      "task": "Презентация для потенциальных корпоративных клиентов на AZ",
+      "status": "DONE_WITH_LIMITS",
+      "result": "Реализован выбранный вариантC; редактируемый PPTX13слайдов, PDF, AZзаметки докладчика. Фокус на выгодах/процессах/реверсном аукционе, не только screenshots; отдельное demo.",
+      "limits": "Не MicrosoftPowerPointdesktop acceptance; прежние варианты superseded. Финальное одобрение клиентом/публичная презентация не заявлены."
+    },
+    {
+      "task": "Data sheet AZ",
+      "status": "DONE_WITH_LIMITS",
+      "result": "Редактируемый PPTX2страницыA4, PDF и текст; claims ограничены проверенными возможностями.",
+      "limits": "Внешние интеграции/сертификации не обещаны, desktopPowerPointNOTRUN."
+    },
+    {
+      "task": "Исследование проекта и сценариев гидов",
+      "status": "DONE_PRESERVED_EXISTING",
+      "result": "Код/документация/guide scripts использованы; действующие AZ/RU/EN assets и маршруты сохранены(PR9), LFS восстановлен.",
+      "limits": "Полная новая запись всех видео после последних изменений НЕ выполнена и не является действующим поручением."
+    },
+    {
+      "task": "Сохранение расширенного бюджетирования при интеграции аудита",
+      "status": "DONE_VERIFIED",
+      "result": "PR7–9: объединены runtimebudget и auditистории миграций без переписывания применённых миграций; financeроль/SoD/границыподразделений/exactlimits/concurrentapprovals/UIвосстановлены.",
+      "limits": "Upgradeтесты синтетические, текущие productionvolume не обновлялись."
+    },
+    {
+      "task": "Изолированная установка и сборка релизного пакета",
+      "status": "DONE_HISTORICAL_NO_DEPLOY",
+      "result": "PR6/10: freshproductionmode stand с signedlicense/private storage/ClamAV; сборка API/webобразов, checksums/restore в CI.",
+      "limits": "Исторический пакет не объявляется свежим артефактом main5782aba. Владелец вернул фокус к исходным задачам; отдельный release/backupпроект НЕ продолжать."
+    },
+    {
+      "task": "Исправление маршрута GitHub и доставка черезPR",
+      "status": "DONE",
+      "result": "Активный ownerrashadoni, PR3–34MERGED, PR2CLOSED_UNMERGED/superseded. Полный список приложен.",
+      "limits": "PR1 предшествовал этой работе; не приписывать его данному аудиту."
+    },
+    {
+      "task": "Критерии/claims/журналы и доказательства",
+      "status": "DONE",
+      "result": "ИсходныеTASKS, currentcriteria JSON/MD, исторические receipts и append-onlyjournals сохранены. MainproofPR34 новее заголовков, написанных перед merge.",
+      "limits": "Старые all20done/SMTPqueue/старыеcounts/ownerмаршруты не являются действующим статусом."
+    },
+    {
+      "task": "Productionвыкладка/TLS/новаясистемаbackup",
+      "status": "NOT_PERFORMED_OUTSIDE_AUTHORIZATION",
+      "result": "Productionне менялся; владелец оставил текущийIP и имеющийсяContabobackup.",
+      "limits": "Общее разрешениеpush/CI/PR/merge НЕ включает production. Не считать отсутствие неразрешённого deploy незавершённой разработкой."
+    }
+  ],
+  "remainingNotRun": [
+    {
+      "id": "E01",
+      "item": "Live внешний LLM: доступность и качество объяснений",
+      "status": "NOT_RUN",
+      "needed": "Реальный согласованный AI_ORCHESTRATOR_URL/провайдер, доступ и критерии приёмки. Секреты через существующий защищённый канал.",
+      "existing": "18actualHTTPboundaryтестов/fallback, а не liveLLM.",
+      "next": "Проверять только при наличии реального подключения; не заменять loopbackfixture."
+    },
+    {
+      "id": "E02",
+      "item": "Реальная клиентская установка и коммерческая лицензия",
+      "status": "NOT_RUN",
+      "needed": "Согласованный клиентскийstand, целеваяконфигурация/лицензия и разрешение на необходимые изменения.",
+      "existing": "Freshisolatedproductionmode и signedtestlicense PASS.",
+      "next": "Не выпускать коммерческуюлицензию/не разворачиватьproduction самостоятельно."
+    },
+    {
+      "id": "E03",
+      "item": "Обновление реального existing-volume окружения",
+      "status": "NOT_RUN",
+      "needed": "Явно выбранная целевая среда/разрешение/реальные данные и предвыкладочная проверка.",
+      "existing": "Обе применённыеистории и modeledstorageupgrade/restore PASS в disposableCI.",
+      "next": "Сохранить dirtyruntime и mixedComposelabels, не reset/overwrite."
+    },
+    {
+      "id": "E04",
+      "item": "PublicTLS на текущем клиентскомendpoint",
+      "status": "NOT_RUN_OWNER_DEFERRED",
+      "needed": "Новый выбор владельца, если он изменит решение оставитьIP.",
+      "existing": "Изолированный trustedHTTPSbrowserPASS; публичный runtimeIP не менялся.",
+      "next": "Не заводить домен/TLSкак самостоятельныйинфраструктурныйпроект."
+    },
+    {
+      "id": "E05",
+      "item": "LiveERP/банк/ASANİmza/Peppolnetwork и реальный OCDSdownstreamпотребитель",
+      "status": "NOT_RUN_NOT_IMPLEMENTED_OR_NOT_INTEGRATED",
+      "needed": "Отдельный реальныйинтеграционныйконтракт, подключения/доступ/тестовыйконтур, если владелец действительно закажет их.",
+      "existing": "CSVнеERP; PAIDзарегистрированныйстатуснеbanktransfer; devsignatureнеASAN; genericUBLнеPeppolBIS/AP; OCDSschemaнеconsumeracceptance.",
+      "next": "Сохранять ограниченияclaims. Не создавать этиинтеграции автоматически ради закрытияаудита."
+    },
+    {
+      "id": "E06",
+      "item": "Открытие/верстка/редактируемость в desktopMicrosoftPowerPoint",
+      "status": "NOT_RUN",
+      "needed": "Подключённая nativePowerPointсессия/доступныйdesktopworker.",
+      "existing": "LibreOfficePPTXrender15страниц/100%ожидаемоготекста PASS, bundledfonts и визуальнаяпроверка; DocumentControlне нашёлсессий.",
+      "next": "При наличии реально открытьобаPPTX; не выдавать PDFpreview за desktopacceptance."
+    }
+  ],
+  "productionChanged": false,
+  "pendingImplementationReviewCi": false,
+  "automaticReviewCaveat": "GitHubagent-reviewзелёныйпослеAnthropic400creditfallback; это НЕ semanticreview. Отдельные реальные независимые ревью источника/итоговыхhead выполнены, в том числеPR34invoice_list_retry_review.",
+  "scopeInstruction": "Не возвращатьLP-A17; не переходитькLeadDrive/pharmacies; не делатьproduction/release/backup sidework без нового поручения."
+}

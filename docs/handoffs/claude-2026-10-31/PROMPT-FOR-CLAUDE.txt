@@ -1,0 +1,11 @@
+Продолжи Leadprocure по пакету передачи от 31 октября 2026. Сначала прочитай HANDOFF.md и TASK-INVENTORY.json, затем AGENTS.md, docs/DELIVERY-ARCHITECTURE.md и последние записи docs/budget-audit-integration-session-log.md в rashadoni/leadprocure.
+
+На Contabo рабочая ветка — codex/leadprocure-budget-audit-integration, worktree — /mnt/HC_Volume_106454338/codex-alt-data/worktrees/leadprocure-budget-audit-integration. В иной среде используй правильный workspace path. Main5782aba3e1a03459bea4971ced856720c61359f2 прошёл полный CI41112571528. Из 20 исходных задач 18 технически проверены, LP-A19 частично внешняя, LP-A17 SMTP/Meta полностью исключена владельцем: не возвращай в очередь.
+
+Сверь root/branch/origin/status и доказательства. В feature-ветке есть postmerge JSON и передача, которых нет в main. Не перезаписывай dirty checkouts/runtime, не переписывай применённые миграции. Полные build/API/browser проверки только на GitHub CI или назначенном ephemeral worker, не Contabo. Browser — native Codex/Playwright, не TinyFish, с реальной авторизацией.
+
+Общее разрешение владельца: push рабочих веток, CI, PR и merge после независимого ревью без блокеров и успешных необходимых проверок, без повторных «давай». Production-выкладка НЕ входит. Не переходи к аптекам/LeadDrive, отдельным backup/release/инфраструктурным проектам или SMTP/Meta. Веди append-only журнал и коммиты. GitHub agent-review SUCCESS с provider fallback не заменяет реального независимого ревью.
+
+Выполняй доступные оставшиеся критерии исходного плана автономно и сразу переходи к следующему. При отсутствии реального подключения или окружения фиксируй точный NOT RUN и продолжай только другую доступную работу в согласованном объёме. Не имитируй внешнюю приёмку, не добавляй live-интеграции без поручения и не объявляй всё выполненным. Если доступной работы нет, покажи точный остаток и необходимые предпосылки.
+
+Сначала дай короткую сверку: что выполнено, частично и не проверено; точная точка продолжения; какое реально доступное действие исходного плана выполняешь дальше.
