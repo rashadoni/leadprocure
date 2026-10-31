@@ -83,13 +83,27 @@ describe('organization members (API e2e)', () => {
     expect((await listUsers(adminA)).filter((u) => u.email === memberEmail).map((u) => u.role))
       .toEqual(['BUYER_APPROVER']);
 
-    // granting access was the one membership change that left no trace
+  });
+
+  it('records the grant of access, which was the one membership change leaving no trace', async () => {
     const audit = await db.query(
       `SELECT payload FROM audit_events WHERE action = 'MEMBER_ADDED' AND payload->>'email' = $1`,
       [memberEmail],
     );
     expect(audit.rows).toHaveLength(1);
     expect(audit.rows[0].payload.role).toBe('BUYER_USER');
+  });
+
+  it('keeps one membership per organization in the SCHEMA, not only in the service', async () => {
+    // Without this the suite passes with migration 0043 absent: addUser's own check
+    // satisfies every other assertion, while the constraint is what protects any other
+    // writer of this table and is the actual root cause of the 500.
+    const { rows } = await db.query(
+      `SELECT conname, array_length(conkey, 1) AS cols FROM pg_constraint
+        WHERE conrelid = 'memberships'::regclass AND contype = 'u'`,
+    );
+    expect(rows).toHaveLength(1);
+    expect(Number(rows[0].cols)).toBe(2);
   });
 
   it('refuses the wrong-side role on an existing member too', async () => {

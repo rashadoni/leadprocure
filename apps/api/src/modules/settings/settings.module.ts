@@ -29,6 +29,9 @@ export class SettingsService {
   // took any member of the shared enum, so a buyer admin could set SUPPLIER_USER inside a
   // BUYER org. That member then loses every buyer page and is admitted to the
   // supplier-only routes with a buyer organization behind them.
+  // Roles grow by migration (0037 added BUYER_FINANCE), and the two arms below are
+  // asymmetric on purpose: a future supplier role is refused until named here, a future
+  // BUYER_* one is admitted. Whoever adds the next role should revisit this.
   private assertRoleFitsOrg(role: MembershipRole, auth: AccessTokenPayload) {
     if (auth.org_kind === 'BOTH') return; // trades on both sides: either role is real
     const fits = auth.org_kind === 'SUPPLIER' ? role === 'SUPPLIER_USER' : role.startsWith('BUYER_');

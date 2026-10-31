@@ -29,21 +29,24 @@ export class OneMembershipPerOrg1720000000043 implements MigrationInterface {
     // constraint on this table with three columns, and its name is Postgres's to choose.
     await q.query(`
       DO $$
-      DECLARE c text;
+      DECLARE c text; n int;
       BEGIN
-        SELECT conname INTO c FROM pg_constraint
+        SELECT count(*), min(conname) INTO n, c FROM pg_constraint
          WHERE conrelid = 'memberships'::regclass AND contype = 'u'
            AND array_length(conkey, 1) = 3;
-        IF c IS NOT NULL THEN EXECUTE format('ALTER TABLE memberships DROP CONSTRAINT %I', c); END IF;
+        IF n > 1 THEN
+          RAISE EXCEPTION 'memberships carries % three-column unique constraints; expected only the (user_id, org_id, role) key', n;
+        END IF;
+        IF n = 1 THEN EXECUTE format('ALTER TABLE memberships DROP CONSTRAINT %I', c); END IF;
       END $$`);
     await q.query(`
       ALTER TABLE memberships ADD CONSTRAINT memberships_user_org_key UNIQUE (user_id, org_id)`);
   }
 
-  public async down(q: QueryRunner): Promise<void> {
-    await q.query(`ALTER TABLE memberships DROP CONSTRAINT IF EXISTS memberships_user_org_key`);
-    await q.query(`
-      ALTER TABLE memberships ADD CONSTRAINT memberships_user_id_org_id_role_key
-        UNIQUE (user_id, org_id, role)`);
+  // Forward-only, like every migration since 0028: reversing this would put back the key
+  // under which a second role for one pair is legal, and with it the 500 that cannot be
+  // escaped from the UI — on data that may have grown new memberships meanwhile.
+  public async down(): Promise<void> {
+    throw new Error('Forward-only membership key correction');
   }
 }
