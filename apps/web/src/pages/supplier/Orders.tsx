@@ -9,11 +9,6 @@ import { ListState, useLoad } from '../../components/ListState';
 
 const PAGE_SIZE = 20;
 
-// The same rule the API enforces: progress runs one way, and EXCEPTION sits outside it —
-// always offerable, and never a dead end, since a shipment at EXCEPTION ranks below every
-// milestone and can therefore be moved on to any of them.
-const SHIPMENT_PROGRESS = SHIPMENT_STATUSES.filter((st) => st !== 'EXCEPTION');
-const progressOf = (status: string) => SHIPMENT_PROGRESS.indexOf(status as any);
 
 // "Заказы в работе" — the supplier's delivery pipeline. Each PO advances through
 // CONFIRMED → PACKED → SHIPPED → DELIVERED; transitions are validated by the DB seam.
@@ -150,11 +145,13 @@ export default function Orders() {
                         <div className="hint">{s.events.map((e: any) => `${e.status}@${e.location ?? '—'}`).join(' → ')}</div>
                         <select style={{ width: 150, marginTop: 4 }} value="" onChange={(e) => e.target.value && addEvent(p.id, e.target.value)}>
                           <option value="">+ {t('history')}…</option>
-                          {/* Only forward, plus EXCEPTION — the API refuses the rest, and
-                              offering them was how a delivered shipment became one in
-                              transit in two clicks. */}
+                          {/* The same rule the API enforces, and only that one: a
+                              delivered shipment cannot become an undelivered one, which
+                              was two clicks away here. Everything else stays offerable —
+                              clearing customs twice or leaving a hub is ordinary freight. */}
                           {SHIPMENT_STATUSES
-                            .filter((st) => st === 'EXCEPTION' || progressOf(st) >= progressOf(s.shipment.status))
+                            .filter((st) => s.shipment.status !== 'DELIVERED'
+                              || st === 'DELIVERED' || st === 'EXCEPTION')
                             .map((st) => <option key={st} value={st}>{st}</option>)}
                         </select>
                       </div>

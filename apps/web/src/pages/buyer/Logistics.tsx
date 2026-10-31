@@ -21,7 +21,7 @@ export default function Logistics() {
           <thead><tr>
             <th>PO</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th>
             <th>{t('carrier')}</th><th>{t('tracking_no')}</th><th>{t('status')}</th>
-            <th>{t('orders')}</th><th>{t('eta')}</th>
+            <th>{t('po_status_col')}</th><th>{t('eta')}</th>
           </tr></thead>
           <tbody>
             {rows.map((s) => (

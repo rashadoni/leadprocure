@@ -26,13 +26,19 @@ const PO_TARGET: Partial<Record<ShipmentStatus, string>> = {
   DELIVERED: 'DELIVERED',
 };
 const SUPPLIER_PO_CHAIN = ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'];
-// Delivery progress only runs one way. The timeline is the supplier's own claim and the
-// buyer's board reads it, so letting it slide back turned a delivered order into one in
-// transit — two clicks apart in the dropdown, and flatly contradicting a purchase order
-// already at DELIVERED or ACCEPTED. EXCEPTION is deliberately outside the order: it is
-// how a shipment says something went wrong, and it stays available at every point.
-const SHIPMENT_PROGRESS = ['CREATED', 'PICKED_UP', 'IN_TRANSIT', 'CUSTOMS', 'ARRIVED', 'DELIVERED'];
-const progressOf = (status: string) => SHIPMENT_PROGRESS.indexOf(status);
+// A delivered shipment cannot become an undelivered one. That single step is what
+// contradicted the order — two clicks apart in the supplier's dropdown, with the purchase
+// order sitting at DELIVERED and the buyer's board reading the delivery — and it is the
+// only one worth refusing. The middle of the timeline is deliberately NOT ordered:
+// clearing customs twice on a cross-border shipment, or arriving at a hub and moving on
+// again, are ordinary freight, and a monotonic rule would have pushed both through
+// EXCEPTION — recording "something went wrong" to describe a leg where nothing did.
+// EXCEPTION stays available everywhere, including after delivery, since that is how a
+// shipment reports a problem with one.
+const SETTLED_PO = ['ACCEPTED', 'REJECTED', 'CANCELLED'];
+// What a supplier may ship against: the same window the UI offers, so the API is not the
+// looser of the two. Outside it the PO is not theirs to act on yet, or not any more.
+const SHIPPABLE_PO = ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'];
 
 @Injectable()
 export class LogisticsService {
@@ -48,9 +54,12 @@ export class LogisticsService {
   ) {
     const m = this.rc.manager;
     // RLS shows the PO to this supplier only if they own it.
-    const po = await m.query(`SELECT id, buyer_org_id, supplier_org_id FROM purchase_orders WHERE id = $1`, [poId]);
+    const po = await m.query(`SELECT id, buyer_org_id, supplier_org_id, status FROM purchase_orders WHERE id = $1`, [poId]);
     if (!po.length) throw new NotFoundException('Order not found');
     if (po[0].supplier_org_id !== auth.org_id) throw new BadRequestException('Only the awarded supplier ships this order');
+    if (!SHIPPABLE_PO.includes(po[0].status)) {
+      throw new BadRequestException(`The order is ${po[0].status}; confirm it before shipping against it`);
+    }
 
     const rows = await m.query(
       `INSERT INTO shipments(po_id, buyer_org_id, supplier_org_id, carrier, tracking_no, origin, destination, eta)
@@ -77,15 +86,17 @@ export class LogisticsService {
     if (!ship.length) throw new NotFoundException('No shipment for this order');
     if (ship[0].supplier_org_id !== auth.org_id) throw new BadRequestException('Only the supplier updates tracking');
 
-    // Once the buyer has accepted the goods the delivery is settled; rewriting the
-    // timeline after that only makes the two screens disagree.
+    // Once the order is settled the delivery is settled with it. REJECTED comes from the
+    // same place as ACCEPTED — the buyer's decision on DELIVERED goods — and is the one
+    // outcome a supplier has the most reason to re-narrate; a shipment opened on an
+    // unconfirmed order can still be running when the buyer cancels it.
     const po = (await m.query(`SELECT status FROM purchase_orders WHERE id = $1`, [poId]))[0];
-    if (po?.status === 'ACCEPTED') {
-      throw new BadRequestException('The buyer has accepted this delivery; its tracking is closed');
+    if (po && SETTLED_PO.includes(po.status)) {
+      throw new BadRequestException(`The order is ${po.status}; its tracking is closed`);
     }
-    if (dto.status !== 'EXCEPTION' && progressOf(dto.status) < progressOf(ship[0].status)) {
+    if (ship[0].status === 'DELIVERED' && dto.status !== 'DELIVERED' && dto.status !== 'EXCEPTION') {
       throw new BadRequestException(
-        `Delivery is already at ${ship[0].status}; record EXCEPTION to report a problem instead of moving it back to ${dto.status}`,
+        `Delivery is already DELIVERED; record EXCEPTION to report a problem instead of moving it back to ${dto.status}`,
       );
     }
 

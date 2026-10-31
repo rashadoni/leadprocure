@@ -88,7 +88,7 @@ describe('logistics (API e2e)', () => {
     // two clicks apart in the supplier's dropdown, and it used to turn a delivered
     // shipment into one in transit while the order stayed at DELIVERED
     const back = await event(po.id, 'IN_TRANSIT').expect(400);
-    expect(back.body.message).toMatch(/already at DELIVERED/);
+    expect(back.body.message).toMatch(/already DELIVERED/);
     expect(back.body.message).toMatch(/EXCEPTION/);
     const still = await http().get(`/logistics/po/${po.id}`).set(...bearer(supplier)).expect(200);
     expect(still.body.shipment.status).toBe('DELIVERED');
@@ -106,9 +106,13 @@ describe('logistics (API e2e)', () => {
     await event(po.id, 'DELIVERED').expect(201);
     await http().post(`/orders/${po.id}/receipts`).set(...bearer(buyer))
       .send({ items: [{ poItemId: po.itemId, qty: 2 }] }).expect(201); // full receipt → ACCEPTED
+    // assert the precondition rather than discovering it as a confusing 201 below: the
+    // auto-accept inside createReceipt is itself best-effort
+    const accepted = await http().get(`/logistics/po/${po.id}`).set(...bearer(supplier)).expect(200);
+    expect(accepted.body.poStatus).toBe('ACCEPTED');
 
     const closed = await event(po.id, 'EXCEPTION').expect(400);
-    expect(closed.body.message).toMatch(/accepted this delivery/);
+    expect(closed.body.message).toMatch(/ACCEPTED; its tracking is closed/);
   });
 
   it('the board shows the order status beside the delivery status', async () => {
