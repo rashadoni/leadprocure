@@ -1,5 +1,5 @@
 import { RequiresNewWork } from '../../common/auth/decorators';
-import { lockOrder, lockEvent, assertSupplierAllowed, uniqueIds, safeMoney, returnedRows } from '../../common/procurement/invariants';
+import { lockOrder, lockEvent, assertSupplierAllowed, uniqueIds, safeMoney, storedLineMoney, returnedRows } from '../../common/procurement/invariants';
 import {
   BadRequestException,
   Body,
@@ -55,8 +55,12 @@ export class ContractsService {
        WHERE request_id = $1 ORDER BY line_no`,
       [requestId],
     );
-    const total = items.reduce((s: number, it: any) => s + Number(it.qty) * Number(it.est_unit_price_minor), 0);
-    safeMoney(total);
+    // Each product, not only the sum: a sum can land back on a safe integer while one of
+    // its products is not, and the line total below is written from that same product.
+    for (const it of items) {
+      (it as any).line_total_minor = storedLineMoney(Number(it.qty), Number(it.est_unit_price_minor));
+    }
+    const total = safeMoney(items.reduce((s: number, it: any) => s + Number(it.line_total_minor), 0));
     const n = await m.query(`SELECT next_document_no($1,'PO') AS n`, [auth.org_id]);
     const poNo = `PO-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
     const po = (
@@ -73,7 +77,7 @@ export class ContractsService {
         `INSERT INTO purchase_order_items(po_id, buyer_org_id, supplier_org_id, event_item_id, line_no, name, qty, uom, unit_price_minor, line_total_minor, vat_rate_bp)
          VALUES ($1,$2,$3,NULL,$4,$5,$6,$7,$8,$9,$10)`,
         [po.id, auth.org_id, supplierOrgId, it.line_no, it.name, it.qty, it.uom,
-         it.est_unit_price_minor, Number(it.qty) * Number(it.est_unit_price_minor), it.vat_rate_bp],
+         it.est_unit_price_minor, it.line_total_minor, it.vat_rate_bp],
       );
     }
     await this.audit.record('PO_CREATED', 'purchase_order', po.id, { request_id: requestId, direct: true, total_minor: total });
@@ -442,10 +446,18 @@ export class ContractsService {
       };
     });
     const changed = new Map(changes.map((c) => [c.poItemId, c]));
-    const newTotal = items.reduce((sum: number, it: any) => {
+    // Guarded per line, like every other total here. Each field was already checked on
+    // its own, but not the product or the sum — and this number is what the SUPPLIER is
+    // shown in the accept/reject panel and what the audit records, while
+    // po_amendment_decide recomputes the order's total independently in SQL. Above 2^53
+    // the JS multiplication stops being exact, so the figure agreed to and the figure
+    // applied are not the same one.
+    const newTotal = safeMoney(items.reduce((sum: number, it: any) => {
       const c = changed.get(it.id);
-      return sum + (c ? c.newQty * c.newUnitPriceMinor : Number(it.qty) * Number(it.unit_price_minor));
-    }, 0);
+      return sum + (c
+        ? storedLineMoney(c.newQty, c.newUnitPriceMinor)
+        : storedLineMoney(Number(it.qty), Number(it.unit_price_minor)));
+    }, 0));
 
     const no = Number(
       (await m.query(`SELECT COALESCE(max(amendment_no), 0) + 1 AS n FROM po_amendments WHERE po_id = $1`, [poId]))[0].n,
