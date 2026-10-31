@@ -596,3 +596,84 @@ Created dedicated codex/leadprocure-budget-audit-integration worktree from main9
 
 - Exactsourcee140c022db582e77df02323d991779a2fc2bf3e5/run41111209233 BOTHjobsSUCCESS:30suites/353API,3contention/14native35.7s/1freshHTTPS/fullbuild/typecheck/schemas/bothhistories/restore52RLS/fresh signedlicense-private storage-realClamAV. Actual /tmp/leadprocure-invoice-list-e140c02-{acceptance,fresh}.log; INVOICE-LIST-ACCEPTANCE-2026-10-30.json. Actual independent invoice_list_retry_review no blockers. Required sourceagent-review41111209172/job124253755054 greenAnthropic400creditfallback, not semanticreview. No failedcandidate. Workflow summary API lagged jobscompleted status; exact jobs/logs used, merge still waits final requiredchecks.
 - Six new native initiallistfailure/retry cases buyer/supplierAZRUEN PASS. Postmutationrefresh503/stalefailure/unmount only source-reviewed, not claimed newbrowsercases. Currentdocs use acceptedbaselinecc25914+newcandidatee140c02; historicalproofs preserved. Active19/18VERIFIED/A19PARTIAL_EXTERNAL unchanged. Next finaldocreview/non-docequality/requiredcheck then authorizedmerge/exactmainfullgate; no production/material/removedtask work.
+
+## 2026-10-31 — Claude принимает передачу: сверка, два дефекта, гейт перед main
+
+- Приём передачи Codex от 2026-10-31. Рабочий корень — воркитри Claude
+  `/home/rashad/projects/Leadprocure/.claude/worktrees/leadprocure-codex-handoff-0a9f68`
+  (он отставал от main на 223 коммита, подтянут fast-forward, ничего не переписано);
+  origin `rashadoni/leadprocure`. Сверка пакета `docs/handoffs/claude-2026-10-31/`
+  против кода и GitHub: main `5782aba` и прогон `41112571528` — оба job SUCCESS,
+  headSha совпадает; 30 suite в `apps/api/test/`, 50 миграций, скрытых `skip` нет
+  (единственный — защита smoke от записи на удалённый стенд); PR 3–34 MERGED, PR2
+  closed; `sha256sum -c SHA256SUMS` материалов AZ — 9/9. Заявления Codex о составе
+  и объёме подтверждены. Production не трогался.
+- Расхождение 1 (гейт). Живая защита `main` требовала одну проверку — `agent-review`,
+  зелёную по построению без ключа и при сбое API; в живом логе job 124508167155
+  видно `Anthropic 400 insufficient credit` и job conclusion success. Из 112 её
+  прогонов красными были два, и оба отказались от дифа по размеру (40455295157 на
+  PR #2, 40584090620 на PR #3), ещё 7 отменены. То есть тесты на мерж не влияли.
+  Собственный тест репозитория это и говорил, падая на
+  `scripts/ci/tests/test_main_protection_script.py` («появился workflow, который идёт
+  на pull request, а скрипт защиты не требует ни одной проверки») — его не запускает
+  ни один workflow, поэтому падение никто не видел. PR #36 → main `b465f2a`: скрипт
+  описывает две джобы `acceptance.yml` (`acceptance`, `fresh-install`, app_id 15368 —
+  workflow идёт на каждом PR без фильтров и без `if:`/`needs:`), `REQUIRED_CHECKS`
+  приведён в соответствие, прежний tripwire заменён новым
+  (`test_every_unfiltered_pull_request_job_is_either_required_or_named_not_a_gate`,
+  проверен на копиях в четырёх сценариях), шапки и `docs/DELIVERY-ARCHITECTURE.md`
+  переписаны. **Сама запись на GitHub НЕ сделана**: `--apply` — слово владельца, и
+  авто-режим сессии заблокировал запись как обход CI. `--check` 2026-10-31 →
+  `RESULT: MISMATCH`, код 1. Остаётся одна команда владельца.
+- Расхождение 2 (дефекты в коде). Оба — в местах, которые журнал Codex сам помечал
+  как «source-reviewed only». (a) `apps/web/src/pages/Invoices.tsx`: разворот карточки
+  инкрементировал `listRequest` и гасил уже идущее обновление списка — его ответ
+  выбрасывался, а 503 на нём не показывал ни ошибки, ни кнопки «Повторить». Теперь
+  строка помечается `fresherRow {version,data}`, `load()` запоминает `readAt` на
+  старте и переносит только то, что новее его чтения; поздний список по-прежнему не
+  откатывает подтверждённый статус. (b) `modules/budgets/budgets.module.ts`, `rollup()`:
+  оплата обязательства не доходила до строки общеорганизационного плана, хотя именно
+  этот план `MATCHED_CTE` нагружает обязательством, когда у подразделения своего нет;
+  финансист видел «использовано 1300, оплачено 0».
+- PR #35 → main `4848651`. Четыре содержательных итерации, потому что каждое
+  независимое ревью находило настоящее.
+  Первая правка относила оплату к общеорг. плану по периоду — ревью показало, что
+  такой шлюз слеп к категории, смотрит только на выбранные планы и пропускает счёт
+  без подразделения. Заменено на точное решение: запрос оплат резолвит через LATERAL
+  с теми же предикатами и тем же ORDER BY, что `MATCHED_CTE`, по ВСЕМ планам орг., и
+  строка `department_id IS NULL` получает оплату ровно тогда, когда нёсший план —
+  один из её планов. Следующее ревью нашло, что фильтр «заказ не отменён» зашёл
+  слишком далеко: у заявки с отменённым заказом оценка возвращает обязательство в
+  план, значит оплату терять нельзя. Третье нашло, что по-ветвенный фильтр приписал
+  `matched` условие по валюте, которого там нет, и оставлял оплату заказа отменённой
+  заявки; итог — точное зеркало обоих тестов `MATCHED_CTE`. Дерево подразделений
+  сохраняет свой период-based приём, как в принятой матрице. Не покрыто тестом и
+  сказано вслух: заказ, вытянутый из договора после отмены заявки (путь договора не
+  проверяет статус заявки) — предикат исключает его по построению, но фикстура
+  потребовала бы полного sourcing-потока.
+- Проверки: полный CI на точных head каждой итерации, затем exact-main. Источник
+  `4119ed1`/прогон 41197012715 и main `4848651`/прогон 41197511266 — оба job SUCCESS:
+  30 suite / **361 API-тест** (было 353), 3 contention, 14 браузерных сценариев
+  (34–36 с), 1 fresh HTTPS, build/typecheck, 4 UBL + OCDS, обе истории миграций,
+  восстановление 52 RLS-таблиц, подписанная тестовая лицензия/private storage/живой
+  ClamAV. Гейт PR #36 на main — `b465f2a`/прогон 41194397067, оба job SUCCESS.
+  Новых браузерных кейсов — один (`verifyRefreshFailureDuringDetail`: реальные
+  approve → detail GET → retry, контролируется только транспорт списка); новых
+  API-кейсов — восемь, каждый падает на предыдущем коммите. `scripts/ci/tests`
+  локально: 176 passed, 1 skipped. Локальная сборка/typecheck НЕ запускались:
+  node_modules на Contabo нет и ставить их по контракту нельзя — typecheck и build
+  шли только в CI — так и нашлись TS7006 (прогон 41189302093) и TS1005 от бэктика
+  внутри SQL-литерала (41195599728).
+- Остаётся NOT RUN, предпосылок не появилось: живой внешний LLM
+  (`AI_ORCHESTRATOR_URL` пуст), клиентский стенд и коммерческая лицензия, upgrade
+  реального volume, публичный TLS, live ERP/банк/ASAN İmza/Peppol и реальный
+  потребитель OCDS. По LP-A19/E06 предпосылка впервые появилась — Microsoft
+  PowerPoint запущен на Маке владельца (pid 656), оба PPTX скачаны в его Downloads
+  через его же Chrome, — но доступ к управлению PowerPoint владелец отклонил
+  (`request_access` → `user_denied`), поэтому desktop-приёмка остаётся NOT RUN; это
+  новый, точный блокер вместо прежнего «сессий не найдено».
+- Границы соблюдены: SMTP/Meta не возвращалась в очередь, production не менялся и
+  не разворачивался, других проектов не касался, отдельных release/backup/инфра-работ
+  не начинал. Из найденного не исправлялось (вне объёма, записано): `/dashboard/
+  spend-analytics` считает оплату по всем PAID-счетам без условия на статус заказа,
+  поэтому на отменённом заказе он и `rollup` разойдутся.

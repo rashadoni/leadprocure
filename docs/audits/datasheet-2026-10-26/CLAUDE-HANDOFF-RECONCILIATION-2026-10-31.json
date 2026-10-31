@@ -1,0 +1,72 @@
+{
+  "repository": "rashadoni/leadprocure",
+  "date": "2026-10-31",
+  "session": "Claude, приём передачи Codex docs/handoffs/claude-2026-10-31",
+  "handoffReconciliation": {
+    "acceptedMainAtHandoff": "5782aba3e1a03459bea4971ced856720c61359f2",
+    "acceptedRunReadBack": "https://github.com/rashadoni/leadprocure/actions/runs/41112571528",
+    "confirmed": [
+      "Оба job прогона 41112571528 SUCCESS, headSha совпадает с main 5782aba.",
+      "30 e2e-suite в apps/api/test, 50 миграций, скрытых skip нет (единственный test.skip — защита smoke от записи на удалённый стенд).",
+      "PR3-34 MERGED, PR2 closed без merge, PR1 предшествовал работе.",
+      "docs/presentations/leadprocure-az/v3/output: sha256sum -c SHA256SUMS = 9/9 OK."
+    ],
+    "statusMatrixAccepted": "19 активных задач, 18 VERIFIED, LP-A19 PARTIAL_EXTERNAL, LP-A17 исключена владельцем — подтверждено, не переписывалось."
+  },
+  "defectsFoundAndFixed": [
+    {
+      "id": "CLD-01",
+      "area": "LP-A19, apps/web/src/pages/Invoices.tsx",
+      "claimItWasUnder": "Codex: postmutation refresh 503 / stale failure / unmount — source-reviewed only, не браузерные кейсы",
+      "defect": "Разворот карточки инкрементировал listRequest и гасил уже идущее обновление списка: ответ выбрасывался, 503 на нём не давал ни ошибки, ни кнопки Повторить, остальные строки оставались устаревшими.",
+      "fix": "Строка помечается fresherRow {version,data}; load() запоминает readAt на старте и переносит только то, что новее его чтения. Поздний список по-прежнему не откатывает подтверждённый статус.",
+      "test": "apps/web/tests/helpers/invoice-list-retry.ts verifyRefreshFailureDuringDetail — реальные approve, detail GET и retry; контролируется только транспорт списка. Падает на предыдущем коммите в двух местах."
+    },
+    {
+      "id": "CLD-02",
+      "area": "LP-A13, apps/api/src/modules/budgets/budgets.module.ts rollup()",
+      "defect": "Оплата обязательства не доходила до строки общеорганизационного плана (department_id IS NULL), хотя MATCHED_CTE нагружает обязательством именно этот план, когда у подразделения своего нет: used 1300 / paid 0.",
+      "fix": "Запрос оплат резолвит нёсший план LATERAL с теми же предикатами и тем же ORDER BY, что MATCHED_CTE, по ВСЕМ планам организации; строка без подразделения получает оплату ровно тогда, когда нёсший план — один из её планов. В выборку попадают только обязательства, которые MATCHED_CTE ещё считает: matched считает заявку независимо от судьбы заказов, matched_orders — живой заказ, за который не говорит заявка той же валюты.",
+      "test": "apps/api/test/budget-paid-period.e2e-spec.ts, второй describe: восемь кейсов — план другой категории у подразделения, неклассифицированный call-off, нёсший план вне фильтра, оплаченный и отменённый call-off, предоплаченная и отозванная заявка. Каждый падает на предыдущем коммите."
+    },
+    {
+      "id": "CLD-03",
+      "area": "merge gate, scripts/ci/configure-main-protection.sh",
+      "defect": "Обязательной проверкой main была agent-review, зелёная по построению без ключа и при сбое API; в живом логе job 124508167155 — Anthropic 400 insufficient credit и conclusion success. Из 112 прогонов красными были два (40455295157 на PR2, 40584090620 на PR3), и оба отказались от дифа по размеру. Тесты на мерж не влияли. Собственный тест репозитория это говорил и падал, но его не запускает ни один workflow.",
+      "fix": "Скрипт описывает две джобы acceptance.yml (acceptance, fresh-install, app_id 15368); REQUIRED_CHECKS приведён в соответствие; прежний tripwire заменён новым (test_every_unfiltered_pull_request_job_is_either_required_or_named_not_a_gate, проверен на копиях в четырёх сценариях); шапки и docs/DELIVERY-ARCHITECTURE.md переписаны.",
+      "notApplied": "Запись на GitHub НЕ сделана: --apply — слово владельца, и авто-режим сессии заблокировал запись. --check 2026-10-31 → RESULT: MISMATCH, код 1. Остаётся одна команда владельца."
+    }
+  ],
+  "delivered": [
+    {"pullRequest": "https://github.com/rashadoni/leadprocure/pull/36", "mergeCommit": "b465f2a6398d16cb25e6c1ad952e9eccaf66a5cf", "mainRun": "https://github.com/rashadoni/leadprocure/actions/runs/41194397067", "status": "BOTH_JOBS_PASS"},
+    {"pullRequest": "https://github.com/rashadoni/leadprocure/pull/35", "mergeCommit": "4848651e1a1aab531b93deaa5d063d5086e338b4", "sourceHead": "4119ed1", "sourceRun": "https://github.com/rashadoni/leadprocure/actions/runs/41197012715", "mainRun": "https://github.com/rashadoni/leadprocure/actions/runs/41197511266", "status": "BOTH_JOBS_PASS"}
+  ],
+  "exactMainGate": {
+    "main": "4848651e1a1aab531b93deaa5d063d5086e338b4",
+    "run": "https://github.com/rashadoni/leadprocure/actions/runs/41197511266",
+    "apiSuites": 30,
+    "apiTests": 361,
+    "contentionTests": 3,
+    "nativeBrowserTests": 14,
+    "nativeBrowserSeconds": 36.0,
+    "freshHttpsBrowserTests": 1,
+    "restoredRlsTables": 52
+  },
+  "independentReview": "Шесть раундов независимого ревью (агент, не писавший изменение). Каждый находил настоящее: слепой к категории шлюз, привязка к выбранным планам, счёт без подразделения, потеря оплаты у заявки с отменённым заказом, приписанное matched условие по валюте, ложные утверждения в шапках скрипта. Все найденные пункты закрыты или записаны вслух. Обязательная agent-review была зелёной с provider fallback и смысловым ревью не считается.",
+  "remainingNotRun": [
+    {"id": "E01", "item": "Живой внешний LLM", "blocker": "AI_ORCHESTRATOR_URL пуст в .env.example, согласованного провайдера нет."},
+    {"id": "E02", "item": "Клиентская установка и коммерческая лицензия", "blocker": "Стенд и разрешение не выданы."},
+    {"id": "E03", "item": "Upgrade реального existing-volume окружения", "blocker": "Среда не выбрана, разрешения нет."},
+    {"id": "E04", "item": "Публичный TLS", "blocker": "Владелец оставил IP."},
+    {"id": "E05", "item": "Live ERP/банк/ASAN Imza/Peppol и реальный потребитель OCDS", "blocker": "Интеграции не заказаны."},
+    {"id": "E06", "item": "Открытие обоих PPTX в desktop Microsoft PowerPoint", "blocker": "ИЗМЕНИЛОСЬ: PowerPoint запущен на Маке владельца (pid 656), оба PPTX скачаны в его Downloads через его Chrome, но request_access на управление PowerPoint отклонён (user_denied). Нужен выданный доступ или владелец открывает файлы сам."},
+    {"id": "CLD-03", "item": "Запись защиты main", "blocker": "bash scripts/ci/configure-main-protection.sh --apply — слово владельца; авто-режим сессии блокирует запись."}
+  ],
+  "observedNotFixed": "GET /dashboard/spend-analytics считает оплату по всем PAID-счетам без условия на статус заказа, поэтому на отменённом заказе он и /budgets/rollup разойдутся. Вне объёма этой задачи, не менялось.",
+  "scopeKept": "SMTP/Meta не возвращалась в очередь. Production не менялся и не разворачивался. Другие проекты не затрагивались. Отдельных release/backup/инфраструктурных работ не начиналось. Полные сборки и браузерные E2E — только GitHub CI.",
+  "applicationChanged": true,
+  "serverChanged": true,
+  "migrationsChanged": false,
+  "materialsChanged": false,
+  "productionChanged": false
+}
