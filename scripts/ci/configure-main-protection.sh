@@ -36,14 +36,17 @@
 # model, and a diff over 400 000 bytes (refused whenever a key is set, before
 # the API is called). When its API key is missing, or the API answers with an
 # error status, it is green — on purpose, so that a provider outage cannot
-# stop delivery. A key is set in this repository's secrets; whether it works
-# is not known.
+# stop delivery. A key is set in this repository's secrets and the API has been
+# answering it 400 insufficient-credit, so what it has been doing here is
+# passing without reading anything.
 # Before the pull request with this change (2026-10-11) the workflow had never
 # run in this repository. In leaddrive-budgeting pull request #4 (2026-09-10)
 # the same workflow was green under its own comment that the API had answered
-# 400 and nobody had read the change. In this repository it was green the same
-# way on every pull request from #3 to #34: Anthropic answered 400
-# insufficient-credit, and the check passed by design.
+# 400 and nobody had read the change. In this repository it was green that same
+# way on nearly every pull request from #3 to #34: Anthropic answered 400
+# insufficient-credit, and the check passed by design. Of all 112 runs here two
+# were red, and both refused the diff instead of reading it: 40455295157 on
+# PR #2 (3 471 359 bytes) and 40584090620 on PR #3 (404 283 bytes).
 # While it is the only required check, a pull request can be merged with
 # nothing having tested the code and nobody having read it. Requiring the
 # acceptance jobs instead is what makes a red test stop a merge.
@@ -100,21 +103,32 @@
 # This payload is what the repository's own test had been asking for since the
 # acceptance workflow appeared: before this change it failed with "a workflow
 # that runs on pull request appeared, and the protection script requires no
-# check". After the first real write, rewrite this paragraph and the "STILL NOT
-# WHAT GITHUB HAS" one, and in the same pull request everything that still
-# names `agent-review` as the required check: docs/DELIVERY-ARCHITECTURE.md
-# (the note in Layer 1, Layers 1 and 2, rule 3 at the end), the delivery
-# section at the top of AGENTS.md / CLAUDE.md, and the comment at the top of
-# .github/workflows/agent-review.yml ("the ONLY required check on main").
+# check".
+# The pull request carrying this payload already rewrote everything that named
+# `agent-review` as the required check — Layers 1 and 2 and rule 3 of
+# docs/DELIVERY-ARCHITECTURE.md, the delivery section at the top of AGENTS.md,
+# and the header of .github/workflows/agent-review.yml. What is left for AFTER
+# the first real write is only what says the write has not happened: this
+# paragraph, the "STILL NOT WHAT GITHUB HAS" one above, the note in Layer 1 of
+# docs/DELIVERY-ARCHITECTURE.md and the warning line in the delivery section of
+# AGENTS.md.
 #
 # Before `--apply`:
 #   - it is the owner's call for this repository, not an agent's
 #   - know what it does here: it requires the acceptance workflow's two jobs and
 #     removes `agent-review` from the required checks. What is lost with it is
-#     its refusal of a diff over 400 000 bytes, and a blocking finding of its
-#     model if the key works — neither of which it has ever produced here. What
-#     is gained is that the tests, the build, the migrations and the browser
-#     acceptance now have to pass before a merge
+#     its refusal of a diff over 400 000 bytes — the ONLY thing that has ever
+#     made this gate red here (PR #2 and PR #3, see above), and the acceptance
+#     jobs have no diff-size cap — plus a blocking finding of its model, which
+#     the credit-exhausted key has never produced. What is gained is that the
+#     tests, the build, the migrations and the browser acceptance now have to
+#     pass before a merge
+#   - and know the new cost: a CANCELLED run is not a success. Sessions here
+#     routinely cancel a "redundant doc-only" acceptance run (the session log
+#     records a dozen of them, and commit 18e7f1c carries `acceptance` and
+#     `fresh-install` as cancelled). After the write such a commit is NOT
+#     mergeable until the run is started again — ~7 minutes. Cancel the run of
+#     a commit you do not intend to merge on, or re-run it before merging
 #   - use the file from `origin/main` after a `git fetch`, not a local `main`
 #     and not another branch. Every branch and worktree cut before this change
 #     was merged carries the old file, whatever its date. The old file is the
@@ -170,10 +184,13 @@ command -v gh >/dev/null || { echo "gh is required" >&2; exit 3; }
 # (15368 is GitHub Actions, so a status of the same name from anywhere else does
 # not count). They qualify because that workflow starts on EVERY pull request:
 # no path filter, no `types`, and neither job behind `if:`, `needs:` or a
-# matrix. A path-filtered required check is unmergeable for ever, and a skipped
-# job counts as green — which is why the list is these two and not the
-# presentation or release workflows, both of which are path-filtered. Keep this
-# list and REQUIRED_CHECKS of the test in step, in one pull request.
+# matrix. The presentation and release workflows are left out because they ARE
+# path-filtered: a workflow that does not start publishes no check run at all,
+# so a pull request outside its paths waits for it for ever. (A job skipped by
+# `if:`/`needs:` inside a workflow that DID start is the other case — GitHub
+# counts that as green, which is what makes a scope-gated job safe to require.
+# Neither of those two is shaped that way.) Keep this list and REQUIRED_CHECKS
+# of the test in step, in one pull request.
 # The other workflow, agent-review.yml, is not a gate (see the header).
 IFS= read -r -d '' DESIRED <<'JSON' || true
 {
