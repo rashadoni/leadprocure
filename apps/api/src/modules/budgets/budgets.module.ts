@@ -533,9 +533,10 @@ export class BudgetsService {
   }
 
   // Per-department rollup: what finance opens the page for. Plan / commitment / actual come
-  // from the budgets themselves; PAID is settlement charged to the plan that CARRIED the
-  // obligation, taken from the invoice's own department_id (denormalized at submission, so
-  // this survives a PO being re-scoped).
+  // from the budgets themselves; PAID is settlement of the obligations the engine still
+  // counts, attributed to rows by the two rules spelled out below, and taken from the
+  // invoice's own department_id (denormalized at submission, so this survives a PO being
+  // re-scoped).
   //
   // Paid is reported BESIDE the others, never added into them: an invoice is settlement of
   // an order already counted as actual, so summing them would double the spend.
