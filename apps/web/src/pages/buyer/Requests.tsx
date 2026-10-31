@@ -39,15 +39,18 @@ export default function Requests() {
   // shared boolean a successful projection would have cleared a dead /departments (the
   // page then claims it loaded while the control choosing whose budget pays is broken),
   // and Retry would have re-run the reference reads instead of the projection that failed.
-  const [impactFailed, setImpactFailed] = useState<string | null>(null);
+  // Every row whose projection failed, not just the latest: with one id, a retry that
+  // succeeded on the second row cleared the alert while the first row's figure was still
+  // missing — and that row's preview is already cached, so the next click approves it.
+  const [impactFailed, setImpactFailed] = useState<string[]>([]);
   // An org without the budgets licence is denied this and the projection is simply absent.
   // Any other failure means the approver confirms without the figure they were promised.
   const loadImpact = (id: string) => api.get(`/budgets/impact/${id}`)
     .then((r) => {
       setImpact((m) => ({ ...m, [id]: r.data ?? null }));
-      setImpactFailed((f) => (f === id ? null : f));
+      setImpactFailed((f) => f.filter((x) => x !== id));
     })
-    .catch((e: any) => { if (!isDenied(e)) setImpactFailed(id); });
+    .catch((e: any) => { if (!isDenied(e)) setImpactFailed((f) => (f.includes(id) ? f : [...f, id])); });
   const loadRefs = () => {
     setRefFailed(false);
     const broken = () => setRefFailed(true);
@@ -237,7 +240,8 @@ export default function Requests() {
           )}
         </div>
         <ListState of={[requests,
-          { loading: false, failed: !!impactFailed, reload: () => impactFailed && loadImpact(impactFailed) }]}
+          { loading: false, failed: impactFailed.length > 0,
+            reload: () => impactFailed.forEach((id) => loadImpact(id)) }]}
           empty={!rows.length} />
         <table>
           <thead><tr><th>#</th><th>{t('title')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('date')}</th><th>{t('requester')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('method')}</th><th>{t('actions')}</th></tr></thead>

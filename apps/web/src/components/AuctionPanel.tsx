@@ -64,7 +64,7 @@ export function AuctionPanel({ eventId, onChanged }: { eventId: string; onChange
       <div className="hint" style={{ marginTop: 8 }}>
         {t('deadline')}: {new Date(state.close_at).toLocaleString()}
       </div>
-      {onChanged && <AuctionRefresher onTick={() => { load(); onChanged(); }} />}
+      {onChanged && !denied && <AuctionRefresher onTick={() => { load(); onChanged(); }} />}
     </div>
   );
 }
