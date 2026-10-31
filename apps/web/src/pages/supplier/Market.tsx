@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../../api/client';
+import { api, fmtDateTime } from '../../api/client';
 import { useI18n } from '../../i18n';
 import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
@@ -34,7 +34,7 @@ export default function Market() {
                 <td><Link to={`/supplier/events/${r.id}`}>{r.title}</Link></td>
                 <td>{r.buyer_name}</td>
                 <td><Badge status={r.status} /></td>
-                <td>{r.close_at ? new Date(r.close_at).toLocaleString() : '—'}</td>
+                <td>{fmtDateTime(r.close_at)}</td>
                 <td><Badge status={r.my_bid_state} /></td>
               </tr>
             ))}

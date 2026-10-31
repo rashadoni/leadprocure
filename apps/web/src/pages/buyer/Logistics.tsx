@@ -1,4 +1,4 @@
-import { api } from '../../api/client';
+import { api, fmtDate } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import { Badge } from '../../components/Badge';
@@ -35,7 +35,7 @@ export default function Logistics() {
                     what the buyer acts on. Walking the order forward is best-effort, so
                     these two can legitimately differ — but only if you can see both. */}
                 <td><Badge status={s.po_status} /></td>
-                <td>{s.eta ? new Date(s.eta).toLocaleDateString() : '—'}</td>
+                <td>{fmtDate(s.eta)}</td>
               </tr>
             ))}
           </tbody>

@@ -98,11 +98,32 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 [data-tip]:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); }
 [data-tip]:hover::before { opacity: 1; }
 
-.badge.DRAFT { background: var(--panel2); color: var(--muted); }
-.badge.OPEN, .badge.SUBMITTED, .badge.APPROVED, .badge.AWARDED, .badge.OPENED { background: rgba(22, 163, 74, .12); color: var(--ok); }
-.badge.CLOSED, .badge.EVALUATION, .badge.PUBLISHED { background: rgba(217, 119, 6, .12); color: var(--warn); }
-.badge.REJECTED, .badge.WITHDRAWN, .badge.BLOCKED { background: rgba(220, 38, 38, .12); color: var(--bad); }
-.badge.INVITED { background: rgba(4, 120, 87, .12); color: var(--accent); }
+/* Status colour by MEANING, not by enum name. Five groups, assigned in one table in
+   components/Badge.tsx; the raw status also stays in the class list, for the browser specs
+   that identify a row by its state. Colouring by enum is what this replaces: 24 of the 38
+   statuses had no rule at all and rendered as plain text in a hairline outline, so a column
+   of them could not be skimmed — and the names themselves had become colour words, with
+   `badge INVITED` doing duty as "green-tinted chip" on a dozen things that are not
+   statuses. */
+.badge.is-neutral { background: var(--panel2); color: var(--muted); }
+.badge.is-progress { background: rgba(4, 120, 87, .12); color: var(--accent); }
+.badge.is-good { background: rgba(22, 163, 74, .12); color: var(--ok); }
+.badge.is-warn { background: rgba(217, 119, 6, .12); color: var(--warn); }
+.badge.is-bad { background: rgba(220, 38, 38, .12); color: var(--bad); }
+/* Not a status: a soft chip for labels that merely name a thing (a role, a category, a
+   document type). It is here so those stop borrowing a status name to get a colour. */
+.badge.is-info { background: rgba(4, 120, 87, .12); color: var(--accent); }
+
+/* A failed read used to be plain black text with a Retry next to it, which reads as a
+   footnote rather than as "this screen is not showing you your data". Same element, same
+   role — only dressed. */
+.state-error { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: rgba(220, 38, 38, .07); border: 1px solid rgba(220, 38, 38, .25);
+  color: var(--bad); border-radius: 10px; padding: 10px 14px; margin: 10px 0; font-weight: 500; }
+.state-error .btn { margin-left: auto; }
+/* An empty list is a legitimate answer, so it gets room to say so rather than a bare grey
+   line jammed under a table header. */
+.state-empty { padding: 18px 0; text-align: center; }
 
 .auth-wrap { display: grid; place-items: center; min-height: 100vh; }
 .auth { width: 380px; }
@@ -156,9 +177,8 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
   .help-actions { margin-left: auto; }
 }
 
-/* budget lifecycle badges — reuse the status palette the rest of the app uses */
-.badge.PENDING { background: rgba(217, 119, 6, .12); color: #b45309; }
-.badge.CLOSED { background: rgba(100, 116, 139, .14); color: #475569; }
+/* Budget lifecycle badges carry their own vocabulary (bud_status_*) but go through the
+   same five groups, so they need no rules of their own any more. */
 
 /* a number that opens into its documents — reads as text, behaves as a link */
 .linklike { background: none; border: 0; padding: 0; font: inherit; color: var(--text);

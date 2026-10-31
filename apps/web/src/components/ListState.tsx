@@ -66,17 +66,25 @@ export function ListState({ of, empty }: { of: AnyLoader | AnyLoader[]; empty?: 
   const { t } = useI18n();
   const all = Array.isArray(of) ? of : [of];
   const broken = all.filter((l) => l.failed);
+  // Order is load-bearing and must stay error → loading → empty: with "empty" first, a dead
+  // request reads as "there is nothing here", which is the exact lie this component exists
+  // to stop. The classes below are presentation only — `role="alert"` and `role="status"`
+  // are what the browser specs select on, and nothing here adds a SECOND alert to a page
+  // (analytics.spec.ts and helpers/budget-report.ts match getByRole('alert') unfiltered and
+  // assert it is absent once healthy, so a second one is a strict-mode violation, not a
+  // readable failure).
   if (broken.length) {
     return (
-      <div role="alert">
-        <span>{t('list_error')}</span>{' '}
+      <div role="alert" className="state-error">
+        <span aria-hidden="true">⚠</span>
+        <span>{t('list_error')}</span>
         <button className="btn small ghost" onClick={() => broken.forEach((l) => l.reload())}>
           {t('list_retry')}
         </button>
       </div>
     );
   }
-  if (all.some((l) => l.loading)) return <div role="status" className="hint">{t('list_loading')}</div>;
-  if (empty) return <div className="hint">{t('list_empty')}</div>;
+  if (all.some((l) => l.loading)) return <div role="status" className="hint state-empty">{t('list_loading')}</div>;
+  if (empty) return <div className="hint state-empty">{t('list_empty')}</div>;
   return null;
 }

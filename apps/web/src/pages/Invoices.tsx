@@ -105,9 +105,6 @@ export default function Invoices() {
     return api.post(`/invoices/${i.id}/approve`, reason ? { reason } : {});
   });
 
-  const badge = (s: string) =>
-    s === 'PAID' || s === 'MATCHED' || s === 'APPROVED' ? s : s === 'DISPUTED' || s === 'REJECTED' ? 'REJECTED' : 'INVITED';
-
   return (
     <>
       <h1>🧾 {t('invoices')}</h1>
@@ -128,7 +125,7 @@ export default function Invoices() {
                 <td className="hint">{fmtDate(i.issued_at ?? i.created_at)}</td>
                 <td className="hint">{fmtDate(i.due_date)}</td>
                 <td>{fmtMoney(i.gross_minor, i.currency)}</td>
-                <td><Badge status={i.status} cls={badge(i.status)} /></td>
+                <td><Badge status={i.status} /></td>
                 <td>
                   {isBuyer && ['MATCHED', 'DISPUTED', 'SUBMITTED'].includes(i.status) && (
                     <>
@@ -149,7 +146,7 @@ export default function Invoices() {
 
       {Object.entries(open).filter(([, v]) => v).map(([id, inv]) => (
         <div className="card" key={id}>
-          <h3>{inv.invoice_no} · {fmtMoney(inv.gross_minor, inv.currency)} <Badge status={inv.status} cls={badge(inv.status)} /></h3>
+          <h3>{inv.invoice_no} · {fmtMoney(inv.gross_minor, inv.currency)} <Badge status={inv.status} /></h3>
           <div className="hint">{t('inv_net')} {fmtMoney(inv.net_minor, inv.currency)} + {t('inv_vat')} {fmtMoney(inv.vat_minor, inv.currency)}</div>
           <h3 style={{ marginTop: 10 }}>{t('inv_match')} {inv.match?.ok ? '✅' : '⚠️'}</h3>
           <table>

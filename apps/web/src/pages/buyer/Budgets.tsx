@@ -1,5 +1,6 @@
 import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
 import { api, fmtDate, fmtMoney } from '../../api/client';
+import { statusGroup } from '../../components/Badge';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
@@ -433,7 +434,7 @@ export default function Budgets() {
           )}
         </div>
         {reportLoading && <div role="status">…</div>}
-        {reportError && <div role="alert">{t('budget_load_error')}{' '}
+        {reportError && <div role="alert" className="state-error">{t('budget_load_error')}{' '}
           <button className="btn ghost small" onClick={() => void load()}>{t('analytics_retry')}</button>
         </div>}
         {!reportLoading && !reportError && <table data-testid="budget-list">
@@ -449,7 +450,7 @@ export default function Budgets() {
                 <Fragment key={b.id}>
                 <tr>
                   <td>{b.name}</td>
-                  <td><span className={`badge ${b.status}`} data-tip={t(`bud_st_${b.status}`)}>{t(`bud_status_${b.status}`)}</span></td>
+                  <td><span className={`badge ${statusGroup(b.status)}`} data-tip={t(`bud_st_${b.status}`)}>{t(`bud_status_${b.status}`)}</span></td>
                   <td>{b.category === '*' ? '—' : b.category}</td>
                   <td data-tip={b.departmentName || undefined}>{b.departmentCode ?? t('bud_org_wide')}</td>
                   <td data-tip={`${b.periodStart} → ${b.periodEnd}`}>{b.periodLabel}</td>

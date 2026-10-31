@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, fmtMoney } from '../api/client';
+import { api, fmtDateTime, fmtMoney } from '../api/client';
 import { useI18n } from '../i18n';
 import { isDenied, ListState } from './ListState';
 
@@ -62,7 +62,7 @@ export function AuctionPanel({ eventId, onChanged }: { eventId: string; onChange
         ? <div role="alert" style={{ marginTop: 8 }}>{t('auction_denied')}</div>
         : stale && <div role="alert" style={{ marginTop: 8 }}>{t('auction_stale')}</div>}
       <div className="hint" style={{ marginTop: 8 }}>
-        {t('deadline')}: {new Date(state.close_at).toLocaleString()}
+        {t('deadline')}: {fmtDateTime(state.close_at)}
       </div>
       {onChanged && !denied && <AuctionRefresher onTick={() => { load(); onChanged(); }} />}
     </div>

@@ -88,7 +88,7 @@ export default function Dashboard() {
           <tbody>
             {kpi.data.tasks.map((task: any, i: number) => (
               <tr key={i}>
-                <td><span className="badge INVITED">{taskLabel(t, task.kind)}</span></td>
+                <td><span className="badge is-info">{taskLabel(t, task.kind)}</span></td>
                 <td>
                   {task.ref && task.ref !== task.title && <b>{task.ref} · </b>}{task.title}
                   {task.amount_minor != null && <> · {fmtMoney(task.amount_minor, task.currency ?? 'AZN')}</>}

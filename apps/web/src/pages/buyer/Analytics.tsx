@@ -114,7 +114,7 @@ export default function Analytics() {
   </div>;
 
   if (!d) return <><h1>{t('analytics')}</h1>{filters}
-    {loadError ? <div role="alert">{t('analytics_load_error')} <button className="btn ghost small" onClick={() => setReload(n => n + 1)}>{t('analytics_retry')}</button></div>
+    {loadError ? <div role="alert" className="state-error">{t('analytics_load_error')} <button className="btn ghost small" onClick={() => setReload(n => n + 1)}>{t('analytics_retry')}</button></div>
       : <div className="center" role="status">…</div>}
   </>;
 

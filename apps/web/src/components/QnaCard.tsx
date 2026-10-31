@@ -27,7 +27,7 @@ export function QnaCard({ eventId, isBuyer }: { eventId: string; isBuyer: boolea
       {rows.map((r) => (
         <div key={r.id} style={{ borderBottom: '1px solid var(--border)', padding: '8px 0' }}>
           <div>
-            {r.kind === 'ADDENDUM' ? <span className="badge INVITED">{t('addendum')}</span> : null}{' '}
+            {r.kind === 'ADDENDUM' ? <span className="badge is-info">{t('addendum')}</span> : null}{' '}
             <b>{r.question}</b> {r.mine && <span className="hint">({t('my_bid').split(' ')[0].toLowerCase()})</span>}
             {!r.is_published && <span className="sealed"> · unpublished</span>}
           </div>
