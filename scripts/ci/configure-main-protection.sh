@@ -5,9 +5,10 @@
 #   - changes arrive only through a pull request: `required_pull_request_reviews`
 #     is set, with zero required approvals — the owner works alone, and a rule
 #     nobody can satisfy stops delivery instead of protecting it
-#   - no required status check: this repository has no CI job that runs on
-#     every pull request, so there is nothing true to require (see the
-#     payload)
+#   - the required status checks are the two jobs of the acceptance workflow,
+#     `acceptance` and `fresh-install`: that workflow runs on EVERY pull
+#     request, with no path filter and neither job behind `if:`/`needs:`, so
+#     requiring them cannot leave a pull request waiting for ever
 #   - the rules apply to administrators too (`enforce_admins`): nobody merges a
 #     red pull request. That is what GitHub has for this branch today, and what
 #     the owner decided for pharmacy-monitor on 2026-10-11; kept here
@@ -16,28 +17,40 @@
 # the same name from another source does not count — is GitHub's description
 # of them. Nobody here tried.
 #
-# THIS IS NOT WHAT GITHUB HAS TODAY, and that is known (read 2026-10-11). The
-# pull-request requirement, `enforce_admins` and the two "no" rules are on
-# GitHub as written here. The required check is not: GitHub has the single
-# context `agent-review`. So `--check` ends in "RESULT: MISMATCH" with exit
-# code 1, naming `required_status_checks`, until the owner says to write. The
-# test keeps that reading (scripts/ci/tests/fixtures/).
+# THIS IS STILL NOT WHAT GITHUB HAS, and that is known (read again 2026-10-31,
+# unchanged since 2026-10-11). The pull-request requirement, `enforce_admins`
+# and the two "no" rules are on GitHub as written here. The required checks are
+# not: GitHub has the single context `agent-review`, so nothing has tested the
+# code of a mergeable pull request. `--check` ends in "RESULT: MISMATCH" with
+# exit code 1, naming `required_status_checks`, until the owner writes:
+#   bash scripts/ci/configure-main-protection.sh --apply
+# The test keeps the 2026-10-11 reading as the fixture it is
+# (scripts/ci/tests/fixtures/).
 #
-# Why `agent-review` is not in the payload. The owner's decision for all his
-# repositories (2026-09-11): the gate before `main` is the CI that GitHub
-# itself runs; no paid AI reviewer in CI, and never a required one.
+# Why `agent-review` is not in the payload, and why the acceptance jobs are.
+# The owner's decision for all his repositories (2026-09-11): the gate before
+# `main` is the CI that GitHub itself runs; no paid AI reviewer in CI, and never
+# a required one. This repository has the reviewer required and its own tests
+# required of nothing — the one state that decision rules out.
 # agent-review.yml is red by design in two cases: a blocking finding of its
 # model, and a diff over 400 000 bytes (refused whenever a key is set, before
 # the API is called). When its API key is missing, or the API answers with an
 # error status, it is green — on purpose, so that a provider outage cannot
-# stop delivery. A key is set in this repository's secrets; whether it works
-# is not known.
+# stop delivery. A key is set in this repository's secrets and the API has been
+# answering it 400 insufficient-credit, so what it has been doing here is
+# passing without reading anything.
 # Before the pull request with this change (2026-10-11) the workflow had never
 # run in this repository. In leaddrive-budgeting pull request #4 (2026-09-10)
 # the same workflow was green under its own comment that the API had answered
-# 400 and nobody had read the change.
+# 400 and nobody had read the change. In this repository it was green that same
+# way on nearly every pull request from #3 to #34: Anthropic answered 400
+# insufficient-credit, and the check passed by design. Of its 112 runs up to
+# this change two were red, and both refused the diff instead of reading it:
+# 40455295157 on PR #2 (3 471 359 bytes) and 40584090620 on PR #3
+# (404 283 bytes). Seven more were cancelled, which is not green either.
 # While it is the only required check, a pull request can be merged with
-# nothing having tested the code and nobody having read it.
+# nothing having tested the code and nobody having read it. Requiring the
+# acceptance jobs instead is what makes a red test stop a merge.
 #
 # Usage:
 #   bash scripts/ci/configure-main-protection.sh --check [owner/repo]
@@ -78,29 +91,51 @@
 # comparison of what GitHub returns with the payload, and writing takes an
 # explicit flag.
 #
-# NOT VERIFIED BY A RUN, as of 2026-10-11: `--apply` has never sent its write
-# to GitHub — branch protection is not changed for the sake of a test. What was
-# checked instead: the payload against the live protection, by reading it (it
-# differs in the required check only, as said above); the comparison filter in
-# gh's own jq, on that same read; and the script against a stand-in `gh` that
-# never reaches the network (scripts/ci/tests/test_main_protection_script.py —
-# run by hand, see its first lines; no workflow of this repository runs it).
-# After the first real write, rewrite this paragraph and the "NOT WHAT GITHUB
-# HAS TODAY" one, and in the same pull request everything that still names
-# `agent-review` as the required check: docs/DELIVERY-ARCHITECTURE.md (the
-# note in Layer 1, Layers 1 and 2, rule 3 at the end), the delivery section
-# at the top of AGENTS.md / CLAUDE.md, and the comment at the top of
-# .github/workflows/agent-review.yml ("the ONLY required check on main").
+# NOT VERIFIED BY A RUN, as of 2026-10-31: `--apply` has never sent its write
+# to GitHub — branch protection is not changed for the sake of a test, and the
+# session that wrote this payload had the write refused by its own sandbox.
+# What was checked instead: the payload against the live protection, by reading
+# it on 2026-10-31 (it differs in the required checks only, as said above —
+# `--check`, exit 1); the comparison filter in gh's own jq, on that same read;
+# and the script against a stand-in `gh` that never reaches the network
+# (scripts/ci/tests/test_main_protection_script.py — run by hand, see its first
+# lines; 176 passed, 1 skipped on 2026-10-31; no workflow of this repository
+# runs it).
+# This payload is what the repository's own test had been asking for since the
+# acceptance workflow appeared: before this change it failed with "a workflow
+# that runs on pull request appeared, and the protection script requires no
+# check".
+# The pull request carrying this payload already rewrote every place that
+# called `agent-review` the required check: Layers 1 and 2 and rule 3 of
+# docs/DELIVERY-ARCHITECTURE.md, the delivery section at the top of AGENTS.md,
+# and the header of .github/workflows/agent-review.yml ("the ONLY required
+# check on main" is nowhere in the repository now). What is left for AFTER the
+# first real write is every place that says the write has not happened:
+#   - this paragraph and the "STILL NOT WHAT GITHUB HAS" one above
+#   - the note in Layer 1 of docs/DELIVERY-ARCHITECTURE.md
+#   - the warning line in the delivery section of AGENTS.md, and the
+#     parenthetical in the sentence above it
+#   - the last paragraph of the .github/workflows/agent-review.yml header
 #
 # Before `--apply`:
 #   - it is the owner's call for this repository, not an agent's
-#   - know what it does here: it removes `agent-review` from the required
-#     checks and puts nothing in its place. After that the gate is the
-#     pull-request requirement alone. If the key of agent-review works, that is
-#     a loss: a pull request it would have stopped on a blocking finding
-#     becomes mergeable. If the key does not work, the one thing lost is its
-#     refusal of a diff over 400 000 bytes: on anything smaller the check is
-#     green whatever the change
+#   - know what it does here: it requires the acceptance workflow's two jobs and
+#     removes `agent-review` from the required checks. What is lost with it is
+#     its refusal of a diff over 400 000 bytes — the ONLY thing that has ever
+#     made this gate red here (PR #2 and PR #3, see above), and the acceptance
+#     jobs have no diff-size cap — plus a blocking finding of its model, which
+#     the credit-exhausted key has never produced. What is gained is that the
+#     tests, the build, the migrations and the browser acceptance now have to
+#     pass before a merge
+#   - and know what it costs: a CANCELLED run is not a success, and sessions
+#     here routinely cancel a "redundant doc-only" acceptance run (the session
+#     log records twenty of them, and commit 18e7f1c carries `acceptance` and
+#     `fresh-install` as cancelled). That already blocks a merge today — four
+#     commits carry a cancelled `agent-review` — but agent-review.yml cancels
+#     itself by supersession (`cancel-in-progress: true`), while an acceptance
+#     run is cancelled on purpose and costs ~7 minutes to start again. So:
+#     cancel the run of a commit you do not intend to merge on, or re-run it
+#     before merging
 #   - use the file from `origin/main` after a `git fetch`, not a local `main`
 #     and not another branch. Every branch and worktree cut before this change
 #     was merged carries the old file, whatever its date. The old file is the
@@ -152,21 +187,28 @@ command -v gh >/dev/null || { echo "gh is required" >&2; exit 3; }
 # the pull-request requirement. That leaving them out clears an allowance
 # already set is assumed too; the comparison shows one that survived.
 #
-# `required_status_checks` is null: no required check. The only workflow of
-# this repository is agent-review.yml, and it is not a gate (see the
-# header). When a CI workflow appears that runs on EVERY pull request to
-# main — no path filters, no `if:` or `needs:` on the job — list its jobs
-# here and in REQUIRED_CHECKS of the test, in this shape (15368 is GitHub
-# Actions):
-#   "required_status_checks": {
-#     "strict": false,
-#     "checks": [{"context": "<job name>", "app_id": 15368}]
-#   },
-# A path-filtered required check is unmergeable for ever. That null removes
-# the check set on GitHub is the API description; not tried.
+# `required_status_checks` names the two jobs of .github/workflows/acceptance.yml
+# (15368 is GitHub Actions, so a status of the same name from anywhere else does
+# not count). They qualify because that workflow starts on EVERY pull request:
+# no path filter, no `types`, and neither job behind `if:`, `needs:` or a
+# matrix. The presentation and release workflows are left out because they ARE
+# path-filtered: a workflow that does not start publishes no check run at all,
+# so a pull request outside its paths waits for it for ever. (A job skipped by
+# `if:`/`needs:` inside a workflow that DID start is the other case: GitHub
+# counts a skip as success, so such a job cannot hold a gate at all — which is
+# why the test refuses `if:`/`needs:` on anything required here. Neither of
+# those two workflows is shaped that way either.) Keep this list and
+# REQUIRED_CHECKS of the test in step, in one pull request.
+# The other workflow, agent-review.yml, is not a gate (see the header).
 IFS= read -r -d '' DESIRED <<'JSON' || true
 {
-  "required_status_checks": null,
+  "required_status_checks": {
+    "strict": false,
+    "checks": [
+      {"context": "acceptance", "app_id": 15368},
+      {"context": "fresh-install", "app_id": 15368}
+    ]
+  },
   "enforce_admins": true,
   "required_pull_request_reviews": {
     "dismiss_stale_reviews": false,
@@ -320,6 +362,6 @@ case "${VERDICT}" in
 esac
 
 echo
-echo "Note: the rules apply to administrators too. No status check is required"
-echo "on this branch: the gate is the pull-request requirement alone, until a CI"
-echo "job that runs on every pull request is listed in this script."
+echo "Note: the rules apply to administrators too. The required checks are the"
+echo "acceptance workflow's own jobs, so a red test stops a merge; the AI"
+echo "reviewer is not among them, by the owner's decision (2026-09-11)."

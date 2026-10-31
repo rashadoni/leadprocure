@@ -80,9 +80,17 @@ OWN_REPO = "rashadoni/leadprocure"
 # Джобы CI, обязательные по скрипту: имя проверки, как его показывает GitHub
 # (`name:` джобы, а без него — её ключ). Пустой список — обязательных проверок
 # нет: в репозитории нет CI, который шёл бы на каждом pull request.
-REQUIRED_CHECKS: list[str] = []
+REQUIRED_CHECKS: list[str] = ["acceptance", "fresh-install"]
 # Workflow, чьи это джобы (файл в .github/workflows). None — когда список пуст.
-CI_WORKFLOW: str | None = None
+CI_WORKFLOW: str | None = "acceptance.yml"
+# Workflow на pull request, джобы которых обязательными быть НЕ должны, и почему.
+# Пустая причина не принимается: решение «это не гейт» называется вслух.
+NOT_A_GATE: dict[str, str] = {
+    "agent-review.yml": (
+        "ИИ-ревьюер обязательной проверкой не бывает: без ключа и при сбое API он "
+        "зелёный на каждом PR (решение владельца 2026-09-11)"
+    ),
+}
 # -----------------------------------------------------------------------------
 
 GITHUB_ACTIONS = 15368
@@ -343,6 +351,49 @@ def test_required_checks_are_ci_jobs_that_run_on_every_pull_request():
         "коммите: PR мимо фильтра будет ждать её вечно"
     )
     assert "main" in trigger.get("branches", ["main"])
+
+
+def test_every_unfiltered_pull_request_job_is_either_required_or_named_not_a_gate():
+    """Тот же tripwire, что и ниже, но в состоянии «обязательные проверки есть».
+
+    Пока обязательных не было, о появлении CI на pull request предупреждал тест ниже.
+    С непустым REQUIRED_CHECKS он пропускается, и без этого теста ни третья джоба в
+    `acceptance.yml`, ни новый workflow на pull request не попадут в гейт, а узнать об
+    этом будет негде: suite не запускает ни один workflow.
+    """
+    required = set(REQUIRED_CHECKS)
+    seen = []
+    for path in sorted(WORKFLOWS.glob("*.y*ml")):
+        workflow = yaml.safe_load(path.read_text())
+        triggers = _triggers(workflow)
+        if not {"pull_request", "pull_request_target"} & set(triggers):
+            continue
+        seen.append(path.name)
+        if path.name in NOT_A_GATE:
+            assert NOT_A_GATE[path.name].strip(), (
+                f"{path.name}: причина, почему это не гейт, не записана"
+            )
+            continue
+        trigger = triggers.get("pull_request") or triggers.get("pull_request_target") or {}
+        jobs = {job.get("name", key) for key, job in workflow["jobs"].items()}
+        if {"paths", "paths-ignore"} & set(trigger):
+            # Такой workflow на части PR не стартует и проверки не публикует вовсе,
+            # поэтому требовать его джобы нельзя: PR мимо фильтра ждал бы вечно.
+            assert not jobs & required, (
+                f"{path.name} отфильтрован по путям, а его джоба стоит в обязательных: "
+                "PR мимо фильтра не смержится никогда"
+            )
+            continue
+        missing = sorted(jobs - required)
+        assert not missing, (
+            f"{path.name} идёт на каждом PR, а джобы {missing} не обязательны: тесты на "
+            "мерж не влияют. Впиши их в `checks` скрипта и в REQUIRED_CHECKS здесь — или "
+            f"назови {path.name} в NOT_A_GATE и скажи, почему это не гейт"
+        )
+    assert CI_WORKFLOW is None or CI_WORKFLOW in seen, (
+        f"{CI_WORKFLOW} больше не идёт на pull request, а его джобы обязательны: "
+        "ни один PR не смержится"
+    )
 
 
 @pytest.mark.skipif(bool(REQUIRED_CHECKS), reason="обязательные проверки в этом репозитории есть")

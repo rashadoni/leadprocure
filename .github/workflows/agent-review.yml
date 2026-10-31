@@ -1,10 +1,19 @@
 name: Agent review
 
 # Layer 2 of docs/DELIVERY-ARCHITECTURE.md: every pull request is read by an
-# agent that did not write it. This is the ONLY required check on main, so it
-# must run for every pull request — including documentation-only ones, which
-# heavier workflows deliberately skip. It is therefore cheap by construction:
-# one short job, no build, no install, ~30 seconds.
+# agent that did not write it. It is NOT the gate — by the owner's decision an
+# AI reviewer is never a required check, because without a key or on an API
+# error it is green by construction, which is what happened on nearly every
+# pull request here from #3 to #34: of the runs before 2026-10-31 only two were
+# red, and both refused the diff on size instead of reading it (40455295157 on
+# PR #2, 40584090620 on PR #3). The gate is acceptance.yml's own jobs. This one
+# still runs for every pull request, documentation-only ones included, and is
+# cheap by construction: one short job, no build, no install, ~30 seconds.
+#
+# On GitHub as of 2026-10-31 this is still the single required context; the
+# protection script describes the acceptance jobs instead and waits for one
+# command from the owner (see the note in docs/DELIVERY-ARCHITECTURE.md).
+# Remove this paragraph once that command has been run.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
