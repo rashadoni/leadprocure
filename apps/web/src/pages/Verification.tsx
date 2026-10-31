@@ -63,7 +63,7 @@ export default function Verification() {
             {cases.map((c) => (
               <tr key={c.id}>
                 <td><a href="#" onClick={(e) => { e.preventDefault(); expand(c.id); }}>{isBuyer ? c.supplier_name : c.buyer_name}</a></td>
-                <td><Badge status={c.status} cls={c.status === 'APPROVED' ? 'APPROVED' : c.status === 'REJECTED' ? 'REJECTED' : 'INVITED'} /></td>
+                <td><Badge status={c.status} /></td>
                 <td>{c.doc_count}</td>
               </tr>
             ))}
@@ -74,10 +74,10 @@ export default function Verification() {
 
       {Object.entries(open).filter(([, v]) => v).map(([id, c]) => (
         <div className="card" key={id}>
-          <h3>{isBuyer ? c.supplier_name : c.buyer_name} <Badge status={c.status} cls={c.status === 'APPROVED' ? 'APPROVED' : c.status === 'REJECTED' ? 'REJECTED' : 'INVITED'} /></h3>
+          <h3>{isBuyer ? c.supplier_name : c.buyer_name} <Badge status={c.status} /></h3>
           {c.documents.map((d: any) => (
             <div key={d.id} style={{ fontSize: 13, padding: '3px 0' }}>
-              <span className="badge INVITED">{d.doc_type}</span>{' '}
+              <span className="badge is-info">{d.doc_type}</span>{' '}
               <a href="#" onClick={(e) => { e.preventDefault(); download(d.id); }}>{d.filename}</a>{' '}
               {/* The stored fingerprint, shown: an auditor asks "is this the file that was
                   uploaded?", and the answer has to be visible, not merely kept in a column. */}

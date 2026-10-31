@@ -29,8 +29,18 @@ h1 { font-size: 21px; font-weight: 700; letter-spacing: -.01em; margin-bottom: 1
 h3 { font-size: 15px; font-weight: 650; margin: 18px 0 8px; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
 table { width: 100%; border-collapse: collapse; }
-th { text-align: left; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 9px 10px; border-bottom: 1px solid var(--border); }
-td { padding: 10px; border-bottom: 1px solid var(--border); }
+th { text-align: left; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: bottom; }
+td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+
+/* Columns that must never wrap. A reference number broke as "REQ- / 2026- / 0012" and a
+   date as "2026- / 08-12", each tripling the height of its row for no gain: these are
+   atomic strings, and a table of them cannot be read across once they stack. The classes
+   are opt-in so a title or a description still wraps, which is right for prose. */
+.nowrap, td.nowrap, th.nowrap { white-space: nowrap; }
+/* Money lines up on the right or it cannot be compared by eye: 360.00 against 24,800.00
+   against 100,000.00 told the reader nothing while they were all flush left. Tabular
+   figures keep the digits in columns too. */
+.num, td.num, th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 tbody tr:last-child td { border-bottom: 0; }
 tr:hover td { background: rgba(4, 120, 87, .05); }
 
@@ -98,11 +108,46 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 [data-tip]:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); }
 [data-tip]:hover::before { opacity: 1; }
 
-.badge.DRAFT { background: var(--panel2); color: var(--muted); }
-.badge.OPEN, .badge.SUBMITTED, .badge.APPROVED, .badge.AWARDED, .badge.OPENED { background: rgba(22, 163, 74, .12); color: var(--ok); }
-.badge.CLOSED, .badge.EVALUATION, .badge.PUBLISHED { background: rgba(217, 119, 6, .12); color: var(--warn); }
-.badge.REJECTED, .badge.WITHDRAWN, .badge.BLOCKED { background: rgba(220, 38, 38, .12); color: var(--bad); }
-.badge.INVITED { background: rgba(4, 120, 87, .12); color: var(--accent); }
+/* Status colour by MEANING, not by enum name. Five groups, assigned in one table in
+   components/Badge.tsx; the raw status also stays in the class list, for the browser specs
+   that identify a row by its state. Colouring by enum is what this replaces: 24 of the 38
+   statuses had no rule at all and rendered as plain text in a hairline outline, so a column
+   of them could not be skimmed — and the names themselves had become colour words, with
+   `badge INVITED` doing duty as "green-tinted chip" on a dozen things that are not
+   statuses. */
+.badge.is-neutral { background: var(--panel2); color: var(--muted); }
+.badge.is-progress { background: rgba(4, 120, 87, .12); color: var(--accent); }
+.badge.is-good { background: rgba(22, 163, 74, .12); color: var(--ok); }
+.badge.is-warn { background: rgba(217, 119, 6, .12); color: var(--warn); }
+.badge.is-bad { background: rgba(220, 38, 38, .12); color: var(--bad); }
+/* Not a status: a soft chip for labels that merely name a thing (a role, a category, a
+   document type). It is here so those stop borrowing a status name to get a colour. */
+.badge.is-info { background: rgba(4, 120, 87, .12); color: var(--accent); }
+
+/* Action cell: one line, even gaps, a floor on button width so the column lines up down
+   the table instead of staggering with every label length. Destructive actions sit last,
+   behind a hairline, so "Cancel" stops being the first thing the eye lands on. */
+.actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.actions .btn { min-width: 92px; justify-content: center; }
+/* Inputs are width:100% globally, which inside a flex row means "take the whole cell". */
+.actions select, .actions input { width: auto; min-width: 124px; padding: 4px 8px; font-size: 12px; }
+/* Six buttons in one cell: the width floor stops helping and starts forcing a wrap. */
+.actions-dense .btn { min-width: 0; }
+.actions-sep { width: 1px; align-self: stretch; min-height: 20px; background: var(--border); margin: 0 2px; }
+/* Pushed to the end AND toned down: it should be reachable, not inviting. */
+.btn.danger { color: var(--bad); border-color: rgba(220, 38, 38, .35); }
+.btn.danger:hover { background: rgba(220, 38, 38, .07); border-color: var(--bad); }
+
+/* A failed read used to be plain black text with a Retry next to it, which reads as a
+   footnote rather than as "this screen is not showing you your data". Same element, same
+   role — only dressed. */
+.state-error { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: rgba(220, 38, 38, .07); border: 1px solid rgba(220, 38, 38, .25);
+  color: var(--bad); border-radius: 10px; padding: 10px 14px; margin: 10px 0; font-weight: 500; }
+.state-error .btn { margin-left: auto; }
+/* An empty list is a legitimate answer, so it gets room to say so rather than a bare grey
+   line jammed under a table header. */
+.state-empty { padding: 18px 0; text-align: center; }
 
 .auth-wrap { display: grid; place-items: center; min-height: 100vh; }
 .auth { width: 380px; }
@@ -156,9 +201,8 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
   .help-actions { margin-left: auto; }
 }
 
-/* budget lifecycle badges — reuse the status palette the rest of the app uses */
-.badge.PENDING { background: rgba(217, 119, 6, .12); color: #b45309; }
-.badge.CLOSED { background: rgba(100, 116, 139, .14); color: #475569; }
+/* Budget lifecycle badges carry their own vocabulary (bud_status_*) but go through the
+   same five groups, so they need no rules of their own any more. */
 
 /* a number that opens into its documents — reads as text, behaves as a link */
 .linklike { background: none; border: 0; padding: 0; font: inherit; color: var(--text);

@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
-import { api, fmtMoney, getToken } from '../../api/client';
+import { api, fmtDateTime, fmtMoney, getToken } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { useAuth } from '../../auth/auth';
 import { AuctionPanel } from '../../components/AuctionPanel';
@@ -146,11 +146,11 @@ export default function EventDetail() {
       <ListState of={[{ loading: false, failed: evFailed, reload: load },
         { loading: false, failed: suppliersFailed, reload: loadSuppliers }]} />
       <h1>
-        {ev.title} <span className="badge INVITED">{ev.type}</span>{' '}
+        {ev.title} <span className="badge is-info">{ev.type}</span>{' '}
         <Badge status={ev.status} />
       </h1>
       <div className="card">
-        <b>{t('deadline')}:</b> {new Date(ev.close_at).toLocaleString()} · <b>{ev.visibility}</b> · {ev.evaluation_currency}
+        <b>{t('deadline')}:</b> {fmtDateTime(ev.close_at)} · <b>{ev.visibility}</b> · {ev.evaluation_currency}
         <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
           {ev.status === 'DRAFT' && <button className="btn" data-tip={t('tip_publish')} onClick={() => act('publish')}>{t('publish')}</button>}
           {ev.status === 'CLOSED' && ev.format === 'SEALED' && (
@@ -283,10 +283,10 @@ export default function EventDetail() {
                         <tr>
                           <td>{f.supplier_name}</td>
                           <td>
-                            {f.has_bid && !f.enrolled && <span className="badge APPROVED">✓ {t('fu_has_bid')}</span>}
-                            {!f.has_bid && !f.enrolled && <span className="badge" style={{ opacity: 0.6 }}>{t('fu_NOT_ENROLLED')}</span>}
+                            {f.has_bid && !f.enrolled && <span className="badge is-good">✓ {t('fu_has_bid')}</span>}
+                            {!f.has_bid && !f.enrolled && <span className="badge is-neutral">{t('fu_NOT_ENROLLED')}</span>}
                             {f.enrolled && (
-                              <span className={`badge ${f.status === 'RESPONDED' ? 'APPROVED' : f.status === 'ACTIVE' ? 'INVITED' : 'REJECTED'}`}
+                              <span className={`badge ${f.status === 'RESPONDED' ? 'is-good' : f.status === 'ACTIVE' ? 'is-progress' : 'is-bad'} ${f.status}`}
                                 data-tip={t(`tip_fu_${f.status}`) !== `tip_fu_${f.status}` ? t(`tip_fu_${f.status}`) : undefined}>
                                 {f.status === 'RESPONDED' ? '✓ ' : ''}{t(`fu_${f.status}`)}
                               </span>
@@ -299,7 +299,7 @@ export default function EventDetail() {
                               const off = f.enrolled && f.status !== 'ACTIVE' && i >= f.current_step;
                               const sentMsg = msgs.find((m: any) => m.step_no === i);
                               const hint = done && sentMsg
-                                ? `${chName(s.channel)} · ${new Date(sentMsg.at).toLocaleString()} · ${sentMsg.recipient}`
+                                ? `${chName(s.channel)} · ${fmtDateTime(sentMsg.at)} · ${sentMsg.recipient}`
                                 : isNext && f.next_run_at
                                   ? t('fu_next_in').replace('{h}', String(hoursTo(f.next_run_at)))
                                   : `${chName(s.channel)} — +${s.afterHours}${t('hours_short')}`;
@@ -344,7 +344,7 @@ export default function EventDetail() {
                             <td colSpan={4} style={{ background: 'var(--card2, #fafafa)' }}>
                               {msgs.map((m: any, i: number) => (
                                 <div key={i} className="hint" style={{ padding: '2px 0' }}>
-                                  {chIco(m.channel)} {new Date(m.at).toLocaleString()} → {m.recipient} · {t(`delivery_${m.status}`)}
+                                  {chIco(m.channel)} {fmtDateTime(m.at)} → {m.recipient} · {t(`delivery_${m.status}`)}
                                 </div>
                               ))}
                             </td>
@@ -378,11 +378,11 @@ export default function EventDetail() {
           </button>
         )}
         <table>
-          <thead><tr><th>{t('name')}</th><th>{t('qty')}</th><th>{t('unit_price')} (est.)</th><th>{t('lots')}</th></tr></thead>
+          <thead><tr><th>{t('name')}</th><th>{t('qty')}</th><th className="num">{t('unit_price')} (est.)</th><th>{t('lots')}</th></tr></thead>
           <tbody>
             {ev.items.map((i: any) => (
               <tr key={i.id}>
-                <td>{i.name}</td><td>{Number(i.qty)}</td><td>{fmtMoney(i.est_unit_price_minor, ev.evaluation_currency)}</td>
+                <td>{i.name}</td><td>{Number(i.qty)}</td><td className="num">{fmtMoney(i.est_unit_price_minor, ev.evaluation_currency)}</td>
                 <td>
                   {ev.status === 'DRAFT' && ev.lots.length > 1 ? (
                     <select value={i.lot_id ?? ''} onChange={async (e) => { await api.put(`/events/${id}/items/${i.id}/lot`, { lotId: e.target.value }); load(); }}>
@@ -417,7 +417,7 @@ export default function EventDetail() {
                 <b>{l.title}</b>{' '}
                 {awarded && (
                   <>
-                    <span className="badge AWARDED">🏆 {t('st_AWARDED')}</span>{' '}
+                    <span className="badge is-good AWARDED">🏆 {t('st_AWARDED')}</span>{' '}
                     <button className="btn small ghost" data-tip={t('cancel_award_prompt')} onClick={() => cancelAward(l.id)}>✕ {t('cancel_award')}</button>
                     {awarded.justification && <div className="hint" style={{ marginTop: 4 }}>📝 {awarded.justification}</div>}
                   </>
@@ -445,7 +445,7 @@ export default function EventDetail() {
       <div className="card">
         <h3>{t('bids')} {!ev.amounts_visible && <span className="sealed">🔒 {t('amounts_hidden')}</span>}</h3>
         <table>
-          <thead><tr><th>{t('supplier_org')}</th><th>{t('status')}</th><th>{t('total')}</th><th>{t('delivery_days')}</th><th>{t('score')}</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>{t('supplier_org')}</th><th>{t('status')}</th><th className="num">{t('total')}</th><th>{t('delivery_days')}</th><th>{t('score')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
             {(ev.bids ?? []).map((b: any) => (
               <tr key={b.id} style={winningBidIds.has(b.id) ? { outline: '1px solid var(--ok)' } : undefined}>
@@ -459,7 +459,7 @@ export default function EventDetail() {
                   {ev.amounts_visible && <BidDocs bidId={b.id} canUpload={false} />}
                 </td>
                 <td><Badge status={b.state} /></td>
-                <td>{ev.amounts_visible ? fmtMoney(b.total_minor, b.currency) : '🔒'}</td>
+                <td className="num">{ev.amounts_visible ? fmtMoney(b.total_minor, b.currency) : '🔒'}</td>
                 <td>{ev.amounts_visible ? (b.delivery_days ?? '—') : '🔒'}</td>
                 <td>{weightedByBid.has(b.id) ? weightedByBid.get(b.id)!.toFixed(1) : '—'}</td>
                 <td>
@@ -471,7 +471,7 @@ export default function EventDetail() {
                           value={scores[b.id]?.[c.key] ?? ''}
                           onChange={e => setScores({...scores,[b.id]:{...scores[b.id],[c.key]:e.target.value === '' ? NaN : Number(e.target.value)}})} />
                       </label>)}
-                      {!winningBidIds.has(b.id) && <button className="btn small ghost" data-tip={t('disqualify')} onClick={() => disqualify(b.id)}>⛔</button>}
+                      {!winningBidIds.has(b.id) && <button className="btn small ghost danger" data-tip={t('disqualify_prompt')} onClick={() => disqualify(b.id)}>⛔ {t('disqualify')}</button>}
                     </span>
                   )}
                   {b.state === 'DISQUALIFIED' && b.disqualified_reason && (

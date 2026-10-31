@@ -174,7 +174,7 @@ async function verifyRfpPayment({buyerPage,supplierPage,call,buyerToken,event,op
       await clicked(supplierPage,`/orders/${po.id}/status`,()=>supplied.getByRole('button',{name:`→ ${label}`,exact:true}).click());
     }
     await buyerPage.reload();
-    await clicked(buyerPage,`/orders/${po.id}/receipts`,()=>order.getByRole('button',{name:controlName(`${copy.receive} 📥`)}).click());
+    await clicked(buyerPage,`/orders/${po.id}/receipts`,()=>order.getByRole('button',{name:controlName(`📥 ${copy.receive}`)}).click());
     await expect(order.locator('.badge.ACCEPTED')).toBeVisible();
     const receipt=await call(`/orders/${po.id}/receipts`,undefined,buyerToken,'get',200);
     expect(receipt.summary).toHaveLength(1);expect(Number(receipt.summary[0].received)).toBe(1);

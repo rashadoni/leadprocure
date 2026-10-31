@@ -114,7 +114,7 @@ export default function Analytics() {
   </div>;
 
   if (!d) return <><h1>{t('analytics')}</h1>{filters}
-    {loadError ? <div role="alert">{t('analytics_load_error')} <button className="btn ghost small" onClick={() => setReload(n => n + 1)}>{t('analytics_retry')}</button></div>
+    {loadError ? <div role="alert" className="state-error">{t('analytics_load_error')} <button className="btn ghost small" onClick={() => setReload(n => n + 1)}>{t('analytics_retry')}</button></div>
       : <div className="center" role="status">…</div>}
   </>;
 
@@ -206,7 +206,7 @@ export default function Analytics() {
           <div className="hint" style={{ marginBottom: 10 }}>{t('budget_pace_hint')}</div>
           <table>
             <thead><tr>
-              <th>{t('department')}</th><th>{t('amount')}</th><th>{t('utilization')}</th>
+              <th>{t('department')}</th><th className="num">{t('amount')}</th><th className="num">{t('utilization')}</th>
               <th>{t('period_elapsed')}</th><th>{t('pace')}</th>
             </tr></thead>
             <tbody>
@@ -216,8 +216,8 @@ export default function Analytics() {
                 return (
                   <tr key={p.departmentCode ?? 'org'}>
                     <td><b>{p.departmentCode ?? t('bud_org_wide')}</b></td>
-                    <td>{fmtMoney(p.amountMinor, p.currency)}</td>
-                    <td>{fmtMoney(p.usedMinor, p.currency)} · {p.utilizationPct}%</td>
+                    <td className="num">{fmtMoney(p.amountMinor, p.currency)}</td>
+                    <td className="num">{fmtMoney(p.usedMinor, p.currency)} · {p.utilizationPct}%</td>
                     <td className="hint">{p.elapsedPct}%</td>
                     <td className={ahead ? 'error' : ''}>
                       {p.paceDeltaPct > 0 ? '+' : ''}{p.paceDeltaPct}%

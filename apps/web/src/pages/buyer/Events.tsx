@@ -43,7 +43,7 @@ export default function Events() {
                   </span>
                 </td>
                 <td><Badge status={r.status} /></td>
-                <td className="hint">{fmtDateTime(r.close_at)}</td>
+                <td className="hint nowrap">{fmtDateTime(r.close_at)}</td>
                 <td>{r.bid_count}</td>
               </tr>
             ))}

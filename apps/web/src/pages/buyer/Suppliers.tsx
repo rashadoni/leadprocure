@@ -3,6 +3,7 @@ import { api } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import { Badge } from '../../components/Badge';
+import { Actions } from '../../components/Actions';
 import { ListState, useLoad } from '../../components/ListState';
 
 export default function Suppliers() {
@@ -66,11 +67,18 @@ export default function Suppliers() {
                 <td>{r.voen ?? '—'}</td>
                 <td><Badge status={r.status} /></td>
                 <td>
+                  {/* Blocking a supplier cuts them out of every future tender — last, and set
+                      apart from approving, which used to sit right next to it. */}
+                  <Actions
+                    danger={canManage && r.status !== 'BLOCKED' && (
+                      <button className="btn small ghost danger" data-tip={t('tip_supplier_block')} onClick={() => setStatus(r.id, 'BLOCKED')}>{t('block')}</button>
+                    )}
+                  >
                   {canManage && <>
-                    {r.status !== 'APPROVED' && <button className="btn small" data-tip={t('tip_supplier_approve')} onClick={() => setStatus(r.id, 'APPROVED')}>{t('approve')}</button>}{' '}
-                    {r.status !== 'BLOCKED' && <button className="btn small ghost" data-tip={t('tip_supplier_block')} onClick={() => setStatus(r.id, 'BLOCKED')}>{t('block')}</button>}{' '}
-                    <button className="btn small ghost" data-tip={t('tip_verify_open')} onClick={() => openVerification(r.supplier_org_id)}>🛡</button>
-                  </>}{' '}
+                    {r.status !== 'APPROVED' && <button className="btn small" data-tip={t('tip_supplier_approve')} onClick={() => setStatus(r.id, 'APPROVED')}>{t('approve')}</button>}
+                    {/* was a bare 🛡 */}
+                    <button className="btn small ghost" data-tip={t('tip_verify_open')} onClick={() => openVerification(r.supplier_org_id)}>🛡 {t('verification')}</button>
+                  </>}
                   {/* Rating is an approver's call, but the figures are everyone's to read —
                       and they only ever appeared as a side effect of rating someone. */}
                   <button className="btn small ghost" data-tip={t('tip_scorecard')}
@@ -79,9 +87,10 @@ export default function Suppliers() {
                   </button>
                   {scores[r.supplier_org_id] && (
                     <span className="hint" style={{ marginLeft: 6 }}>
-                      {scores[r.supplier_org_id].map((a: any) => `${a.metric}:${a.avg_score}`).join(' ')}
+                      {scores[r.supplier_org_id].map((a: any) => `${a.metric}: ${a.avg_score}`).join(' · ')}
                     </span>
                   )}
+                  </Actions>
                 </td>
               </tr>
             ))}

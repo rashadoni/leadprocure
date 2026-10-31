@@ -55,17 +55,29 @@ api.interceptors.response.use(
   },
 );
 
-export const fmtMoney = (minor: number | string | null, currency = 'AZN'): string => {
-  if (minor == null) return '···';
-  return `${(Number(minor) / 100).toLocaleString('az-AZ', { minimumFractionDigits: 2 })} ${currency}`;
-};
-
-// Locale-aware dates driven by the UI language (US-style 7/14/2026 reads wrong for az/ru).
-const dateLocale = () => {
+// The UI language decides how numbers and dates are written. US-style 7/14/2026 reads wrong
+// in az and ru, and money used to be pinned to az-AZ whatever the interface was speaking.
+const uiLocale = () => {
   const lang = localStorage.getItem('lp_lang') || 'ru';
   return lang === 'az' ? 'az-AZ' : lang === 'en' ? 'en-GB' : 'ru-RU';
 };
+
+// `···` is not "empty", it is "sealed": a bid amount the reader may not see yet. `—` means
+// there is genuinely nothing. Keep them apart — the buyer's bid table says "🔒 amounts
+// hidden until opening" above exactly these cells.
+export const fmtMoney = (minor: number | string | null, currency = 'AZN'): string => {
+  if (minor == null) return '···';
+  return `${(Number(minor) / 100).toLocaleString(uiLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+};
+
+// Every date in the product goes through these two. Calling toLocaleString() with no
+// arguments anywhere else brings back the browser's own locale — which is how one tender's
+// deadline came to be written four different ways on four screens.
 export const fmtDate = (iso: string | Date | null | undefined): string =>
-  iso ? new Date(iso).toLocaleDateString(dateLocale()) : '—';
+  iso ? new Date(iso).toLocaleDateString(uiLocale()) : '—';
 export const fmtDateTime = (iso: string | Date | null | undefined): string =>
-  iso ? new Date(iso).toLocaleString(dateLocale(), { dateStyle: 'short', timeStyle: 'short' }) : '—';
+  iso ? new Date(iso).toLocaleString(uiLocale(), { dateStyle: 'short', timeStyle: 'short' }) : '—';
+// Anti-sniping moves an auction's close_at by seconds, so the one clock on that panel has
+// to show them. Everywhere else seconds are noise.
+export const fmtDateTimeSec = (iso: string | Date | null | undefined): string =>
+  iso ? new Date(iso).toLocaleString(uiLocale(), { dateStyle: 'short', timeStyle: 'medium' }) : '—';

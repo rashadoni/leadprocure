@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { api, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
+import { Actions } from '../../components/Actions';
 import { BUYER_ROLES } from '@leadprocure/shared';
 import { ChannelsCard } from '../../components/ChannelsCard';
 import { isDenied, ListState, useLoad } from '../../components/ListState';
@@ -162,7 +163,7 @@ export default function Settings() {
                       {BUYER_ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
                     </select>
                   ) : (
-                    <span className="badge INVITED">{roleLabel(u.role)}</span>
+                    <span className="badge is-info">{roleLabel(u.role)}</span>
                   )}
                 </td>
                 <td>
@@ -193,7 +194,7 @@ export default function Settings() {
                 {BUYER_ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
               </select>
             </div>
-            <button className="btn">+</button>
+            <button className="btn" style={{ flex: 'none' }}>+ {t('add')}</button>
           </form>
         )}
       </div>
@@ -204,7 +205,7 @@ export default function Settings() {
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: isAdmin ? 12 : 0 }}>
           {cats.length === 0 && <span className="hint">—</span>}
           {cats.map((c) => (
-            <span key={c.id} className="badge INVITED" data-tip={c.name || undefined}>
+            <span key={c.id} className="badge is-info" data-tip={c.name || undefined}>
               {c.code}{c.name ? ` · ${c.name}` : ''}
               {isAdmin && (
                 <button className="btn small ghost" style={{ marginLeft: 6, padding: '0 6px' }}
@@ -218,7 +219,7 @@ export default function Settings() {
             onSubmit={(e) => { e.preventDefault(); if (newCat.code.trim()) run(() => api.post('/categories', newCat)).then(() => setNewCat({ code: '', name: '' })); }}>
             <div><label>{t('cat_code')}</label><input value={newCat.code} onChange={(e) => setNewCat({ ...newCat, code: e.target.value })} placeholder="IT" /></div>
             <div><label>{t('name')}</label><input value={newCat.name} onChange={(e) => setNewCat({ ...newCat, name: e.target.value })} /></div>
-            <button className="btn">+</button>
+            <button className="btn" style={{ flex: 'none' }}>+ {t('add')}</button>
           </form>
         )}
       </div>
@@ -239,16 +240,22 @@ export default function Settings() {
                 <td>{d.name || '—'}</td>
                 <td className="hint">{d.parent_code ?? '—'}</td>
                 <td className="hint">{d.usage_count}</td>
-                <td>{d.is_active ? <span className="badge APPROVED">{t('dep_active')}</span> : <span className="badge INVITED">{t('dep_inactive')}</span>}</td>
+                <td>{d.is_active ? <span className="badge is-good">{t('dep_active')}</span> : <span className="badge is-neutral">{t('dep_inactive')}</span>}</td>
                 {isAdmin && (
                   <td>
                     {/* retiring beats deleting: a department carrying spend must keep its history */}
-                    <button className="btn small ghost" data-tip={d.is_active ? t('dep_deactivate') : t('dep_activate')}
-                      onClick={() => run(() => api.put(`/departments/${d.id}`, { code: d.code, name: d.name ?? undefined, parentId: d.parent_id ?? undefined, isActive: !d.is_active }))}>
-                      {d.is_active ? '⏸' : '▶'}
-                    </button>{' '}
-                    <button className="btn small ghost" data-tip={t('tip_delete')} disabled={d.usage_count > 0}
-                      onClick={() => run(() => api.delete(`/departments/${d.id}`))}>🗑</button>
+                    <Actions
+                      danger={(
+                        <button className="btn small ghost danger" disabled={d.usage_count > 0}
+                          data-tip={d.usage_count > 0 ? t('dep_delete_blocked') : t('tip_delete')}
+                          onClick={() => run(() => api.delete(`/departments/${d.id}`))}>🗑 {t('delete')}</button>
+                      )}
+                    >
+                      <button className="btn small ghost" data-tip={d.is_active ? t('dep_deactivate') : t('dep_activate')}
+                        onClick={() => run(() => api.put(`/departments/${d.id}`, { code: d.code, name: d.name ?? undefined, parentId: d.parent_id ?? undefined, isActive: !d.is_active }))}>
+                        {d.is_active ? `⏸ ${t('dep_retire')}` : `▶ ${t('dep_restore')}`}
+                      </button>
+                    </Actions>
                   </td>
                 )}
               </tr>
@@ -273,7 +280,7 @@ export default function Settings() {
                 <option value="">—</option>
                 {deps.map((d) => <option key={d.id} value={d.id}>{d.code}</option>)}
               </select></div>
-            <button className="btn">+</button>
+            <button className="btn" style={{ flex: 'none' }}>+ {t('add')}</button>
           </form>
         )}
 
@@ -501,7 +508,7 @@ export default function Settings() {
               <span style={{ color: 'var(--muted)' }}>:</span>
               {(p.steps ?? []).sort((a: any, b: any) => a.order - b.order).map((s: any, i: number, arr: any[]) => (
                 <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                  <span className="badge INVITED">{ROLE_ICO[s.role] ?? '👤'} {i + 1} · {roleLabel(s.role)}</span>
+                  <span className="badge is-info">{ROLE_ICO[s.role] ?? '👤'} {i + 1} · {roleLabel(s.role)}</span>
                   {i < arr.length - 1 && <span style={{ color: 'var(--muted)' }}>→</span>}
                 </span>
               ))}
@@ -524,7 +531,7 @@ export default function Settings() {
                       background: active ? '#f2faf5' : '#fff', borderRadius: 10, padding: '10px 12px',
                     }}>
                     <div style={{ fontWeight: 600, marginBottom: 6 }}>
-                      {preset.label} {active && <span className="badge APPROVED" style={{ marginLeft: 4 }}>✓ {t('chain_active')}</span>}
+                      {preset.label} {active && <span className="badge is-good" style={{ marginLeft: 4 }}>✓ {t('chain_active')}</span>}
                     </div>
                     {preset.policies.length === 0 && <div className="hint">{t('chain_p0_desc')}</div>}
                     {preset.policies.map((b: any, i: number) => (

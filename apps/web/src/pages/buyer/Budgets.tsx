@@ -1,5 +1,7 @@
 import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
 import { api, fmtDate, fmtMoney } from '../../api/client';
+import { statusGroup } from '../../components/Badge';
+import { Actions } from '../../components/Actions';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
@@ -338,7 +340,7 @@ export default function Budgets() {
           <h3>{t('bud_by_department')}</h3>
           <table>
             <thead><tr>
-              <th>{t('department')}</th><th>{t('amount')}</th><th>{t('committed')}</th><th>{t('actual')}</th>
+              <th>{t('department')}</th><th className="num">{t('amount')}</th><th className="num">{t('committed')}</th><th className="num">{t('actual')}</th>
               {/* Not the invoice figure on /buyer/analytics: a different measure, so it
                   carries its own name — taken from the basis the endpoint declares rather
                   than hard-coded here. See PAID_BASES in @leadprocure/shared.
@@ -346,7 +348,7 @@ export default function Budgets() {
                   the columns to its left — each order's own vat_mode — so it needs no
                   separate one. The analytics tile keeps its «incl. VAT» because it reports
                   the invoice as billed. */}
-              <th>{t(paidBasis)}</th><th>{t('remaining')}</th><th>{t('forecast')}</th><th style={{ width: 180 }}>{t('utilization')}</th>
+              <th className="num">{t(paidBasis)}</th><th className="num">{t('remaining')}</th><th className="num">{t('forecast')}</th><th style={{ width: 180 }}>{t('utilization')}</th>
             </tr></thead>
             <tbody>
               {depSummary.map((d) => {
@@ -358,14 +360,14 @@ export default function Budgets() {
                       {/* a parent's figures include its units — say so, or the totals look wrong */}
                       {d.includesChildren && <span className="hint" data-tip={t('bud_rollup_tip')}> ⤵</span>}
                     </td>
-                    <td>{fmtMoney(d.amountMinor, d.currency)}</td>
-                    <td>{fmtMoney(d.committedMinor, d.currency)}</td>
-                    <td>{fmtMoney(d.actualMinor, d.currency)}</td>
+                    <td className="num">{fmtMoney(d.amountMinor, d.currency)}</td>
+                    <td className="num">{fmtMoney(d.committedMinor, d.currency)}</td>
+                    <td className="num">{fmtMoney(d.actualMinor, d.currency)}</td>
                     {/* settlement of orders already counted as actual — shown beside, never summed in */}
-                    <td className="hint" data-tip={t(paidBasisTip)}>{fmtMoney(d.paidMinor, d.currency)}</td>
-                    <td className={over ? 'error' : ''}>{fmtMoney(d.remainingMinor, d.currency)}</td>
+                    <td className="hint num" data-tip={t(paidBasisTip)}>{fmtMoney(d.paidMinor, d.currency)}</td>
+                    <td className={`num ${over ? 'error' : ''}`}>{fmtMoney(d.remainingMinor, d.currency)}</td>
                     {/* where the period lands at the current rate — the question that follows "how much is left" */}
-                    <td className={d.forecastOverMinor > 0 ? 'error' : 'hint'} data-tip={t('forecast_hint')}>
+                    <td className={`num ${d.forecastOverMinor > 0 ? 'error' : 'hint'}`} data-tip={t('forecast_hint')}>
                       {fmtMoney(d.forecastMinor, d.currency)}
                       {d.forecastOverMinor > 0 && <span> · +{fmtMoney(d.forecastOverMinor, d.currency)}</span>}
                     </td>
@@ -433,13 +435,13 @@ export default function Budgets() {
           )}
         </div>
         {reportLoading && <div role="status">…</div>}
-        {reportError && <div role="alert">{t('budget_load_error')}{' '}
+        {reportError && <div role="alert" className="state-error">{t('budget_load_error')}{' '}
           <button className="btn ghost small" onClick={() => void load()}>{t('analytics_retry')}</button>
         </div>}
         {!reportLoading && !reportError && <table data-testid="budget-list">
           <thead><tr>
             <th>{t('name')}</th><th>{t('status')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('period')}</th>
-            <th>{t('amount')}</th><th>{t('committed')}</th><th>{t('actual')}</th><th>{t('remaining')}</th>
+            <th className="num">{t('amount')}</th><th className="num">{t('committed')}</th><th className="num">{t('actual')}</th><th className="num">{t('remaining')}</th>
             <th style={{ width: 180 }}>{t('utilization')}</th>{canManagePlans && <th>{t('actions')}</th>}
           </tr></thead>
           <tbody>
@@ -449,18 +451,18 @@ export default function Budgets() {
                 <Fragment key={b.id}>
                 <tr>
                   <td>{b.name}</td>
-                  <td><span className={`badge ${b.status}`} data-tip={t(`bud_st_${b.status}`)}>{t(`bud_status_${b.status}`)}</span></td>
+                  <td><span className={`badge ${statusGroup(b.status)} ${b.status}`} data-tip={t(`bud_st_${b.status}`)}>{t(`bud_status_${b.status}`)}</span></td>
                   <td>{b.category === '*' ? '—' : b.category}</td>
                   <td data-tip={b.departmentName || undefined}>{b.departmentCode ?? t('bud_org_wide')}</td>
                   <td data-tip={`${b.periodStart} → ${b.periodEnd}`}>{b.periodLabel}</td>
-                  <td>{fmtMoney(b.amountMinor, b.currency)}</td>
-                  <td data-tip={t('drill_hint')}>
+                  <td className="num">{fmtMoney(b.amountMinor, b.currency)}</td>
+                  <td className="num" data-tip={t('drill_hint')}>
                     <button className="linklike" onClick={() => toggleDocs(b.id, 'committed')}>{fmtMoney(b.committedMinor, b.currency)}</button>
                   </td>
-                  <td data-tip={t('drill_hint')}>
+                  <td className="num" data-tip={t('drill_hint')}>
                     <button className="linklike" onClick={() => toggleDocs(b.id, 'actual')}>{fmtMoney(b.actualMinor, b.currency)}</button>
                   </td>
-                  <td className={over ? 'error' : ''}>{fmtMoney(b.remainingMinor, b.currency)}</td>
+                  <td className={`num ${over ? 'error' : ''}`}>{fmtMoney(b.remainingMinor, b.currency)}</td>
                   <td>
                     <div className="budget-bar">
                       <div className={`budget-fill ${over ? 'over' : ''}`} style={{ width: `${Math.min(100, b.utilizationPct)}%` }} />
@@ -469,34 +471,41 @@ export default function Budgets() {
                   </td>
                   {canManagePlans && (
                     <td>
-                      {b.status === 'DRAFT' && (
-                        <>
-                          <button className="btn small ghost" data-tip={t('tip_edit')} onClick={() => edit(b)}>✎</button>{' '}
-                          <button className="btn small" data-tip={t('bud_submit_tip')} onClick={() => act(b.id, 'submit')}>{t('submit')}</button>{' '}
-                        </>
-                      )}
-                      {b.status === 'PENDING' && (
-                        <>
-                          <button className="btn small" data-tip={t('bud_approve_tip')} onClick={() => act(b.id, 'approve')}>{t('approve')}</button>{' '}
-                          <button className="btn small ghost" data-tip={t('bud_reject_tip')} onClick={() => withReason(b.id, 'reject', 'bud_reject_prompt')}>{t('reject')}</button>{' '}
-                          <button className="btn small ghost" data-tip={t('bud_recall_tip')} onClick={() => act(b.id, 'recall')}>↩</button>{' '}
-                        </>
-                      )}
-                      {b.status === 'APPROVED' && (
-                        <>
-                          <button className="btn small ghost" data-tip={t('bud_revise_tip')} onClick={() => edit(b)}>✎</button>{' '}
-                          <button className="btn small ghost" data-tip={t('bud_close_tip')} onClick={() => act(b.id, 'close')}>🔒</button>{' '}
-                        </>
-                      )}
-                      {b.status === 'CLOSED' && (
-                        <button className="btn small ghost" data-tip={t('bud_reopen_tip')} onClick={() => withReason(b.id, 'reopen', 'bud_reopen_prompt')}>🔓</button>
-                      )}{' '}
-                      <button className="btn small ghost" data-tip={t('bud_history')} onClick={() => toggleHistory(b.id)}>🕘</button>{' '}
-                      <button className="btn small ghost" data-tip={t('bud_phasing_tip')} onClick={() => togglePhasing(b.id)}>📅</button>{' '}
-                      <button className="btn small ghost" data-tip={t('bud_rollover')} onClick={() => rollover(b.id)}>↪</button>{' '}
-                      {b.status === 'DRAFT' && (
-                        <button className="btn small ghost" data-tip={t('tip_delete')} onClick={() => remove(b.id)}>🗑</button>
-                      )}
+                      {/* Six wordless emoji in a 2×3 block, which rearranged itself whenever a
+                          labelled button joined them. Every one of them says what it does now,
+                          and deleting the plan sits apart at the end. */}
+                      <Actions
+                        dense
+                        danger={b.status === 'DRAFT' && (
+                          <button className="btn small ghost danger" data-tip={t('tip_delete')} onClick={() => remove(b.id)}>🗑 {t('delete')}</button>
+                        )}
+                      >
+                        {b.status === 'DRAFT' && (
+                          <>
+                            <button className="btn small" data-tip={t('bud_submit_tip')} onClick={() => act(b.id, 'submit')}>{t('submit')}</button>
+                            <button className="btn small ghost" data-tip={t('tip_edit')} onClick={() => edit(b)}>✎ {t('edit')}</button>
+                          </>
+                        )}
+                        {b.status === 'PENDING' && (
+                          <>
+                            <button className="btn small" data-tip={t('bud_approve_tip')} onClick={() => act(b.id, 'approve')}>{t('approve')}</button>
+                            <button className="btn small ghost" data-tip={t('bud_reject_tip')} onClick={() => withReason(b.id, 'reject', 'bud_reject_prompt')}>{t('reject')}</button>
+                            <button className="btn small ghost" data-tip={t('bud_recall_tip')} onClick={() => act(b.id, 'recall')}>↩ {t('bud_recall')}</button>
+                          </>
+                        )}
+                        {b.status === 'APPROVED' && (
+                          <>
+                            <button className="btn small ghost" data-tip={t('bud_revise_tip')} onClick={() => edit(b)}>✎ {t('bud_revise')}</button>
+                            <button className="btn small ghost" data-tip={t('bud_close_tip')} onClick={() => act(b.id, 'close')}>🔒 {t('bud_close')}</button>
+                          </>
+                        )}
+                        {b.status === 'CLOSED' && (
+                          <button className="btn small ghost" data-tip={t('bud_reopen_tip')} onClick={() => withReason(b.id, 'reopen', 'bud_reopen_prompt')}>🔓 {t('bud_reopen')}</button>
+                        )}
+                        <button className="btn small ghost" data-tip={t('bud_history')} onClick={() => toggleHistory(b.id)}>🕘 {t('bud_history_label')}</button>
+                        <button className="btn small ghost" data-tip={t('bud_phasing_tip')} onClick={() => togglePhasing(b.id)}>📅 {t('bud_phasing')}</button>
+                        <button className="btn small ghost" data-tip={t('bud_rollover')} onClick={() => rollover(b.id)}>↪ {t('bud_rollover_label')}</button>
+                      </Actions>
                     </td>
                   )}
                 </tr>
@@ -518,8 +527,8 @@ export default function Budgets() {
                                 <td>{d.title ?? t('bud_calloff')}</td>
                                 <td>{d.category ?? '—'}</td>
                                 <td>{d.departmentCode ?? '—'}</td>
-                                <td className="hint">{fmtDate(d.datedAt)}</td>
-                                <td>{fmtMoney(d.amountMinor, b.currency)}<span className="hint"> · {t(`drill_${d.bucket}`)}</span></td>
+                                <td className="hint nowrap">{fmtDate(d.datedAt)}</td>
+                                <td className="num">{fmtMoney(d.amountMinor, b.currency)}<span className="hint"> · {t(`drill_${d.bucket}`)}</span></td>
                               </tr>
                             ))}
                           </tbody>
@@ -534,14 +543,14 @@ export default function Budgets() {
                       <b>{t('bud_history')}</b>
                       <table style={{ margin: '6px 0' }}>
                         <thead><tr>
-                          <th>{t('date')}</th><th>{t('amount')}</th><th>{t('bud_delta')}</th>
+                          <th>{t('date')}</th><th className="num">{t('amount')}</th><th>{t('bud_delta')}</th>
                           <th>{t('reason')}</th><th>{t('requester')}</th>
                         </tr></thead>
                         <tbody>
                           {history[b.id].map((r: any) => (
                             <tr key={r.id}>
-                              <td className="hint">{fmtDate(r.createdAt)}</td>
-                              <td>{fmtMoney(r.amountAfterMinor, b.currency)}</td>
+                              <td className="hint nowrap">{fmtDate(r.createdAt)}</td>
+                              <td className="num">{fmtMoney(r.amountAfterMinor, b.currency)}</td>
                               <td className={r.deltaMinor != null && r.deltaMinor < 0 ? 'error' : ''}>
                                 {r.deltaMinor == null ? '—' : `${r.deltaMinor > 0 ? '+' : ''}${fmtMoney(r.deltaMinor, b.currency)}`}
                               </td>
@@ -610,7 +619,7 @@ export default function Budgets() {
           <table>
             <thead><tr>
               <th>#</th><th>{t('title')}</th><th>{t('category')}</th><th>{t('department')}</th>
-              <th>{t('date')}</th><th>{t('amount')}</th><th>{t('currency')}</th>
+              <th>{t('date')}</th><th className="num">{t('amount')}</th><th>{t('currency')}</th>
             </tr></thead>
             <tbody>
               {unbudgeted.map((u) => (
@@ -620,8 +629,8 @@ export default function Budgets() {
                   <td>{u.title ?? (u.kind === 'ORDER' ? t('bud_calloff') : '—')}</td>
                   <td>{u.category ?? '—'}</td>
                   <td>{u.departmentCode ?? '—'}</td>
-                  <td className="hint">{fmtDate(u.approvedAt)}</td>
-                  <td>{fmtMoney(u.amountMinor, u.currency)}</td>
+                  <td className="hint nowrap">{fmtDate(u.approvedAt)}</td>
+                  <td className="num">{fmtMoney(u.amountMinor, u.currency)}</td>
                   {/* a non-AZN order can never hit an AZN budget — that is why it is here */}
                   <td className={u.currency !== 'AZN' ? 'error' : 'hint'}>{u.currency}</td>
                 </tr>

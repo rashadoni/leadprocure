@@ -103,8 +103,8 @@ export function ChannelsCard({ isAdmin }: { isAdmin: boolean }) {
                   <div style={{ fontWeight: 600 }}>{t(`ch_${c.channel}`)}</div>
                   <div className="hint">
                     {c.connected
-                      ? <span className="badge APPROVED">✓ {t('ch_connected')}</span>
-                      : <span className="badge" style={{ opacity: 0.6 }}>{t('ch_not_connected')}</span>}
+                      ? <span className="badge is-good">✓ {t('ch_connected')}</span>
+                      : <span className="badge is-neutral">{t('ch_not_connected')}</span>}
                     {c.connected ? ` · ${c.channel === 'WHATSAPP'
                       ? (c.config.verifiedName || c.config.displayPhone || t('ch_wa_meta'))
                       : (c.config.from || '')}` : ''}
