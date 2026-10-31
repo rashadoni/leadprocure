@@ -191,3 +191,118 @@ describe('budget rollup: settled obligation periods and department isolation', (
     expect(await rollup({ year: 2034 }, other)).toEqual([]);
   });
 });
+
+// The org-wide plan (no department) is MATCHED_CTE's last resort, so its settlement follows
+// the same test as its commitment: the invoice's OWN department has no plan for the day —
+// an ancestor's plan does not stand in, because matching never walks up the tree — and the
+// plan's category claims it. Its own orgs and departments, so the matrix above is untouched.
+describe('budget rollup: settlement of the org-wide plan', () => {
+  let app: INestApplication, db: Client;
+  const tag = randomUUID().slice(0, 8);
+  const http = () => request(app.getHttpServer());
+  const bearer = (token: string) => ['Authorization', `Bearer ${token}`] as [string, string];
+  let buyer: string, approver: string, supplier: string, supplierOrg: string;
+  let top: string, mid: string, leaf: string;
+  const rollup = async (query: Record<string, unknown>) =>
+    (await http().get('/budgets/rollup').query(query).set(...bearer(buyer)).expect(200)).body as any[];
+  const dep = (rows: any[], id: string | null) => {
+    const found = rows.find((r: any) => r.departmentId === id);
+    expect(found).toBeTruthy();
+    return found;
+  };
+  const budget = async (departmentId: string | null, year: number, category: string) => {
+    const created = await http().post('/budgets').set(...bearer(buyer)).send({
+      name: `Org ${tag} ${departmentId ?? 'org'} ${year} ${category}`, category,
+      ...(departmentId ? { departmentId } : {}),
+      periodYear: year, periodType: 'YEAR', amountMinor: 100_000_000,
+    }).expect(201);
+    await http().post(`/budgets/${created.body.id}/submit`).set(...bearer(buyer)).expect(201);
+    await http().post(`/budgets/${created.body.id}/approve`).set(...bearer(approver)).expect(201);
+  };
+  // Real procurement through to a settled invoice. Only the obligation date is moved, and
+  // the order is dated far outside every selection so it cannot pick the period instead.
+  const settled = async (amount: number, departmentId: string, category: string, date: string) => {
+    const req = (await http().post('/requests').set(...bearer(buyer)).send({
+      title: `Org settle ${tag} ${amount}`, departmentId, category,
+      items: [{ name: 'Paper', qty: 1, estUnitPriceMinor: amount, vatRateBp: 0 }],
+    }).expect(201)).body;
+    await http().post(`/requests/${req.id}/submit`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.id}/approve`).set(...bearer(approver)).expect(201);
+    const po = (await http().post(`/orders/direct/from-request/${req.id}`).set(...bearer(buyer))
+      .send({ supplierOrgId: supplierOrg }).expect(201)).body;
+    await http().post(`/orders/${po.id}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
+    for (const status of ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED']) {
+      await http().post(`/orders/${po.id}/status`).set(...bearer(supplier)).send({ status }).expect(201);
+    }
+    await http().post(`/orders/${po.id}/receipts`).set(...bearer(buyer))
+      .send({ items: [{ poItemId: po.items[0].id, qty: 1 }] }).expect(201);
+    const inv = (await http().post(`/invoices/from-po/${po.id}`).set(...bearer(supplier))
+      .send({ items: [{ poItemId: po.items[0].id, qty: 1, unitPriceMinor: amount }] }).expect(201)).body;
+    expect(inv.status).toBe('MATCHED');
+    await http().post(`/invoices/${inv.id}/approve`).set(...bearer(buyer)).expect(201);
+    await http().post(`/invoices/${inv.id}/pay`).set(...bearer(buyer)).expect(201);
+    await db.query('UPDATE procurement_requests SET approved_at = $2 WHERE id = $1', [req.id, date]);
+    await db.query("UPDATE purchase_orders SET issued_at = '2040-01-01T00:00:00Z', created_at = '2040-01-01T00:00:00Z' WHERE id = $1", [po.id]);
+  };
+
+  beforeAll(async () => {
+    const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = mod.createNestApplication();
+    app.use(cookieParser());
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    await app.init();
+    db = new Client({ connectionString: process.env.DATABASE_OWNER_URL ?? process.env.DATABASE_URL });
+    await db.connect();
+    const register = async (kind: string, suffix: string) => (await http().post(`/auth/register/${kind}`).send({
+      legalName: `Org ${suffix} ${tag}`, email: `org-${suffix}-${tag}@t.test`, password: 'password123', fullName: suffix,
+    }).expect(201)).body;
+    buyer = (await register('buyer', 'buyer')).accessToken;
+    const sup = await register('supplier', 'supplier');
+    supplier = sup.accessToken; supplierOrg = sup.org.id;
+    approver = await addApprover(app, buyer, tag);
+    await http().put('/requests/method-policies').set(...bearer(buyer))
+      .send({ policies: [{ category: '*', minAmountMinor: 0, maxAmountMinor: null, method: 'DIRECT' }] }).expect(200);
+    await http().post(`/suppliers/${supplierOrg}/invite`).set(...bearer(buyer)).expect(201);
+    const rel = (await http().get('/suppliers').set(...bearer(buyer)).expect(200)).body
+      .find((r: any) => r.supplier_org_id === supplierOrg);
+    await http().post(`/suppliers/relationships/${rel.id}/status`).set(...bearer(buyer)).send({ status: 'APPROVED' }).expect(201);
+    top = (await http().post('/departments').set(...bearer(buyer)).send({ code: `T-${tag}` }).expect(201)).body.id;
+    mid = (await http().post('/departments').set(...bearer(buyer)).send({ code: `M-${tag}`, parentId: top }).expect(201)).body.id;
+    leaf = (await http().post('/departments').set(...bearer(buyer)).send({ code: `L-${tag}`, parentId: mid }).expect(201)).body.id;
+    await budget(mid, 2034, '*');       // an ancestor of leaf has a plan; leaf itself has none
+    await budget(null, 2034, '*');      // and this is the plan leaf's request actually matched
+    await budget(null, 2035, 'FACILITIES'); // claims only its own category
+    await settled(1300, leaf, '*', '2034-06-15T00:00:00Z');
+    await settled(2600, top, 'IT', '2035-06-15T00:00:00Z');
+  }, 60000);
+
+  afterAll(async () => {
+    if (db) {
+      await db.query('DELETE FROM organizations WHERE legal_name LIKE $1', [`Org %${tag}`]);
+      await db.end();
+    }
+    if (app) await app.close();
+  });
+
+  it('reports settlement on the plan that carried the commitment, not only on an ancestor', async () => {
+    const rows = await rollup({ year: 2034, periodType: 'YEAR' });
+    // leaf has no plan, so MATCHED_CTE charged its commitment to the org-wide plan; the
+    // settlement now stands beside it instead of reading 0.
+    expect(dep(rows, null).usedMinor).toBe(1300);
+    expect(dep(rows, null).paidMinor).toBe(1300);
+    // The department tree is unchanged: an ancestor whose own period covers the day still
+    // reports its units' settlement.
+    expect(dep(rows, mid).paidMinor).toBe(1300);
+    expect(dep(rows, top).paidMinor).toBe(1300);
+    expect(rows.find((r: any) => r.departmentId === leaf)).toBeFalsy();
+  });
+
+  it('leaves an obligation the org-wide plan never claimed outside it', async () => {
+    const rows = await rollup({ year: 2035, periodType: 'YEAR' });
+    expect(dep(rows, null).usedMinor).toBe(0);
+    expect(dep(rows, null).paidMinor).toBe(0);
+    const outside = (await http().get('/budgets/unbudgeted').query({ from: '2035-01-01', to: '2035-12-31' })
+      .set(...bearer(buyer)).expect(200)).body;
+    expect(outside.map((r: any) => [r.category, r.amountMinor])).toEqual([['IT', 2600]]);
+  });
+});

@@ -630,19 +630,24 @@ export class BudgetsService {
       `WITH dated_paid AS (
          SELECT i.department_id, i.currency, i.gross_minor,
                 CASE WHEN r.status = 'APPROVED' AND r.approved_at IS NOT NULL AND r.currency = o.currency
-                     THEN r.approved_at ELSE COALESCE(o.issued_at, o.created_at) END AS budget_at
+                     THEN r.approved_at ELSE COALESCE(o.issued_at, o.created_at) END AS budget_at,
+                -- The same split as matched / matched_orders: a request dates and classifies
+                -- its own spend, while a call-off nobody classified carries no category and
+                -- only a category-agnostic plan ('*') may claim it.
+                CASE WHEN r.status = 'APPROVED' AND r.approved_at IS NOT NULL AND r.currency = o.currency
+                     THEN r.category ELSE NULL END AS category
          FROM invoices i
          JOIN purchase_orders o ON o.id = i.po_id
          LEFT JOIN procurement_requests r ON r.id = o.request_id
          WHERE i.status = 'PAID' AND ($3::uuid IS NULL OR i.department_id = $3)
        )
-       SELECT department_id, currency,
+       SELECT department_id, currency, category,
               to_char(budget_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS budget_day,
               sum(gross_minor)::bigint AS paid
        FROM dated_paid
        WHERE budget_at >= ($1::date::timestamp AT TIME ZONE 'UTC')
          AND budget_at < (($2::date + 1)::timestamp AT TIME ZONE 'UTC')
-       GROUP BY department_id, currency, to_char(budget_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
+       GROUP BY department_id, currency, category, to_char(budget_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
       [budgets.reduce((min: string, b: any) => b.periodStart < min ? b.periodStart : min, budgets[0].periodStart),
        budgets.reduce((max: string, b: any) => b.periodEnd > max ? b.periodEnd : max, budgets[0].periodEnd),
        filter.scopeDepartmentId ?? null],
@@ -650,24 +655,33 @@ export class BudgetsService {
     const covers = (key: string, day: string) => !!paidWindows.get(key)?.some(
       (window) => day >= window.from && day <= window.to,
     );
+    // The org-wide plans in this selection, with the category each one claims. This row is
+    // not an ancestor of anything, so it is the only one that needs MATCHED_CTE's own
+    // test — period AND category — rather than the department tree's period-only rule.
+    const orgPlans = budgets
+      .filter((b: any) => !b.departmentId)
+      .map((b: any) => ({ from: b.periodStart, to: b.periodEnd, category: b.category }));
+    const orgCarried = (day: string, category: string | null) => orgPlans.some(
+      (plan) => day >= plan.from && day <= plan.to && (plan.category === '*' || plan.category === category),
+    );
     for (const row of paid) {
       // Eligibility comes from the invoice department or its ancestors' OWN budgets,
       // never a sibling's period. Once covered, propagate once to each ancestor.
       let covered = false;
+      // Its OWN department decides the org-wide plan's share, because MATCHED_CTE matches
+      // a request's department exactly and never walks up the tree: with no plan of its
+      // own, the request's commitment went to the org-wide plan even when an ancestor has
+      // one, and reporting that plan's settlement as 0 beside its own commitment was wrong.
+      const ownCovered = covers(row.department_id ?? '', row.budget_day);
       for (const key of [row.department_id ?? '', ...ancestors(row.department_id ?? null)]) {
         const cur = byDep.get(key);
         // only AZN settles against an AZN budget; foreign invoices are reported elsewhere
         covered = covered || covers(key, row.budget_day);
         if (cur && row.currency === cur.currency && covered) cur.paidMinor += Number(row.paid);
       }
-      // Same specificity order as MATCHED_CTE, whose last resort is the org-wide plan
-      // (department_id IS NULL): when no department in the chain has a budget for the
-      // period, that plan is what carried the spend, so its settlement belongs there.
-      // Only then — a department that did cover it already took the amount, and adding it
-      // here too would report the same settlement twice.
-      if (!covered && row.department_id) {
+      if (!ownCovered && row.department_id) {
         const org = byDep.get('');
-        if (org && row.currency === org.currency && covers('', row.budget_day)) {
+        if (org && row.currency === org.currency && orgCarried(row.budget_day, row.category ?? null)) {
           org.paidMinor += Number(row.paid);
         }
       }
