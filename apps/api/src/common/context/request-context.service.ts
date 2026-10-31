@@ -58,8 +58,11 @@ export class RequestContextService {
 
   // The acting person, for the paths that authenticate inside the request instead of
   // arriving with a token: register and login. Without it their own audit rows name no
-  // actor, which on a login is the entire content of the record. The GUC matters too —
-  // the SECURITY DEFINER seams read app.actor_id to stamp who decided something.
+  // actor, which on a login is the entire content of the record. What attributes the row
+  // is ctx.actorId — AuditService reads it and passes it to audit_append as a parameter.
+  // The GUC is set for a different reader: the SECURITY DEFINER seams (po_apply_status,
+  // po_amendment_decide) take app.actor_id to stamp who decided something, so the two
+  // ways of knowing the actor cannot drift apart.
   async setActor(actorId: string): Promise<void> {
     const ctx = this.get();
     ctx.actorId = actorId;
