@@ -25,8 +25,10 @@ export default function Contracts() {
     () => api.get('/orders', { params: { page: oPage, pageSize: PAGE_SIZE } }).then((r) => r.data),
     [oPage], { items: [] as any[], total: 0 },
   );
-  const contracts: any[] = contractList.data.items ?? [];
-  const orders: any[] = orderList.data.items ?? [];
+  // A failed page change must not leave the PREVIOUS page's rows sitting under the new
+  // page number: on failure the alert stands alone.
+  const contracts: any[] = contractList.failed ? [] : (contractList.data.items ?? []);
+  const orders: any[] = orderList.failed ? [] : (orderList.data.items ?? []);
   const cTotal: number = contractList.data.total ?? 0;
   const oTotal: number = orderList.data.total ?? 0;
   const load = () => { contractList.reload(); orderList.reload(); };

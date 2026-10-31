@@ -20,7 +20,9 @@ export default function Orders() {
     () => api.get('/orders', { params: { page, pageSize: PAGE_SIZE } }).then((r) => r.data),
     [page], { items: [] as any[], total: 0 },
   );
-  const orders: any[] = orderList.data.items ?? [];
+  // A failed page change must not leave the PREVIOUS page's rows sitting under the new
+  // page number: on failure the alert stands alone.
+  const orders: any[] = orderList.failed ? [] : (orderList.data.items ?? []);
   const total: number = orderList.data.total ?? 0;
   const load = () => orderList.reload();
 

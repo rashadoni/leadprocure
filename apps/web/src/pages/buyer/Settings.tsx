@@ -98,7 +98,13 @@ export default function Settings() {
       }))
       .sort((a, b) => a.min - b.min),
   );
-  const activeChainKey = Object.entries(CHAIN_PRESETS).find(([, pr]) => chainSig(pr.policies) === chainSig(approvals))?.[0];
+  // Only match presets against a chain we actually HAVE. The p0 preset is the empty
+  // chain, so a failed GET would badge "no approvals" as the active one, leave it
+  // unclickable, and make one click on the real chain a PUT that overwrites it.
+  const chainKnown = !approvalList.loading && !approvalList.failed;
+  const activeChainKey = chainKnown
+    ? Object.entries(CHAIN_PRESETS).find(([, pr]) => chainSig(pr.policies) === chainSig(approvals))?.[0]
+    : undefined;
 
   // Explicit save. These fields can stop spending across the company; saving them on blur,
   // the way they behaved before, was far too quiet for what they do.
@@ -497,7 +503,7 @@ export default function Settings() {
                 const active = activeChainKey === key;
                 return (
                   <div key={key} role="button" tabIndex={0}
-                    onClick={() => !active && setChain(key)}
+                    onClick={() => chainKnown && !active && setChain(key)}
                     onKeyDown={(e) => e.key === 'Enter' && !active && setChain(key)}
                     style={{
                       cursor: active ? 'default' : 'pointer', minWidth: 220, flex: '1 1 220px', maxWidth: 340,

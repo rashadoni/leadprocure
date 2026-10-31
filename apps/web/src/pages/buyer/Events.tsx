@@ -22,7 +22,9 @@ export default function Events() {
     [page],
     { items: [] as any[], total: 0 },
   );
-  const rows: any[] = events.data.items ?? [];
+  // A failed page change must not leave the PREVIOUS page's rows sitting under the new
+  // page number: on failure the alert stands alone.
+  const rows: any[] = events.failed ? [] : (events.data.items ?? []);
   return (
     <>
       <h1>{t('events')}</h1>

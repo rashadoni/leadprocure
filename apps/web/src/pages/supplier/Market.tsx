@@ -18,7 +18,9 @@ export default function Market() {
     [page],
     { items: [] as any[], total: 0 },
   );
-  const rows: any[] = market.data.items ?? [];
+  // A failed page change must not leave the PREVIOUS page's rows sitting under the new
+  // page number: on failure the alert stands alone.
+  const rows: any[] = market.failed ? [] : (market.data.items ?? []);
   return (
     <>
       <h1>{t('market')}</h1>

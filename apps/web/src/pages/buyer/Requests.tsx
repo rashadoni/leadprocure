@@ -40,7 +40,9 @@ export default function Requests() {
       .then((r) => r.data),
     [q, page, depFilter], { items: [] as any[], total: 0 },
   );
-  const rows: any[] = requests.data.items ?? [];
+  // A failed page change must not leave the PREVIOUS page's rows sitting under the new
+  // page number: on failure the alert stands alone.
+  const rows: any[] = requests.failed ? [] : (requests.data.items ?? []);
   const total: number = requests.data.total ?? 0;
   const load = () => requests.reload();
 

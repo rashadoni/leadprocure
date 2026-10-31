@@ -51,6 +51,8 @@ export default function Dashboard() {
   return (
     <>
       <h1>{t('dashboard')}</h1>
+      {/* a refresh that failed after the page was drawn: the figures below are stale */}
+      <ListState of={{ loading: false, failed: kpi.failed, reload: kpi.reload }} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
         {cards.map((c) => (
           <div className="card" key={c.label} style={{ marginBottom: 0 }}>
