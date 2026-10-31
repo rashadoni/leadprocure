@@ -7,15 +7,16 @@
 # overlay closes that gap the same way `minio` already does it in the base file: a pinned
 # `image:` plus a pull policy, so Compose neither builds nor fetches anything.
 #
-# Full procedure, preconditions and rollback: docs/prod-release-path.md.
-#
-#   RELEASE_SHA=<full 40-char SHA> docker compose -p leadprocure-prod \
-#     -f docker-compose.prod.yml -f docker-compose.release.yml \
-#     --env-file ./.env.prod up -d --no-build --no-deps api web
+# Full procedure, preconditions and rollback: docs/prod-release-path.md, step 6. Take the
+# exact invocation from there rather than improvising one — this pair of files has to be
+# read from a checkout of the RELEASED SHA, while `.env.prod` stays the live one in the
+# worktree the running containers are labelled with, and the two are not the same place.
 #
 # `--no-deps` is not optional: without it Compose also acts on postgres/createbuckets and
 # wants to replace the running MinIO image over its existing volume, which infra/DEPLOY.md
-# forbids. `--no-build` keeps the `build:` sections in the base file inert.
+# forbids. `--no-build` keeps the `build:` sections in the base file inert. `-p
+# leadprocure-prod` is what makes this replace the running containers instead of starting
+# a second stack beside them.
 #
 # The tags are the ones scripts/release/build-images.sh produces and
 # `manifest.cjs verify-loaded` checks, including the org.opencontainers.image.revision
