@@ -286,7 +286,7 @@ export default function EventDetail() {
                             {f.has_bid && !f.enrolled && <span className="badge is-good">✓ {t('fu_has_bid')}</span>}
                             {!f.has_bid && !f.enrolled && <span className="badge" style={{ opacity: 0.6 }}>{t('fu_NOT_ENROLLED')}</span>}
                             {f.enrolled && (
-                              <span className={`badge ${f.status === 'RESPONDED' ? 'is-good' : f.status === 'ACTIVE' ? 'is-progress' : 'is-bad'}`}
+                              <span className={`badge ${f.status === 'RESPONDED' ? 'is-good' : f.status === 'ACTIVE' ? 'is-progress' : 'is-bad'} ${f.status}`}
                                 data-tip={t(`tip_fu_${f.status}`) !== `tip_fu_${f.status}` ? t(`tip_fu_${f.status}`) : undefined}>
                                 {f.status === 'RESPONDED' ? '✓ ' : ''}{t(`fu_${f.status}`)}
                               </span>

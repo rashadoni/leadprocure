@@ -451,7 +451,7 @@ export default function Budgets() {
                 <Fragment key={b.id}>
                 <tr>
                   <td>{b.name}</td>
-                  <td><span className={`badge ${statusGroup(b.status)}`} data-tip={t(`bud_st_${b.status}`)}>{t(`bud_status_${b.status}`)}</span></td>
+                  <td><span className={`badge ${statusGroup(b.status)} ${b.status}`} data-tip={t(`bud_st_${b.status}`)}>{t(`bud_status_${b.status}`)}</span></td>
                   <td>{b.category === '*' ? '—' : b.category}</td>
                   <td data-tip={b.departmentName || undefined}>{b.departmentCode ?? t('bud_org_wide')}</td>
                   <td data-tip={`${b.periodStart} → ${b.periodEnd}`}>{b.periodLabel}</td>
