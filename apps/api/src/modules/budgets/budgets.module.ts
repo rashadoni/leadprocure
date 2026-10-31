@@ -630,34 +630,100 @@ export class BudgetsService {
       `WITH dated_paid AS (
          SELECT i.department_id, i.currency, i.gross_minor,
                 CASE WHEN r.status = 'APPROVED' AND r.approved_at IS NOT NULL AND r.currency = o.currency
-                     THEN r.approved_at ELSE COALESCE(o.issued_at, o.created_at) END AS budget_at
+                     THEN r.approved_at ELSE COALESCE(o.issued_at, o.created_at) END AS budget_at,
+                -- The same split as matched / matched_orders: a request dates and classifies
+                -- its own spend, while a call-off nobody classified carries no category and
+                -- only a category-agnostic plan ('*') may claim it.
+                CASE WHEN r.status = 'APPROVED' AND r.approved_at IS NOT NULL AND r.currency = o.currency
+                     THEN r.category ELSE NULL END AS category
          FROM invoices i
          JOIN purchase_orders o ON o.id = i.po_id
          LEFT JOIN procurement_requests r ON r.id = o.request_id
-         WHERE i.status = 'PAID' AND ($3::uuid IS NULL OR i.department_id = $3)
+         -- Only obligations MATCHED_CTE still counts, by its own two tests. Its matched
+         -- branch counts the REQUEST, whatever became of its orders — a cancelled order
+         -- releases the actual and the estimate takes the commitment back (it says so
+         -- above), so that settlement must keep standing beside it. Its matched_orders
+         -- branch counts the ORDER, and only a live one that no same-currency request
+         -- already speaks for. What neither counts carries no commitment, is absent from
+         -- the unbudgeted report too, and its settlement must not stand against a plan:
+         -- a withdrawn call-off, and an order whose request was cancelled (the app
+         -- refuses to cancel a request that has a live order, but an order can still be
+         -- drawn from a contract afterwards).
+         WHERE i.status = 'PAID'
+           AND ((r.status = 'APPROVED' AND r.approved_at IS NOT NULL)
+                OR (o.status NOT IN ('CANCELLED','REJECTED')
+                    AND (o.request_id IS NULL OR o.currency <> r.currency)))
+           AND ($3::uuid IS NULL OR i.department_id = $3)
+       ),
+       -- Which plan carried this obligation, by MATCHED_CTE's own choice (same
+       -- predicates, same ORDER BY) over EVERY plan of the org — not only the ones
+       -- this report selected, because the commitment was charged without knowing
+       -- about any filter. Only the org-wide row needs it; the department tree keeps
+       -- its period-only rule, which is what the accepted matrix reports.
+       settled AS (
+         SELECT d.*, mb.budget_id
+         -- Narrowed to the reported window BEFORE the lookup: one plan search per
+         -- settlement in the period, not per settlement the org has ever made.
+         FROM (SELECT * FROM dated_paid
+               WHERE budget_at >= ($1::date::timestamp AT TIME ZONE 'UTC')
+                 AND budget_at < (($2::date + 1)::timestamp AT TIME ZONE 'UTC')) d
+         LEFT JOIN LATERAL (
+           SELECT b.id AS budget_id
+           FROM budgets b
+           WHERE b.status IN ('APPROVED','CLOSED')
+             AND b.currency = d.currency
+             AND d.budget_at >= b.period_start::timestamptz
+             AND d.budget_at < (b.period_end + 1)::timestamptz
+             AND (b.department_id IS NULL OR b.department_id = d.department_id)
+             AND (b.category = '*' OR b.category = d.category)
+           ORDER BY (b.department_id IS NOT NULL) DESC, (b.category <> '*') DESC,
+                    b.period_start DESC, b.id
+           LIMIT 1
+         ) mb ON true
        )
-       SELECT department_id, currency,
+       SELECT department_id, currency, budget_id,
               to_char(budget_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS budget_day,
               sum(gross_minor)::bigint AS paid
-       FROM dated_paid
-       WHERE budget_at >= ($1::date::timestamp AT TIME ZONE 'UTC')
-         AND budget_at < (($2::date + 1)::timestamp AT TIME ZONE 'UTC')
-       GROUP BY department_id, currency, to_char(budget_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
+       FROM settled
+       GROUP BY department_id, currency, budget_id, to_char(budget_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
       [budgets.reduce((min: string, b: any) => b.periodStart < min ? b.periodStart : min, budgets[0].periodStart),
        budgets.reduce((max: string, b: any) => b.periodEnd > max ? b.periodEnd : max, budgets[0].periodEnd),
        filter.scopeDepartmentId ?? null],
     );
+    const covers = (key: string, day: string) => !!paidWindows.get(key)?.some(
+      (window) => day >= window.from && day <= window.to,
+    );
+    // The org-wide plans this report is showing. The '' row is their sum, so the
+    // settlement that belongs on it is the settlement of the obligations they carried.
+    const selectedOrgPlans = new Set<string>(
+      budgets.filter((b: any) => !b.departmentId).map((b: any) => String(b.id)),
+    );
     for (const row of paid) {
-      // Eligibility comes from the invoice department or its ancestors' OWN budgets,
+      // Departments: eligibility comes from the department's or an ancestor's OWN budgets,
       // never a sibling's period. Once covered, propagate once to each ancestor.
       let covered = false;
       for (const key of [row.department_id ?? '', ...ancestors(row.department_id ?? null)]) {
+        if (!key) continue; // '' is the org-wide plan, not a department — see below
         const cur = byDep.get(key);
         // only AZN settles against an AZN budget; foreign invoices are reported elsewhere
-        covered = covered || !!paidWindows.get(key)?.some(
-          (window) => row.budget_day >= window.from && row.budget_day <= window.to,
-        );
+        covered = covered || covers(key, row.budget_day);
         if (cur && row.currency === cur.currency && covered) cur.paidMinor += Number(row.paid);
+      }
+      // The org-wide row is nobody's ancestor, so a period that merely overlaps says
+      // nothing: it is credited exactly when the plan that carried this obligation IS one
+      // of its plans. Anything a department plan carried, or that no plan carried at all
+      // (the unbudgeted report's job), leaves it alone. One settlement can still appear on
+      // several rows of one report — a department, its ancestors, and this one — as the
+      // plan figures do, and each row counts it at most once. Only this row's appearance
+      // means "the plan here carried it"; a department's means "my period covers it",
+      // which is the looser rule the accepted matrix reports (see the 2036 case).
+      // Paid is also not comparable to used as a number: with the default EXCLUSIVE
+      // vat_mode an order's total is net while an invoice's gross carries VAT, so 18%
+      // spend settles at about 1.18× its actual (INCLUSIVE orders settle at about 1×).
+      const org = byDep.get('');
+      if (org && row.budget_id && selectedOrgPlans.has(String(row.budget_id))
+          && row.currency === org.currency) {
+        org.paidMinor += Number(row.paid);
       }
     }
 

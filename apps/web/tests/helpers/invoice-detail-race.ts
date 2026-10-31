@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
-import { verifyInvoiceListRetry } from './invoice-list-retry';
+import { verifyInvoiceListRetry, verifyRefreshFailureDuringDetail } from './invoice-list-retry';
 
 const renderFinished = (page: Page) => page.evaluate(() => new Promise<void>(resolve =>
   requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
@@ -151,6 +151,7 @@ export async function verifyInvoiceDetailConcurrency({ page, supplierPage, call,
     await expect(supplied.locator('.badge.PAID')).toBeVisible();
     await verifyNewerServerDetail({page,call,buyerToken,invoice:newer,poNo:po.po_no});
     await verifyInvoiceListRetry({page, supplierPage, invoiceNo:invoice.invoice_no, poNo:po.po_no});
+    await verifyRefreshFailureDuringDetail({page, call, buyerToken, approverToken, supplierToken, supplierOrgId, tag});
   });
 }
 

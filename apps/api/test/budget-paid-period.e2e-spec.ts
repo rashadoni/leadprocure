@@ -20,20 +20,22 @@ describe('budget rollup: settled obligation periods and department isolation', (
   let before: any[];
   const rollup = async (query: Record<string, unknown>, token = buyer) =>
     (await http().get('/budgets/rollup').query(query).set(...bearer(token)).expect(200)).body as any[];
-  const row = (rows: any[], id: string) => {
+  const row = (rows: any[], id: string | null) => {
     const found = rows.find((r: any) => r.departmentId === id);
     expect(found).toBeTruthy();
     return found;
   };
-  const budget = async (departmentId: string, year: number, month?: number) => {
+  // departmentId null = the org-wide ceiling (no department), MATCHED_CTE's last resort.
+  const budget = async (departmentId: string | null, year: number, month?: number) => {
     const created = await http().post('/budgets').set(...bearer(buyer)).send({
-      name: `Paid ${tag} ${departmentId} ${year} ${month ?? 'year'}`, category: month ? 'MONTHLY' : '*', departmentId,
+      name: `Paid ${tag} ${departmentId ?? 'org'} ${year} ${month ?? 'year'}`, category: month ? 'MONTHLY' : '*',
+      ...(departmentId ? { departmentId } : {}),
       periodYear: year, periodType: month ? 'MONTH' : 'YEAR', ...(month ? { periodMonth: month } : {}), amountMinor: 100_000_000,
     }).expect(201);
     await http().post(`/budgets/${created.body.id}/submit`).set(...bearer(buyer)).expect(201);
     await http().post(`/budgets/${created.body.id}/approve`).set(...bearer(approver)).expect(201);
   };
-  const invoice = async (amount: number, departmentId: string, date: string, currency = 'AZN', catalog = false, noIssue = false) => {
+  const invoice = async (amount: number, departmentId: string | null, date: string, currency = 'AZN', catalog = false, noIssue = false) => {
     let po: any;
     let requestId: string | undefined;
     if (catalog) {
@@ -106,6 +108,7 @@ describe('budget rollup: settled obligation periods and department isolation', (
     await budget(child, 2034); await budget(child, 2035);
     await budget(child, 2034, 1); await budget(child, 2034, 3);
     await budget(sibling, 2034); await budget(sibling, 2034, 1);
+    await budget(null, 2034); // org-wide: the only plan covering the parent department
     await invoice(1100, child, '2034-01-31T23:59:59.999Z');
     await invoice(2200, child, '2034-02-01T00:00:00Z');
     await invoice(3300, child, '2034-03-31T23:59:59.999Z');
@@ -116,6 +119,8 @@ describe('budget rollup: settled obligation periods and department isolation', (
     await invoice(8800, sibling, '2034-03-15T00:00:00Z'); // sibling has no March plan
     await invoice(900, child, '2034-03-15T00:00:00Z', 'AZN', true);
     await invoice(1000, child, '2034-01-15T00:00:00Z', 'AZN', true, true);
+    // parent has no budget of its own, so only the org-wide plan carries this one
+    await invoice(1300, parent, '2034-06-15T00:00:00Z');
     before = await rollup({ year: 2034, periodType: 'YEAR' });
     for (const id of invoices) await http().post(`/invoices/${id}/pay`).set(...bearer(buyer)).expect(201);
     const email = `paid-user-${tag}@t.test`;
@@ -166,11 +171,274 @@ describe('budget rollup: settled obligation periods and department isolation', (
     expect(row(march, child).paidMinor).toBe(4200); // 3300 request approval + 900 catalog issue, not its 2035 creation
   });
 
+  it('settles against the org-wide plan when no department in the chain has a budget', async () => {
+    const current = await rollup({ year: 2034, periodType: 'YEAR' });
+    // The same spend is this plan's commitment, so reporting 0 paid beside it was wrong.
+    expect(row(current, null).usedMinor).toBe(1300);
+    expect(row(current, null).paidMinor).toBe(1300);
+    expect(row(before, null).paidMinor).toBe(0);
+    // and it is counted once: the department chain must not also absorb it
+    expect(row(current, parent).paidMinor).toBe(29400);
+    expect(row(current, child).paidMinor).toBe(12900);
+    expect(row(current, sibling).paidMinor).toBe(16500);
+  });
+
   it('does not leak sibling settlement through a shared ancestor or another buyer', async () => {
     const scoped = await rollup({ year: 2034, periodType: 'YEAR' }, user);
     expect(scoped.map((r: any) => r.departmentId).sort()).toEqual([child, parent].sort());
     expect(row(scoped, child).paidMinor).toBe(12900);
     expect(row(scoped, parent).paidMinor).toBe(12900);
     expect(await rollup({ year: 2034 }, other)).toEqual([]);
+  });
+});
+
+// The org-wide plan (no department) is MATCHED_CTE's last resort, and its settlement is
+// reported by the same choice: credited exactly when the plan that CARRIED the obligation
+// is one of this report's org-wide plans — not when a period happens to overlap — and only
+// while MATCHED_CTE still counts that obligation at all. The department tree keeps its own
+// period-based rule, under the same condition. Its own orgs and departments, so the matrix
+// above is untouched.
+describe('budget rollup: settlement of the org-wide plan', () => {
+  let app: INestApplication, db: Client;
+  const tag = randomUUID().slice(0, 8);
+  const http = () => request(app.getHttpServer());
+  const bearer = (token: string) => ['Authorization', `Bearer ${token}`] as [string, string];
+  let buyer: string, approver: string, supplier: string, supplierOrg: string;
+  let top: string, mid: string, leaf: string, callOffNo: string;
+  const rollup = async (query: Record<string, unknown>) =>
+    (await http().get('/budgets/rollup').query(query).set(...bearer(buyer)).expect(200)).body as any[];
+  const dep = (rows: any[], id: string | null) => {
+    const found = rows.find((r: any) => r.departmentId === id);
+    expect(found).toBeTruthy();
+    return found;
+  };
+  const budget = async (departmentId: string | null, year: number, category: string, month?: number) => {
+    const created = await http().post('/budgets').set(...bearer(buyer)).send({
+      name: `Org ${tag} ${departmentId ?? 'org'} ${year} ${category} ${month ?? 'year'}`, category,
+      ...(departmentId ? { departmentId } : {}),
+      periodYear: year, periodType: month ? 'MONTH' : 'YEAR',
+      ...(month ? { periodMonth: month } : {}), amountMinor: 100_000_000,
+    }).expect(201);
+    await http().post(`/budgets/${created.body.id}/submit`).set(...bearer(buyer)).expect(201);
+    await http().post(`/budgets/${created.body.id}/approve`).set(...bearer(approver)).expect(201);
+  };
+  // Real procurement through to a settled invoice. Only the obligation date is moved, and
+  // the order is dated far outside every selection so it cannot pick the period instead.
+  const settled = async (amount: number, departmentId: string, category: string, date: string) => {
+    const req = (await http().post('/requests').set(...bearer(buyer)).send({
+      title: `Org settle ${tag} ${amount}`, departmentId, category,
+      items: [{ name: 'Paper', qty: 1, estUnitPriceMinor: amount, vatRateBp: 0 }],
+    }).expect(201)).body;
+    await http().post(`/requests/${req.id}/submit`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.id}/approve`).set(...bearer(approver)).expect(201);
+    const po = (await http().post(`/orders/direct/from-request/${req.id}`).set(...bearer(buyer))
+      .send({ supplierOrgId: supplierOrg }).expect(201)).body;
+    await http().post(`/orders/${po.id}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
+    for (const status of ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED']) {
+      await http().post(`/orders/${po.id}/status`).set(...bearer(supplier)).send({ status }).expect(201);
+    }
+    await http().post(`/orders/${po.id}/receipts`).set(...bearer(buyer))
+      .send({ items: [{ poItemId: po.items[0].id, qty: 1 }] }).expect(201);
+    const inv = (await http().post(`/invoices/from-po/${po.id}`).set(...bearer(supplier))
+      .send({ items: [{ poItemId: po.items[0].id, qty: 1, unitPriceMinor: amount }] }).expect(201)).body;
+    expect(inv.status).toBe('MATCHED');
+    await http().post(`/invoices/${inv.id}/approve`).set(...bearer(buyer)).expect(201);
+    await http().post(`/invoices/${inv.id}/pay`).set(...bearer(buyer)).expect(201);
+    await db.query('UPDATE procurement_requests SET approved_at = $2 WHERE id = $1', [req.id, date]);
+    await db.query("UPDATE purchase_orders SET issued_at = '2040-01-01T00:00:00Z', created_at = '2040-01-01T00:00:00Z' WHERE id = $1", [po.id]);
+  };
+
+  // A catalog call-off placed by an admin with no home department: no request, so no
+  // category either, and the invoice carries no department. Dated by order issue.
+  const callOff = async (amount: number, date: string) => {
+    const cat = (await http().post('/catalogs').set(...bearer(buyer))
+      .send({ supplierOrgId: supplierOrg, title: `Org call-off ${tag} ${amount}`, currency: 'AZN' }).expect(201)).body;
+    const item = (await http().post(`/catalogs/${cat.id}/items`).set(...bearer(buyer))
+      .send({ name: 'Paper', unitPriceMinor: amount, vatRateBp: 0 }).expect(201)).body.items[0];
+    await http().post(`/catalogs/${cat.id}/activate`).set(...bearer(buyer)).expect(201);
+    const order = (await http().post(`/catalogs/${cat.id}/order`).set(...bearer(buyer))
+      .send({ items: [{ catalogItemId: item.id, qty: 1 }] }).expect(201)).body;
+    const po = (await http().get(`/orders/${order.id}`).set(...bearer(buyer)).expect(200)).body;
+    expect(po.department_id ?? null).toBeNull();
+    await http().post(`/orders/${po.id}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
+    for (const status of ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED']) {
+      await http().post(`/orders/${po.id}/status`).set(...bearer(supplier)).send({ status }).expect(201);
+    }
+    await http().post(`/orders/${po.id}/receipts`).set(...bearer(buyer))
+      .send({ items: [{ poItemId: po.items[0].id, qty: 1 }] }).expect(201);
+    const inv = (await http().post(`/invoices/from-po/${po.id}`).set(...bearer(supplier))
+      .send({ items: [{ poItemId: po.items[0].id, qty: 1, unitPriceMinor: amount }] }).expect(201)).body;
+    await http().post(`/invoices/${inv.id}/approve`).set(...bearer(buyer)).expect(201);
+    await http().post(`/invoices/${inv.id}/pay`).set(...bearer(buyer)).expect(201);
+    await db.query('UPDATE purchase_orders SET issued_at = $2, created_at = $2 WHERE id = $1', [po.id, date]);
+    return po.po_no as string;
+  };
+
+  // Paid, then the order cancelled: MATCHED_CTE drops such an order from both of its
+  // branches, so it carries no commitment and the unbudgeted report does not list it
+  // either. Invoiced without a receipt, so it is DISPUTED and takes a written override.
+  const cancelledAfterPaying = async (amount: number, date: string) => {
+    const cat = (await http().post('/catalogs').set(...bearer(buyer))
+      .send({ supplierOrgId: supplierOrg, title: `Org cancelled ${tag} ${amount}`, currency: 'AZN' }).expect(201)).body;
+    const item = (await http().post(`/catalogs/${cat.id}/items`).set(...bearer(buyer))
+      .send({ name: 'Paper', unitPriceMinor: amount, vatRateBp: 0 }).expect(201)).body.items[0];
+    await http().post(`/catalogs/${cat.id}/activate`).set(...bearer(buyer)).expect(201);
+    const order = (await http().post(`/catalogs/${cat.id}/order`).set(...bearer(buyer))
+      .send({ items: [{ catalogItemId: item.id, qty: 1 }] }).expect(201)).body;
+    const po = (await http().get(`/orders/${order.id}`).set(...bearer(buyer)).expect(200)).body;
+    await http().post(`/orders/${po.id}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
+    const inv = (await http().post(`/invoices/from-po/${po.id}`).set(...bearer(supplier))
+      .send({ items: [{ poItemId: po.items[0].id, qty: 1, unitPriceMinor: amount }] }).expect(201)).body;
+    expect(inv.status).toBe('DISPUTED'); // nothing was received
+    await http().post(`/invoices/${inv.id}/approve`).set(...bearer(buyer))
+      .send({ reason: 'Paid in advance, order withdrawn afterwards' }).expect(201);
+    await http().post(`/invoices/${inv.id}/pay`).set(...bearer(buyer)).expect(201);
+    await http().post(`/orders/${po.id}/status`).set(...bearer(buyer)).send({ status: 'CANCELLED' }).expect(201);
+    expect((await http().get(`/invoices/${inv.id}`).set(...bearer(buyer)).expect(200)).body.status).toBe('PAID');
+    await db.query('UPDATE purchase_orders SET issued_at = $2, created_at = $2 WHERE id = $1', [po.id, date]);
+  };
+
+  // Paid in advance, then the ORDER withdrawn while its request stays approved: the
+  // commitment returns to the request's estimate, so this settlement must stay reported.
+  const prepaidThenWithdrawn = async (amount: number, departmentId: string, date: string) => {
+    const req = (await http().post('/requests').set(...bearer(buyer)).send({
+      title: `Org withdrawn ${tag} ${amount}`, departmentId,
+      items: [{ name: 'Paper', qty: 1, estUnitPriceMinor: amount, vatRateBp: 0 }],
+    }).expect(201)).body;
+    await http().post(`/requests/${req.id}/submit`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.id}/approve`).set(...bearer(approver)).expect(201);
+    const po = (await http().post(`/orders/direct/from-request/${req.id}`).set(...bearer(buyer))
+      .send({ supplierOrgId: supplierOrg }).expect(201)).body;
+    await http().post(`/orders/${po.id}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
+    const inv = (await http().post(`/invoices/from-po/${po.id}`).set(...bearer(supplier))
+      .send({ items: [{ poItemId: po.items[0].id, qty: 1, unitPriceMinor: amount }] }).expect(201)).body;
+    expect(inv.status).toBe('DISPUTED'); // nothing was received
+    await http().post(`/invoices/${inv.id}/approve`).set(...bearer(buyer))
+      .send({ reason: 'Prepaid, order withdrawn afterwards' }).expect(201);
+    await http().post(`/invoices/${inv.id}/pay`).set(...bearer(buyer)).expect(201);
+    await http().post(`/orders/${po.id}/status`).set(...bearer(buyer)).send({ status: 'CANCELLED' }).expect(201);
+    expect((await http().get(`/requests/${req.id}`).set(...bearer(buyer)).expect(200)).body.status).toBe('APPROVED');
+    await db.query('UPDATE procurement_requests SET approved_at = $2 WHERE id = $1', [req.id, date]);
+  };
+
+  beforeAll(async () => {
+    const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = mod.createNestApplication();
+    app.use(cookieParser());
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    await app.init();
+    db = new Client({ connectionString: process.env.DATABASE_OWNER_URL ?? process.env.DATABASE_URL });
+    await db.connect();
+    const register = async (kind: string, suffix: string) => (await http().post(`/auth/register/${kind}`).send({
+      legalName: `Org ${suffix} ${tag}`, email: `org-${suffix}-${tag}@t.test`, password: 'password123', fullName: suffix,
+    }).expect(201)).body;
+    buyer = (await register('buyer', 'buyer')).accessToken;
+    const sup = await register('supplier', 'supplier');
+    supplier = sup.accessToken; supplierOrg = sup.org.id;
+    approver = await addApprover(app, buyer, tag);
+    await http().put('/requests/method-policies').set(...bearer(buyer))
+      .send({ policies: [{ category: '*', minAmountMinor: 0, maxAmountMinor: null, method: 'DIRECT' }] }).expect(200);
+    await http().post(`/suppliers/${supplierOrg}/invite`).set(...bearer(buyer)).expect(201);
+    const rel = (await http().get('/suppliers').set(...bearer(buyer)).expect(200)).body
+      .find((r: any) => r.supplier_org_id === supplierOrg);
+    await http().post(`/suppliers/relationships/${rel.id}/status`).set(...bearer(buyer)).send({ status: 'APPROVED' }).expect(201);
+    top = (await http().post('/departments').set(...bearer(buyer)).send({ code: `T-${tag}` }).expect(201)).body.id;
+    mid = (await http().post('/departments').set(...bearer(buyer)).send({ code: `M-${tag}`, parentId: top }).expect(201)).body.id;
+    leaf = (await http().post('/departments').set(...bearer(buyer)).send({ code: `L-${tag}`, parentId: mid }).expect(201)).body.id;
+    await budget(mid, 2034, '*');       // an ancestor of leaf has a plan; leaf itself has none
+    await budget(null, 2034, '*');      // and this is the plan leaf's request actually matched
+    await budget(null, 2035, 'FACILITIES'); // claims only its own category
+    await budget(leaf, 2036, 'IT');     // leaf HAS a plan, for another category
+    await budget(null, 2036, '*');      // so this is what an OFFICE obligation lands on
+    await budget(null, 2037, 'FACILITIES'); // and nothing claims an unclassified call-off
+    await budget(leaf, 2038, '*', 3);   // a monthly plan, outside a yearly selection
+    await budget(null, 2038, '*');
+    await budget(null, 2039, '*');      // and nothing is owed on a withdrawn call-off
+    await budget(leaf, 2041, '*');      // while a withdrawn ORDER leaves its request's plan
+    await settled(1300, leaf, '*', '2034-06-15T00:00:00Z');
+    await settled(2600, top, 'IT', '2035-06-15T00:00:00Z');
+    await settled(700, leaf, 'OFFICE', '2036-06-15T00:00:00Z');
+    callOffNo = await callOff(500, '2037-06-15T00:00:00Z');
+    await settled(900, leaf, '*', '2038-03-10T00:00:00Z');
+    await cancelledAfterPaying(400, '2039-06-15T00:00:00Z');
+    await prepaidThenWithdrawn(1100, leaf, '2041-06-15T00:00:00Z');
+  }, 60000);
+
+  afterAll(async () => {
+    if (db) {
+      await db.query('DELETE FROM organizations WHERE legal_name LIKE $1', [`Org %${tag}`]);
+      await db.end();
+    }
+    if (app) await app.close();
+  });
+
+  it('reports settlement on the plan that carried the commitment, not only on an ancestor', async () => {
+    const rows = await rollup({ year: 2034, periodType: 'YEAR' });
+    // leaf has no plan, so MATCHED_CTE charged its commitment to the org-wide plan; the
+    // settlement now stands beside it instead of reading 0.
+    expect(dep(rows, null).usedMinor).toBe(1300);
+    expect(dep(rows, null).paidMinor).toBe(1300);
+    // The department tree is unchanged: an ancestor whose own period covers the day still
+    // reports its units' settlement.
+    expect(dep(rows, mid).paidMinor).toBe(1300);
+    expect(dep(rows, top).paidMinor).toBe(1300);
+    expect(rows.find((r: any) => r.departmentId === leaf)).toBeFalsy();
+  });
+
+  it('leaves an obligation the org-wide plan never claimed outside it', async () => {
+    const rows = await rollup({ year: 2035, periodType: 'YEAR' });
+    expect(dep(rows, null).usedMinor).toBe(0);
+    expect(dep(rows, null).paidMinor).toBe(0);
+    const outside = (await http().get('/budgets/unbudgeted').query({ from: '2035-01-01', to: '2035-12-31' })
+      .set(...bearer(buyer)).expect(200)).body;
+    expect(outside.map((r: any) => [r.category, r.amountMinor])).toEqual([['IT', 2600]]);
+  });
+
+  it('a plan of the department for ANOTHER category does not keep settlement off the org plan', async () => {
+    const rows = await rollup({ year: 2036, periodType: 'YEAR' });
+    // leaf's own plan is IT, the obligation is OFFICE: the category test excludes it, so
+    // MATCHED_CTE charged the org-wide plan — and its settlement belongs there too.
+    expect(dep(rows, null).usedMinor).toBe(700);
+    expect(dep(rows, null).paidMinor).toBe(700);
+    // leaf's own plan carries none of it, and the department tree still reports the
+    // settlement of its own period: that pairing is the accepted convention, not an
+    // oversight, so it is pinned here rather than left to be rediscovered.
+    expect(dep(rows, leaf).usedMinor).toBe(0);
+    expect(dep(rows, leaf).paidMinor).toBe(700);
+  });
+
+  it('does not claim an unclassified call-off for a plan that could not have carried it', async () => {
+    const rows = await rollup({ year: 2037, periodType: 'YEAR' });
+    expect(dep(rows, null).usedMinor).toBe(0);
+    expect(dep(rows, null).paidMinor).toBe(0);
+    const outside = (await http().get('/budgets/unbudgeted').query({ from: '2037-01-01', to: '2037-12-31' })
+      .set(...bearer(buyer)).expect(200)).body;
+    expect(outside.map((r: any) => [r.kind, r.docNo, r.amountMinor])).toEqual([['ORDER', callOffNo, 500]]);
+  });
+
+  it('does not report settlement of an order that carries no commitment at all', async () => {
+    const rows = await rollup({ year: 2039, periodType: 'YEAR' });
+    expect(dep(rows, null).usedMinor).toBe(0);
+    expect(dep(rows, null).paidMinor).toBe(0);
+  });
+
+  it('keeps settlement of a request whose order was withdrawn, because its estimate is', async () => {
+    // A cancelled order releases the actual and the request's estimate takes the
+    // commitment back, so the plan still carries this obligation — and the money that
+    // settled it has to stay reported beside it, or real cash leaves the page.
+    const rows = await rollup({ year: 2041, periodType: 'YEAR' });
+    expect(dep(rows, leaf).committedMinor).toBe(1100);
+    expect(dep(rows, leaf).actualMinor).toBe(0);
+    expect(dep(rows, leaf).paidMinor).toBe(1100);
+  });
+
+  it('does not move settlement onto the org plan because the carrying plan is out of the filter', async () => {
+    // The obligation was charged to leaf's MARCH plan, which a yearly selection leaves out.
+    // An overlapping org-wide year must not pick up settlement it never committed to.
+    const rows = await rollup({ year: 2038, periodType: 'YEAR' });
+    expect(dep(rows, null).usedMinor).toBe(0);
+    expect(dep(rows, null).paidMinor).toBe(0);
+    const march = await rollup({ year: 2038, periodType: 'MONTH' });
+    expect(dep(march, leaf).paidMinor).toBe(900);
   });
 });
