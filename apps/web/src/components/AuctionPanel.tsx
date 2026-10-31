@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, fmtMoney } from '../api/client';
 import { useI18n } from '../i18n';
-import { ListState } from './ListState';
+import { isDenied, ListState } from './ListState';
 
 // Live auction state for both sides. Amounts come from the REST endpoint only;
 // the socket merely signals "state changed" (see backend design).
@@ -13,19 +13,26 @@ export function AuctionPanel({ eventId, onChanged }: { eventId: string; onChange
   // would be bidding against a best price that has already moved. Say when the last
   // refresh did not land.
   const [stale, setStale] = useState(false);
+  // Reverse auction is its own licence key, separate from sourcing.rfq, so an org can
+  // legitimately open a REVERSE event and be denied this endpoint. That answer will not
+  // change on the next poll: show nothing and stop asking, instead of an error banner the
+  // supplier cannot act on and a request every five seconds behind it.
+  const [denied, setDenied] = useState(false);
 
   const load = useCallback(
     () => api.get(`/events/${eventId}/auction/state`)
       .then((r) => { setState(r.data); setStale(false); })
-      .catch(() => setStale(true)),
+      .catch((e: any) => { if (isDenied(e)) setDenied(true); else setStale(true); }),
     [eventId],
   );
   useEffect(() => {
+    if (denied) return;
     load();
     const iv = setInterval(load, 5000); // poll fallback alongside the WS signal
     return () => clearInterval(iv);
-  }, [load]);
+  }, [load, denied]);
 
+  if (denied) return null;
   if (!state) {
     return stale ? (
       <div className="card" style={{ borderColor: 'var(--accent2)' }}>

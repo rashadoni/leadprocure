@@ -87,22 +87,25 @@ test.describe('buyer panel', () => {
   // as "you are not over budget".
   test('a denied optional read stays silent, a broken one speaks up', async () => {
     let status = 403;
-    await page.route('**/budgets', async (route) => {
+    // Match the pathname, not a glob: "**/budgets" also matches the SPA page URL
+    // /buyer/budgets, and fulfilling THAT with JSON would stop the app loading at all.
+    const isBudgets = (url: URL) => url.pathname === '/budgets';
+    await page.route(isBudgets, async (route) => {
       await route.fulfill({ status, contentType: 'application/json', body: '{"message":"no"}' });
     });
-    const denied = page.waitForResponse((r) => r.url().endsWith('/budgets'));
+    const denied = page.waitForResponse((r) => new URL(r.url()).pathname === '/budgets' && r.status() === 403);
     await page.goto('/buyer/dashboard');
     await denied;
     await expect(page.locator('text=AZN').first()).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('alert')).toHaveCount(0);
 
     status = 503;
-    const broken = page.waitForResponse((r) => r.url().endsWith('/budgets'));
+    const broken = page.waitForResponse((r) => new URL(r.url()).pathname === '/budgets' && r.status() === 503);
     await page.goto('/buyer/dashboard');
     await broken;
     await expect(page.getByRole('alert').filter({ hasText: 'Could not load the data.' }))
       .toBeVisible({ timeout: 20_000 });
-    await page.unroute('**/budgets');
+    await page.unroute(isBudgets);
   });
 
   // Fields are addressed by data-testid, not by position: the old `form > input` /

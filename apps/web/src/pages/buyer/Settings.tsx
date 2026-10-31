@@ -42,9 +42,13 @@ export default function Settings() {
   const [refFailed, setRefFailed] = useState(false);
   const loadOptional = () => {
     setRefFailed(false);
+    // Only the policy sits behind a licence. /categories and /departments carry nothing
+    // but @Roles over the four buyer roles, so on this page every failure of theirs is a
+    // real one and there is no denial to exempt.
+    const broken = () => setRefFailed(true);
     const quiet = (e: any) => { if (!isDenied(e)) setRefFailed(true); };
-    api.get('/categories').then((r) => setCats(r.data)).catch(quiet);
-    api.get('/departments').then((r) => setDeps(r.data)).catch(quiet);
+    api.get('/categories').then((r) => setCats(r.data)).catch(broken);
+    api.get('/departments').then((r) => setDeps(r.data)).catch(broken);
     api.get('/budgets/policy').then((r) => {
       setPolicy(r.data);
       setPolicyDraft({

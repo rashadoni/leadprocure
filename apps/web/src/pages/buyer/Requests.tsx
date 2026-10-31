@@ -32,12 +32,14 @@ export default function Requests() {
   // These two fill the category and department selects, and the department decides whose
   // budget the spend lands on. A fresh org legitimately has neither (and may be denied
   // them), but a dead request must not quietly leave the author with no choice to make.
+  // Both carry only @Roles over the four buyer roles — no licence gate — so on a buyer
+  // page every failure of theirs is a real one.
   const [refFailed, setRefFailed] = useState(false);
   const loadRefs = () => {
     setRefFailed(false);
-    const quiet = (e: any) => { if (!isDenied(e)) setRefFailed(true); };
-    api.get('/categories').then((r) => setCats(r.data.map((c: any) => c.code))).catch(quiet);
-    api.get('/departments').then((r) => setDeps(r.data)).catch(quiet);
+    const broken = () => setRefFailed(true);
+    api.get('/categories').then((r) => setCats(r.data.map((c: any) => c.code))).catch(broken);
+    api.get('/departments').then((r) => setDeps(r.data)).catch(broken);
   };
   useEffect(loadRefs, []);
   const canApprove = ['BUYER_ADMIN', 'BUYER_APPROVER'].includes(session?.org.role ?? '');
@@ -118,9 +120,12 @@ export default function Requests() {
       const { data } = await api.get(`/requests/${id}`);
       setPreview((p) => ({ ...p, [id]: data }));
       // what this approval does to the budget — shown before the second click, not after
+      // An org without the budgets licence is denied this and the projection is simply
+      // absent. Any other failure means the approver is about to confirm without the
+      // figure they were promised, and silence reads as "no budget impact".
       api.get(`/budgets/impact/${id}`)
-        .then((r) => setImpact((m) => ({ ...m, [id]: r.data ?? null })))
-        .catch(() => {});
+        .then((r) => { setImpact((m) => ({ ...m, [id]: r.data ?? null })); setRefFailed(false); })
+        .catch((e: any) => { if (!isDenied(e)) setRefFailed(true); });
       return;
     }
     try {
@@ -166,6 +171,7 @@ export default function Requests() {
   return (
     <>
       <h1>{t('requests')}</h1>
+      <ListState of={{ loading: false, failed: refFailed, reload: loadRefs }} />
       {!isFinance && <div className="card">
         <form onSubmit={create}>
           <div className="row">
@@ -222,7 +228,7 @@ export default function Requests() {
             <> · <a href="/buyer/settings">⚖️ {t('method_policy')}</a></>
           )}
         </div>
-        <ListState of={[requests, { loading: false, failed: refFailed, reload: loadRefs }]} empty={!rows.length} />
+        <ListState of={requests} empty={!rows.length} />
         <table>
           <thead><tr><th>#</th><th>{t('title')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('date')}</th><th>{t('requester')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('method')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>

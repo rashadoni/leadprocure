@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
 import { useI18n } from '../i18n';
-import { isDenied, ListState } from './ListState';
+import { ListState } from './ListState';
 
 async function sha256(file: File): Promise<string> {
   const buf = await file.arrayBuffer();
@@ -18,14 +18,15 @@ export function BidDocs({ bidId, canUpload }: { bidId: string; canUpload: boolea
   const [msg, setMsg] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // A supplier's attachments are hidden from the buyer until opening, and that denial is
-  // a legitimate "none". A failed request is not: the buyer would evaluate the bid as
-  // though nothing had been attached to it.
+  // This route carries no guard: RLS filters the rows, so a buyer who may not see the
+  // attachments yet gets 200 and an empty list. There is therefore no "denied" answer to
+  // exempt here — every failure is a real one, and swallowing it let the buyer evaluate
+  // the bid as though nothing had been attached to it.
   const [failed, setFailed] = useState(false);
   const load = useCallback(
     () => api.get(`/documents/bid/${bidId}`)
       .then((r) => { setDocs(r.data); setFailed(false); })
-      .catch((e: any) => setFailed(!isDenied(e))),
+      .catch(() => setFailed(true)),
     [bidId],
   );
   useEffect(() => { load(); }, [load]);

@@ -4,7 +4,7 @@ import { api, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import { Badge } from '../../components/Badge';
-import { isDenied, ListState, useLoad } from '../../components/ListState';
+import { ListState, useLoad } from '../../components/ListState';
 
 export default function Catalogs() {
   const { t } = useI18n();
@@ -22,12 +22,13 @@ export default function Catalogs() {
   const rows = catalogs.data;
   const load = () => catalogs.reload();
   // A call-off has no request behind it, so this select is the only place its budget is
-  // chosen. Denied or genuinely empty is silent; a dead request is not.
+  // ever chosen. /departments carries no licence gate and a supplier never reaches this
+  // call, so every failure here is a real one.
   const [depsFailed, setDepsFailed] = useState(false);
   const loadDeps = () => {
     if (!isBuyer) return;
     setDepsFailed(false);
-    api.get('/departments').then((r) => setDeps(r.data)).catch((e: any) => { if (!isDenied(e)) setDepsFailed(true); });
+    api.get('/departments').then((r) => setDeps(r.data)).catch(() => setDepsFailed(true));
   };
   useEffect(loadDeps, [isBuyer]);
 
