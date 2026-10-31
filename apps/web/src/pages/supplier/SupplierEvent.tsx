@@ -55,6 +55,11 @@ export default function SupplierEvent() {
   // Until the event is here this page is only a spinner, and a failed load used to
   // leave that spinner on screen for ever instead of saying what happened.
   if (!ev) return <div className="card"><ListState of={{ loading: !evFailed, failed: evFailed, reload: load }} /></div>;
+  // The supplier's own sealed payload comes back decrypted to them at any status — sealing
+  // hides a price from the BUYER and from rival bidders, never from its author.
+  const myPrices = new Map<string, number>(
+    (ev.my_bid?.payload?.items ?? []).map((i: any) => [i.event_item_id, Number(i.unit_price_minor)]),
+  );
   const total = ev.items.reduce(
     (s: number, i: any) => s + (Number(prices[i.id] || 0) * Number(i.qty)), 0,
   );
@@ -105,25 +110,38 @@ export default function SupplierEvent() {
 
       {ev.format === 'REVERSE' && <AuctionPanel eventId={id!} onChanged={load} />}
 
-      {canBid && (
+      {/* Shown whenever there is anything to show, not only while bidding is open. The whole
+          card used to be wrapped in `canBid`, so the moment the deadline passed a supplier
+          lost sight of what was being bought AND of what they had priced it at — a closed
+          tender was a title, a buyer, a deadline and nothing else. The API has always
+          returned the items to suppliers (with the buyer's estimate stripped), so only this
+          screen was hiding them. */}
+      {(canBid || (ev.type !== 'RFI' && ev.items.length > 0)) && (
       <div className="card">
         <h3>
           {ev.type === 'RFI' ? `❓ RFI — ${t('response_text')}`
-            : <>{t('items')} — {ev.format === 'REVERSE' ? `⚡ ${t('place_bid')}` : t('bid')}</>}
+            : <>{t('items')}{canBid && <> — {ev.format === 'REVERSE' ? `⚡ ${t('place_bid')}` : t('bid')}</>}</>}
         </h3>
         {ev.type !== 'RFI' && (
           <table>
             {/* no buyer estimate here — publishing it to bidders anchors their prices */}
-            <thead><tr><th>{t('name')}</th><th>{t('qty')}</th><th>{t('unit_price')} ({ev.evaluation_currency})</th></tr></thead>
+            <thead><tr><th>{t('name')}</th><th className="num">{t('qty')}</th><th className="num">{t('unit_price')} ({ev.evaluation_currency})</th></tr></thead>
             <tbody>
               {ev.items.map((i: any) => (
                 <tr key={i.id}>
                   <td>{i.name}</td>
-                  <td>{Number(i.qty)}</td>
-                  <td>
-                    <input style={{ width: 130 }} type="number" step="0.01" min="0" value={prices[i.id] ?? ''}
-                      disabled={ev.status !== 'OPEN'}
-                      onChange={(e) => setPrices({ ...prices, [i.id]: e.target.value })} />
+                  <td className="num">{Number(i.qty)}</td>
+                  <td className="num">
+                    {canBid ? (
+                      <input style={{ width: 130 }} type="number" step="0.01" min="0" value={prices[i.id] ?? ''}
+                        disabled={ev.status !== 'OPEN'}
+                        onChange={(e) => setPrices({ ...prices, [i.id]: e.target.value })} />
+                    ) : (
+                      /* After the deadline the input is useless, but the price the supplier
+                         actually submitted is theirs to re-read — it comes back decrypted in
+                         their own my_bid payload. */
+                      myPrices.has(i.id) ? fmtMoney(myPrices.get(i.id)!, ev.my_bid?.payload?.currency ?? ev.evaluation_currency) : '—'
+                    )}
                   </td>
                 </tr>
               ))}
@@ -138,6 +156,8 @@ export default function SupplierEvent() {
               onChange={(e) => setProposalText(e.target.value)} />
           </div>
         )}
+        {canBid && (
+        <>
         <div className="row" style={{ marginTop: 12, maxWidth: 480 }}>
           {ev.type !== 'RFI' && (
             <>
@@ -158,6 +178,8 @@ export default function SupplierEvent() {
         </div>
         {msg && <div className="hint">{msg}</div>}
         {ev.format !== 'REVERSE' && <div className="hint">🔒 {t('amounts_hidden')}</div>}
+        </>
+        )}
       </div>
       )}
 

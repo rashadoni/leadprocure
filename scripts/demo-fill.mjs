@@ -511,11 +511,20 @@ const log = (s) => console.log(s);
     { name: T.furnItem2, qty: 25, estUnitPriceMinor: 35_000 },
   ], depIds.OPS);
   const evB = await mkEvent(reqB, T.furnEv, 'RFQ', new Date(Date.now() + 7 * DAY).toISOString());
-  const itemsB = (await get(`/events/${evB}`, sup1)).items;
-  await post(`/events/${evB}/bid`, sup1, {
-    items: itemsB.map((i) => ({ eventItemId: i.id, unitPriceMinor: Math.round(Number(i.est_unit_price_minor) * 0.93) })),
-    deliveryDays: 10,
+  // Price off the BUYER's view of the event. Read as the supplier, every estimate comes back
+  // null — the API strips est_unit_price_minor for bidders so the buyer's number cannot
+  // anchor theirs — and `Number(null) * 0.93` rounds to 0. That is how this demo tender came
+  // to carry a bid of 0.00 on every line: the supplier's own screen was reporting that total
+  // honestly, the data behind it was simply zero.
+  const itemsB = (await get(`/events/${evB}`, buyer)).items;
+  const bidLines = itemsB.map((i) => {
+    const est = Number(i.est_unit_price_minor);
+    if (!Number.isFinite(est) || est <= 0) {
+      throw new Error(`demo-fill: no estimate for event item ${i.id} — a bid priced from it would be 0`);
+    }
+    return { eventItemId: i.id, unitPriceMinor: Math.round(est * 0.93) };
   });
+  await post(`/events/${evB}/bid`, sup1, { items: bidLines, deliveryDays: 10 });
   // Q&A на открытом тендере
   await post(`/events/${evB}/qna`, sup2, { question: T.qnaQ });
   const qna = await get(`/events/${evB}/qna`, buyer);
