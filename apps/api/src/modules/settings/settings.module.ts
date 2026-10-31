@@ -24,6 +24,22 @@ export class SettingsService {
     private readonly audit: AuditService,
   ) {}
 
+  // A role belongs to a kind of organization: a buyer org has no SUPPLIER_USER and a
+  // supplier org has no buyer roles. Only the web UI's own list enforced that — the API
+  // took any member of the shared enum, so a buyer admin could set SUPPLIER_USER inside a
+  // BUYER org. That member then loses every buyer page and is admitted to the
+  // supplier-only routes with a buyer organization behind them.
+  // Roles grow by migration (0037 added BUYER_FINANCE), and the two arms below are
+  // asymmetric on purpose: a future supplier role is refused until named here, a future
+  // BUYER_* one is admitted. Whoever adds the next role should revisit this.
+  private assertRoleFitsOrg(role: MembershipRole, auth: AccessTokenPayload) {
+    if (auth.org_kind === 'BOTH') return; // trades on both sides: either role is real
+    const fits = auth.org_kind === 'SUPPLIER' ? role === 'SUPPLIER_USER' : role.startsWith('BUYER_');
+    if (!fits) {
+      throw new BadRequestException(`Role ${role} does not belong to a ${auth.org_kind} organization`);
+    }
+  }
+
   async users(orgId: string) {
     return this.rc.manager.query(
       `SELECT u.id, u.email, u.full_name, u.status, m.role, m.created_at, m.department_id,
@@ -57,6 +73,7 @@ export class SettingsService {
   async setRole(userId: string, role: MembershipRole, auth: AccessTokenPayload) {
     if (userId === auth.sub) throw new ForbiddenException('You cannot change your own role');
     if (!MEMBERSHIP_ROLES.includes(role)) throw new BadRequestException('Unknown role');
+    this.assertRoleFitsOrg(role, auth);
     const rows = returnedRows(await this.rc.manager.query(
       `UPDATE memberships SET role = $3 WHERE user_id = $1 AND org_id = $2 RETURNING id`,
       [userId, auth.org_id, role],
@@ -73,6 +90,7 @@ export class SettingsService {
 
   async addUser(dto: { email: string; fullName: string; password: string; role: MembershipRole }, auth: AccessTokenPayload) {
     const m = this.rc.manager;
+    this.assertRoleFitsOrg(dto.role, auth);
     const argon2 = await import('argon2');
     const existing = await m.query(`SELECT id FROM organization_users WHERE email = $1`, [dto.email]);
     let userId: string;
@@ -87,11 +105,33 @@ export class SettingsService {
         )
       )[0].id;
     }
-    await m.query(
-      `INSERT INTO memberships(user_id, org_id, role) VALUES ($1,$2,$3)
-       ON CONFLICT (user_id, org_id, role) DO NOTHING`,
-      [userId, auth.org_id, dto.role],
+    // One membership per pair. Adding the same person again with a different role used to
+    // insert a second row — legal under the old three-column key — and from then on every
+    // role change for them collided with it. Send the admin to the role control, which
+    // audits the change and kills the target's tokens; this path does neither.
+    const already = await m.query(
+      `SELECT role FROM memberships WHERE user_id = $1 AND org_id = $2`,
+      [userId, auth.org_id],
     );
+    if (already.length) {
+      throw new BadRequestException(
+        `${dto.email} is already a member of your organization as ${already[0].role} — change the role instead`,
+      );
+    }
+    const membership = (
+      await m.query(
+        `INSERT INTO memberships(user_id, org_id, role) VALUES ($1,$2,$3) RETURNING id`,
+        [userId, auth.org_id, dto.role],
+      )
+    )[0];
+    // Granting someone access to the organization was the one membership change that left
+    // no trace, while changing their role and their department both did.
+    await this.audit.record('MEMBER_ADDED', 'membership', membership.id, {
+      user_id: userId, email: dto.email, role: dto.role,
+      // organization_users is global and carries no RLS, so an address that already has an
+      // account anywhere is attached rather than created. Worth seeing in the trail.
+      existing_account: Boolean(existing.length),
+    });
     return this.users(auth.org_id);
   }
 }
