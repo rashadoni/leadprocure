@@ -48,6 +48,13 @@ export function useLoad<T>(fetcher: () => Promise<NoInfer<T>>, deps: DependencyL
 
 type AnyLoader = { loading: boolean; failed: boolean; reload: () => unknown };
 
+// 403 is this API's "you may not have this": FeatureGuard throws ForbiddenException for an
+// unlicensed feature and the role guard answers the same way. A page that then shows fewer
+// options is CORRECT, so that one failure stays quiet. Every other failure is a dead
+// request, and swallowing it the same way is exactly what makes a broken read look like an
+// org that simply has nothing configured.
+export const isDenied = (e: any) => e?.response?.status === 403;
+
 // The one line a list owes its reader: loading, or a failure with a Retry that really
 // retries, or that it is genuinely empty. Pages that load several lists share one line;
 // Retry then re-runs exactly the loads that failed.

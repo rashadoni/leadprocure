@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, fmtMoney } from '../api/client';
 import { useI18n } from '../i18n';
+import { ListState } from './ListState';
 
 // Live auction state for both sides. Amounts come from the REST endpoint only;
 // the socket merely signals "state changed" (see backend design).
 export function AuctionPanel({ eventId, onChanged }: { eventId: string; onChanged?: () => void }) {
   const { t } = useI18n();
   const [state, setState] = useState<any>(null);
+  // This polls every 5s and the panel keeps the last numbers between polls. In a live
+  // reverse auction that is the one place a silent failure costs money: the supplier
+  // would be bidding against a best price that has already moved. Say when the last
+  // refresh did not land.
+  const [stale, setStale] = useState(false);
 
   const load = useCallback(
-    () => api.get(`/events/${eventId}/auction/state`).then((r) => setState(r.data)).catch(() => {}),
+    () => api.get(`/events/${eventId}/auction/state`)
+      .then((r) => { setState(r.data); setStale(false); })
+      .catch(() => setStale(true)),
     [eventId],
   );
   useEffect(() => {
@@ -18,7 +26,14 @@ export function AuctionPanel({ eventId, onChanged }: { eventId: string; onChange
     return () => clearInterval(iv);
   }, [load]);
 
-  if (!state) return null;
+  if (!state) {
+    return stale ? (
+      <div className="card" style={{ borderColor: 'var(--accent2)' }}>
+        <h3>⚡ {t('auction')}</h3>
+        <ListState of={{ loading: false, failed: true, reload: load }} />
+      </div>
+    ) : null;
+  }
   return (
     <div className="card" style={{ borderColor: 'var(--accent2)' }}>
       <h3>⚡ {t('auction')} — REVERSE</h3>
@@ -33,6 +48,7 @@ export function AuctionPanel({ eventId, onChanged }: { eventId: string; onChange
           <div><div className="hint">{t('my_bid')}</div><b>{fmtMoney(state.my_best_total_minor, state.currency)}</b></div>
         )}
       </div>
+      {stale && <div role="alert" style={{ marginTop: 8 }}>{t('auction_stale')}</div>}
       <div className="hint" style={{ marginTop: 8 }}>
         {t('deadline')}: {new Date(state.close_at).toLocaleString()}
       </div>

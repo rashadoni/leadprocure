@@ -5,7 +5,7 @@ import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
-import { ListState, useLoad } from '../../components/ListState';
+import { isDenied, ListState, useLoad } from '../../components/ListState';
 
 const PAGE_SIZE = 20;
 
@@ -29,8 +29,17 @@ export default function Requests() {
   const [deps, setDeps] = useState<any[]>([]);
   const [department, setDepartment] = useState('');
   const [depFilter, setDepFilter] = useState('');
-  useEffect(() => { api.get('/categories').then((r) => setCats(r.data.map((c: any) => c.code))).catch(() => {}); }, []);
-  useEffect(() => { api.get('/departments').then((r) => setDeps(r.data)).catch(() => {}); }, []);
+  // These two fill the category and department selects, and the department decides whose
+  // budget the spend lands on. A fresh org legitimately has neither (and may be denied
+  // them), but a dead request must not quietly leave the author with no choice to make.
+  const [refFailed, setRefFailed] = useState(false);
+  const loadRefs = () => {
+    setRefFailed(false);
+    const quiet = (e: any) => { if (!isDenied(e)) setRefFailed(true); };
+    api.get('/categories').then((r) => setCats(r.data.map((c: any) => c.code))).catch(quiet);
+    api.get('/departments').then((r) => setDeps(r.data)).catch(quiet);
+  };
+  useEffect(loadRefs, []);
   const canApprove = ['BUYER_ADMIN', 'BUYER_APPROVER'].includes(session?.org.role ?? '');
   const isFinance = session?.org.role === 'BUYER_FINANCE';
   const isAdmin = session?.org.role === 'BUYER_ADMIN';
@@ -213,7 +222,7 @@ export default function Requests() {
             <> · <a href="/buyer/settings">⚖️ {t('method_policy')}</a></>
           )}
         </div>
-        <ListState of={requests} empty={!rows.length} />
+        <ListState of={[requests, { loading: false, failed: refFailed, reload: loadRefs }]} empty={!rows.length} />
         <table>
           <thead><tr><th>#</th><th>{t('title')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('date')}</th><th>{t('requester')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('method')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>

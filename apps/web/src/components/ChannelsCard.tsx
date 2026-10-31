@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { useI18n } from '../i18n';
+import { isDenied, ListState } from './ListState';
 
 // Per-org sending channels (Email/SMTP + WhatsApp gateway) the buyer connects for the
 // follow-up reminders. Catalog-style cards → inline connect form → test / disconnect.
@@ -28,7 +29,16 @@ export function ChannelsCard({ isAdmin }: { isAdmin: boolean }) {
   // Public webhook URL the buyer pastes into Meta (callback + verify token).
   const webhookUrl = `${(import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000')}/channels/whatsapp/webhook`;
 
-  const load = useCallback(() => api.get('/channels').then((r) => setRows(r.data)).catch(() => setRows([])), []);
+  // An org without the follow-ups licence is denied this and correctly sees no channels.
+  // Any other failure used to render the same empty grid, i.e. "nothing is connected" —
+  // about the one screen where that sentence makes an admin re-enter credentials.
+  const [failed, setFailed] = useState(false);
+  const load = useCallback(
+    () => api.get('/channels')
+      .then((r) => { setRows(r.data); setFailed(false); })
+      .catch((e: any) => { setRows([]); setFailed(!isDenied(e)); }),
+    [],
+  );
   useEffect(() => { load(); }, [load]);
 
   // Pull the org's APPROVED Meta templates into the dropdown (needs WABA + token saved).
@@ -78,6 +88,7 @@ export function ChannelsCard({ isAdmin }: { isAdmin: boolean }) {
     <div className="card">
       <h3>📡 {t('channels_hdr')}</h3>
       <p className="hint" style={{ marginTop: 2 }}>{t('channels_desc')}</p>
+      <ListState of={{ loading: false, failed, reload: load }} />
 
       <div className="ch-grid">
         {rows.map((c) => {

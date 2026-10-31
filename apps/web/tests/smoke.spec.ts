@@ -81,6 +81,30 @@ test.describe('buyer panel', () => {
     await page.unroute('**/dashboard/buyer');
   });
 
+  // The other half of the rule: a read a page can live without is swallowed ONLY when the
+  // API says the org may not have it. 403 is that answer (FeatureGuard / the role guard);
+  // everything else is a dead request, and "no overspend banner" is not the same statement
+  // as "you are not over budget".
+  test('a denied optional read stays silent, a broken one speaks up', async () => {
+    let status = 403;
+    await page.route('**/budgets', async (route) => {
+      await route.fulfill({ status, contentType: 'application/json', body: '{"message":"no"}' });
+    });
+    const denied = page.waitForResponse((r) => r.url().endsWith('/budgets'));
+    await page.goto('/buyer/dashboard');
+    await denied;
+    await expect(page.locator('text=AZN').first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('alert')).toHaveCount(0);
+
+    status = 503;
+    const broken = page.waitForResponse((r) => r.url().endsWith('/budgets'));
+    await page.goto('/buyer/dashboard');
+    await broken;
+    await expect(page.getByRole('alert').filter({ hasText: 'Could not load the data.' }))
+      .toBeVisible({ timeout: 20_000 });
+    await page.unroute('**/budgets');
+  });
+
   // Fields are addressed by data-testid, not by position: the old `form > input` /
   // `.row > div:nth-child(n)` selectors matched nothing once the form grew a field, and a
   // selector that silently stops matching is worse than no test.

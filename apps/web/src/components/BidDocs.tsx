@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
 import { useI18n } from '../i18n';
+import { isDenied, ListState } from './ListState';
 
 async function sha256(file: File): Promise<string> {
   const buf = await file.arrayBuffer();
@@ -17,7 +18,16 @@ export function BidDocs({ bidId, canUpload }: { bidId: string; canUpload: boolea
   const [msg, setMsg] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const load = useCallback(() => api.get(`/documents/bid/${bidId}`).then((r) => setDocs(r.data)).catch(() => {}), [bidId]);
+  // A supplier's attachments are hidden from the buyer until opening, and that denial is
+  // a legitimate "none". A failed request is not: the buyer would evaluate the bid as
+  // though nothing had been attached to it.
+  const [failed, setFailed] = useState(false);
+  const load = useCallback(
+    () => api.get(`/documents/bid/${bidId}`)
+      .then((r) => { setDocs(r.data); setFailed(false); })
+      .catch((e: any) => setFailed(!isDenied(e))),
+    [bidId],
+  );
   useEffect(() => { load(); }, [load]);
 
   const upload = async (file: File) => {
@@ -43,6 +53,7 @@ export function BidDocs({ bidId, canUpload }: { bidId: string; canUpload: boolea
 
   return (
     <div>
+      <ListState of={{ loading: false, failed, reload: load }} />
       {docs.map((d) => (
         <div key={d.id} style={{ fontSize: 12 }}>
           📎 <a href="#" onClick={(e) => { e.preventDefault(); download(d.id); }}>{d.filename}</a>
