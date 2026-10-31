@@ -23,6 +23,19 @@ export function lineMoney(qty: number, price: number): number {
   safeMoney(qty); safeMoney(price);
   return safeMoney(qty * price);
 }
+// What a line stored in the database is worth, rounded the way Postgres rounds it.
+// `qty` columns are `numeric`, and po_amendment_decide computes
+// round(qty::numeric * price::bigint) — so JS replaying a stored line has to round too,
+// instead of demanding an integer quantity the schema never promised and the SQL side
+// contradicts. The guard stays on the money: a product JavaScript cannot hold exactly
+// throws rather than quietly losing a minor unit.
+export function storedLineMoney(qty: number, price: number): number {
+  safeMoney(price);
+  if (!Number.isFinite(qty) || qty < 0) {
+    throw new BadRequestException('Quantity must be a non-negative number');
+  }
+  return safeMoney(Math.round(qty * price));
+}
 export function taxTotals(amount: number, rate: number, mode: string) {
   safeMoney(amount);
   if (!Number.isInteger(rate) || rate < 0 || rate > 10000) throw new BadRequestException('VAT rate must be 0..10000 basis points');

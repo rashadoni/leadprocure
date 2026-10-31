@@ -160,5 +160,9 @@ describe('PO amendments (API e2e)', () => {
     expect(refused.body.message).toMatch(/safe integer/);
     const none = await http().get(`/orders/${po3}/amendments`).set(...bearer(buyer)).expect(200);
     expect(none.body).toHaveLength(0);
+    // and the guard really runs before any write: the amendment number was not consumed
+    const ok = await http().post(`/orders/${po3}/amendments`).set(...bearer(buyer))
+      .send({ reason: 'A sane one', items: [{ poItemId: item3, qty: 3 }] }).expect(201);
+    expect(ok.body.amendment_no).toBe(1);
   });
 });
