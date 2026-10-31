@@ -486,7 +486,7 @@ describe('sealed RFQ end-to-end flow', () => {
     expect(all.body.filter((c: any) => c.contract_id === contractId)).toHaveLength(1);
   });
 
-  it('audit hash-chain for the buyer org is intact and linked', async () => {
+  it('audit hash-chain for the buyer org is intact, linked AND recomputes from the stored rows', async () => {
     await db.query(`SELECT set_config('app.org_id', $1, false), set_config('app.role','BUYER_ADMIN', false)`, [buyerOrgId]);
     const rows = (
       await db.query(`SELECT action, prev_hash, hash FROM audit_events WHERE org_id=$1 ORDER BY seq`, [buyerOrgId])
@@ -497,5 +497,29 @@ describe('sealed RFQ end-to-end flow', () => {
     for (let i = 1; i < rows.length; i++) {
       expect(rows[i].prev_hash).toBe(rows[i - 1].hash); // unbroken chain
     }
+    // Linkage alone only catches a truncated tail: every row could carry an invented
+    // digest and this would still pass. Recompute each one from the columns actually
+    // stored — which is what the chain was supposed to make possible and could not,
+    // because the timestamp that went into the old JS digest was never written down.
+    const check = (
+      await db.query(
+        `WITH c AS (
+           SELECT seq, prev_hash, hash,
+                  lag(hash) OVER (ORDER BY seq) AS expected_prev,
+                  encode(sha256(convert_to(coalesce(prev_hash,'') ||
+                    audit_body(org_id, actor_id, action, entity_type, entity_id, payload, created_at),
+                    'UTF8')), 'hex') AS recomputed
+             FROM audit_events WHERE org_id = $1
+         )
+         SELECT count(*)::int AS total,
+                count(*) FILTER (WHERE hash <> recomputed)::int AS bad_hash,
+                count(*) FILTER (WHERE seq > (SELECT min(seq) FROM c)
+                                   AND prev_hash IS DISTINCT FROM expected_prev)::int AS bad_link
+           FROM c`,
+        [buyerOrgId],
+      )
+    ).rows[0];
+    expect(check.total).toBeGreaterThan(4);
+    expect({ bad_hash: check.bad_hash, bad_link: check.bad_link }).toEqual({ bad_hash: 0, bad_link: 0 });
   });
 });

@@ -115,6 +115,22 @@ describe('LP-A08/A18 safe money and sealed deadline boundaries', () => {
     await clock.query('SELECT * FROM close_due_events()');
     const opened = (await http().post(`/events/${ev.eventId}/open`).set(auth(buyer)).expect(201)).body;
     expect(opened.bids[0].state).toBe('OPENED'); expect(Number(opened.bids[0].total_minor)).toBe(180);
+    // The deadline close is the one transition nobody performs by hand, and it used to be
+    // written with org_id NULL — a row no per-organization query can reach, so the tender's
+    // own closing was missing from its history — carrying md5(id || clock_timestamp()) as
+    // a "hash". It is now attributed and chained, and the digest recomputes from the row.
+    const closedRow = (await clock.query(
+      `SELECT a.org_id, a.prev_hash, a.hash,
+              a.hash = encode(sha256(convert_to(coalesce(a.prev_hash,'') ||
+                audit_body(a.org_id, a.actor_id, a.action, a.entity_type, a.entity_id,
+                           a.payload, a.created_at), 'UTF8')), 'hex') AS verifies,
+              (SELECT e.buyer_org_id FROM sourcing_events e WHERE e.id = a.entity_id) AS owner
+         FROM audit_events a WHERE a.action='EVENT_CLOSED' AND a.entity_id=$1`, [ev.eventId])).rows;
+    expect(closedRow).toHaveLength(1);
+    expect(closedRow[0].org_id).toBe(closedRow[0].owner);
+    expect(closedRow[0].verifies).toBe(true);
+    expect(closedRow[0].hash).toHaveLength(64); // sha256 hex, not the old 32-char md5
+
     const audit = (await clock.query(`SELECT action,payload FROM audit_events WHERE entity_id=ANY($1::uuid[])`, [[ev.eventId, ev.bidId]])).rows;
     expect(audit.filter(r => r.action === 'BID_SUBMITTED')).toHaveLength(1);
     expect(audit.filter(r => r.action === 'BID_WITHDRAWN')).toHaveLength(0);
