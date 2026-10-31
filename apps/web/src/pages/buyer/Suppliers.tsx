@@ -1,11 +1,18 @@
 import { useState } from 'react';
 import { api } from '../../api/client';
+import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import { Badge } from '../../components/Badge';
 import { ListState, useLoad } from '../../components/ListState';
 
 export default function Suppliers() {
   const { t } = useI18n();
+  const { session } = useAuth();
+  // Every write on this page — invite, approve, block, rate, open a verification case —
+  // takes BUYER_ADMIN or BUYER_APPROVER. They were all drawn for everyone, so a plain
+  // user got a row of buttons that answer 403; a button that always fails is worse than
+  // no button.
+  const canManage = ['BUYER_ADMIN', 'BUYER_APPROVER'].includes(session?.org.role ?? '');
   const registry = useLoad(() => api.get('/suppliers').then((r) => r.data), [], [] as any[]);
   const directory = useLoad(() => api.get('/suppliers/directory').then((r) => r.data), [], [] as any[]);
   const reload = () => { registry.reload(); directory.reload(); };
@@ -57,10 +64,12 @@ export default function Suppliers() {
                 <td>{r.voen ?? '—'}</td>
                 <td><Badge status={r.status} /></td>
                 <td>
-                  {r.status !== 'APPROVED' && <button className="btn small" data-tip={t('tip_supplier_approve')} onClick={() => setStatus(r.id, 'APPROVED')}>{t('approve')}</button>}{' '}
-                  {r.status !== 'BLOCKED' && <button className="btn small ghost" data-tip={t('tip_supplier_block')} onClick={() => setStatus(r.id, 'BLOCKED')}>{t('block')}</button>}{' '}
-                  <button className="btn small ghost" data-tip={t('tip_scorecard')} onClick={() => rate(r.supplier_org_id)}>★ {t('scorecard')}</button>{' '}
-                  <button className="btn small ghost" data-tip={t('tip_verify_open')} onClick={() => openVerification(r.supplier_org_id)}>🛡</button>
+                  {canManage && <>
+                    {r.status !== 'APPROVED' && <button className="btn small" data-tip={t('tip_supplier_approve')} onClick={() => setStatus(r.id, 'APPROVED')}>{t('approve')}</button>}{' '}
+                    {r.status !== 'BLOCKED' && <button className="btn small ghost" data-tip={t('tip_supplier_block')} onClick={() => setStatus(r.id, 'BLOCKED')}>{t('block')}</button>}{' '}
+                    <button className="btn small ghost" data-tip={t('tip_scorecard')} onClick={() => rate(r.supplier_org_id)}>★ {t('scorecard')}</button>{' '}
+                    <button className="btn small ghost" data-tip={t('tip_verify_open')} onClick={() => openVerification(r.supplier_org_id)}>🛡</button>
+                  </>}
                   {scores[r.supplier_org_id] && (
                     <span className="hint" style={{ marginLeft: 6 }}>
                       {scores[r.supplier_org_id].map((a: any) => `${a.metric}:${a.avg_score}`).join(' ')}
@@ -83,7 +92,7 @@ export default function Suppliers() {
                 <td>{s.legal_name}</td>
                 <td>{s.voen ?? '—'}</td>
                 <td>{(s.categories ?? []).join(', ')}</td>
-                <td>{!inRegistry.has(s.id) && <button className="btn small" data-tip={t('tip_supplier_invite')} onClick={() => invite(s.id)}>{t('invite')}</button>}</td>
+                <td>{canManage && !inRegistry.has(s.id) && <button className="btn small" data-tip={t('tip_supplier_invite')} onClick={() => invite(s.id)}>{t('invite')}</button>}</td>
               </tr>
             ))}
           </tbody>

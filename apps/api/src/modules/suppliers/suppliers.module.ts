@@ -1,5 +1,5 @@
 import { returnedRows } from '../../common/procurement/invariants';
-import { Body, Controller, Get, Injectable, Module, NotFoundException, Param, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Injectable, Module, NotFoundException, Param, Post } from '@nestjs/common';
 import type { AccessTokenPayload } from '@leadprocure/shared';
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
@@ -75,6 +75,24 @@ export class SuppliersService {
     buyerOrgId: string,
     userId: string,
   ) {
+    const m = this.rc.manager;
+    // A rating is an input to the award recommendation — reliability carries 30% of the
+    // weighted total in ai-scorer — so it has to be about a supplier. Nothing stopped it
+    // being attached to any uuid at all, a buyer organization included.
+    const org = await m.query(
+      `SELECT id FROM organizations WHERE id = $1 AND kind IN ('SUPPLIER','BOTH')`,
+      [supplierOrgId],
+    );
+    if (!org.length) throw new NotFoundException('Supplier organization not found');
+    // And when it cites an order, that order has to be this buyer's with this supplier.
+    // RLS already hides everyone else's, so a foreign id simply finds nothing here.
+    if (dto.sourcePoId) {
+      const po = await m.query(
+        `SELECT id FROM purchase_orders WHERE id = $1 AND buyer_org_id = $2 AND supplier_org_id = $3`,
+        [dto.sourcePoId, buyerOrgId, supplierOrgId],
+      );
+      if (!po.length) throw new BadRequestException('That order is not yours with this supplier');
+    }
     const row = (
       await this.rc.manager.query(
         `INSERT INTO supplier_scorecard_entries(buyer_org_id, supplier_org_id, source_po_id, metric, score, note, created_by)
@@ -151,8 +169,13 @@ export class SuppliersController {
     return this.suppliers.scorecard(supplierOrgId);
   }
 
+  // Reliability from these entries is 30% of the weighted total the award recommendation
+  // ranks by (SCORING_WEIGHTS in common/ai/ai-scorer.ts), so this is an input to who wins,
+  // not a note. It now takes the same roles as the rest of the registry: a BUYER_USER who
+  // may not approve a request, invite a supplier or block one may not move the ranking
+  // either.
   @Post(':supplierOrgId/scorecard')
-  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER')
   addScore(
     @Param('supplierOrgId') supplierOrgId: string,
     @Body() body: AddScoreDto,
