@@ -273,6 +273,10 @@ export default function Budgets() {
       <ListState of={{ loading: false, failed: refFailed, reload: loadRefs }} />
       {canManagePlans && (
         <div className="card">
+          {/* This row and the filter row below carry the same three controls — period, year,
+              department — and looked identical, so there was no telling which one created a
+              plan and which one narrowed the list. Both say what they are now. */}
+          <h3 style={{ marginTop: 0 }}>{editId ? t('bud_revise') : t('bud_new_plan')}</h3>
           <form onSubmit={submit} className="row" style={{ alignItems: 'flex-end' }}>
             <div><label>{t('name')}</label>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
@@ -381,7 +385,9 @@ export default function Budgets() {
                       <div className={d.paceDeltaPct > 0 ? 'error' : 'hint'} style={{ fontSize: 11 }}
                         data-tip={d.phased ? t('bud_pace_phased_tip') : t('bud_pace_tip')}>
                         {t('bud_pace')} {d.elapsedPct}%{d.phased ? ' 📅' : ''}
-                        {d.paceDeltaPct !== 0 && <> · {d.paceDeltaPct > 0 ? '+' : ''}{d.paceDeltaPct}</>}
+                        {/* the gap between spent and planned-by-now, in points of the same
+                            scale as the two figures beside it — it used to be a bare number */}
+                        {d.paceDeltaPct !== 0 && <> · {d.paceDeltaPct > 0 ? '+' : ''}{d.paceDeltaPct}%</>}
                       </div>
                     </td>
                   </tr>
@@ -397,7 +403,8 @@ export default function Budgets() {
       )}
 
       <div className="card">
-        <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span className="hint" style={{ whiteSpace: 'nowrap' }}>{t('filters')}</span>
           <select value={filter.periodType} onChange={(e) => setFilter({ ...filter, periodType: e.target.value })} style={{ maxWidth: 200 }}>
             <option value="">{t('period_all')}</option>
             <option value="YEAR">{t('period_year')}</option>
