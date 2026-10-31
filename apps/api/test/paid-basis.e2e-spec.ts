@@ -78,6 +78,12 @@ describe('paid: the invoice ledger and plan settlement are different measures', 
     await http().post(`/requests/${req.id}/approve`).set(...bearer(approver)).expect(201);
     const po = (await http().post(`/orders/direct/from-request/${req.id}`).set(...bearer(buyer))
       .send({ supplierOrgId: supplierOrg }).expect(201)).body;
+    // The order must really carry the mode this fixture asked for: it is the whole point of
+    // the INCLUSIVE case, and `vatMode` is a DTO field a whitelist could quietly drop. Left
+    // to be inferred from the amounts, a stripped mode would still satisfy both rollup
+    // assertions (under EXCLUSIVE net_minor IS the raw line sum), so assert it directly.
+    expect((await http().get(`/orders/${po.id}`).set(...bearer(buyer)).expect(200)).body.vat_mode)
+      .toBe(vatMode);
     await deliver(po.id, po.items[0].id);
     const inv = (await http().post(`/invoices/from-po/${po.id}`).set(...bearer(supplier))
       .send({ items: [{ poItemId: po.items[0].id, qty: 1, unitPriceMinor: amount }] }).expect(201)).body;

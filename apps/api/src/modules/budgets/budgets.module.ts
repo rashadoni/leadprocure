@@ -662,7 +662,8 @@ export class BudgetsService {
          -- the invoice amounts it found. An INCLUSIVE contract-linked order predating that
          -- migration has an invoice computed EXCLUSIVE-style, so gross overstates it by the
          -- VAT. Left alone deliberately: guessing which legacy rows were meant as INCLUSIVE
-         -- and rewriting settled amounts is worse than a known, narrow overstatement. This is NOT an invariant that paid <= used — a DISPUTED invoice may be
+         -- and rewriting settled amounts is worse than a known, narrow overstatement.
+         -- This is NOT an invariant that paid <= used — a DISPUTED invoice may be
          -- approved over its order with a written reason, and a cancelled order hands the
          -- commitment back to the request's estimate — it is the same basis, so the two
          -- figures can be read against each other at all.
