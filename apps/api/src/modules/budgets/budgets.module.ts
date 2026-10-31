@@ -639,18 +639,20 @@ export class BudgetsService {
          FROM invoices i
          JOIN purchase_orders o ON o.id = i.po_id
          LEFT JOIN procurement_requests r ON r.id = o.request_id
-         -- Only obligations MATCHED_CTE still counts, by the same split again: its
-         -- matched branch counts the REQUEST, whatever became of its orders — a cancelled
-         -- order releases the actual and the estimate takes the commitment back (it says
-         -- so above), so that settlement must keep standing beside it. Its matched_orders
-         -- branch counts the order itself, so there a cancelled or rejected one carries
-         -- nothing, is absent from the unbudgeted report too, and its settlement must not
-         -- stand against a plan.
-         -- (A request can only be cancelled once every order of it is gone, so a cancelled
-         -- request falls to the second case and is dropped with its orders.)
+         -- Only obligations MATCHED_CTE still counts, by its own two tests. Its matched
+         -- branch counts the REQUEST, whatever became of its orders — a cancelled order
+         -- releases the actual and the estimate takes the commitment back (it says so
+         -- above), so that settlement must keep standing beside it. Its matched_orders
+         -- branch counts the ORDER, and only a live one that no same-currency request
+         -- already speaks for. What neither counts carries no commitment, is absent from
+         -- the unbudgeted report too, and its settlement must not stand against a plan:
+         -- a withdrawn call-off, and an order whose request was cancelled (the app
+         -- refuses to cancel a request that has a live order, but an order can still be
+         -- drawn from a contract afterwards).
          WHERE i.status = 'PAID'
-           AND ((r.status = 'APPROVED' AND r.approved_at IS NOT NULL AND r.currency = o.currency)
-                OR o.status NOT IN ('CANCELLED','REJECTED'))
+           AND ((r.status = 'APPROVED' AND r.approved_at IS NOT NULL)
+                OR (o.status NOT IN ('CANCELLED','REJECTED')
+                    AND (o.request_id IS NULL OR o.currency <> r.currency)))
            AND ($3::uuid IS NULL OR i.department_id = $3)
        ),
        -- Which plan carried this obligation, by MATCHED_CTE's own choice (same
@@ -712,7 +714,9 @@ export class BudgetsService {
       // of its plans. Anything a department plan carried, or that no plan carried at all
       // (the unbudgeted report's job), leaves it alone. One settlement can still appear on
       // several rows of one report — a department, its ancestors, and this one — as the
-      // plan figures do; what each row reports is that it carries it, counted once.
+      // plan figures do, and each row counts it at most once. Only this row's appearance
+      // means "the plan here carried it"; a department's means "my period covers it",
+      // which is the looser rule the accepted matrix reports (see the 2036 case).
       // Paid is also not comparable to used as a number: with the default EXCLUSIVE
       // vat_mode an order's total is net while an invoice's gross carries VAT, so 18%
       // spend settles at about 1.18× its actual (INCLUSIVE orders settle at about 1×).

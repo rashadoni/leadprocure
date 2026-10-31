@@ -80,29 +80,6 @@ describe('budget rollup: settled obligation periods and department isolation', (
     }
   };
 
-  // Paid in advance, then the ORDER withdrawn while its request stays approved: the
-  // commitment returns to the request's estimate, so this settlement must stay reported.
-  const prepaidThenWithdrawn = async (amount: number, departmentId: string, date: string) => {
-    const req = (await http().post('/requests').set(...bearer(buyer)).send({
-      title: `Org withdrawn ${tag} ${amount}`, departmentId,
-      items: [{ name: 'Paper', qty: 1, estUnitPriceMinor: amount, vatRateBp: 0 }],
-    }).expect(201)).body;
-    await http().post(`/requests/${req.id}/submit`).set(...bearer(buyer)).expect(201);
-    await http().post(`/requests/${req.id}/approve`).set(...bearer(approver)).expect(201);
-    const po = (await http().post(`/orders/direct/from-request/${req.id}`).set(...bearer(buyer))
-      .send({ supplierOrgId: supplierOrg }).expect(201)).body;
-    await http().post(`/orders/${po.id}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
-    const inv = (await http().post(`/invoices/from-po/${po.id}`).set(...bearer(supplier))
-      .send({ items: [{ poItemId: po.items[0].id, qty: 1, unitPriceMinor: amount }] }).expect(201)).body;
-    expect(inv.status).toBe('DISPUTED'); // nothing was received
-    await http().post(`/invoices/${inv.id}/approve`).set(...bearer(buyer))
-      .send({ reason: 'Prepaid, order withdrawn afterwards' }).expect(201);
-    await http().post(`/invoices/${inv.id}/pay`).set(...bearer(buyer)).expect(201);
-    await http().post(`/orders/${po.id}/status`).set(...bearer(buyer)).send({ status: 'CANCELLED' }).expect(201);
-    expect((await http().get(`/requests/${req.id}`).set(...bearer(buyer)).expect(200)).body.status).toBe('APPROVED');
-    await db.query('UPDATE procurement_requests SET approved_at = $2 WHERE id = $1', [req.id, date]);
-  };
-
   beforeAll(async () => {
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = mod.createNestApplication();
