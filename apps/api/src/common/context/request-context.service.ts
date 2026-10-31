@@ -56,6 +56,19 @@ export class RequestContextService {
     (ctx.postCommit ??= []).push(fn);
   }
 
+  // The acting person, for the paths that authenticate inside the request instead of
+  // arriving with a token: register and login. Without it their own audit rows name no
+  // actor, which on a login is the entire content of the record. What attributes the row
+  // is ctx.actorId — AuditService reads it and passes it to audit_append as a parameter.
+  // The GUC is set for a different reader: the SECURITY DEFINER seams (po_apply_status,
+  // po_amendment_decide) take app.actor_id to stamp who decided something, so the two
+  // ways of knowing the actor cannot drift apart.
+  async setActor(actorId: string): Promise<void> {
+    const ctx = this.get();
+    ctx.actorId = actorId;
+    await ctx.manager.query(`select set_config('app.actor_id', $1, true)`, [actorId]);
+  }
+
   // Used during registration: once the owning org exists we elevate the request's
   // RLS context so RLS WITH CHECK passes for rows owned by the new org.
   async setOrg(orgId: string, role?: string): Promise<void> {
