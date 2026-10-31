@@ -640,14 +640,36 @@ export class BudgetsService {
          JOIN purchase_orders o ON o.id = i.po_id
          LEFT JOIN procurement_requests r ON r.id = o.request_id
          WHERE i.status = 'PAID' AND ($3::uuid IS NULL OR i.department_id = $3)
+       ),
+       -- Which plan carried this obligation, by MATCHED_CTE's own choice (same
+       -- predicates, same ORDER BY) over EVERY plan of the org — not only the ones
+       -- this report selected, because the commitment was charged without knowing
+       -- about any filter. Only the org-wide row needs it; the department tree keeps
+       -- its period-only rule, which is what the accepted matrix reports.
+       settled AS (
+         SELECT d.*, mb.budget_id
+         FROM dated_paid d
+         LEFT JOIN LATERAL (
+           SELECT b.id AS budget_id
+           FROM budgets b
+           WHERE b.status IN ('APPROVED','CLOSED')
+             AND b.currency = d.currency
+             AND d.budget_at >= b.period_start::timestamptz
+             AND d.budget_at < (b.period_end + 1)::timestamptz
+             AND (b.department_id IS NULL OR b.department_id = d.department_id)
+             AND (b.category = '*' OR b.category = d.category)
+           ORDER BY (b.department_id IS NOT NULL) DESC, (b.category <> '*') DESC,
+                    b.period_start DESC, b.id
+           LIMIT 1
+         ) mb ON true
        )
-       SELECT department_id, currency, category,
+       SELECT department_id, currency, budget_id,
               to_char(budget_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS budget_day,
               sum(gross_minor)::bigint AS paid
-       FROM dated_paid
+       FROM settled
        WHERE budget_at >= ($1::date::timestamp AT TIME ZONE 'UTC')
          AND budget_at < (($2::date + 1)::timestamp AT TIME ZONE 'UTC')
-       GROUP BY department_id, currency, category, to_char(budget_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
+       GROUP BY department_id, currency, budget_id, to_char(budget_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
       [budgets.reduce((min: string, b: any) => b.periodStart < min ? b.periodStart : min, budgets[0].periodStart),
        budgets.reduce((max: string, b: any) => b.periodEnd > max ? b.periodEnd : max, budgets[0].periodEnd),
        filter.scopeDepartmentId ?? null],
@@ -655,35 +677,31 @@ export class BudgetsService {
     const covers = (key: string, day: string) => !!paidWindows.get(key)?.some(
       (window) => day >= window.from && day <= window.to,
     );
-    // The org-wide plans in this selection, with the category each one claims. This row is
-    // not an ancestor of anything, so it is the only one that needs MATCHED_CTE's own
-    // test — period AND category — rather than the department tree's period-only rule.
-    const orgPlans: Array<{ from: string; to: string; category: string }> = budgets
-      .filter((b: any) => !b.departmentId)
-      .map((b: any) => ({ from: b.periodStart, to: b.periodEnd, category: b.category }));
-    const orgCarried = (day: string, category: string | null) => orgPlans.some(
-      (plan) => day >= plan.from && day <= plan.to && (plan.category === '*' || plan.category === category),
+    // The org-wide plans this report is showing. The '' row is their sum, so the
+    // settlement that belongs on it is the settlement of the obligations they carried.
+    const selectedOrgPlans = new Set<string>(
+      budgets.filter((b: any) => !b.departmentId).map((b: any) => String(b.id)),
     );
     for (const row of paid) {
-      // Eligibility comes from the invoice department or its ancestors' OWN budgets,
+      // Departments: eligibility comes from the department's or an ancestor's OWN budgets,
       // never a sibling's period. Once covered, propagate once to each ancestor.
       let covered = false;
-      // Its OWN department decides the org-wide plan's share, because MATCHED_CTE matches
-      // a request's department exactly and never walks up the tree: with no plan of its
-      // own, the request's commitment went to the org-wide plan even when an ancestor has
-      // one, and reporting that plan's settlement as 0 beside its own commitment was wrong.
-      const ownCovered = covers(row.department_id ?? '', row.budget_day);
       for (const key of [row.department_id ?? '', ...ancestors(row.department_id ?? null)]) {
+        if (!key) continue; // '' is the org-wide plan, not a department — see below
         const cur = byDep.get(key);
         // only AZN settles against an AZN budget; foreign invoices are reported elsewhere
         covered = covered || covers(key, row.budget_day);
         if (cur && row.currency === cur.currency && covered) cur.paidMinor += Number(row.paid);
       }
-      if (!ownCovered && row.department_id) {
-        const org = byDep.get('');
-        if (org && row.currency === org.currency && orgCarried(row.budget_day, row.category ?? null)) {
-          org.paidMinor += Number(row.paid);
-        }
+      // The org-wide row is nobody's ancestor, so a period that merely overlaps says
+      // nothing: it is credited exactly when the plan that carried this obligation IS one
+      // of its plans. Anything a department plan carried, or that no plan carried at all
+      // (the unbudgeted report's job), leaves it alone — so paid never exceeds the used it
+      // stands beside, and nothing is counted twice.
+      const org = byDep.get('');
+      if (org && row.budget_id && selectedOrgPlans.has(String(row.budget_id))
+          && row.currency === org.currency) {
+        org.paidMinor += Number(row.paid);
       }
     }
 
