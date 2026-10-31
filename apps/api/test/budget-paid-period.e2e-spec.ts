@@ -80,6 +80,29 @@ describe('budget rollup: settled obligation periods and department isolation', (
     }
   };
 
+  // Paid in advance, then the ORDER withdrawn while its request stays approved: the
+  // commitment returns to the request's estimate, so this settlement must stay reported.
+  const prepaidThenWithdrawn = async (amount: number, departmentId: string, date: string) => {
+    const req = (await http().post('/requests').set(...bearer(buyer)).send({
+      title: `Org withdrawn ${tag} ${amount}`, departmentId,
+      items: [{ name: 'Paper', qty: 1, estUnitPriceMinor: amount, vatRateBp: 0 }],
+    }).expect(201)).body;
+    await http().post(`/requests/${req.id}/submit`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.id}/approve`).set(...bearer(approver)).expect(201);
+    const po = (await http().post(`/orders/direct/from-request/${req.id}`).set(...bearer(buyer))
+      .send({ supplierOrgId: supplierOrg }).expect(201)).body;
+    await http().post(`/orders/${po.id}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
+    const inv = (await http().post(`/invoices/from-po/${po.id}`).set(...bearer(supplier))
+      .send({ items: [{ poItemId: po.items[0].id, qty: 1, unitPriceMinor: amount }] }).expect(201)).body;
+    expect(inv.status).toBe('DISPUTED'); // nothing was received
+    await http().post(`/invoices/${inv.id}/approve`).set(...bearer(buyer))
+      .send({ reason: 'Prepaid, order withdrawn afterwards' }).expect(201);
+    await http().post(`/invoices/${inv.id}/pay`).set(...bearer(buyer)).expect(201);
+    await http().post(`/orders/${po.id}/status`).set(...bearer(buyer)).send({ status: 'CANCELLED' }).expect(201);
+    expect((await http().get(`/requests/${req.id}`).set(...bearer(buyer)).expect(200)).body.status).toBe('APPROVED');
+    await db.query('UPDATE procurement_requests SET approved_at = $2 WHERE id = $1', [req.id, date]);
+  };
+
   beforeAll(async () => {
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = mod.createNestApplication();
@@ -194,9 +217,10 @@ describe('budget rollup: settled obligation periods and department isolation', (
 
 // The org-wide plan (no department) is MATCHED_CTE's last resort, and its settlement is
 // reported by the same choice: credited exactly when the plan that CARRIED the obligation
-// is one of this report's org-wide plans — not when a period happens to overlap. The
-// department tree keeps its own period-based rule, which the matrix above pins. Its own
-// orgs and departments, so that matrix is untouched.
+// is one of this report's org-wide plans — not when a period happens to overlap — and only
+// while MATCHED_CTE still counts that obligation at all. The department tree keeps its own
+// period-based rule, under the same condition. Its own orgs and departments, so the matrix
+// above is untouched.
 describe('budget rollup: settlement of the org-wide plan', () => {
   let app: INestApplication, db: Client;
   const tag = randomUUID().slice(0, 8);
@@ -297,6 +321,29 @@ describe('budget rollup: settlement of the org-wide plan', () => {
     await db.query('UPDATE purchase_orders SET issued_at = $2, created_at = $2 WHERE id = $1', [po.id, date]);
   };
 
+  // Paid in advance, then the ORDER withdrawn while its request stays approved: the
+  // commitment returns to the request's estimate, so this settlement must stay reported.
+  const prepaidThenWithdrawn = async (amount: number, departmentId: string, date: string) => {
+    const req = (await http().post('/requests').set(...bearer(buyer)).send({
+      title: `Org withdrawn ${tag} ${amount}`, departmentId,
+      items: [{ name: 'Paper', qty: 1, estUnitPriceMinor: amount, vatRateBp: 0 }],
+    }).expect(201)).body;
+    await http().post(`/requests/${req.id}/submit`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.id}/approve`).set(...bearer(approver)).expect(201);
+    const po = (await http().post(`/orders/direct/from-request/${req.id}`).set(...bearer(buyer))
+      .send({ supplierOrgId: supplierOrg }).expect(201)).body;
+    await http().post(`/orders/${po.id}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
+    const inv = (await http().post(`/invoices/from-po/${po.id}`).set(...bearer(supplier))
+      .send({ items: [{ poItemId: po.items[0].id, qty: 1, unitPriceMinor: amount }] }).expect(201)).body;
+    expect(inv.status).toBe('DISPUTED'); // nothing was received
+    await http().post(`/invoices/${inv.id}/approve`).set(...bearer(buyer))
+      .send({ reason: 'Prepaid, order withdrawn afterwards' }).expect(201);
+    await http().post(`/invoices/${inv.id}/pay`).set(...bearer(buyer)).expect(201);
+    await http().post(`/orders/${po.id}/status`).set(...bearer(buyer)).send({ status: 'CANCELLED' }).expect(201);
+    expect((await http().get(`/requests/${req.id}`).set(...bearer(buyer)).expect(200)).body.status).toBe('APPROVED');
+    await db.query('UPDATE procurement_requests SET approved_at = $2 WHERE id = $1', [req.id, date]);
+  };
+
   beforeAll(async () => {
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = mod.createNestApplication();
@@ -329,13 +376,15 @@ describe('budget rollup: settlement of the org-wide plan', () => {
     await budget(null, 2037, 'FACILITIES'); // and nothing claims an unclassified call-off
     await budget(leaf, 2038, '*', 3);   // a monthly plan, outside a yearly selection
     await budget(null, 2038, '*');
-    await budget(null, 2039, '*');      // and nothing is owed on a withdrawn order
+    await budget(null, 2039, '*');      // and nothing is owed on a withdrawn call-off
+    await budget(leaf, 2041, '*');      // while a withdrawn ORDER leaves its request's plan
     await settled(1300, leaf, '*', '2034-06-15T00:00:00Z');
     await settled(2600, top, 'IT', '2035-06-15T00:00:00Z');
     await settled(700, leaf, 'OFFICE', '2036-06-15T00:00:00Z');
     callOffNo = await callOff(500, '2037-06-15T00:00:00Z');
     await settled(900, leaf, '*', '2038-03-10T00:00:00Z');
     await cancelledAfterPaying(400, '2039-06-15T00:00:00Z');
+    await prepaidThenWithdrawn(1100, leaf, '2041-06-15T00:00:00Z');
   }, 60000);
 
   afterAll(async () => {
@@ -394,11 +443,16 @@ describe('budget rollup: settlement of the org-wide plan', () => {
     const rows = await rollup({ year: 2039, periodType: 'YEAR' });
     expect(dep(rows, null).usedMinor).toBe(0);
     expect(dep(rows, null).paidMinor).toBe(0);
-    // and it is not hidden in the other report either: a cancelled order is in neither
-    // branch of MATCHED_CTE, which is exactly why its settlement stands against nothing
-    const outside = (await http().get('/budgets/unbudgeted').query({ from: '2039-01-01', to: '2039-12-31' })
-      .set(...bearer(buyer)).expect(200)).body;
-    expect(outside).toEqual([]);
+  });
+
+  it('keeps settlement of a request whose order was withdrawn, because its estimate is', async () => {
+    // A cancelled order releases the actual and the request's estimate takes the
+    // commitment back, so the plan still carries this obligation — and the money that
+    // settled it has to stay reported beside it, or real cash leaves the page.
+    const rows = await rollup({ year: 2041, periodType: 'YEAR' });
+    expect(dep(rows, leaf).committedMinor).toBe(1100);
+    expect(dep(rows, leaf).actualMinor).toBe(0);
+    expect(dep(rows, leaf).paidMinor).toBe(1100);
   });
 
   it('does not move settlement onto the org plan because the carrying plan is out of the filter', async () => {
