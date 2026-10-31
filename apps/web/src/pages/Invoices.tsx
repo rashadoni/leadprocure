@@ -15,15 +15,23 @@ export default function Invoices() {
   const detailSequence = useRef(0);
   const detailIntent = useRef<Record<string, { request: number; open: boolean }>>({});
   const mutationVersion = useRef<Record<string, number>>({});
+  // Rows a confirmed mutation or detail read already knows better than any list read that
+  // started earlier. Keeping them per row — instead of discarding the whole list response —
+  // is what lets a refresh still refresh every OTHER row, and still report its own failure.
+  const fresherRow = useRef<Record<string, { version: number; data: any }>>({});
   const listRequest = useRef(0);
 
   const load = async () => {
     const request = ++listRequest.current;
+    const readAt = detailSequence.current;
     setListLoading(true);
     setListError(false);
     try {
       const { data } = await api.get('/invoices');
-      if (request === listRequest.current) setRows(data);
+      if (request === listRequest.current) setRows(data.map((row: any) => {
+        const fresher = fresherRow.current[row.id];
+        return fresher && fresher.version > readAt ? { ...row, ...fresher.data } : row;
+      }));
     } catch {
       if (request === listRequest.current) setListError(true);
     } finally {
@@ -32,17 +40,21 @@ export default function Invoices() {
   };
   useEffect(() => {
     load();
-    return () => { detailIntent.current = {}; mutationVersion.current = {}; listRequest.current++; };
+    return () => {
+      detailIntent.current = {}; mutationVersion.current = {}; fresherRow.current = {};
+      listRequest.current++;
+    };
   }, []);
 
   const act = async (id: string, fn: () => Promise<{ data: any } | undefined>) => {
     try {
       const result = await fn();
       if (!result) return; // cancelled override prompt — no state transition
-      // Any GET spanning this confirmation has ambiguous snapshot ordering.
-      // Invalidate older list reads and let a pending detail read refresh itself.
+      // Any GET spanning this confirmation has ambiguous snapshot ordering. Mark the row
+      // as freshly known and let a pending detail read refresh itself; an older list read
+      // keeps running, so it still refreshes the rest and still reports its own failure.
       mutationVersion.current[id] = ++detailSequence.current;
-      listRequest.current++;
+      fresherRow.current[id] = { version: mutationVersion.current[id], data: result.data };
       setRows((current) => current.map((row) => row.id === id ? { ...row, ...result.data } : row));
       // The mutation returns the canonical invoice row. Keep loaded item details,
       // but update status/match/totals only after the server confirms success.
@@ -68,8 +80,7 @@ export default function Invoices() {
         // overlay a local row: read again after confirmation and trust the server.
         // Another read is needed only when a successful local action overlapped it.
         if (mutationVersion.current[id] !== versionAtStart) continue;
-        listRequest.current++;
-        setListLoading(false);
+        fresherRow.current[id] = { version: ++detailSequence.current, data };
         setRows((current) => current.map((row) => row.id === id ? { ...row, ...data } : row));
         setOpen((o) => ({ ...o, [id]: data }));
         return;

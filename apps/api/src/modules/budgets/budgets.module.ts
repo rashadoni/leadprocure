@@ -647,6 +647,9 @@ export class BudgetsService {
        budgets.reduce((max: string, b: any) => b.periodEnd > max ? b.periodEnd : max, budgets[0].periodEnd),
        filter.scopeDepartmentId ?? null],
     );
+    const covers = (key: string, day: string) => !!paidWindows.get(key)?.some(
+      (window) => day >= window.from && day <= window.to,
+    );
     for (const row of paid) {
       // Eligibility comes from the invoice department or its ancestors' OWN budgets,
       // never a sibling's period. Once covered, propagate once to each ancestor.
@@ -654,10 +657,19 @@ export class BudgetsService {
       for (const key of [row.department_id ?? '', ...ancestors(row.department_id ?? null)]) {
         const cur = byDep.get(key);
         // only AZN settles against an AZN budget; foreign invoices are reported elsewhere
-        covered = covered || !!paidWindows.get(key)?.some(
-          (window) => row.budget_day >= window.from && row.budget_day <= window.to,
-        );
+        covered = covered || covers(key, row.budget_day);
         if (cur && row.currency === cur.currency && covered) cur.paidMinor += Number(row.paid);
+      }
+      // Same specificity order as MATCHED_CTE, whose last resort is the org-wide plan
+      // (department_id IS NULL): when no department in the chain has a budget for the
+      // period, that plan is what carried the spend, so its settlement belongs there.
+      // Only then — a department that did cover it already took the amount, and adding it
+      // here too would report the same settlement twice.
+      if (!covered && row.department_id) {
+        const org = byDep.get('');
+        if (org && row.currency === org.currency && covers('', row.budget_day)) {
+          org.paidMinor += Number(row.paid);
+        }
       }
     }
 

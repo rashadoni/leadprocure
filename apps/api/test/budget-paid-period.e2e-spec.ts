@@ -20,20 +20,22 @@ describe('budget rollup: settled obligation periods and department isolation', (
   let before: any[];
   const rollup = async (query: Record<string, unknown>, token = buyer) =>
     (await http().get('/budgets/rollup').query(query).set(...bearer(token)).expect(200)).body as any[];
-  const row = (rows: any[], id: string) => {
+  const row = (rows: any[], id: string | null) => {
     const found = rows.find((r: any) => r.departmentId === id);
     expect(found).toBeTruthy();
     return found;
   };
-  const budget = async (departmentId: string, year: number, month?: number) => {
+  // departmentId null = the org-wide ceiling (no department), MATCHED_CTE's last resort.
+  const budget = async (departmentId: string | null, year: number, month?: number) => {
     const created = await http().post('/budgets').set(...bearer(buyer)).send({
-      name: `Paid ${tag} ${departmentId} ${year} ${month ?? 'year'}`, category: month ? 'MONTHLY' : '*', departmentId,
+      name: `Paid ${tag} ${departmentId ?? 'org'} ${year} ${month ?? 'year'}`, category: month ? 'MONTHLY' : '*',
+      ...(departmentId ? { departmentId } : {}),
       periodYear: year, periodType: month ? 'MONTH' : 'YEAR', ...(month ? { periodMonth: month } : {}), amountMinor: 100_000_000,
     }).expect(201);
     await http().post(`/budgets/${created.body.id}/submit`).set(...bearer(buyer)).expect(201);
     await http().post(`/budgets/${created.body.id}/approve`).set(...bearer(approver)).expect(201);
   };
-  const invoice = async (amount: number, departmentId: string, date: string, currency = 'AZN', catalog = false, noIssue = false) => {
+  const invoice = async (amount: number, departmentId: string | null, date: string, currency = 'AZN', catalog = false, noIssue = false) => {
     let po: any;
     let requestId: string | undefined;
     if (catalog) {
@@ -106,6 +108,7 @@ describe('budget rollup: settled obligation periods and department isolation', (
     await budget(child, 2034); await budget(child, 2035);
     await budget(child, 2034, 1); await budget(child, 2034, 3);
     await budget(sibling, 2034); await budget(sibling, 2034, 1);
+    await budget(null, 2034); // org-wide: the only plan covering the parent department
     await invoice(1100, child, '2034-01-31T23:59:59.999Z');
     await invoice(2200, child, '2034-02-01T00:00:00Z');
     await invoice(3300, child, '2034-03-31T23:59:59.999Z');
@@ -116,6 +119,8 @@ describe('budget rollup: settled obligation periods and department isolation', (
     await invoice(8800, sibling, '2034-03-15T00:00:00Z'); // sibling has no March plan
     await invoice(900, child, '2034-03-15T00:00:00Z', 'AZN', true);
     await invoice(1000, child, '2034-01-15T00:00:00Z', 'AZN', true, true);
+    // parent has no budget of its own, so only the org-wide plan carries this one
+    await invoice(1300, parent, '2034-06-15T00:00:00Z');
     before = await rollup({ year: 2034, periodType: 'YEAR' });
     for (const id of invoices) await http().post(`/invoices/${id}/pay`).set(...bearer(buyer)).expect(201);
     const email = `paid-user-${tag}@t.test`;
@@ -164,6 +169,18 @@ describe('budget rollup: settled obligation periods and department isolation', (
   it('dates requestless catalog settlement by issue, falling back to creation', async () => {
     const march = await rollup({ year: 2034, periodType: 'MONTH', from: '2034-03-01', to: '2034-03-31' });
     expect(row(march, child).paidMinor).toBe(4200); // 3300 request approval + 900 catalog issue, not its 2035 creation
+  });
+
+  it('settles against the org-wide plan when no department in the chain has a budget', async () => {
+    const current = await rollup({ year: 2034, periodType: 'YEAR' });
+    // The same spend is this plan's commitment, so reporting 0 paid beside it was wrong.
+    expect(row(current, null).usedMinor).toBe(1300);
+    expect(row(current, null).paidMinor).toBe(1300);
+    expect(row(before, null).paidMinor).toBe(0);
+    // and it is counted once: the department chain must not also absorb it
+    expect(row(current, parent).paidMinor).toBe(29400);
+    expect(row(current, child).paidMinor).toBe(12900);
+    expect(row(current, sibling).paidMinor).toBe(16500);
   });
 
   it('does not leak sibling settlement through a shared ancestor or another buyer', async () => {
