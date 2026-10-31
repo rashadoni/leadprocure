@@ -116,7 +116,7 @@ export default function Invoices() {
           <button className="btn small ghost" onClick={() => load()}>{t('invoice_list_retry')}</button>
         </div>}
         <table>
-          <thead><tr><th>#</th><th>PO</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="nowrap">{t('due_date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>#</th><th>PO</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
             {rows.map((i) => (
               <tr key={i.id}>
@@ -124,7 +124,11 @@ export default function Invoices() {
                 <td className="nowrap">{i.po_no}</td>
                 <td>{isBuyer ? i.supplier_name : i.buyer_name}</td>
                 <td className="hint nowrap">{fmtDate(i.issued_at ?? i.created_at)}</td>
-                <td className="hint nowrap">{fmtDate(i.due_date)}</td>
+                {/* No payment-due column: `invoices.due_date` exists and the submit endpoint
+                    stores `dueDate` when it is sent, but nothing in the product ever sends
+                    it — the supplier's invoice action is a single button with no form — so
+                    the column was a dash on every row in every org. It comes back the day
+                    payment terms become a real field rather than standing empty meanwhile. */}
                 <td className="num">{fmtMoney(i.gross_minor, i.currency)}</td>
                 <td><Badge status={i.status} /></td>
                 <td>
