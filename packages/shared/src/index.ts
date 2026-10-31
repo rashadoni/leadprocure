@@ -313,3 +313,52 @@ export interface AccessTokenPayload {
   role: MembershipRole;
   token_version: number;
 }
+
+// ---------------- Settlement reporting: the two meanings of "paid" ----------------
+// Two screens report settled invoices, and they deliberately report DIFFERENT numbers.
+// This is the one place that says what each one means; both endpoints tag their payload
+// with the basis below and both pages label the figure from it, so the difference is
+// stated rather than left to be rediscovered as a defect.
+//
+// 'invoice_ledger' — GET /dashboard/spend-analytics → invoices.{paidMinor,outstandingMinor}
+//   Every invoice RECORDED in the selected window, split into what has since been settled
+//   and what is still owed. It asks nothing about budgets and nothing about what became of
+//   the order: money paid out on a call-off withdrawn afterwards is money paid out, and an
+//   accounts-payable view that hid it would hide exactly the leak it exists to show. Dated
+//   by the invoice's own created_at — the day the organisation recorded the liability. (No
+//   bank settlement date is stored anywhere, so this is not, and must not be labelled, the
+//   day the money moved.)
+//
+// 'budget_obligation' — GET /budgets/rollup → paidMinor
+//   Settlement of obligations the budget engine still counts (MATCHED_CTE), dated by the
+//   obligation itself: the request's approved_at, or a requestless order's issue/creation.
+//   A paid invoice whose order was withdrawn and whose request is gone carries no
+//   commitment, is absent from the unbudgeted report too, and must not stand against any
+//   plan.
+//   WHICH ROW it lands on follows two different rules, and the column must not be
+//   described as though it followed only the stricter one. A department row is credited
+//   when the obligation's day falls inside that department's OWN selected plan periods,
+//   and that credit then propagates to each of its ancestors — so a parent with no plan of
+//   its own still reports its units' settlement. Either way the plan beside the figure need
+//   not be the one that carried it (pinned: the 2036 case in budget-paid-period.e2e-spec.ts,
+//   where a department reads used 0 and paid 700). Only the org-wide row is credited
+//   strictly, with what its own plans actually carried. See the loop over `paid` in
+//   rollup().
+//   VAT: this is the invoice's GROSS, while commitment and actual are each order's own
+//   basis — the raw sum of its lines, which taxTotals() makes NET under the default
+//   EXCLUSIVE vat_mode and GROSS under INCLUSIVE. So a fully settled EXCLUSIVE order at
+//   18% reads "used 1000 / paid 1180", and the column must say «incl. VAT» or that reads
+//   as a data error. Gross is deliberate and is kept: it is the money that actually left,
+//   and it is the basis the invoice list and the analytics tiles already report, so
+//   restating it net here would buy comparability with the column beside it at the price
+//   of a THIRD number for the same invoice — the defect this whole section exists to
+//   prevent. Making paid comparable to used instead is a real alternative; it is a money
+//   computation (CASE WHEN o.vat_mode = 'INCLUSIVE' THEN i.gross_minor ELSE i.net_minor
+//   END) and so a decision of its own, not something to slip in behind a label.
+//
+// So the same paid invoice can appear on one page and not the other, and can fall in
+// different months on each. That is the design: one is a ledger of invoices, the other is
+// settlement of commitments. Neither figure is comparable to the other, and neither is
+// summed into actual spend.
+export const PAID_BASES = ['invoice_ledger', 'budget_obligation'] as const;
+export type PaidBasis = (typeof PAID_BASES)[number];

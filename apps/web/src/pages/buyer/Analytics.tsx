@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, fmtMoney } from '../../api/client';
+import type { PaidBasis } from '@leadprocure/shared';
 import { useI18n } from '../../i18n';
 
 // Every split carries the same window a year earlier beside it. A row that exists only in
@@ -20,7 +21,12 @@ interface Spend {
   byDepartment: YoyRow<'department'>[];
   topSuppliers: { name: string; totalMinor: number; poCount: number }[];
   savings: { estimatedMinor: number; awardedMinor: number; savedMinor: number; events: number };
-  invoices: { paidMinor: number; outstandingMinor: number; paidCount: number; outstandingCount: number };
+  // The invoice LEDGER, not budget settlement: the endpoint names its own basis, and
+  // PAID_BASES in @leadprocure/shared holds both definitions side by side.
+  invoices: {
+    paidMinor: number; outstandingMinor: number; paidCount: number; outstandingCount: number;
+    basis: PaidBasis; dateBasis: string;
+  };
 }
 
 interface Pace {
@@ -106,6 +112,14 @@ export default function Analytics() {
   </>;
 
   const money = (value: number) => fmtMoney(value, d.currency);
+  // The label and the explanation come from the basis the endpoint DECLARES, not from an
+  // assumption on this page: if the endpoint ever started reporting the other measure, the
+  // wording would move with it instead of quietly lying. One wording per meaning, shared
+  // with /buyer/budgets — see PAID_BASES in @leadprocure/shared.
+  const paidBasis = `paid_basis_${d.invoices.basis}`;
+  // `tip` explains the figure on hover, `note` is the visible line that names the other page.
+  const paidBasisTip = `paid_basis_tip_${d.invoices.basis}`;
+  const paidBasisNote = `paid_basis_note_${d.invoices.basis}`;
   // the plan line must fit the same scale as the bars, or it lands off the chart
   const maxMonth = Math.max(1, ...d.monthly.map((m) => Math.max(m.totalMinor, m.plannedMinor, m.prevTotalMinor)));
   // Growth reads as a cost, so up is red and down is green — the opposite of a sales chart.
@@ -129,15 +143,19 @@ export default function Analytics() {
       {filters}
       <p className="hint">{t('spend_date_basis')}</p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12, marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12, marginBottom: 8 }}>
         {/* PO volume is net; invoices are gross — label the VAT basis so «paid > spend» never
-            reads as a data error. */}
+            reads as a data error. The invoice tiles are the INVOICE LEDGER: every invoice
+            recorded in this window, whatever became of its order. /buyer/budgets answers a
+            different question with the same word, so both carry their basis in the label. */}
         {[
           { label: `${t('spend')} · ${t('net_label')}`, value: money(d.monthly.reduce((s, m) => s + m.totalMinor, 0)) },
           { label: `${t('savings')} · ${d.savings.events}`, value: `${money(d.savings.savedMinor)} (${savingsPct}%)`,
             hint: t('savings_hint') },
-          { label: `${t('paid')} · ${d.invoices.paidCount} · ${t('gross_label')}`, value: money(d.invoices.paidMinor) },
-          { label: `${t('outstanding')} · ${d.invoices.outstandingCount} · ${t('gross_label')}`, value: money(d.invoices.outstandingMinor) },
+          { label: `${t(paidBasis)} · ${d.invoices.paidCount} · ${t('gross_label')}`, value: money(d.invoices.paidMinor),
+            hint: t(paidBasisTip) },
+          { label: `${t('inv_outstanding')} · ${d.invoices.outstandingCount} · ${t('gross_label')}`, value: money(d.invoices.outstandingMinor),
+            hint: t('inv_outstanding_hint') },
         ].map((c: any) => (
           <div className="card" key={c.label} style={{ marginBottom: 0 }} title={c.hint}>
             <div style={{ color: 'var(--muted)', fontSize: 12 }}>{c.label}</div>
@@ -145,6 +163,9 @@ export default function Analytics() {
           </div>
         ))}
       </div>
+      {/* Said out loud, not only in a tooltip: finance opens both pages and must not have to
+          guess why the two «paid» figures differ. */}
+      <p className="hint" style={{ marginTop: 0, marginBottom: 16 }}>{t(paidBasisNote)}</p>
 
       <div className="card">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>

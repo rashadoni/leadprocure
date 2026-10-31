@@ -244,6 +244,17 @@ export default function Budgets() {
     catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
+  // The column's name and its explanation come from the basis the ROWS declare, not from
+  // an assumption here: if the endpoint ever started reporting the other settlement measure
+  // the wording would move with it instead of quietly lying. One wording per meaning,
+  // shared with /buyer/analytics — see PAID_BASES in @leadprocure/shared. Only read where
+  // the rollup renders, which is only when there is a row.
+  const paidBasis = `paid_basis_${depSummary[0]?.paidBasis}`;
+  // `tip` explains the figure on hover — short, because it sits on every row and the bubble
+  // is 240px wide; `note` is the visible line under the table that names the other page.
+  const paidBasisTip = `paid_basis_tip_${depSummary[0]?.paidBasis}`;
+  const paidBasisNote = `paid_basis_note_${depSummary[0]?.paidBasis}`;
+
   return (
     <>
       <h1>{t('budgets')}</h1>
@@ -317,7 +328,13 @@ export default function Budgets() {
           <table>
             <thead><tr>
               <th>{t('department')}</th><th>{t('amount')}</th><th>{t('committed')}</th><th>{t('actual')}</th>
-              <th>{t('paid')}</th><th>{t('remaining')}</th><th>{t('forecast')}</th><th style={{ width: 180 }}>{t('utilization')}</th>
+              {/* Not the invoice figure on /buyer/analytics: a different measure, so it
+                  carries its own name — taken from the basis the endpoint declares rather
+                  than hard-coded here. See PAID_BASES in @leadprocure/shared.
+                  «incl. VAT» is not decoration: this is invoice gross while the columns
+                  to its left follow each order's own VAT mode, so a fully paid order at
+                  18% shows 1180 beside 1000 and must not read as a data error. */}
+              <th>{t(paidBasis)} · {t('gross_label')}</th><th>{t('remaining')}</th><th>{t('forecast')}</th><th style={{ width: 180 }}>{t('utilization')}</th>
             </tr></thead>
             <tbody>
               {depSummary.map((d) => {
@@ -333,7 +350,7 @@ export default function Budgets() {
                     <td>{fmtMoney(d.committedMinor, d.currency)}</td>
                     <td>{fmtMoney(d.actualMinor, d.currency)}</td>
                     {/* settlement of orders already counted as actual — shown beside, never summed in */}
-                    <td className="hint" data-tip={t('paid_hint')}>{fmtMoney(d.paidMinor, d.currency)}</td>
+                    <td className="hint" data-tip={t(paidBasisTip)}>{fmtMoney(d.paidMinor, d.currency)}</td>
                     <td className={over ? 'error' : ''}>{fmtMoney(d.remainingMinor, d.currency)}</td>
                     {/* where the period lands at the current rate — the question that follows "how much is left" */}
                     <td className={d.forecastOverMinor > 0 ? 'error' : 'hint'} data-tip={t('forecast_hint')}>
@@ -358,6 +375,10 @@ export default function Budgets() {
               })}
             </tbody>
           </table>
+          {/* Two screens report settled invoices and deliberately report different numbers.
+              A finance reader comparing them must find the reason on the page, not file it
+              as a defect. */}
+          <div className="hint" style={{ marginTop: 10 }}>{t(paidBasisNote)}</div>
         </div>
       )}
 

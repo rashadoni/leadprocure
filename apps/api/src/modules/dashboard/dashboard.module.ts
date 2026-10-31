@@ -1,4 +1,5 @@
 import { BadRequestException, Controller, Get, Injectable, Module, Query } from '@nestjs/common';
+import type { PaidBasis } from '@leadprocure/shared';
 import { Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 
@@ -6,6 +7,10 @@ const lineNet = (amount: string) => `(CASE WHEN e.vat_mode='INCLUSIVE' THEN ${am
 const poNet = `(CASE WHEN p.vat_mode='INCLUSIVE' THEN (SELECT sum(poi.line_total_minor-round(poi.line_total_minor*poi.vat_rate_bp::numeric/(10000+poi.vat_rate_bp))) FROM purchase_order_items poi WHERE poi.po_id=p.id) ELSE p.total_minor END)`;
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+// Which of the two settlement measures this endpoint reports. The union it is checked
+// against carries both definitions: see PAID_BASES in @leadprocure/shared.
+const INVOICE_LEDGER: PaidBasis = 'invoice_ledger';
 
 // Buyer KPIs — every query is RLS-scoped by the request context, so plain
 // aggregates cannot leak across orgs by construction.
@@ -200,6 +205,16 @@ export class DashboardService {
         SELECT COALESCE(sum(est), 0)::bigint AS estimated, COALESCE(sum(awd), 0)::bigint AS awarded,
                COALESCE(sum(est - awd), 0)::bigint AS saved, count(*)::int AS events
         FROM awarded`,[from, to, currency]),
+      // The INVOICE LEDGER, not budget settlement — see PAID_BASES in @leadprocure/shared
+      // for both definitions side by side. Every invoice recorded in this window, split
+      // into what has since been settled and what is still owed: no budget is consulted
+      // and the order's fate is not asked about, because cash that left on a call-off
+      // withdrawn afterwards is exactly what an accounts-payable view must not hide.
+      // /budgets/rollup answers the other question — settlement charged to the plan that
+      // carried the obligation, dated by the obligation — so the same invoice can be
+      // absent there, or land in a different month. Both are right; they are not the same
+      // measure, and neither is summed into spend above (PO totals are net, invoice
+      // gross carries VAT).
       m.query(`
         SELECT COALESCE(sum(gross_minor) FILTER (WHERE status = 'PAID'), 0)::bigint AS paid,
                COALESCE(sum(gross_minor) FILTER (WHERE status NOT IN ('PAID','REJECTED')), 0)::bigint AS outstanding,
@@ -266,6 +281,10 @@ export class DashboardService {
       invoices: {
         paidMinor: Number(inv.paid), outstandingMinor: Number(inv.outstanding),
         paidCount: inv.paid_count, outstandingCount: inv.outstanding_count,
+        // Declared, not implied: the page labels the figure from this, and the page-level
+        // dateBasis above describes the PO panels, which this block does not follow.
+        basis: INVOICE_LEDGER,
+        dateBasis: 'invoice_created_at',
       },
     };
   }

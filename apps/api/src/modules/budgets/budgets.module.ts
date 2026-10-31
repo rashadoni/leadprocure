@@ -12,7 +12,7 @@ import {
   MinLength, ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import type { AccessTokenPayload } from '@leadprocure/shared';
+import type { AccessTokenPayload, PaidBasis } from '@leadprocure/shared';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
@@ -111,6 +111,10 @@ export const BUDGET_CURRENCY = 'AZN';
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const DAY_MS = 86_400_000;
+
+// Which of the two settlement measures this module reports. The union it is checked
+// against carries both definitions: see PAID_BASES in @leadprocure/shared.
+const BUDGET_OBLIGATION: PaidBasis = 'budget_obligation';
 
 // Share of a period already gone, clamped to 0–100: a period still ahead reads 0, a closed
 // one reads 100, so a finished budget never looks "ahead of pace".
@@ -529,11 +533,27 @@ export class BudgetsService {
   }
 
   // Per-department rollup: what finance opens the page for. Plan / commitment / actual come
-  // from the budgets themselves; PAID is recorded invoice settlement, taken from the invoice's
-  // own department_id (denormalized at submission, so this survives a PO being re-scoped).
+  // from the budgets themselves; PAID is settlement of the obligations the engine still
+  // counts, attributed to rows by the two rules spelled out below, and taken from the
+  // invoice's own department_id (denormalized at submission, so this survives a PO being
+  // re-scoped).
   //
   // Paid is reported BESIDE the others, never added into them: an invoice is settlement of
   // an order already counted as actual, so summing them would double the spend.
+  //
+  // This is NOT the same measure as the invoice figures on /buyer/analytics, and the two
+  // are not meant to agree — PAID_BASES in @leadprocure/shared states both definitions.
+  // Here: only obligations MATCHED_CTE still counts, dated by the obligation (a request's
+  // approved_at, a requestless order's issue/creation). There: every invoice recorded in
+  // the window, dated by the invoice. So a paid invoice whose order was withdrawn shows up
+  // on analytics and not here, and an invoice recorded in a month other than its
+  // obligation's falls in a different month on each page. Both are correct answers to
+  // different questions; the rows below carry `paidBasis` so the page can say which.
+  //
+  // Which ROW gets a settlement is two rules, not one — a department's period covers it,
+  // the org-wide row's plans carried it. The loop over `paid` below is the authority on
+  // that distinction, and the wording on screen must keep it: a department row can report
+  // settlement beside a plan that carried none of it.
   async rollup(
     filter: {
       year?: number; periodType?: string; from?: string; to?: string;
@@ -720,6 +740,9 @@ export class BudgetsService {
       // Paid is also not comparable to used as a number: with the default EXCLUSIVE
       // vat_mode an order's total is net while an invoice's gross carries VAT, so 18%
       // spend settles at about 1.18× its actual (INCLUSIVE orders settle at about 1×).
+      // The two sit in ONE table row, so this cannot live only here: the column carries
+      // «incl. VAT» and its hint says it, or a fully paid order reads as arithmetic that
+      // does not add up. Pinned by the 18% case in paid-basis.e2e-spec.ts.
       const org = byDep.get('');
       if (org && row.budget_id && selectedOrgPlans.has(String(row.budget_id))
           && row.currency === org.currency) {
@@ -748,6 +771,9 @@ export class BudgetsService {
         const forecastMinor = elapsedPct > 0 ? Math.round((used / elapsedPct) * 100) : d.amountMinor;
         return {
           ...d,
+          // Named on every row, so the page never has to guess which settlement measure
+          // this is — nor a reader wonder why it disagrees with /buyer/analytics.
+          paidBasis: BUDGET_OBLIGATION,
           usedMinor: used,
           remainingMinor: d.amountMinor - used,
           utilizationPct,
