@@ -1,6 +1,13 @@
 import { DependencyList, useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 
+// 403 is this API's "you may not have this": FeatureGuard throws ForbiddenException for an
+// unlicensed feature and the role guard answers the same way. A page that then shows fewer
+// options is CORRECT, so that one failure stays quiet. Every other failure is a dead
+// request, and swallowing it the same way is exactly what makes a broken read look like an
+// org that simply has nothing configured.
+export const isDenied = (e: any) => e?.response?.status === 403;
+
 export type Loader<T> = {
   data: T;
   loading: boolean;
@@ -32,8 +39,11 @@ export function useLoad<T>(fetcher: () => Promise<NoInfer<T>>, deps: DependencyL
     try {
       const next = await fetcher();
       if (mine === seq.current) setData(next);
-    } catch {
-      if (mine === seq.current) setFailed(true);
+    } catch (e) {
+      // Denied is not failed, here too: an org without a feature's licence used to see an
+      // empty list, and reporting that as "could not load" would be the same lie in the
+      // other direction.
+      if (mine === seq.current && !isDenied(e)) setFailed(true);
     } finally {
       if (mine === seq.current) setLoading(false);
     }
@@ -47,6 +57,7 @@ export function useLoad<T>(fetcher: () => Promise<NoInfer<T>>, deps: DependencyL
 }
 
 type AnyLoader = { loading: boolean; failed: boolean; reload: () => unknown };
+
 
 // The one line a list owes its reader: loading, or a failure with a Retry that really
 // retries, or that it is genuinely empty. Pages that load several lists share one line;

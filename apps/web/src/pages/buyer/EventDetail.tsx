@@ -8,7 +8,7 @@ import { AuctionPanel } from '../../components/AuctionPanel';
 import { QnaCard } from '../../components/QnaCard';
 import { BidDocs } from '../../components/BidDocs';
 import { Badge } from '../../components/Badge';
-import { ListState } from '../../components/ListState';
+import { isDenied, ListState } from '../../components/ListState';
 
 export default function EventDetail() {
   const { id } = useParams();
@@ -26,7 +26,16 @@ export default function EventDetail() {
     () => { setEvFailed(false); return api.get(`/events/${id}`).then((r) => setEv(r.data)).catch(() => setEvFailed(true)); },
     [id],
   );
-  useEffect(() => { load(); api.get('/suppliers/directory').then((r) => setSuppliers(r.data)).catch(() => {}); }, [load]);
+  // This fills the invite-supplier select on a live tender. The registry sits behind a
+  // licence, and being denied it means there is genuinely nobody to invite from here;
+  // any other failure said the same thing while the directory was simply unreachable.
+  const [suppliersFailed, setSuppliersFailed] = useState(false);
+  const loadSuppliers = useCallback(() => {
+    setSuppliersFailed(false);
+    api.get('/suppliers/directory').then((r) => setSuppliers(r.data))
+      .catch((e: any) => { if (!isDenied(e)) setSuppliersFailed(true); });
+  }, []);
+  useEffect(() => { load(); loadSuppliers(); }, [load, loadSuppliers]);
 
   // Follow-up chains: reminder status per invited supplier (email → … → WhatsApp).
   const [fups, setFups] = useState<any[]>([]);
@@ -134,7 +143,8 @@ export default function EventDetail() {
   return (
     <>
       {/* a reload that failed after the page was drawn: the figures below are stale */}
-      <ListState of={{ loading: false, failed: evFailed, reload: load }} />
+      <ListState of={[{ loading: false, failed: evFailed, reload: load },
+        { loading: false, failed: suppliersFailed, reload: loadSuppliers }]} />
       <h1>
         {ev.title} <span className="badge INVITED">{ev.type}</span>{' '}
         <Badge status={ev.status} />

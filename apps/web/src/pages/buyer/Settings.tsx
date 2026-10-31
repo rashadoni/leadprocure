@@ -4,7 +4,7 @@ import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import { BUYER_ROLES } from '@leadprocure/shared';
 import { ChannelsCard } from '../../components/ChannelsCard';
-import { ListState, useLoad } from '../../components/ListState';
+import { isDenied, ListState, useLoad } from '../../components/ListState';
 
 export default function Settings() {
   const { t } = useI18n();
@@ -35,11 +35,20 @@ export default function Settings() {
   const MP_ICO: Record<string, string> = { DIRECT: '📦', RFQ: '🔒', OPEN_TENDER: '🌐' };
   const mLabel = (m: string) => { const l = t(`mt_${m}`); return l === `mt_${m}` ? m : l; };
 
-  // Reference data the page can live without: an org with no categories, no departments
-  // or no budget feature simply renders fewer options, so these stay quiet when they fail.
+  // Reference data the page can live without — but only when it is genuinely absent.
+  // An org with no budgets licence gets 403 on the policy and renders no threshold card,
+  // which is right; a 503 on the same URL used to render exactly the same thing, so the
+  // admin read "we don't have budget limits" off a dead request.
+  const [refFailed, setRefFailed] = useState(false);
   const loadOptional = () => {
-    api.get('/categories').then((r) => setCats(r.data)).catch(() => {});
-    api.get('/departments').then((r) => setDeps(r.data)).catch(() => {});
+    setRefFailed(false);
+    // Only the policy sits behind a licence. /categories and /departments carry nothing
+    // but @Roles over the four buyer roles, so on this page every failure of theirs is a
+    // real one and there is no denial to exempt.
+    const broken = () => setRefFailed(true);
+    const quiet = (e: any) => { if (!isDenied(e)) setRefFailed(true); };
+    api.get('/categories').then((r) => setCats(r.data)).catch(broken);
+    api.get('/departments').then((r) => setDeps(r.data)).catch(broken);
     api.get('/budgets/policy').then((r) => {
       setPolicy(r.data);
       setPolicyDraft({
@@ -47,7 +56,7 @@ export default function Settings() {
         blockPct: r.data.blockPct == null ? '' : String(r.data.blockPct),
         allowOverride: r.data.allowOverride,
       });
-    }).catch(() => {});
+    }).catch(quiet);
   };
   useEffect(loadOptional, []);
   const load = () => { userList.reload(); policyList.reload(); approvalList.reload(); loadOptional(); };
@@ -135,7 +144,8 @@ export default function Settings() {
   return (
     <>
       <h1>{t('settings')}</h1>
-      <ListState of={[userList, policyList, approvalList]} />
+      <ListState of={[userList, policyList, approvalList,
+        { loading: false, failed: refFailed, reload: loadOptional }]} />
       <div className="card">
         <h3>{t('users')}</h3>
         <table>

@@ -21,7 +21,16 @@ export default function Catalogs() {
   const catalogs = useLoad(() => api.get('/catalogs').then((r) => r.data), [], [] as any[]);
   const rows = catalogs.data;
   const load = () => catalogs.reload();
-  useEffect(() => { if (isBuyer) api.get('/departments').then((r) => setDeps(r.data)).catch(() => {}); }, [isBuyer]);
+  // A call-off has no request behind it, so this select is the only place its budget is
+  // ever chosen. /departments carries no licence gate and a supplier never reaches this
+  // call, so every failure here is a real one.
+  const [depsFailed, setDepsFailed] = useState(false);
+  const loadDeps = () => {
+    if (!isBuyer) return;
+    setDepsFailed(false);
+    api.get('/departments').then((r) => setDeps(r.data)).catch(() => setDepsFailed(true));
+  };
+  useEffect(loadDeps, [isBuyer]);
 
   const run = async (fn: () => Promise<unknown>) => {
     try { await fn(); load(); } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
@@ -45,7 +54,7 @@ export default function Catalogs() {
     <>
       <h1>📖 {t('catalogs')}</h1>
       <div className="card">
-        <ListState of={catalogs} />
+        <ListState of={[catalogs, { loading: false, failed: depsFailed, reload: loadDeps }]} />
         <table>
           <thead><tr><th>{t('title')}</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th>{t('status')}</th><th>{t('items')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>

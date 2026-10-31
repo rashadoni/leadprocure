@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, fmtMoney } from '../../api/client';
 import type { PaidBasis } from '@leadprocure/shared';
 import { useI18n } from '../../i18n';
+import { isDenied, ListState } from '../../components/ListState';
 
 // Every split carries the same window a year earlier beside it. A row that exists only in
 // last year's half still comes back — "we stopped buying this" is a change worth seeing.
@@ -77,10 +78,16 @@ export default function Analytics() {
       .catch(() => { if (active) setLoadError(true); });
     return () => { active = false; controller.abort(); };
   }, [win.from, win.to, currency, reload]);
-  useEffect(() => {
+  const [paceFailed, setPaceFailed] = useState(false);
+  // Without the budgets licence this is denied and the card is correctly absent. Any
+  // other failure is a dead read, and an absent pace card is not the same as "on pace".
+  const loadPace = () => {
+    setPaceFailed(false);
     api.get('/budgets/rollup', { params: { current: 1 } })
-      .then((r) => setPace(r.data)).catch(() => setPace([]));
-  }, []);
+      .then((r) => setPace(r.data))
+      .catch((e: any) => { setPace([]); if (!isDenied(e)) setPaceFailed(true); });
+  };
+  useEffect(loadPace, []);
   // Auth-guarded CSV of exactly the window on screen.
   const exportCsv = () => {
     if (!d) return;
@@ -192,6 +199,7 @@ export default function Analytics() {
         <div className="hint" style={{ marginTop: 8 }}>{t('plan_line_hint')}</div>
       </div>
 
+      <ListState of={{ loading: false, failed: paceFailed, reload: loadPace }} />
       {pace.length > 0 && (
         <div className="card">
           <h3>{t('budget_pace')}</h3>

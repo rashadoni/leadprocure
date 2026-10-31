@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, fmtDate, fmtDateTime, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { notifText, taskLabel } from '../../components/humanize';
-import { ListState, useLoad } from '../../components/ListState';
+import { isDenied, ListState, useLoad } from '../../components/ListState';
 
 const TASK_LINK: Record<string, (id: string) => string> = {
   APPROVE_REQUEST: () => '/buyer/requests',
@@ -18,12 +18,16 @@ export default function Dashboard() {
   const notes = useLoad(() => api.get('/notifications').then((r) => r.data.slice(0, 8)), [], [] as any[]);
   const [overBudgets, setOverBudgets] = useState<any[]>([]);
 
-  // a 9× overspend must scream on the front page, not hide in the budgets tab. This one
-  // stays quiet when it fails: an org without the budgets feature has no overspend to show.
+  // a 9x overspend must scream on the front page, not hide in the budgets tab. An org
+  // without the budgets licence is denied and has no overspend to show — that one stays
+  // silent. Any other failure means we cannot say whether they are over, and "no banner"
+  // is not the same statement as "not over".
+  const [budgetsFailed, setBudgetsFailed] = useState(false);
   const loadOverBudgets = () => {
+    setBudgetsFailed(false);
     api.get('/budgets')
       .then((r) => setOverBudgets(r.data.filter((b: any) => b.committedMinor > b.amountMinor)))
-      .catch(() => {});
+      .catch((e: any) => { if (!isDenied(e)) setBudgetsFailed(true); });
   };
   useEffect(loadOverBudgets, []);
 
@@ -52,7 +56,8 @@ export default function Dashboard() {
     <>
       <h1>{t('dashboard')}</h1>
       {/* a refresh that failed after the page was drawn: the figures below are stale */}
-      <ListState of={{ loading: false, failed: kpi.failed, reload: kpi.reload }} />
+      <ListState of={[{ loading: false, failed: kpi.failed, reload: kpi.reload },
+        { loading: false, failed: budgetsFailed, reload: loadOverBudgets }]} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
         {cards.map((c) => (
           <div className="card" key={c.label} style={{ marginBottom: 0 }}>

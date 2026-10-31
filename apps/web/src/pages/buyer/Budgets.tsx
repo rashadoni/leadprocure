@@ -3,6 +3,7 @@ import { api, fmtDate, fmtMoney } from '../../api/client';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
+import { isDenied, ListState } from '../../components/ListState';
 
 interface Budget {
   id: string;
@@ -57,8 +58,17 @@ export default function Budgets() {
   const [deps, setDeps] = useState<any[]>([]);
   const [unbudgeted, setUnbudgeted] = useState<any[]>([]);
   const [policy, setPolicy] = useState<{ warnPct: number; blockPct: number | null; allowOverride: boolean } | null>(null);
-  useEffect(() => { api.get('/departments').then((r) => setDeps(r.data)).catch(() => {}); }, []);
-  useEffect(() => { api.get('/budgets/policy').then((r) => setPolicy(r.data)).catch(() => {}); }, []);
+  // Choosing no department writes an ORG-WIDE plan, which is a different plan from a
+  // departmental one — so an empty select must never be a dead read. /departments has no
+  // licence gate, hence no exemption; the policy does, hence one.
+  const [refFailed, setRefFailed] = useState(false);
+  const loadRefs = () => {
+    setRefFailed(false);
+    api.get('/departments').then((r) => setDeps(r.data)).catch(() => setRefFailed(true));
+    api.get('/budgets/policy').then((r) => setPolicy(r.data))
+      .catch((e: any) => { if (!isDenied(e)) setRefFailed(true); });
+  };
+  useEffect(loadRefs, []);
 
   // Period + department filter over the list, all optional.
   const [filter, setFilter] = useState({ periodType: '', year: '', departmentId: '' });
@@ -258,6 +268,7 @@ export default function Budgets() {
   return (
     <>
       <h1>{t('budgets')}</h1>
+      <ListState of={{ loading: false, failed: refFailed, reload: loadRefs }} />
       {canManagePlans && (
         <div className="card">
           <form onSubmit={submit} className="row" style={{ alignItems: 'flex-end' }}>

@@ -3,6 +3,7 @@ import { api, fmtDate, fmtMoney } from '../api/client';
 import { useAuth } from '../auth/auth';
 import { useI18n } from '../i18n';
 import { Badge } from '../components/Badge';
+import { isDenied } from '../components/ListState';
 
 export default function Invoices() {
   const { t } = useI18n();
@@ -32,8 +33,10 @@ export default function Invoices() {
         const fresher = fresherRow.current[row.id];
         return fresher && fresher.version > readAt ? { ...row, ...fresher.data } : row;
       }));
-    } catch {
-      if (request === listRequest.current) setListError(true);
+    } catch (e) {
+      // p2p.invoicing is a licence: an org without it is denied, and that is an empty
+      // list, not a failed one. This page's loader predates useLoad, so it says so here.
+      if (request === listRequest.current && !isDenied(e)) setListError(true);
     } finally {
       if (request === listRequest.current) setListLoading(false);
     }
