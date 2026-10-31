@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-31",
+  "archive": "/home/codex-alt/exports/Leadprocure_Claude_Handoff_2026-10-31.zip",
+  "bytes": 5616807,
+  "sha256": "9c589a4d563bfa0290a6611822a12dba4993cb21bd13cc426166b1c465c0ac10",
+  "entries": 126,
+  "manifestChecks": 125,
+  "zipCrcAndBytes": "PASS",
+  "manifestSha256": "PASS",
+  "all20TaskIds": "PASS",
+  "18VerifiedA19PartialA17Removed": "PASS",
+  "pr3Through34MergedReadback": "PASS",
+  "mainCi41112571528SuccessReadback": "PASS",
+  "presentationManifest9of9": "PASS",
+  "credentialPatternScreen": "No matches for private key/GitHub PAT/AWS access key patterns; explicit file whitelist excludes environment/runtime data. Not an exhaustive secret audit.",
+  "applicationChanged": false,
+  "productionChanged": false,
+  "handoffCommit": "856b9012b2a718582c5cbc4fd7cd9608527d3050"
+}
