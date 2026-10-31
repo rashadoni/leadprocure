@@ -84,9 +84,11 @@ const dict: Record<Lang, Record<string, string>> = {
     // Ödənişin iki mənası — hər biri bir yerdə yazılıb; adı serverin bildirdiyi
     // basisdən gəlir (PAID_BASES, @leadprocure/shared).
     paid_basis_invoice_ledger: 'Ödənilmiş qaimələr',
-    paid_basis_hint_invoice_ledger: 'Qaimə jurnalı: seçilmiş dövrdə qeydə alınmış və artıq ödənilmiş bütün qaimələr, qaimənin qeydə alınma tarixi ilə. Büdcə nəzərə alınmır, sifarişin sonrakı taleyi də — sonradan ləğv edilmiş sifariş üzrə ödənilən pul burada qalır. «Büdcələr» səhifəsindəki «Plan üzrə ödəniş» başqa şeyi sayır, ona görə eyni qaimə orada olmaya və ya başqa aya düşə bilər. Bu, səhv deyil.',
+    paid_basis_tip_invoice_ledger: 'Seçilmiş dövrdə qeydə alınmış və artıq ödənilmiş bütün qaimələr, qaimənin qeydə alınma tarixi ilə. Büdcə nəzərə alınmır, sifarişin sonrakı taleyi də: sonradan ləğv edilmiş sifariş üzrə ödənilən pul burada qalır.',
+    paid_basis_note_invoice_ledger: 'Bu, qaimə jurnalıdır, «Büdcələr» səhifəsindəki «Plan üzrə ödəniş» deyil: orada yalnız büdcənin hələ saydığı öhdəliklər, öhdəliyin tarixi ilə. Ona görə eyni qaimə orada olmaya və ya başqa aya düşə bilər. Bu, səhv deyil.',
     paid_basis_budget_obligation: 'Plan üzrə ödəniş',
-    paid_basis_hint_budget_obligation: 'Bu planın hələ saxladığı öhdəliklərin ödənişi, öhdəliyin tarixi ilə: tələbin təsdiqi, tələbsiz sifariş üzrə isə buraxılış və ya yaradılma. Faktiki məbləğə əlavə edilmir. «Analitika» səhifəsi «Ödənilmiş qaimələr»i sayır — bütün ödənilmiş qaimələri, qaimənin tarixi ilə — ona görə rəqəmlər bilərəkdən fərqlənir.',
+    paid_basis_tip_budget_obligation: 'Büdcənin hələ saydığı öhdəliklərin ödənişi, öhdəliyin tarixi ilə: tələbin təsdiqi, tələbsiz sifariş üzrə isə buraxılış və ya yaradılma. Şöbə sətri tarixi öz planlarının dövrlərinə düşən ödənişi götürür, ona görə yanındakı plan onu daşımamış da ola bilər; «bütün təşkilat» sətri isə yalnız öz planlarının daşıdığını. Faktiki məbləğə əlavə edilmir.',
+    paid_basis_note_budget_obligation: 'Bu, «Analitika» səhifəsindəki «Ödənilmiş qaimələr» deyil: orada bütün ödənilmiş qaimələr qaimənin tarixi ilə, planlara və sifarişin taleyinə baxmadan. Ona görə eyni qaimə orada ola, burada olmaya və ya başqa aya düşə bilər. Bu, səhv deyil.',
     committed_hint: 'Təsdiqlənmiş sorğular — hələ sifariş verilməyib',
     actual_hint: 'Verilmiş sifarişlər (PO) — sorğunun proqnozunu əvəz edir',
     cancel: 'Ləğv et', tip_cancel_request: 'Sorğunu ləğv et və büdcə öhdəliyini azad et',
@@ -306,9 +308,11 @@ const dict: Record<Lang, Record<string, string>> = {
     // Два смысла оплаты — каждый описан в одном месте; подпись берётся по базису,
     // который называет сервер (PAID_BASES в @leadprocure/shared).
     paid_basis_invoice_ledger: 'Оплачено по счетам',
-    paid_basis_hint_invoice_ledger: 'Журнал счетов: все счета, зарегистрированные в выбранном окне и уже оплаченные, по дате регистрации счёта. Бюджет не спрашивается, судьба заказа тоже — деньги, ушедшие по заказу, который потом отменили, остаются здесь. На странице «Бюджеты» колонка «Оплата по плану» считает другое, поэтому тот же счёт может там отсутствовать или попасть в другой месяц. Это не ошибка.',
+    paid_basis_tip_invoice_ledger: 'Все счета, зарегистрированные в выбранном окне и уже оплаченные, по дате регистрации счёта. Бюджет не спрашивается, судьба заказа тоже: деньги, ушедшие по заказу, который потом отменили, остаются здесь.',
+    paid_basis_note_invoice_ledger: 'Это журнал счетов, а не «Оплата по плану» со страницы «Бюджеты»: там только обязательства, которые бюджет ещё считает, и по дате обязательства. Поэтому один и тот же счёт может там отсутствовать или попасть в другой месяц. Это не ошибка.',
     paid_basis_budget_obligation: 'Оплата по плану',
-    paid_basis_hint_budget_obligation: 'Оплата обязательств, которые этот план ещё держит, по дате обязательства: утверждение заявки, а для заказа без заявки — выпуск или создание. К факту не прибавляется. «Аналитика» считает «Оплачено по счетам» — все оплаченные счета по дате счёта, — поэтому числа расходятся намеренно.',
+    paid_basis_tip_budget_obligation: 'Оплата обязательств, которые бюджет ещё считает, по дате обязательства: утверждение заявки, а для заказа без заявки — выпуск или создание. Строка отдела берёт оплату, чья дата попала в периоды её собственных планов, поэтому рядом может стоять план, который её не нёс; строка «вся организация» — только то, что несли её планы. К факту не прибавляется.',
+    paid_basis_note_budget_obligation: 'Это не «Оплачено по счетам» со страницы «Аналитика»: там все оплаченные счета по дате счёта, без оглядки на планы и на судьбу заказа. Поэтому один и тот же счёт может быть там и отсутствовать здесь или попасть в другой месяц. Это не ошибка.',
     committed_hint: 'Одобренные заявки, по которым заказ ещё не размещён',
     actual_hint: 'Размещённые заказы (PO) — заменяют оценку заявки',
     cancel: 'Отменить', tip_cancel_request: 'Отменить заявку и освободить бюджет',
@@ -528,9 +532,11 @@ const dict: Record<Lang, Record<string, string>> = {
     // The two meanings of paid, each written once; the label comes from the basis the
     // server declares (PAID_BASES in @leadprocure/shared).
     paid_basis_invoice_ledger: 'Paid (invoices)',
-    paid_basis_hint_invoice_ledger: "The invoice ledger: every invoice recorded in the selected window that has since been settled, dated by the invoice's own recording date. No budget is consulted and the order's fate is not asked about — cash paid on an order withdrawn afterwards stays here. On Budgets, «Settled against plan» counts something else, so the same invoice can be missing there or fall in another month. That is by design, not a defect.",
+    paid_basis_tip_invoice_ledger: "Every invoice recorded in the selected window that has since been settled, dated by the invoice's own recording date. No budget is consulted and the order's fate is not asked about: cash paid on an order withdrawn afterwards stays here.",
+    paid_basis_note_invoice_ledger: 'This is the invoice ledger, not «Settled against plan» on Budgets: that counts only obligations the budget still carries, dated by the obligation. So the same invoice can be missing there or fall in another month. That is by design, not a defect.',
     paid_basis_budget_obligation: 'Settled against plan',
-    paid_basis_hint_budget_obligation: 'Settlement of the obligations this plan still carries, dated by the obligation: request approval, or order issue/creation without a request. Never added to actual spend. Analytics counts «Paid (invoices)» instead — every settled invoice, dated by the invoice — so the two figures differ on purpose.',
+    paid_basis_tip_budget_obligation: 'Settlement of obligations the budget still counts, dated by the obligation: request approval, or order issue/creation without a request. A department row takes the settlement whose date falls inside its own plan periods, so the plan beside it need not be the one that carried it; the org-wide row takes only what its own plans carried. Never added to actual spend.',
+    paid_basis_note_budget_obligation: 'This is not «Paid (invoices)» on Analytics: that counts every settled invoice by the invoice date, regardless of plans and of what became of the order. So the same invoice can be there and missing here, or fall in another month. That is by design, not a defect.',
     committed_hint: 'Approved requests not yet turned into an order',
     actual_hint: 'Orders placed (POs) — these replace the request estimate',
     cancel: 'Cancel', tip_cancel_request: 'Cancel the request and release its budget commitment',

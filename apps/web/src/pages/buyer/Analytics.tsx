@@ -117,7 +117,9 @@ export default function Analytics() {
   // wording would move with it instead of quietly lying. One wording per meaning, shared
   // with /buyer/budgets — see PAID_BASES in @leadprocure/shared.
   const paidBasis = `paid_basis_${d.invoices.basis}`;
-  const paidBasisHint = `paid_basis_hint_${d.invoices.basis}`;
+  // `tip` explains the figure on hover, `note` is the visible line that names the other page.
+  const paidBasisTip = `paid_basis_tip_${d.invoices.basis}`;
+  const paidBasisNote = `paid_basis_note_${d.invoices.basis}`;
   // the plan line must fit the same scale as the bars, or it lands off the chart
   const maxMonth = Math.max(1, ...d.monthly.map((m) => Math.max(m.totalMinor, m.plannedMinor, m.prevTotalMinor)));
   // Growth reads as a cost, so up is red and down is green — the opposite of a sales chart.
@@ -151,7 +153,7 @@ export default function Analytics() {
           { label: `${t('savings')} · ${d.savings.events}`, value: `${money(d.savings.savedMinor)} (${savingsPct}%)`,
             hint: t('savings_hint') },
           { label: `${t(paidBasis)} · ${d.invoices.paidCount} · ${t('gross_label')}`, value: money(d.invoices.paidMinor),
-            hint: t(paidBasisHint) },
+            hint: t(paidBasisTip) },
           { label: `${t('inv_outstanding')} · ${d.invoices.outstandingCount} · ${t('gross_label')}`, value: money(d.invoices.outstandingMinor),
             hint: t('inv_outstanding_hint') },
         ].map((c: any) => (
@@ -163,7 +165,7 @@ export default function Analytics() {
       </div>
       {/* Said out loud, not only in a tooltip: finance opens both pages and must not have to
           guess why the two «paid» figures differ. */}
-      <p className="hint" style={{ marginTop: 0, marginBottom: 16 }}>{t(paidBasisHint)}</p>
+      <p className="hint" style={{ marginTop: 0, marginBottom: 16 }}>{t(paidBasisNote)}</p>
 
       <div className="card">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>

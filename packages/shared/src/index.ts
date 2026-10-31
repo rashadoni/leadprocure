@@ -330,11 +330,18 @@ export interface AccessTokenPayload {
 //   day the money moved.)
 //
 // 'budget_obligation' — GET /budgets/rollup → paidMinor
-//   Settlement attributed to the PLAN that carried the obligation, counted only while the
-//   budget engine still counts that obligation (MATCHED_CTE), and dated by the obligation
-//   itself: the request's approved_at, or a requestless order's issue/creation. A paid
-//   invoice whose order was withdrawn and whose request is gone carries no commitment, is
-//   absent from the unbudgeted report too, and must not stand against any plan.
+//   Settlement of obligations the budget engine still counts (MATCHED_CTE), dated by the
+//   obligation itself: the request's approved_at, or a requestless order's issue/creation.
+//   A paid invoice whose order was withdrawn and whose request is gone carries no
+//   commitment, is absent from the unbudgeted report too, and must not stand against any
+//   plan.
+//   WHICH ROW it lands on follows two different rules, and the column must not be
+//   described as though it followed only the stricter one. A department row — and each of
+//   its ancestors — is credited when the obligation's day falls inside that department's
+//   OWN selected plan periods, so a department can report settlement beside a plan that
+//   carried none of it (pinned: the 2036 case in budget-paid-period.e2e-spec.ts, where a
+//   department reads used 0 and paid 700). Only the org-wide row is credited strictly, with
+//   what its own plans actually carried. See the loop over `paid` in rollup().
 //
 // So the same paid invoice can appear on one page and not the other, and can fall in
 // different months on each. That is the design: one is a ledger of invoices, the other is

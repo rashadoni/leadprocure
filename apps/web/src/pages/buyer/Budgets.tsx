@@ -250,7 +250,10 @@ export default function Budgets() {
   // shared with /buyer/analytics — see PAID_BASES in @leadprocure/shared. Only read where
   // the rollup renders, which is only when there is a row.
   const paidBasis = `paid_basis_${depSummary[0]?.paidBasis}`;
-  const paidBasisHint = `paid_basis_hint_${depSummary[0]?.paidBasis}`;
+  // `tip` explains the figure on hover — short, because it sits on every row and the bubble
+  // is 240px wide; `note` is the visible line under the table that names the other page.
+  const paidBasisTip = `paid_basis_tip_${depSummary[0]?.paidBasis}`;
+  const paidBasisNote = `paid_basis_note_${depSummary[0]?.paidBasis}`;
 
   return (
     <>
@@ -344,7 +347,7 @@ export default function Budgets() {
                     <td>{fmtMoney(d.committedMinor, d.currency)}</td>
                     <td>{fmtMoney(d.actualMinor, d.currency)}</td>
                     {/* settlement of orders already counted as actual — shown beside, never summed in */}
-                    <td className="hint" data-tip={t(paidBasisHint)}>{fmtMoney(d.paidMinor, d.currency)}</td>
+                    <td className="hint" data-tip={t(paidBasisTip)}>{fmtMoney(d.paidMinor, d.currency)}</td>
                     <td className={over ? 'error' : ''}>{fmtMoney(d.remainingMinor, d.currency)}</td>
                     {/* where the period lands at the current rate — the question that follows "how much is left" */}
                     <td className={d.forecastOverMinor > 0 ? 'error' : 'hint'} data-tip={t('forecast_hint')}>
@@ -372,7 +375,7 @@ export default function Budgets() {
           {/* Two screens report settled invoices and deliberately report different numbers.
               A finance reader comparing them must find the reason on the page, not file it
               as a defect. */}
-          <div className="hint" style={{ marginTop: 10 }}>{t(paidBasisHint)}</div>
+          <div className="hint" style={{ marginTop: 10 }}>{t(paidBasisNote)}</div>
         </div>
       )}
 

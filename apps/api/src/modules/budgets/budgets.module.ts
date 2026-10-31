@@ -548,6 +548,11 @@ export class BudgetsService {
   // on analytics and not here, and an invoice recorded in a month other than its
   // obligation's falls in a different month on each page. Both are correct answers to
   // different questions; the rows below carry `paidBasis` so the page can say which.
+  //
+  // Which ROW gets a settlement is two rules, not one — a department's period covers it,
+  // the org-wide row's plans carried it. The loop over `paid` below is the authority on
+  // that distinction, and the wording on screen must keep it: a department row can report
+  // settlement beside a plan that carried none of it.
   async rollup(
     filter: {
       year?: number; periodType?: string; from?: string; to?: string;

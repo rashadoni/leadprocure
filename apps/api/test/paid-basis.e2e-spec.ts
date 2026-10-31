@@ -36,8 +36,8 @@ describe('paid: the invoice ledger and plan settlement are different measures', 
     expect(found).toBeTruthy();
     return found;
   };
-  // One month of the invoice ledger. The window is 'YYYY-MM' on both ends, which is what
-  // the page sends.
+  // One month of the invoice ledger. 'YYYY-MM' on both ends; the page sends the
+  // 'YYYY-MM-01' form of the same month, and monthStart() accepts either.
   const ledger = async (month: string) =>
     (await http().get('/dashboard/spend-analytics').query({ from: month, to: month, currency: 'AZN' })
       .set(...bearer(buyer)).expect(200)).body.invoices as any;
@@ -193,12 +193,17 @@ describe('paid: the invoice ledger and plan settlement are different measures', 
       .set(...bearer(buyer)).expect(200)).body).toEqual([]);
   });
 
-  it('reports settlement beside the commitment it settles, on the plan that carried it', async () => {
+  it('reports settlement beside the commitment it settles, in the same plan period', async () => {
     const rows = await rollup({ year: 2043, periodType: 'YEAR' });
     expect(row(rows, dep).actualMinor).toBe(5500);
     expect(row(rows, dep).paidMinor).toBe(5500);
     // Beside, never summed in: an invoice settles an order already counted as actual.
     expect(row(rows, dep).usedMinor).toBe(5500);
+    // A department row is credited because the obligation's day falls in its OWN plan
+    // period, not because that plan carried it — here the two happen to agree. Where they
+    // part (a department plan for another category, so the org-wide plan carried it) is
+    // pinned by the 2036 case in budget-paid-period.e2e-spec.ts, and the label on screen
+    // is worded for the looser rule because of it.
   });
 
   it('puts one settlement in different months on the two pages, by design', async () => {
