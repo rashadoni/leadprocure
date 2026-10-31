@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, fmtDate, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
@@ -6,27 +6,30 @@ import { useI18n } from '../../i18n';
 import { PO_BUYER_NEXT } from '@leadprocure/shared';
 import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
+import { ListState, useLoad } from '../../components/ListState';
 
 const PAGE_SIZE = 20;
 
 export default function Contracts() {
   const { t } = useI18n();
   const { session } = useAuth();
-  const [contracts, setContracts] = useState<any[]>([]);
-  const [orders, setOrders] = useState<any[]>([]);
   const [cPage, setCPage] = useState(1);
-  const [cTotal, setCTotal] = useState(0);
   const [oPage, setOPage] = useState(1);
-  const [oTotal, setOTotal] = useState(0);
   const isBuyerSide = session?.org.kind !== 'SUPPLIER';
 
-  const load = () => {
-    api.get('/contracts', { params: { page: cPage, pageSize: PAGE_SIZE } })
-      .then((r) => { setContracts(r.data.items); setCTotal(r.data.total); });
-    api.get('/orders', { params: { page: oPage, pageSize: PAGE_SIZE } })
-      .then((r) => { setOrders(r.data.items); setOTotal(r.data.total); });
-  };
-  useEffect(load, [cPage, oPage]);
+  const contractList = useLoad(
+    () => api.get('/contracts', { params: { page: cPage, pageSize: PAGE_SIZE } }).then((r) => r.data),
+    [cPage], { items: [] as any[], total: 0 },
+  );
+  const orderList = useLoad(
+    () => api.get('/orders', { params: { page: oPage, pageSize: PAGE_SIZE } }).then((r) => r.data),
+    [oPage], { items: [] as any[], total: 0 },
+  );
+  const contracts: any[] = contractList.data.items ?? [];
+  const orders: any[] = orderList.data.items ?? [];
+  const cTotal: number = contractList.data.total ?? 0;
+  const oTotal: number = orderList.data.total ?? 0;
+  const load = () => { contractList.reload(); orderList.reload(); };
 
   // Every action here succeeds silently, and two of them put their result on a DIFFERENT
   // screen — a catalog lands in Catalogs, a new PO lands paginated at the bottom. Nothing on
@@ -91,6 +94,7 @@ export default function Contracts() {
         </div>
       )}
       <div className="card">
+        <ListState of={contractList} empty={!contracts.length} />
         <table>
           <thead><tr><th>#</th><th>{t('title')}</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th>{t('validity')}</th><th>{t('total')}</th><th>{t('drawn')}</th><th>{t('status')}</th><th>PO</th><th>{t('actions')}</th></tr></thead>
           <tbody>
@@ -129,6 +133,7 @@ export default function Contracts() {
 
       <h1>{t('orders')}</h1>
       <div className="card">
+        <ListState of={orderList} empty={!orders.length} />
         <table>
           <thead><tr><th>#</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th>{t('date')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>

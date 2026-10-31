@@ -56,6 +56,27 @@ test.describe('buyer panel', () => {
     await expect(page.locator('text=AZN').first()).toBeVisible({ timeout: 10_000 });
   });
 
+  // A load that fails must SAY so. The KPI used to leave "…" on screen for ever — the page
+  // never came back and never explained itself — because the only rejection handler was none.
+  test('a failed dashboard load reports itself, and Retry really retries', async () => {
+    let fail = true;
+    await page.route('**/dashboard/buyer', async (route) => {
+      if (!fail) return route.continue();
+      fail = false;
+      await route.fulfill({ status: 503, contentType: 'application/json', body: '{"message":"down"}' });
+    });
+    await page.goto('/buyer/dashboard');
+    const alert = page.getByRole('alert').filter({ hasText: 'Could not load the data.' });
+    await expect(alert).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('h1')).toContainText(/Dashboard|Рабочий стол|İdarə paneli/);
+    const retried = page.waitForResponse((r) => r.url().includes('/dashboard/buyer') && r.ok());
+    await alert.getByRole('button', { name: 'Retry' }).click();
+    await retried;
+    await expect(alert).toHaveCount(0);
+    await expect(page.locator('text=AZN').first()).toBeVisible({ timeout: 20_000 });
+    await page.unroute('**/dashboard/buyer');
+  });
+
   // Fields are addressed by data-testid, not by position: the old `form > input` /
   // `.row > div:nth-child(n)` selectors matched nothing once the form grew a field, and a
   // selector that silently stops matching is worse than no test.
@@ -111,6 +132,27 @@ test.describe('supplier panel', () => {
     await assertRenders(page, '/supplier/invoices', /Счета|Invoices|Qaimə/);
     await assertRenders(page, '/supplier/catalogs', /Каталоги|Catalogs|Kataloq/);
     await assertRenders(page, '/supplier/verification', /Верификация|Verification|Yoxlama/);
+  });
+
+  // An empty market and a market that failed to load used to look identical — the supplier
+  // would conclude there is nothing to bid on. They must never read the same.
+  test('a failed market load is not shown as an empty market', async () => {
+    let fail = true;
+    await page.route('**/events?**', async (route) => {
+      if (!fail) return route.continue();
+      fail = false;
+      await route.fulfill({ status: 503, contentType: 'application/json', body: '{"message":"down"}' });
+    });
+    await page.goto('/supplier/market');
+    const alert = page.getByRole('alert').filter({ hasText: 'Could not load the data.' });
+    await expect(alert).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText('Nothing here yet')).toHaveCount(0);
+    const retried = page.waitForResponse((r) => r.url().includes('/events?') && r.ok());
+    await alert.getByRole('button', { name: 'Retry' }).click();
+    await retried;
+    await expect(alert).toHaveCount(0);
+    await expect(page.getByRole('status')).toHaveCount(0);
+    await page.unroute('**/events?**');
   });
 
   test('role guard: supplier cannot open buyer pages', async () => {

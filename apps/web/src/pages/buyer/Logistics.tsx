@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
 import { api } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import { Badge } from '../../components/Badge';
+import { ListState, useLoad } from '../../components/ListState';
 
 // Shipment tracking board — the buyer watches deliveries in flight (read-only;
 // the supplier drives the timeline from "Заказы в работе").
@@ -10,9 +10,8 @@ export default function Logistics() {
   const { t } = useI18n();
   const { session } = useAuth();
   const isBuyer = session?.org.kind !== 'SUPPLIER';
-  const [rows, setRows] = useState<any[]>([]);
-
-  useEffect(() => { api.get('/logistics').then((r) => setRows(r.data)); }, []);
+  const board = useLoad(() => api.get('/logistics').then((r) => r.data), [], [] as any[]);
+  const rows = board.data;
 
   return (
     <>
@@ -36,7 +35,7 @@ export default function Logistics() {
             ))}
           </tbody>
         </table>
-        {rows.length === 0 && <div className="hint">—</div>}
+        <ListState of={board} empty={!rows.length} />
       </div>
     </>
   );

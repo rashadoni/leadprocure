@@ -5,6 +5,7 @@ import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
+import { ListState, useLoad } from '../../components/ListState';
 
 const PAGE_SIZE = 20;
 
@@ -14,14 +15,12 @@ export default function Requests() {
   const { t } = useI18n();
   const { session } = useAuth();
   const nav = useNavigate();
-  const [rows, setRows] = useState<any[]>([]);
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
   const [items, setItems] = useState<Item[]>([{ name: '', qty: 1, price: '' }]);
   const [err, setErr] = useState('');
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
   const [directFor, setDirectFor] = useState<string | null>(null);
   const [approvedSuppliers, setApprovedSuppliers] = useState<any[]>([]);
   const [cats, setCats] = useState<string[]>([]);
@@ -36,9 +35,14 @@ export default function Requests() {
   const isFinance = session?.org.role === 'BUYER_FINANCE';
   const isAdmin = session?.org.role === 'BUYER_ADMIN';
 
-  const load = () => api.get('/requests', { params: { ...(q ? { q } : {}), ...(depFilter ? { departmentId: depFilter } : {}), page, pageSize: PAGE_SIZE } })
-    .then((r) => { setRows(r.data.items); setTotal(r.data.total); });
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, page, depFilter]);
+  const requests = useLoad(
+    () => api.get('/requests', { params: { ...(q ? { q } : {}), ...(depFilter ? { departmentId: depFilter } : {}), page, pageSize: PAGE_SIZE } })
+      .then((r) => r.data),
+    [q, page, depFilter], { items: [] as any[], total: 0 },
+  );
+  const rows: any[] = requests.data.items ?? [];
+  const total: number = requests.data.total ?? 0;
+  const load = () => requests.reload();
 
   const openDirect = async (id: string) => {
     const r = await api.get('/suppliers');
@@ -207,6 +211,7 @@ export default function Requests() {
             <> · <a href="/buyer/settings">⚖️ {t('method_policy')}</a></>
           )}
         </div>
+        <ListState of={requests} empty={!rows.length} />
         <table>
           <thead><tr><th>#</th><th>{t('title')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('date')}</th><th>{t('requester')}</th><th>{t('total')}</th><th>{t('status')}</th><th>{t('method')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>

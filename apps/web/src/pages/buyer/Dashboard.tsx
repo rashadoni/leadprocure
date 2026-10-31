@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, fmtDate, fmtDateTime, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { notifText, taskLabel } from '../../components/humanize';
+import { ListState, useLoad } from '../../components/ListState';
 
 const TASK_LINK: Record<string, (id: string) => string> = {
   APPROVE_REQUEST: () => '/buyer/requests',
@@ -13,26 +14,33 @@ const TASK_LINK: Record<string, (id: string) => string> = {
 
 export default function Dashboard() {
   const { t } = useI18n();
-  const [kpi, setKpi] = useState<any>(null);
-  const [notes, setNotes] = useState<any[]>([]);
+  const kpi = useLoad<any>(() => api.get('/dashboard/buyer').then((r) => r.data), [], null);
+  const notes = useLoad(() => api.get('/notifications').then((r) => r.data.slice(0, 8)), [], [] as any[]);
   const [overBudgets, setOverBudgets] = useState<any[]>([]);
 
-  const load = () => {
-    api.get('/dashboard/buyer').then((r) => setKpi(r.data));
-    api.get('/notifications').then((r) => setNotes(r.data.slice(0, 8)));
-    // a 9× overspend must scream on the front page, not hide in the budgets tab
-    api.get('/budgets').then((r) => setOverBudgets(r.data.filter((b: any) => b.committedMinor > b.amountMinor))).catch(() => {});
-  };
-  useEffect(load, []);
+  // a 9× overspend must scream on the front page, not hide in the budgets tab. This one
+  // stays quiet when it fails: an org without the budgets feature has no overspend to show.
+  useEffect(() => {
+    api.get('/budgets')
+      .then((r) => setOverBudgets(r.data.filter((b: any) => b.committedMinor > b.amountMinor)))
+      .catch(() => {});
+  }, []);
 
-  if (!kpi) return <div className="center">…</div>;
+  const readNote = async (id: string) => {
+    try { await api.post(`/notifications/${id}/read`); await notes.reload(); }
+    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  };
+
+  // Without the KPI there is no page. A failed load used to leave "…" on screen for ever;
+  // now it says what happened and offers the retry.
+  if (!kpi.data) return <><h1>{t('dashboard')}</h1><div className="card"><ListState of={kpi} /></div></>;
 
   const cards = [
-    { label: t('spend'), value: fmtMoney(kpi.awardedSpend) },
-    { label: t('savings'), value: fmtMoney(kpi.savings) },
-    { label: t('active_events'), value: kpi.activeEvents },
-    { label: t('pending'), value: kpi.pendingApprovals },
-    { label: t('orders'), value: kpi.openPos },
+    { label: t('spend'), value: fmtMoney(kpi.data.awardedSpend) },
+    { label: t('savings'), value: fmtMoney(kpi.data.savings) },
+    { label: t('active_events'), value: kpi.data.activeEvents },
+    { label: t('pending'), value: kpi.data.pendingApprovals },
+    { label: t('orders'), value: kpi.data.openPos },
   ];
 
   return (
@@ -63,10 +71,10 @@ export default function Dashboard() {
 
       <div className="card" style={{ marginTop: 16 }}>
         <h3>{t('tasks')}</h3>
-        {kpi.tasks.length === 0 && <div className="hint">—</div>}
+        {kpi.data.tasks.length === 0 && <div className="hint">—</div>}
         <table>
           <tbody>
-            {kpi.tasks.map((task: any, i: number) => (
+            {kpi.data.tasks.map((task: any, i: number) => (
               <tr key={i}>
                 <td><span className="badge INVITED">{taskLabel(t, task.kind)}</span></td>
                 <td>
@@ -83,18 +91,16 @@ export default function Dashboard() {
 
       <div className="card">
         <h3>{t('notifications')}</h3>
-        {notes.length === 0 && <div className="hint">—</div>}
+        <ListState of={notes} empty={!notes.data.length} />
         <table>
           <tbody>
-            {notes.map((n) => (
+            {notes.data.map((n) => (
               <tr key={n.id} style={{ opacity: n.read_at ? 0.5 : 1 }}>
                 <td>{notifText(t, n)}</td>
                 <td className="hint">{fmtDateTime(n.created_at)}</td>
                 <td>
                   {!n.read_at && (
-                    <button className="btn small ghost" onClick={async () => { await api.post(`/notifications/${n.id}/read`); load(); }}>
-                      ✓
-                    </button>
+                    <button className="btn small ghost" onClick={() => readNote(n.id)}>✓</button>
                   )}
                 </td>
               </tr>

@@ -4,13 +4,17 @@ import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import { BUYER_ROLES } from '@leadprocure/shared';
 import { ChannelsCard } from '../../components/ChannelsCard';
+import { ListState, useLoad } from '../../components/ListState';
 
 export default function Settings() {
   const { t } = useI18n();
   const { session } = useAuth();
-  const [users, setUsers] = useState<any[]>([]);
-  const [policies, setPolicies] = useState<any[]>([]);
-  const [approvals, setApprovals] = useState<any[]>([]);
+  const userList = useLoad(() => api.get('/settings/users').then((r) => r.data), [], [] as any[]);
+  const policyList = useLoad(() => api.get('/requests/method-policies').then((r) => r.data), [], [] as any[]);
+  const approvalList = useLoad(() => api.get('/requests/approval-policies').then((r) => r.data), [], [] as any[]);
+  const users = userList.data;
+  const policies = policyList.data;
+  const approvals = approvalList.data;
   const [cats, setCats] = useState<any[]>([]);
   const [newCat, setNewCat] = useState({ code: '', name: '' });
   const [deps, setDeps] = useState<any[]>([]);
@@ -31,10 +35,9 @@ export default function Settings() {
   const MP_ICO: Record<string, string> = { DIRECT: '📦', RFQ: '🔒', OPEN_TENDER: '🌐' };
   const mLabel = (m: string) => { const l = t(`mt_${m}`); return l === `mt_${m}` ? m : l; };
 
-  const load = () => {
-    api.get('/settings/users').then((r) => setUsers(r.data));
-    api.get('/requests/method-policies').then((r) => setPolicies(r.data));
-    api.get('/requests/approval-policies').then((r) => setApprovals(r.data));
+  // Reference data the page can live without: an org with no categories, no departments
+  // or no budget feature simply renders fewer options, so these stay quiet when they fail.
+  const loadOptional = () => {
     api.get('/categories').then((r) => setCats(r.data)).catch(() => {});
     api.get('/departments').then((r) => setDeps(r.data)).catch(() => {});
     api.get('/budgets/policy').then((r) => {
@@ -46,7 +49,8 @@ export default function Settings() {
       });
     }).catch(() => {});
   };
-  useEffect(load, []);
+  useEffect(loadOptional, []);
+  const load = () => { userList.reload(); policyList.reload(); approvalList.reload(); loadOptional(); };
 
   const run = async (fn: () => Promise<unknown>) => {
     try { await fn(); load(); } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
@@ -125,6 +129,7 @@ export default function Settings() {
   return (
     <>
       <h1>{t('settings')}</h1>
+      <ListState of={[userList, policyList, approvalList]} />
       <div className="card">
         <h3>{t('users')}</h3>
         <table>
