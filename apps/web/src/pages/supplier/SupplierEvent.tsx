@@ -66,6 +66,8 @@ export default function SupplierEvent() {
 
   return (
     <>
+      {/* a reload that failed after the page was drawn: the figures below are stale */}
+      <ListState of={{ loading: false, failed: evFailed, reload: load }} />
       <h1>{ev.title} <Badge status={ev.status} /></h1>
       {won && (
         <div className="card" style={{ borderColor: 'var(--ok)' }}>

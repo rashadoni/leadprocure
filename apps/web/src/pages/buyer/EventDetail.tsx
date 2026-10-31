@@ -133,6 +133,8 @@ export default function EventDetail() {
 
   return (
     <>
+      {/* a reload that failed after the page was drawn: the figures below are stale */}
+      <ListState of={{ loading: false, failed: evFailed, reload: load }} />
       <h1>
         {ev.title} <span className="badge INVITED">{ev.type}</span>{' '}
         <Badge status={ev.status} />

@@ -13,7 +13,12 @@ export type Loader<T> = {
 // request into an empty table — the reader cannot tell "the market is empty" from "the
 // request died", and the rejection is never handled at all. The sequence guard also keeps
 // a slow earlier response (page 1) from landing on top of the page the reader asked for.
-export function useLoad<T>(fetcher: () => Promise<T>, deps: DependencyList, initial: T): Loader<T> {
+// NoInfer on the fetcher is load-bearing: `api.get(...).then((r) => r.data)` is
+// Promise<any>, and an `any` candidate wins inference outright — T would collapse to
+// `any` and every `loader.data.map((x) => …)` on a page would become an implicit-any
+// build error. Inferring T from `initial` alone keeps the `any[]` the pages used to get
+// from useState<any[]>([]).
+export function useLoad<T>(fetcher: () => Promise<NoInfer<T>>, deps: DependencyList, initial: T): Loader<T> {
   const [data, setData] = useState<T>(initial);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);

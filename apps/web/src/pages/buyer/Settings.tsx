@@ -377,7 +377,7 @@ export default function Settings() {
             </div>
           </div>
         ))}
-        {policies.length === 0 && <p className="hint">— {isAdmin ? t('mp_empty_admin') : t('mp_empty')}</p>}
+        {!policyList.loading && !policyList.failed && policies.length === 0 && <p className="hint">— {isAdmin ? t('mp_empty_admin') : t('mp_empty')}</p>}
 
         {isAdmin && !mpEditing && (
           <button className="btn small ghost" style={{ marginTop: 6 }}
@@ -470,7 +470,9 @@ export default function Settings() {
         <div className="hint" style={{ marginBottom: 10 }}>🛡 {t('chain_sod_note')}</div>
 
         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>{t('chain_current')}</div>
-        {approvals.length === 0 && <div style={{ marginBottom: 8 }}>{t('chain_none')}</div>}
+        {/* "nothing requires approval" is a statement about a live control: never say it
+            because the request for the chain failed. */}
+        {!approvalList.loading && !approvalList.failed && approvals.length === 0 && <div style={{ marginBottom: 8 }}>{t('chain_none')}</div>}
         {approvals
           .slice()
           .sort((a: any, b: any) => Number(a.min_amount_minor) - Number(b.min_amount_minor))

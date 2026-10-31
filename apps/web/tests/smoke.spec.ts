@@ -59,16 +59,20 @@ test.describe('buyer panel', () => {
   // A load that fails must SAY so. The KPI used to leave "…" on screen for ever — the page
   // never came back and never explained itself — because the only rejection handler was none.
   test('a failed dashboard load reports itself, and Retry really retries', async () => {
+    // Fail every request until the failure is ON SCREEN, then let the retry through. A
+    // handler that only failed the FIRST request would 503 the mount that React
+    // StrictMode throws away in a dev server and let the surviving one succeed — the test
+    // would then pass in CI (production build, StrictMode inert) and fail locally.
     let fail = true;
     await page.route('**/dashboard/buyer', async (route) => {
       if (!fail) return route.continue();
-      fail = false;
       await route.fulfill({ status: 503, contentType: 'application/json', body: '{"message":"down"}' });
     });
     await page.goto('/buyer/dashboard');
     const alert = page.getByRole('alert').filter({ hasText: 'Could not load the data.' });
     await expect(alert).toBeVisible({ timeout: 20_000 });
     await expect(page.locator('h1')).toContainText(/Dashboard|Рабочий стол|İdarə paneli/);
+    fail = false;
     const retried = page.waitForResponse((r) => r.url().includes('/dashboard/buyer') && r.ok());
     await alert.getByRole('button', { name: 'Retry' }).click();
     await retried;
@@ -137,16 +141,16 @@ test.describe('supplier panel', () => {
   // An empty market and a market that failed to load used to look identical — the supplier
   // would conclude there is nothing to bid on. They must never read the same.
   test('a failed market load is not shown as an empty market', async () => {
-    let fail = true;
+    let fail = true;  // as above: every request, until the failure is on screen
     await page.route('**/events?**', async (route) => {
       if (!fail) return route.continue();
-      fail = false;
       await route.fulfill({ status: 503, contentType: 'application/json', body: '{"message":"down"}' });
     });
     await page.goto('/supplier/market');
     const alert = page.getByRole('alert').filter({ hasText: 'Could not load the data.' });
     await expect(alert).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText('Nothing here yet')).toHaveCount(0);
+    fail = false;
     const retried = page.waitForResponse((r) => r.url().includes('/events?') && r.ok());
     await alert.getByRole('button', { name: 'Retry' }).click();
     await retried;

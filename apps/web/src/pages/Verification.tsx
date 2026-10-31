@@ -56,7 +56,7 @@ export default function Verification() {
     <>
       <h1>🛡 {t('verification')}</h1>
       <div className="card">
-        <ListState of={caseList} empty={!cases.length} />
+        <ListState of={caseList} />
         <table>
           <thead><tr><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th>{t('status')}</th><th>{t('attachments')}</th></tr></thead>
           <tbody>
@@ -69,7 +69,7 @@ export default function Verification() {
             ))}
           </tbody>
         </table>
-        {cases.length === 0 && <div className="hint">—{isBuyer ? ` ${t('hint_verification_empty')}` : ''}</div>}
+        {!caseList.loading && !caseList.failed && cases.length === 0 && <div className="hint">—{isBuyer ? ` ${t('hint_verification_empty')}` : ''}</div>}
       </div>
 
       {Object.entries(open).filter(([, v]) => v).map(([id, c]) => (

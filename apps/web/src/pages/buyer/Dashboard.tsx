@@ -20,15 +20,20 @@ export default function Dashboard() {
 
   // a 9× overspend must scream on the front page, not hide in the budgets tab. This one
   // stays quiet when it fails: an org without the budgets feature has no overspend to show.
-  useEffect(() => {
+  const loadOverBudgets = () => {
     api.get('/budgets')
       .then((r) => setOverBudgets(r.data.filter((b: any) => b.committedMinor > b.amountMinor)))
       .catch(() => {});
-  }, []);
+  };
+  useEffect(loadOverBudgets, []);
 
   const readNote = async (id: string) => {
-    try { await api.post(`/notifications/${id}/read`); await notes.reload(); }
-    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    try {
+      await api.post(`/notifications/${id}/read`);
+      // the whole front page moves with a notification, not just the list it came from
+      await Promise.all([notes.reload(), kpi.reload()]);
+      loadOverBudgets();
+    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
   };
 
   // Without the KPI there is no page. A failed load used to leave "…" on screen for ever;
