@@ -39,7 +39,14 @@ import { MailModule } from './common/mail/mail.module';
 @Module({
   imports: [
     EventEmitterModule.forRoot(),
-    ScheduleModule.forRoot(),
+    // Cron jobs in an e2e app are a liability, not coverage. Every suite builds a full
+    // AppModule, the minute and 30-second jobs fire during the run, and a tick still in
+    // flight when a suite closes queries a closing DataSource and logs after teardown —
+    // which makes jest exit non-zero while every single test passed. That is a gate going
+    // red for a reason nobody can read, and the first instinct is to re-run it.
+    // followups.e2e already stopped the jobs by hand for exactly this reason; the flag
+    // does it for every suite, and schedulers are tested by calling the tick directly.
+    ...(process.env.DISABLE_SCHEDULERS === '1' ? [] : [ScheduleModule.forRoot()]),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 300 }]),
     DatabaseModule,
     AuthModule,

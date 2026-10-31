@@ -1,5 +1,4 @@
 import { DataSource } from 'typeorm';
-import { SchedulerRegistry } from '@nestjs/schedule';
 import { createHmac } from 'crypto';
 import * as channelSenders from '../src/modules/channels/channels.module';
 import { AppConfig } from '../src/common/config/config.service';
@@ -70,8 +69,9 @@ describe('outreach follow-ups (API e2e)', () => {
     app.use(cookieParser());
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
-    // Tests drive real ticks explicitly; avoid unrelated wall-clock cron races.
-    app.get(SchedulerRegistry).getCronJobs().forEach(job=>job.stop());
+    // Ticks are driven explicitly below; the cron jobs are not registered at all under
+    // DISABLE_SCHEDULERS, which setup-env sets for every suite (this one used to stop
+    // them by hand, and it was the only suite that did).
     scheduler = app.get(FollowupsScheduler);
     owner = new Client({ connectionString: process.env.DATABASE_OWNER_URL });
     await owner.connect();
