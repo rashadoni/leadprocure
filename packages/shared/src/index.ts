@@ -336,12 +336,14 @@ export interface AccessTokenPayload {
 //   commitment, is absent from the unbudgeted report too, and must not stand against any
 //   plan.
 //   WHICH ROW it lands on follows two different rules, and the column must not be
-//   described as though it followed only the stricter one. A department row — and each of
-//   its ancestors — is credited when the obligation's day falls inside that department's
-//   OWN selected plan periods, so a department can report settlement beside a plan that
-//   carried none of it (pinned: the 2036 case in budget-paid-period.e2e-spec.ts, where a
-//   department reads used 0 and paid 700). Only the org-wide row is credited strictly, with
-//   what its own plans actually carried. See the loop over `paid` in rollup().
+//   described as though it followed only the stricter one. A department row is credited
+//   when the obligation's day falls inside that department's OWN selected plan periods,
+//   and that credit then propagates to each of its ancestors — so a parent with no plan of
+//   its own still reports its units' settlement. Either way the plan beside the figure need
+//   not be the one that carried it (pinned: the 2036 case in budget-paid-period.e2e-spec.ts,
+//   where a department reads used 0 and paid 700). Only the org-wide row is credited
+//   strictly, with what its own plans actually carried. See the loop over `paid` in
+//   rollup().
 //
 // So the same paid invoice can appear on one page and not the other, and can fall in
 // different months on each. That is the design: one is a ledger of invoices, the other is
