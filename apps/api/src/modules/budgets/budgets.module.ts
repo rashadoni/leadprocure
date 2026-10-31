@@ -657,7 +657,12 @@ export class BudgetsService {
          -- 18% report 1180 against an actual of 1000, in one table row. The invoice's
          -- vat_mode IS the order's (invoices.submit computes net/vat/gross from po.vat_mode
          -- and the invoice carries no mode of its own), so o.vat_mode selects the matching
-         -- column. This is NOT an invariant that paid <= used — a DISPUTED invoice may be
+         -- column — for invoices written since migration 0029, which added
+         -- purchase_orders.vat_mode and back-filled it from the contract while preserving
+         -- the invoice amounts it found. An INCLUSIVE contract-linked order predating that
+         -- migration has an invoice computed EXCLUSIVE-style, so gross overstates it by the
+         -- VAT. Left alone deliberately: guessing which legacy rows were meant as INCLUSIVE
+         -- and rewriting settled amounts is worse than a known, narrow overstatement. This is NOT an invariant that paid <= used — a DISPUTED invoice may be
          -- approved over its order with a written reason, and a cancelled order hands the
          -- commitment back to the request's estimate — it is the same basis, so the two
          -- figures can be read against each other at all.

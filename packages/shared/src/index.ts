@@ -360,11 +360,13 @@ export interface AccessTokenPayload {
 //   basis as the orders. One invoice therefore shows two amounts across the product — the
 //   gross on the invoice list and on analytics, the order basis here — and each screen says
 //   which it is. (Owner's decision, 2026-10-31; the reasoning for both options is in
-//   docs/budget-by-department-decisions.md.)
+//   docs/budget-by-department-decisions.md. The claim that the invoice's basis is the
+//   order's holds for invoices written since migration 0029 — see the note in dated_paid.)
 //
-// So the same paid invoice can appear on one page and not the other, and can fall in
-// different months on each. That is the design: one is a ledger of invoices, the other is
-// settlement of commitments. Neither figure is comparable to the other, and neither is
-// summed into actual spend.
+// So the same paid invoice can appear on one page and not the other, fall in a different
+// month on each, AND carry a different amount. All three follow from the same split: one is
+// a ledger of invoices, the other is settlement of commitments measured like the plan. The
+// two are not comparable to EACH OTHER — the budget figure is comparable to the commitment
+// and actual beside it, which is why it exists — and neither is summed into actual spend.
 export const PAID_BASES = ['invoice_ledger', 'budget_obligation'] as const;
 export type PaidBasis = (typeof PAID_BASES)[number];
