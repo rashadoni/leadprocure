@@ -639,12 +639,13 @@ export class BudgetsService {
          FROM invoices i
          JOIN purchase_orders o ON o.id = i.po_id
          LEFT JOIN procurement_requests r ON r.id = o.request_id
-         -- Only obligations MATCHED_CTE still counts, by the same split again: `matched`
-         -- counts the REQUEST, whatever became of its orders — a cancelled order releases
-         -- the actual and the estimate takes the commitment back (see matched above), so
-         -- that settlement must keep standing beside it. `matched_orders` counts the order
-         -- itself, so there a cancelled or rejected one carries nothing, is absent from
-         -- the unbudgeted report too, and its settlement must not stand against a plan.
+         -- Only obligations MATCHED_CTE still counts, by the same split again: its
+         -- matched branch counts the REQUEST, whatever became of its orders — a cancelled
+         -- order releases the actual and the estimate takes the commitment back (it says
+         -- so above), so that settlement must keep standing beside it. Its matched_orders
+         -- branch counts the order itself, so there a cancelled or rejected one carries
+         -- nothing, is absent from the unbudgeted report too, and its settlement must not
+         -- stand against a plan.
          -- (A request can only be cancelled once every order of it is gone, so a cancelled
          -- request falls to the second case and is dropped with its orders.)
          WHERE i.status = 'PAID'
