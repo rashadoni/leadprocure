@@ -80,9 +80,9 @@ OWN_REPO = "rashadoni/leadprocure"
 # Джобы CI, обязательные по скрипту: имя проверки, как его показывает GitHub
 # (`name:` джобы, а без него — её ключ). Пустой список — обязательных проверок
 # нет: в репозитории нет CI, который шёл бы на каждом pull request.
-REQUIRED_CHECKS: list[str] = []
+REQUIRED_CHECKS: list[str] = ["acceptance", "fresh-install"]
 # Workflow, чьи это джобы (файл в .github/workflows). None — когда список пуст.
-CI_WORKFLOW: str | None = None
+CI_WORKFLOW: str | None = "acceptance.yml"
 # -----------------------------------------------------------------------------
 
 GITHUB_ACTIONS = 15368
