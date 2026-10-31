@@ -1,5 +1,5 @@
 import { RequiresNewWork } from '../../common/auth/decorators';
-import { lockOrder, lockEvent, assertSupplierAllowed, uniqueIds, safeMoney, returnedRows } from '../../common/procurement/invariants';
+import { lockOrder, lockEvent, assertSupplierAllowed, uniqueIds, safeMoney, lineMoney, returnedRows } from '../../common/procurement/invariants';
 import {
   BadRequestException,
   Body,
@@ -442,10 +442,18 @@ export class ContractsService {
       };
     });
     const changed = new Map(changes.map((c) => [c.poItemId, c]));
-    const newTotal = items.reduce((sum: number, it: any) => {
+    // Through lineMoney, like every other total in this codebase. Each field was already
+    // checked on its own, but not the product or the sum — and this number is stored as
+    // the amendment's new_total_minor while po_amendment_decide recomputes the order's
+    // total independently, in SQL. Above 2^53 the JS multiplication stops being exact, so
+    // the two diverge: the change order's record of the money and the order itself would
+    // disagree, with the audit carrying the wrong one.
+    const newTotal = safeMoney(items.reduce((sum: number, it: any) => {
       const c = changed.get(it.id);
-      return sum + (c ? c.newQty * c.newUnitPriceMinor : Number(it.qty) * Number(it.unit_price_minor));
-    }, 0);
+      return sum + (c
+        ? lineMoney(c.newQty, c.newUnitPriceMinor)
+        : lineMoney(Number(it.qty), Number(it.unit_price_minor)));
+    }, 0));
 
     const no = Number(
       (await m.query(`SELECT COALESCE(max(amendment_no), 0) + 1 AS n FROM po_amendments WHERE po_id = $1`, [poId]))[0].n,

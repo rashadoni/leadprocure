@@ -145,4 +145,20 @@ describe('PO amendments (API e2e)', () => {
     expect(Number(po.body.total_minor)).toBe(300_000); // untouched
     expect(Number(po.body.items[0].qty)).toBe(2);
   });
+
+  it('refuses a change order whose total JavaScript cannot hold exactly', async () => {
+    const { id: po3, itemId: item3 } = await mkPo();
+    // 3 x 9007199254740991 is 27021597764222973, but in JS it comes out ...972: past 2^53
+    // the multiplication stops being exact. Each field passed safeMoney on its own; the
+    // product and the sum did not. The amendment stores that JS number as
+    // new_total_minor while po_amendment_decide recomputes the order's total in SQL, so
+    // accepting it left the change order's record of the money and the order itself
+    // disagreeing — with the audit carrying the wrong one.
+    const refused = await http().post(`/orders/${po3}/amendments`).set(...bearer(buyer))
+      .send({ reason: 'Overflow probe', items: [{ poItemId: item3, qty: 3, unitPriceMinor: 9007199254740991 }] })
+      .expect(400);
+    expect(refused.body.message).toMatch(/safe integer/);
+    const none = await http().get(`/orders/${po3}/amendments`).set(...bearer(buyer)).expect(200);
+    expect(none.body).toHaveLength(0);
+  });
 });
