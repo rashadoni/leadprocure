@@ -9,7 +9,7 @@ export const taskLabel = (t: (k: string) => string, kind: string): string => {
 
 // Status enums inside payloads ({status}: DELIVERED, DISPUTED…) are localized through
 // the same st_<STATUS> dictionary the badges use — short label, not the explanation.
-const statusLabel = (t: (k: string) => string, v: unknown): string => {
+export const statusLabel = (t: (k: string) => string, v: unknown): string => {
   const key = `st_${v}`;
   const full = t(key);
   return full === key ? String(v) : full.split(' — ')[0].split(' / ')[0].split(' (')[0];
