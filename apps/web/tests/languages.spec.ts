@@ -11,3 +11,19 @@ for(const [language,title] of [['az','Analitika'],['ru','Аналитика'],['
     await expect(page.getByText('Unexpected Application Error')).toHaveCount(0);
   });
 }
+
+// The sign-in page was the one screen with no language switcher: everything after it has
+// one in the sidebar, which is behind the sign-in. A supplier who reads only Azerbaijani
+// met whatever language the last visitor left behind, and no way out of it. No login here,
+// so this costs nothing against the 10/min limit on /auth/login.
+test('the sign-in page offers all three languages and switches at once', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('lp_lang', 'en'));
+  await page.goto('/login');
+  const picker = page.locator('.auth .lang');
+  await expect(picker.getByRole('button')).toHaveCount(3);
+  await expect(page.getByText('Password', { exact: true })).toBeVisible();
+  await picker.getByRole('button', { name: 'RU', exact: true }).click();
+  await expect(page.getByText('Пароль', { exact: true })).toBeVisible();
+  await picker.getByRole('button', { name: 'AZ', exact: true }).click();
+  await expect(page.getByText('Şifrə', { exact: true })).toBeVisible();
+});

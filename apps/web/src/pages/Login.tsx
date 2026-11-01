@@ -2,11 +2,11 @@ import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, Session } from '../auth/auth';
 import { api } from '../api/client';
-import { useI18n } from '../i18n';
+import { useI18n, LANGS } from '../i18n';
 
 export default function Login() {
   const { login, register } = useAuth();
-  const { t } = useI18n();
+  const { t, lang, setLang } = useI18n();
   const nav = useNavigate();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [kind, setKind] = useState<'buyer' | 'supplier'>('buyer');
@@ -40,6 +40,17 @@ export default function Login() {
   return (
     <div className="auth-wrap">
       <form className="card auth" onSubmit={onSubmit}>
+        {/* The only screen in the product where the language could not be changed — and the
+            first one a new supplier sees. Everything after sign-in has the switcher in the
+            sidebar, which is behind the sign-in. */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
+          <div className="lang lang-light">
+            {LANGS.map((l) => (
+              <button key={l} type="button" className={l === lang ? 'on' : ''}
+                onClick={() => setLang(l)}>{l.toUpperCase()}</button>
+            ))}
+          </div>
+        </div>
         <div className="brand" style={{ marginBottom: 14 }}>Leadprocure</div>
         <div className="tabs">
           <button type="button" className={`btn ${mode === 'login' ? '' : 'ghost'}`} onClick={() => setMode('login')}>{t('login')}</button>

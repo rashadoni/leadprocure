@@ -66,7 +66,7 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
   await expect(page.getByRole('columnheader', { name: /^Score \/ 100(?:\s|$)/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Score', exact: true })).toBeVisible();
   // Q&A: the field and the button no longer carry one and the same word.
-  await expect(page.getByLabel('Addendum', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Clarification', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /^📢 Publish(?:\s|$)/ })).toBeVisible();
   const groupA = page.getByRole('group', { name: lotA.title, exact: true });
   const groupB = page.getByRole('group', { name: lotB.title, exact: true });

@@ -15,11 +15,11 @@ export default function Logistics() {
 
   return (
     <>
-      <h1>🚚 {t('logistics')}</h1>
+      <h1>{t('logistics')}</h1>
       <div className="card">
         <table>
           <thead><tr>
-            <th>PO</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th>
+            <th>{t('order_no')}</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th>
             <th>{t('carrier')}</th><th>{t('tracking_no')}</th><th>{t('status')}</th>
             <th>{t('po_status_col')}</th><th>{t('eta')}</th>
           </tr></thead>

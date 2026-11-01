@@ -105,7 +105,7 @@ export default function Contracts() {
       <div className="card">
         <ListState of={contractList} empty={!contracts.length} />
         <table>
-          <thead><tr><th>#</th><th>{t('title')}</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('validity')}</th><th className="num">{t('total')}</th><th className="num">{t('drawn')}</th><th>{t('status')}</th><th className="num">PO</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>#</th><th>{t('title')}</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('validity')}</th><th className="num">{t('total')}</th><th className="num">{t('drawn')}</th><th>{t('status')}</th><th className="num">{t('orders_n')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
             {contracts.map((c) => {
               const over = Number(c.drawn_minor) > Number(c.total_minor);

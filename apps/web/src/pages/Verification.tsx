@@ -56,7 +56,7 @@ export default function Verification() {
 
   return (
     <>
-      <h1>🛡 {t('verification')}</h1>
+      <h1>{t('verification')}</h1>
       <div className="card">
         <ListState of={caseList} />
         <table>
