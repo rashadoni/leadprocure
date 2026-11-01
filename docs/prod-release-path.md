@@ -21,8 +21,8 @@
 3. **Выкладка без файла лицензии остановит закупочный процесс.** На `400f861` её
    отсутствие безобидно; на `main` это 403 на десяти ручках записи — от «создать
    заявку» до «выпустить заказ по договору», включая уже присуждённые тендеры. Файл
-   выпущен 1 ноября 2026 и лежит на хосте (§1); прописать его в `.env.prod` — шаг
-   самой выкладки.
+   выпущен 1 ноября 2026 и лежит на хосте; в `.env.prod` он ещё не прописан — это
+   условие из чеклиста, а не шаг выкладки (§1).
 4. Проверки из `infra/DEPLOY.md` не «забыли» и релизный скрипт не «обошли»: **ни
    того, ни другого никогда не было в тех каталогах, из которых прод собран.** Они
    написаны в конце октября, а прод собран в августе.
@@ -243,24 +243,54 @@ CI этого не поймает и не должен: `fresh-install.sh` ка�
 
 Подписана существующей парой ключей эмитента от 5 июля 2026
 (`apps/api/license-private.pem`, вне git); открытый ключ выводится из неё на месте,
-хранить его отдельную копию не нужно. Проверена не генератором, а кодом самого
-прод-образа: `docker run --rm` над уже собранным `leadprocure-prod-api` прогнал файл
-через скомпилированный `paseto-license.js` и те же проверки claims, что делает
-`EntitlementService.verify()` — подпись принята, 13 фич из 13 образу известны, статус
-`valid`, создание нового разрешено. Лежавшая рядом лицензия от 5 июля
-(`apps/api/acme-mmc.license`, заказчик «Acme MMC») для этого не годится и оставлена
-как есть: в ней 11 фич, `controls.budgets` и `outreach.followups` в неё не входят, то
-есть бюджеты по подразделениям отдавали бы 403 на licence-гейте, пройдя проверку
-подписи.
+хранить его отдельную копию не нужно. Проверка: `docker run --rm` над уже собранным
+`leadprocure-prod-api` прогнал файл через скомпилированный `paseto-license.js` и
+`FEATURE_KEYS` самого образа — подпись принята, все 13 фич образу известны. Проверок
+claims (даты, `features ⊆ FEATURE_KEYS`, `schema_version`) в образе от 12 августа ещё
+нет — там `verify()` только сверяет подпись, остальное добавлено позже. Поэтому их
+прогнали отдельно, в том виде, в котором они написаны на `main`, то есть в том, какой
+и будет читать этот файл: пройдены, статус `valid`, создание нового разрешено.
 
-Две механики решают, как файл попадёт в прод:
+Лежащая рядом лицензия от 5 июля (`apps/api/acme-mmc.license`, «Acme MMC») для этого
+не годится и оставлена как есть: подпись у неё проходит, но фич в ней 11 — нет
+`controls.budgets` и `outreach.followups`. То есть `/budgets`, `/followups` и
+`/channels` отдавали бы 403 на feature-гейте, пройдя проверку подписи: поломка,
+которую проще всего прочитать как «выкладка сломала бюджеты».
+
+**Как файл попадает в прод.** Решают две механики:
 
 - **Строка в таблице `licenses` главнее файла.** `reload()` сначала читает базу и
-  берёт файл только если таблица пуста. Preflight (шаг 1) печатает
+  берёт файл только если таблица пуста; строка, не прошедшая проверку, не
+  «проваливается» на файл, а даёт ограниченный режим. Preflight (шаг 1) печатает
   `installed_licenses`; ожидается `0`.
-- **Загрузить лицензию через `POST /admin/license` на проде нельзя.** Ручка отказывает,
-  если `DEPLOYMENT_MODE` не `on_prem_isolated`, а у прода он `cloud_multi_tenant`.
-  Единственный путь — файл плюс переменные окружения, как в шаге 6.
+- **Загрузить лицензию через `POST /admin/license` на этом стенде нельзя.** Ручка
+  отказывает, если `DEPLOYMENT_MODE` не `on_prem_isolated`, а у прода он
+  `cloud_multi_tenant`.
+
+Значит путь один: файл на хосте плюс две переменные в живом `.env.prod`. **Оба
+значения живут только там**, и в командах шагов 6 и 8 их нет намеренно. `LICENSE_DIR`,
+заданный ещё и в оболочке, перебивает `--env-file` молча; а пустой `LICENSE_DIR`
+превращается в `./license` относительно `--project-directory` — и такой каталог в
+релизном воркитри существует, потому что `infra/license/README.md` отслеживается
+git'ом. Значит `create_host_path: false` не сработает, смонтируется каталог без
+лицензии, и api уйдёт в ограниченный режим без единой ошибки.
+
+```bash
+ENVP=/home/rashad/projects/Leadprocure/.claude/worktrees/budget-by-department-audit-4e2173/infra/.env.prod
+grep -q '^LICENSE_DIR=' "$ENVP" \
+  || echo 'LICENSE_DIR=/home/rashad/projects/Leadprocure/infra/license' >> "$ENVP"
+grep -q '^LICENSE_PUBLIC_KEY_B64=' "$ENVP" \
+  || echo "LICENSE_PUBLIC_KEY_B64=$(openssl pkey -in /home/rashad/projects/Leadprocure/apps/api/license-private.pem -pubout | base64 -w0)" >> "$ENVP"
+```
+
+`LICENSE_FILE` не трогать: он зашит в `infra/docker-compose.prod.yml` на
+`/run/leadprocure-license/leadprocure.license` — это путь внутри контейнера, не
+настройка оператора. Приватный ключ эмитента ни в образ, ни в контейнер не попадает:
+`.dockerignore` исключает `*.license` и `license-private.pem`.
+
+Пока работают контейнеры от `400f861`, эти две строки не меняют ничего — в
+compose-файле того коммита переменных лицензии нет вовсе. Убедиться, что они доедут,
+можно только dry-run'ом на релизных файлах; он в шаге 6.
 
 ### Смешанные каталоги Compose
 
@@ -387,19 +417,11 @@ Never replace their image or delete data as a workaround»). Замена хра
 
 - [ ] `acceptance` и `fresh-install` зелёные на том самом коммите `main`, который
       выкладывается (не на PR, а на `main` — `workflow_dispatch` на нём).
-- [ ] **Лицензия прописана в окружение.** Сам файл уже выпущен и проверен (§1); в
-      `.env.prod` остаётся добавить каталог с ним и открытый ключ:
-
-      ```bash
-      ENVP=/home/rashad/projects/Leadprocure/.claude/worktrees/budget-by-department-audit-4e2173/infra/.env.prod
-      { echo 'LICENSE_DIR=/home/rashad/projects/Leadprocure/infra/license'
-        echo "LICENSE_PUBLIC_KEY_B64=$(openssl pkey -in /home/rashad/projects/Leadprocure/apps/api/license-private.pem -pubout | base64 -w0)"
-      } >> "$ENVP"
-      ```
-
-      Без этих двух строк после выкладки перестанет создаваться новая закупка.
-      Приватный ключ эмитента ни в образ, ни в контейнер не попадает — из него
-      только выводится открытый.
+- [ ] **Лицензия выпущена и прописана в окружение** (§1, там же команда): файл
+      проверен, и в живом `.env.prod` стоят `LICENSE_DIR` и
+      `LICENSE_PUBLIC_KEY_B64`. Без них после выкладки api уходит в ограниченный
+      режим и новая закупка не создаётся. Проверяется dry-run'ом из шага 6, а не
+      чтением `.env.prod`: переменная может быть на месте и всё равно не доехать.
 - [ ] **Резервная копия базы снята и восстановление проверено отдельно.** Миграции
       необратимы; откат образа схему не вернёт. На 28.10.2026 резервной копии
       Leadprocure на хосте не нашли. `scripts/acceptance/backup-restore.sh`
@@ -491,14 +513,21 @@ node scripts/release/manifest.cjs verify-loaded /путь/к/пакету "$SHA"
 `…/budget-by-department-audit-4e2173/infra`; ветку и файлы этого воркитри не трогать,
 из него читается только env.
 
-`$SHA` уже задан в шаге 3; остальные три задаются здесь и нужны ещё в шагах 7 и 8:
+`$SHA` уже задан в шаге 3; остальные два задаются здесь и нужны ещё в шагах 7 и 8.
+Переменных лицензии в команде нет намеренно — они живут в `.env.prod` (§1).
 
 ```bash
 REL=/путь/к/воркитри/на/выложенном/SHA       # git worktree add … "$SHA"
 ENVP=/home/rashad/projects/Leadprocure/.claude/worktrees/budget-by-department-audit-4e2173/infra/.env.prod
-LIC=/абсолютный/путь/к/каталогу/лицензии
 
-RELEASE_SHA="$SHA" LICENSE_DIR="$LIC" \
+# Сначала dry-run — он единственное место, где видно, доехала ли лицензия.
+RELEASE_SHA="$SHA" docker compose -p leadprocure-prod \
+  --project-directory "$REL/infra" \
+  -f "$REL/infra/docker-compose.prod.yml" \
+  -f "$REL/infra/docker-compose.release.yml" \
+  --env-file "$ENVP" config | grep -iE 'license|source:'
+
+RELEASE_SHA="$SHA" \
 docker compose -p leadprocure-prod \
   --project-directory "$REL/infra" \
   -f "$REL/infra/docker-compose.prod.yml" \
@@ -508,10 +537,12 @@ docker compose -p leadprocure-prod \
 
 `-p leadprocure-prod` обязателен — иначе compose создаст новый проект вместо того,
 чтобы заменить работающие контейнеры. `--project-directory` задаёт каталог, от
-которого считаются относительные пути в compose-файле; `LICENSE_DIR` абсолютным
-путём выводит каталог лицензии из-под него (проверено `docker compose config`:
-монтирование разрешается в указанный абсолютный путь, `read_only: true`,
-`create_host_path: false`).
+которого считаются относительные пути в compose-файле — поэтому `LICENSE_DIR` в
+`.env.prod` и обязан быть абсолютным. Dry-run должен показать
+`LICENSE_PUBLIC_KEY_B64` у службы api и `source:` монтирования — абсолютный путь к
+каталогу с лицензией, `read_only: true`, `create_host_path: false`. Если вместо него
+виден путь внутри `$REL`, переменная не доехала: `up` не запускать, вернуться к
+условию из §1.
 
 `infra/docker-compose.release.yml` добавлен этим документом: он подставляет api и web
 готовые образы `leadprocure-api:${RELEASE_SHA}` / `leadprocure-web:${RELEASE_SHA}` с
@@ -582,12 +613,12 @@ docker run --rm --entrypoint sh -e SEEDPASS="$SEEDPASS" "leadprocure-web:$SHA" -
 
 ### Шаг 8. Откат
 
-Те же переменные, что в шаге 6 (`$REL`, `$ENVP`, `$LIC`) — меняется только тег:
+Те же переменные, что в шаге 6 (`$REL`, `$ENVP`) — меняется только тег:
 
 ```bash
 docker image tag leadprocure-prod-api:rollback-400f861 leadprocure-api:rollback
 docker image tag leadprocure-prod-web:rollback-400f861 leadprocure-web:rollback
-RELEASE_SHA=rollback LICENSE_DIR="$LIC" \
+RELEASE_SHA=rollback \
 docker compose -p leadprocure-prod \
   --project-directory "$REL/infra" \
   -f "$REL/infra/docker-compose.prod.yml" \
@@ -633,14 +664,17 @@ specification`**, то есть после откату `POST /settings/users` (
 - **Резервной копии прода нет.** Это условие, а не замечание: без проверенного
   восстановления необратимые миграции выкладывать некуда.
 - **Лицензия выпущена, но не включена.** Файл от 1 ноября 2026 лежит в
-  `infra/license/leadprocure.license` канонического чекаута и проверен кодом
-  прод-образа (§1). Переменные в `.env.prod` не прописаны — это шаг самой выкладки, а
-  не подготовки: до него прод остаётся на dev-fallback, а `main` без них встанет на
-  десяти ручках записи.
-- **Пара ключей эмитента существует в одном экземпляре** —
-  `apps/api/license-private.pem` на этом хосте, вне git, без резервной копии. Её
-  потеря делает непроверяемой любую уже выпущенную лицензию и требует новой пары и
-  новой `LICENSE_PUBLIC_KEY_B64` в проде.
+  `infra/license/leadprocure.license` канонического чекаута и проверен (§1); в живом
+  `.env.prod` переменных ещё нет. Это условие выкладки: до них прод остаётся на
+  dev-fallback, а `main` без них встанет на десяти ручках записи.
+- **Закрытый ключ эмитента лежит на этом хосте в двух одинаковых копиях** —
+  `Leadprocure/apps/api/license-private.pem` и
+  `leadprocure-cloudrun-src/apps/api/license-private.pem` (совпадают по md5, 5 июля
+  2026, обе вне git; рядом с каждой — своя копия старой «Acme MMC»). Копии вне хоста
+  нет, и это та потеря, после которой ни одну уже выпущенную лицензию не проверить:
+  нужна новая пара и новая `LICENSE_PUBLIC_KEY_B64` в проде. Вторая копия при этом не
+  резерв, а лишнее место, где лежит ключ подписи. Свести хранение к одному месту и
+  сделать настоящий офлайн-бэкап — решение владельца.
 - **Базу прода прочитать не удалось**: `docker exec … psql` запрещён классификатором
   этой среды («Production Reads»), и обходить это не стали. Поэтому настоящие числа
   дублей (`duplicate_invoice_lines`, `duplicate_evaluation_scores`,
