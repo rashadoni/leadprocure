@@ -43,12 +43,46 @@ const WITH_ROWS = ['/buyer/requests', '/buyer/budgets', '/buyer/settings', '/buy
 // is the option the owner refused, so sideways scrolling is not a blemish here — it is the
 // failure. One pixel of tolerance and no more: `scrollWidth` is an integer rounded UP from
 // a fractional layout width, so a page that fits exactly can report 1px over.
+//
+// `expect.soft`, so one run reports EVERY screen and width that breaks instead of only the
+// first. The suite runs with `--max-failures=1` and takes eleven minutes, so a hard
+// assertion here spends a whole cycle to learn about one page at one width.
 async function assertNoSidewaysScroll(page: Page, where: string): Promise<void> {
-  const over = await page.evaluate(() => {
-    const el = document.scrollingElement!;
-    return el.scrollWidth - el.clientWidth;
+  const { over, blame } = await page.evaluate(() => {
+    const root = document.scrollingElement!;
+    const limit = root.clientWidth;
+    const over = root.scrollWidth - limit;
+    if (over <= 1) return { over, blame: '' };
+    // A failure has to NAME what sticks out. «Scrolls by 104px» sends the next reader
+    // measuring nineteen screens by hand; this says which box, and answers first the one
+    // question a box cannot answer — whether it is a box at all. A hint bubble is an
+    // `::after`, which no query can enumerate and which does not grow its own element's
+    // rectangle, so it is found by taking every bubble away and asking again.
+    const style = document.createElement('style');
+    style.textContent = '[data-tip]::after, [data-tip]::before { display: none !important }';
+    document.head.appendChild(style);
+    const withoutTips = root.scrollWidth - limit;
+    style.remove();
+    // Deepest elements only: a parent that sticks out because its child does is reported by
+    // the child, and printing both buries the answer. Fixed boxes are skipped because they
+    // are outside the page's scrollable width by construction.
+    const out: string[] = [];
+    for (const el of Array.from(document.body.querySelectorAll<HTMLElement>('*'))) {
+      const r = el.getBoundingClientRect();
+      if (!r.width || r.right <= limit + 1) continue;
+      if (getComputedStyle(el).position === 'fixed') continue;
+      if (Array.from(el.children).some((c) => c.getBoundingClientRect().right > limit + 1)) continue;
+      const cls = String(el.className || '').trim().split(/\s+/).filter(Boolean).join('.');
+      out.push(`${el.tagName.toLowerCase()}${cls ? '.' + cls : ''}`
+        + ` right=${Math.round(r.right)} w=${Math.round(r.width)} min=${el.scrollWidth}`);
+      if (out.length === 6) break;
+    }
+    const blame = `without hint bubbles it would be ${withoutTips}px; `
+      + (out.length ? `widest boxes past ${limit}px: ${out.join(' | ')}`
+        : `no element past ${limit}px — a pseudo-element, a margin or a shadow`);
+    return { over, blame };
   });
-  expect(over, `${where} scrolls sideways by ${over}px`).toBeLessThanOrEqual(1);
+  expect.soft(over, `${where} scrolls sideways by ${over}px — ${blame}`).toBeLessThanOrEqual(1);
 }
 
 // Resized, not revisited: four visits per page would spend this test's whole budget on
@@ -67,7 +101,7 @@ async function assertFitsEveryWidth(page: Page, path: string): Promise<void> {
   // failure alike.
   await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
   if (WITH_ROWS.includes(path)) {
-    expect(await page.locator('tbody tr').count(),
+    expect.soft(await page.locator('tbody tr').count(),
       `${path} is measured for its rows and had none`).toBeGreaterThan(0);
   }
   for (const width of WIDTHS) {
@@ -184,6 +218,8 @@ test.describe('buyer panel', () => {
     await expect(dep).toBeVisible({ timeout: 10_000 });
 
     await page.goto('/buyer/requests');
+    // The form is behind a button now: the list of requests is what this screen opens on.
+    await page.getByTestId('req-new').click();
     const title = `PW smoke ${Date.now()}`;
     await page.fill('[data-testid=req-title]', title);
     await page.selectOption('[data-testid=req-department]', { label: code });
@@ -266,20 +302,36 @@ test.describe('buyer panel', () => {
     // The menu follows the page down instead of scrolling away from a long list. Measured,
     // not read off the declaration: `position: sticky` keeps reporting itself as sticky
     // after any ancestor grows an `overflow` that silently disables it.
-    // Both menus, each at a width where it IS the menu: 1280 is the wide layout, where the
-    // menu is the rail down the left; below the 1100px breakpoint the rail is a drawer and
-    // the thing that must not scroll away is the top bar holding the «Menu» button. The
-    // rail stopped being the answer to this question on narrow screens, so the question is
-    // now asked of each layout separately rather than of the rail at every width.
-    await page.setViewportSize({ width: 1280, height: 420 });
-    await page.evaluate(() => window.scrollTo(0, 300));
-    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
-    expect(await page.locator('.side').evaluate((el) => el.getBoundingClientRect().top)).toBeLessThan(2);
+    //
+    // The window is this short on purpose, and it got shorter when the request form moved
+    // behind a button: this screen now FITS, which is the whole point of that change, so a
+    // fixed 420px window left only 20–83px to scroll and the measurement stopped being a
+    // measurement. The page is made to scroll by the window, not by how much the app
+    // happens to draw — and we scroll as far as it goes rather than to a guessed offset.
+    //
+    // Asked of BOTH menus, each at a width where it IS the menu: 1280 is the wide layout,
+    // where the menu is the rail down the left; below the 1100px breakpoint the rail is a
+    // drawer and the thing that must not scroll away is the top bar holding the «Menu»
+    // button. The rail stopped being the answer to this question on a narrow screen, so the
+    // question is now put to each layout separately rather than to the rail at every width.
+    const staysOnScreen = async (selector: string) => {
+      const scrollable = await page.evaluate(() =>
+        document.scrollingElement!.scrollHeight - document.scrollingElement!.clientHeight);
+      // without this the assertions below pass on a page that cannot scroll at all
+      expect(scrollable).toBeGreaterThan(100);
+      await page.evaluate(() => window.scrollTo(0, document.scrollingElement!.scrollHeight));
+      expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
+      // |top|, не top: отлипшее меню уезжает ВВЕРХ и его `top` становится отрицательным,
+      // то есть «< 2» проходило и когда меню приклеено (0), и когда его унесло (−176) —
+      // ровно тот сбой, который этот замер и существует чтобы поймать.
+      const top = await page.locator(selector).evaluate((el) => el.getBoundingClientRect().top);
+      expect(Math.abs(top), `${selector} did not stay on screen`).toBeLessThan(2);
+    };
+    await page.setViewportSize({ width: 1280, height: 240 });
+    await staysOnScreen('.side');
     await expect(page.locator('.topbar')).toBeHidden();
-    await page.setViewportSize({ width: 375, height: 420 });
-    await page.evaluate(() => window.scrollTo(0, 300));
-    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
-    expect(await page.locator('.topbar').evaluate((el) => el.getBoundingClientRect().top)).toBeLessThan(2);
+    await page.setViewportSize({ width: 375, height: 240 });
+    await staysOnScreen('.topbar');
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.evaluate(() => window.scrollTo(0, 0));
     // a prefix: [data-tip]::after lands in the accessible name
