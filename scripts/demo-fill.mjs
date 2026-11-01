@@ -278,9 +278,18 @@ const log = (s) => console.log(s);
   // Идемпотентно: отправка навешивается только на заказы, у которых её ещё нет, —
   // так блок можно доливать на живой стенд, не плодя дублей.
   const storyH = async () => {
-    const shipped = new Set((await get('/logistics', buyer)).map((s) => s.po_id));
-    const poPage = await get('/orders', buyer);
-    const orders = (Array.isArray(poPage) ? poPage : poPage.items ?? []).filter((o) => !shipped.has(o.id) && o.status !== 'DRAFT');
+    // Спрашиваем СПИСОК ТЕМ ЖЕ поставщиком, который потом заводит отправку: RLS сам
+    // оставит только его заказы, и не нужно знать его org id. Раньше список брался у
+    // заказчика — в нём лежат и чужие заказы.
+    const shipped = new Set((await get('/logistics', sup1)).map((s) => s.po_id));
+    const poPage = await get('/orders', sup1);
+    // Тот же набор статусов, что проверяет API (SHIPPABLE_PO в logistics.module.ts):
+    // отправку можно завести только на подтверждённый и ещё не закрытый заказ. Фильтр
+    // «всё кроме черновика» был шире правила, и первый же заказ из истории A, дошедший
+    // до «принят», ронял весь налив: 400 «The order is ACCEPTED; confirm it before
+    // shipping against it». Правило в API появилось позже этого скрипта.
+    const SHIPPABLE = ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'];
+    const orders = (Array.isArray(poPage) ? poPage : poPage.items ?? []).filter((o) => !shipped.has(o.id) && SHIPPABLE.includes(o.status));
     const plan = [
       { status: 'CUSTOMS', carrier: 'Global Cargo', from: 'İstanbul', to: 'Bakı', days: 3, note: T.shipCustoms },
       { status: 'EXCEPTION', carrier: 'Baku Express', from: 'Bakı', to: 'Gəncə', days: 1, note: T.shipException },
