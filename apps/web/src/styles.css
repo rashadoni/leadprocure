@@ -130,20 +130,36 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 [data-tip]::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 9px);
   transform: translateX(-50%) translateY(4px); background: #10231c; color: #fff; font-size: 12px;
   font-weight: 500; line-height: 1.35; letter-spacing: normal; text-align: left; padding: 7px 10px;
-  border-radius: 8px; white-space: normal; width: max-content; max-width: 240px; box-shadow: var(--shadow-lg);
-  opacity: 0; pointer-events: none; transition: opacity .14s ease, transform .14s ease; z-index: 90; }
+  border-radius: 8px; white-space: normal; width: max-content; box-shadow: var(--shadow-lg);
+  opacity: 0; pointer-events: none; transition: opacity .14s ease, transform .14s ease; z-index: 90;
+  /* Nothing until it is shown. `opacity: 0` hides the bubble from the eye but NOT from the
+     page: an absolutely positioned box is part of the width the page can scroll, so a 240px
+     bubble centred on a chip near the right edge of the window put a horizontal scrollbar on
+     the whole product — 104px of it on Бюджеты at 1440px, and on Настройки and Поставщики
+     too. Measured by the browser spec, which hides every bubble and asks for the width
+     again: without them the overflow is 0 on all three.
+     `max-width: 0` with the text clipped rather than `display: none`, for two reasons: a
+     display:none pseudo-element leaves the accessible name, and this product's specs are
+     built around that text BEING in the name (`controlName()` in tests/helpers/rfx.ts); and
+     a box that is still there can still fade in — the cap is not transitioned, so it lifts
+     at once and the bubble fades in at full size exactly as it did before. */
+  max-width: 0; overflow: hidden; }
 [data-tip]::before { content: ''; position: absolute; left: 50%; bottom: calc(100% + 4px);
   transform: translateX(-50%); border: 5px solid transparent; border-top-color: #10231c;
-  opacity: 0; pointer-events: none; transition: opacity .14s ease; z-index: 90; }
-[data-tip]:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); }
-[data-tip]:hover::before { opacity: 1; }
-/* A bubble drawn by ::after is not in the accessibility tree and there is no hover on a
-   touch screen, so focus has to open it too — :focus rather than :focus-visible, because a
+  opacity: 0; pointer-events: none; transition: opacity .14s ease; z-index: 90;
+  /* All border and no text, so this one can simply not exist until it is wanted — its five
+     pixels either side counted towards the page's width exactly as the bubble's did. */
+  display: none; }
+[data-tip]:hover::after { opacity: 1; max-width: 240px; transform: translateX(-50%) translateY(0); }
+[data-tip]:hover::before { opacity: 1; display: block; }
+/* A bubble drawn by ::after is not an element anyone can reach — it does land in its host's
+   accessible NAME, which is why tests/helpers/rfx.ts has to match control labels by prefix —
+   and there is no hover on a touch screen, so focus has to open it too — :focus rather than :focus-visible, because a
    tap gives plain focus and would otherwise reach nothing. This only fires where an element
    was deliberately made focusable (the spend chart's columns), and the ring below is keyboard
    only, so a mouse click does not leave one behind. */
-[data-tip]:focus::after { opacity: 1; transform: translateX(-50%) translateY(0); }
-[data-tip]:focus::before { opacity: 1; }
+[data-tip]:focus::after { opacity: 1; max-width: 240px; transform: translateX(-50%) translateY(0); }
+[data-tip]:focus::before { opacity: 1; display: block; }
 /* For an element at the very top of the page — the section's help line — where a bubble
    drawn above would sit off the top of the window with nowhere to scroll to it. */
 [data-tip].tip-below::after { bottom: auto; top: calc(100% + 9px); transform: translateX(-50%) translateY(-4px); }
@@ -213,8 +229,10 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
    line jammed under a table header. */
 .state-empty { padding: 18px 0; text-align: center; }
 
-.auth-wrap { display: grid; place-items: center; min-height: 100vh; }
-.auth { width: 380px; }
+.auth-wrap { display: grid; place-items: center; min-height: 100vh; padding: 16px; }
+/* min(), not 380px: on a 375px phone a fixed 380 is five pixels of horizontal scroll on
+   the very first screen of the product. */
+.auth { width: min(380px, 100%); }
 /* The sign-in card is outside `.main`, so the product's link-hover rule never reached it:
    «Forgot your password?» was green text the same size as the field labels, distinguished
    by colour and nothing else. Underlined at rest, since there is no hover on a phone. */
@@ -306,3 +324,135 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 /* Confirmation of an action whose result lives on another screen. Not a toast: it stays
    until dismissed, because the thing it is pointing at is a link the reader may want. */
 .note-ok { border-color: var(--accent); background: rgba(4, 120, 87, .06); padding: 10px 14px; }
+
+/* ═════════════════════════ Narrow screens: tablet and phone ═════════════════════════
+   Until now this stylesheet had no @media rule at all. At 375px the 232px rail left about
+   140px for the page, and every list ran off the side of the screen.
+
+   ONE breakpoint, and both halves of the answer happen at it, because they have one cause —
+   there is not room for a sidebar AND a table of ten columns:
+     · the rail folds into a «Menu» button in a top bar, and the page gets the whole window;
+     · a row is drawn as a card of «name: value» lines instead of a line of cells.
+
+   Why 1100 and not the ~700 a card layout usually starts at: the widest tables here
+   (budgets, requests, contracts) need around 980px, and the one thing that is NOT allowed
+   is a table that scrolls inside itself. At 768 — a tablet held upright, one of the widths
+   this has to be right at — eleven columns in 736px can only be cards. Above 1100 nothing
+   below this line applies: the rail, the paddings and the tables are what they were.
+
+   The labels on the cards come from each table's own <th>, stamped onto the cells by
+   components/narrow.ts — CSS cannot reach a table's header from its body.
+   ════════════════════════════════════════════════════════════════════════════════════ */
+.topbar, .menu-back, .side-close { display: none; }
+
+@media (max-width: 1100px) {
+  /* The rail leaves the flow, so the grid and the gradient that painted its stripe go with
+     it — otherwise a 232px band of dark green runs down a page that has no menu in it. */
+  .shell { display: flex; flex-direction: column; background: none; }
+  /* `anywhere`, not `break-word`: both break a word that does not fit, but only
+     `anywhere` also makes the MINIMUM width of the box smaller — and it is the minimum
+     that decides whether a flex row, a grid track or a table cell holding a sha256 or a
+     long address can shrink to the screen at all. */
+  .main { padding: 18px 16px; max-width: none; overflow-wrap: anywhere; }
+  h1 { font-size: 19px; margin-bottom: 14px; }
+  .card { padding: 14px; }
+
+  /* Sticky, like the rail it stands in for: a list of cards is long, and the menu must not
+     be left at the top of a page the reader has scrolled away from. It sticks against
+     `.shell` — which is why the narrow layout is flex and not grid: a sticky grid item
+     sticks within its own row, and this bar's row is only as tall as the bar. */
+  .topbar { display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 60;
+    background: var(--side-bg); padding: 9px 12px; }
+  .topbar-brand { font-weight: 800; font-size: 15px; letter-spacing: -.01em;
+    background: linear-gradient(90deg, #34d399, #a7f3d0); -webkit-background-clip: text;
+    background-clip: text; color: transparent; }
+  /* A word, not a hamburger on its own — an icon with no word beside it is not read. */
+  .menu-btn { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-weight: 600;
+    background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .28); color: #fff;
+    border-radius: 8px; padding: 7px 13px; cursor: pointer; }
+  .menu-btn:hover { background: rgba(255, 255, 255, .18); }
+
+  /* The drawer. `display: none` rather than a panel parked off-screen: an off-screen box is
+     still part of the page's scrollable width, which is the thing this whole section is
+     about. It only exists while it is open. */
+  .side { display: none; position: fixed; top: 0; left: 0; bottom: 0; width: min(284px, 86vw);
+    max-height: none; z-index: 110; padding: 16px 14px; border-right: 0; box-shadow: var(--shadow-lg); }
+  .shell.menu-open .side { display: flex; }
+  .shell.menu-open .menu-back { display: block; position: fixed; inset: 0; z-index: 105;
+    background: rgba(16, 24, 40, .45); }
+  .side-close { display: block; background: none; border: 0; color: var(--side-text); font: inherit;
+    font-size: 12px; text-align: left; padding: 8px 12px; margin: -6px 0 6px; border-radius: 8px;
+    cursor: pointer; }
+  .side-close:hover { background: rgba(255, 255, 255, .08); color: #fff; }
+
+  /* ---- a row becomes a card ----------------------------------------------------------
+     The label is an inline-block before the value, not a grid column: a cell holds anything
+     from one word to a <div> of six buttons, and a two-column grid puts every extra child
+     of a cell into a column of its own, scrambling the row. Inline-block keeps a short
+     value beside its label and lets a block one (an action row, a utilization bar, a nested
+     table) start on the line below, which is what both want. */
+  .main table, .main tbody, .main tr, .main td, .main th { display: block; }
+  .main thead { display: none; }
+  .main tbody tr { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px 12px; margin: 0 0 9px; }
+  .main tbody tr td, .main tbody tr th { padding: 4px 0; text-align: left;
+    border-bottom: 1px dashed var(--border); overflow-wrap: anywhere; }
+  .main tbody tr > :last-child { border-bottom: 0; padding-bottom: 0; }
+  .main tbody tr > [data-label]::before { content: attr(data-label) ': '; display: inline-block;
+    min-width: 84px; margin-right: 6px; color: var(--muted); font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .03em; }
+  /* A card is not a row of a table any more; a hover tint on one cell of it means nothing. */
+  .main tbody tr:hover td { background: none; }
+  /* `.nowrap` exists so a reference number does not break across three lines of a table
+     cell. Inside a card the cell is 250px wide and «2026-01-01 — 2026-12-31» does not fit
+     on one line at all — held unbroken it would push the card off the screen. Money keeps
+     its nowrap: it is short, and digits in one piece is the point of it. */
+  .main tbody tr .nowrap { white-space: normal; }
+  /* the items of an expanded row: a card inside a card, told apart by its fill */
+  .main td table { margin: 6px 0 0; }
+  .main td table tbody tr { background: var(--panel2); }
+
+  /* ---- controls that assumed a wide window ---- */
+  /* A field per line on a phone, two or three on a tablet. The basis is what stops two
+     200px month pickers from being packed into one 311px line. */
+  .row { flex-wrap: wrap; }
+  .row > * { flex: 1 1 190px; min-width: 0; }
+  input, select, textarea { min-width: 0; }
+  .qna-row { flex-wrap: wrap; }
+  .fu-step { grid-template-columns: 26px minmax(0, 1fr); row-gap: 6px; }
+  .fu-step .fu-delay, .fu-step .fu-del { grid-column: 2; }
+  .actions .btn, .actions select, .actions input { min-width: 0; }
+  .pager { flex-wrap: wrap; justify-content: flex-start; }
+  /* Two connect cards side by side needs 280px each; one per line needs nothing. */
+  .ch-grid { grid-template-columns: 1fr; }
+  .modal-actions { flex-wrap: wrap; }
+  .chart { gap: 3px; }
+  .chart-label { font-size: 9px; }
+
+  /* ---- the hint bubble ----
+     It is drawn by ::after and opened by :hover — and a touch screen has no hover, so on a
+     phone every explanation in the product was unreachable. components/narrow.ts makes the
+     chips and tiles that carry one focusable by tap (tabindex="-1", so the Tab order is
+     untouched) and the :focus rule above opens it; :active covers a press-and-hold where a
+     tap does not focus.
+     The bubble itself moves to the bottom of the WINDOW. Centred on its element it hung off
+     the side of a 375px screen — and it hung off it even while invisible, because a box at
+     opacity 0 is still laid out and still counts towards the width the page can scroll. */
+  [data-tip]::after { position: fixed; left: 12px; right: 12px; top: auto; bottom: 12px;
+    width: auto; transform: none; }
+  /* The cap is lifted on the way IN, not at rest: at rest the base's `max-width: 0` holds
+     here too, which is what keeps a hidden bubble out of the page's width. */
+  [data-tip]:hover::after, [data-tip]:focus::after, [data-tip]:active::after,
+  [data-tip].tip-below:hover::after, [data-tip].tip-below:focus::after { transform: none; max-width: none; }
+  [data-tip].tip-below::after { top: auto; bottom: 12px; }
+  [data-tip]:active::after { opacity: 1; }
+  /* the arrow pointed at an element the bubble no longer sits above, so it stays undrawn
+     here even while the bubble is shown */
+  [data-tip]::before, [data-tip].tip-below::before,
+  [data-tip]:hover::before, [data-tip]:focus::before { display: none; }
+  /* A transform — and a filter just as much — makes an element the containing block for its
+     OWN fixed-position bubble, so the hover lift and the hover brightening would both move
+     the bubble out of the window's corner and onto the button. The hover shadow stays, so a
+     narrow screen with a mouse still answers the pointer. */
+  .btn:hover, .btn:active { transform: none; filter: none; }
+}

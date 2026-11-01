@@ -9,6 +9,19 @@ for(const [language,title] of [['az','Analitika'],['ru','Аналитика'],['
     await page.getByTestId('analytics-currency').selectOption('USD');
     expect((await (await request).json()).currency).toBe('USD');
     await expect(page.getByText('Unexpected Application Error')).toHaveCount(0);
+    // The narrow layout is otherwise only ever measured in English, and Russian and
+    // Azerbaijani labels are materially longer — on a card the column's name and its value
+    // share one line. Analytics is the page to ask it of: a hand-rolled chart of twelve
+    // columns, two month pickers and four lists of figures, all on one screen. Measured
+    // here because this test already has a browser standing on it in this language and
+    // spends no login of the 10/min budget to do it.
+    await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+    await page.setViewportSize({ width: 375, height: 820 });
+    const over = await page.evaluate(() => {
+      const el = document.scrollingElement!;
+      return el.scrollWidth - el.clientWidth;
+    });
+    expect(over, `/buyer/analytics in ${language} scrolls sideways by ${over}px`).toBeLessThanOrEqual(1);
   });
 }
 
@@ -29,4 +42,13 @@ test('the sign-in page offers all three languages and switches at once', async (
   await expect(passwordLabel).toContainText('Пароль');
   await picker.getByRole('button', { name: 'AZ', exact: true }).click();
   await expect(passwordLabel).toContainText('Şifrə');
+  // The card was a fixed 380px wide: on a 375px phone the very first screen of the product
+  // scrolled sideways before anyone had typed anything. Measured here because this test
+  // already has a browser on the sign-in page and makes no login request of its own.
+  await page.setViewportSize({ width: 375, height: 720 });
+  const over = await page.evaluate(() => {
+    const el = document.scrollingElement!;
+    return el.scrollWidth - el.clientWidth;
+  });
+  expect(over, `the sign-in page scrolls sideways by ${over}px`).toBeLessThanOrEqual(1);
 });
