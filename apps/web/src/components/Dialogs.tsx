@@ -180,11 +180,11 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
               close(pending.kind === 'ask' ? value : true);
             }}>
             <h3 id="dialog-title" style={{ margin: 0 }}>{pending.opts.title}</h3>
+            {/* A visible label only where it says something the title does not: with no
+                `label` the question sits directly above the field and IS its name, and
+                repeating it word for word read as a stutter («OTIF score / OTIF score»).
+                The control is still named for a screen reader, by the title. */}
             {pending.kind === 'ask' && (
-              {/* A visible label only where it says something the title does not: with no
-                  `label` the question sits directly above the field and IS its name, and
-                  repeating it word for word read as a stutter («OTIF score / OTIF score»).
-                  The control is still named for a screen reader, by the title. */}
               <div className="filter-field" style={{ marginTop: 12 }}>
                 {pending.opts.label && <label htmlFor="dialog-input">{pending.opts.label}</label>}
                 {pending.opts.options ? (
