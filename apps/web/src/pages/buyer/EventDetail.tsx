@@ -8,6 +8,7 @@ import { AuctionPanel } from '../../components/AuctionPanel';
 import { QnaCard } from '../../components/QnaCard';
 import { BidDocs } from '../../components/BidDocs';
 import { Badge } from '../../components/Badge';
+import { ProcedureChip } from '../../components/ProcedureChip';
 import { isDenied, ListState } from '../../components/ListState';
 
 export default function EventDetail() {
@@ -139,6 +140,12 @@ export default function EventDetail() {
   const isReverse = ev.type === 'AUCTION' || ev.format === 'REVERSE';
   const isRfi = ev.type === 'RFI';
   const canAi = ['EVALUATION', 'AWARDED'].includes(ev.status) && !isRfi;
+  // The actions column of the bids table is empty in every state but EVALUATION (and for a
+  // bid that was disqualified with a reason), yet it took its share of the width in all of
+  // them — a heading over nothing, on the screen where the widths matter most.
+  const showBidActions = (ev.bids ?? []).some((b: any) =>
+    (ev.status === 'EVALUATION' && !isReverse && !isRfi && b.state === 'OPENED')
+    || (b.state === 'DISQUALIFIED' && b.disqualified_reason));
 
   return (
     <>
@@ -146,12 +153,31 @@ export default function EventDetail() {
       <ListState of={[{ loading: false, failed: evFailed, reload: load },
         { loading: false, failed: suppliersFailed, reload: loadSuppliers }]} />
       <h1>
-        {ev.title} <span className="badge is-info">{ev.type}</span>{' '}
+        {/* The list draws the procedure as «🔒 RFQ» with a tip explaining what a sealed
+            tender is; the card drew the bare enum in a pill. One component now, both screens. */}
+        {ev.title} <ProcedureChip type={ev.type} format={ev.format} />{' '}
         <Badge status={ev.status} />
       </h1>
       <div className="card">
-        <b>{t('deadline')}:</b> {fmtDateTime(ev.close_at)} · <b>{ev.visibility}</b> · {ev.evaluation_currency}
-        <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+        {/* «Срок: 8/12/2026 · INVITED · AZN» — a date, a word straight out of the database in
+            bold, and a lone currency code, with nothing saying what either of the last two
+            was. Every fact carries its own name now, and the visibility is said in words
+            about who may bid rather than as an enum. */}
+        <div className="fact-row">
+          <div className="fact">
+            <span className="fact-k">{t('deadline')}</span>
+            <span className="fact-v">{fmtDateTime(ev.close_at)}</span>
+          </div>
+          <div className="fact" data-tip={t(`vis_${ev.visibility}_tip`)}>
+            <span className="fact-k">{t('visibility')}</span>
+            <span className="fact-v">{t(`vis_${ev.visibility}`)}</span>
+          </div>
+          <div className="fact">
+            <span className="fact-k">{t('eval_currency')}</span>
+            <span className="fact-v">{ev.evaluation_currency}</span>
+          </div>
+        </div>
+        <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {ev.status === 'DRAFT' && <button className="btn" data-tip={t('tip_publish')} onClick={() => act('publish')}>{t('publish')}</button>}
           {ev.status === 'CLOSED' && ev.format === 'SEALED' && (
             <button className="btn" data-tip={t('tip_open_bids')} onClick={() => act('open')}>{t('open_bids')}</button>
@@ -170,6 +196,10 @@ export default function EventDetail() {
             }}>{t('make_contract')} · {ev.lots.find((l: any) => l.id === a.lot_id)?.title}</button>
           ))}
         </div>
+        {/* OCDS is three letters that mean nothing to a procurement officer in Baku unless
+            somebody writes them out. The hover tip has done so since wave 1; this is the
+            visible line, because that button is the only place the acronym ever appears. */}
+        <div className="hint" style={{ marginTop: 8 }}>{t('ocds_hint')}</div>
         {['DRAFT', 'OPEN'].includes(ev.status) && (
           <div className="row" style={{ marginTop: 12, maxWidth: 480 }}>
             <div>
@@ -426,11 +456,14 @@ export default function EventDetail() {
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
                     {totals.map((t2: any, idx: number) => {
                       const bid = (ev.bids ?? []).find((b: any) => b.id === t2.bid_id);
+                      // The ⭐ on the leading offer had nothing to say why it was there.
+                      const leader = idx === 0 && (isReverse || uniqueScoreLeader);
                       return (
-                        <button key={t2.bid_id} className={`btn small ${idx === 0 && (isReverse || uniqueScoreLeader) ? '' : 'ghost'}`}
+                        <button key={t2.bid_id} className={`btn small ${leader ? '' : 'ghost'}`}
                           disabled={!isReverse && !weightedByBid.has(t2.bid_id)}
-                          data-tip={t('tip_award_bid')} onClick={() => awardBid(l.id, t2.bid_id)}>
-                          {bid?.supplier_name} · {fmtMoney(t2.total_minor, ev.evaluation_currency)}{idx === 0 && (isReverse || uniqueScoreLeader) ? ' ⭐' : ''}
+                          data-tip={leader ? t('tip_award_leader') : t('tip_award_bid')}
+                          onClick={() => awardBid(l.id, t2.bid_id)}>
+                          {bid?.supplier_name} · {fmtMoney(t2.total_minor, ev.evaluation_currency)}{leader ? ' ⭐' : ''}
                         </button>
                       );
                     })}
@@ -445,12 +478,25 @@ export default function EventDetail() {
       <div className="card">
         <h3>{t('bids')} {!ev.amounts_visible && <span className="sealed">🔒 {t('amounts_hidden')}</span>}</h3>
         <table>
-          <thead><tr><th>{t('supplier_org')}</th><th>{t('status')}</th><th className="num">{t('total')}</th><th>{t('delivery_days')}</th><th>{t('score')}</th><th>{t('actions')}</th></tr></thead>
+          {/* The score heading used the `score` key — the same entry as the «Score» BUTTON
+              below the table — so the column was titled with an imperative verb
+              («Qiymətləndir», «Оценить»: «go and score it!»), and «89.0» never said out of
+              what. Criterion weights sum to exactly 100 and each score is 0–100, so the
+              weighted total is out of 100 — said on the heading, explained in its tip. */}
+          <thead><tr>
+            <th>{t('supplier_org')}</th><th>{t('status')}</th>
+            <th className="num">{t('total')}</th><th>{t('delivery_days')}</th>
+            <th className="num" data-tip={t('score_col_tip')}>{t('score_col')} / 100</th>
+            {showBidActions && <th>{t('actions')}</th>}
+          </tr></thead>
           <tbody>
             {(ev.bids ?? []).map((b: any) => (
               <tr key={b.id} style={winningBidIds.has(b.id) ? { outline: '1px solid var(--ok)' } : undefined}>
                 <td>
-                  {b.supplier_name}{winningBidIds.has(b.id) ? ' 🏆' : ''}
+                  {/* A trophy beside the name and a green outline on the row were the only
+                      marks the winner carried — neither of them a word. */}
+                  {b.supplier_name}
+                  {winningBidIds.has(b.id) && <> <span className="badge is-good AWARDED">🏆 {t('winner')}</span></>}
                   {b.proposal_text && (
                     <div className="hint" style={{ whiteSpace: 'pre-wrap', maxWidth: 420, marginTop: 4 }}>
                       📝 {b.proposal_text}
@@ -461,7 +507,8 @@ export default function EventDetail() {
                 <td><Badge status={b.state} /></td>
                 <td className="num">{ev.amounts_visible ? fmtMoney(b.total_minor, b.currency) : '🔒'}</td>
                 <td>{ev.amounts_visible ? (b.delivery_days ?? '—') : '🔒'}</td>
-                <td>{weightedByBid.has(b.id) ? weightedByBid.get(b.id)!.toFixed(1) : '—'}</td>
+                <td className="num">{weightedByBid.has(b.id) ? weightedByBid.get(b.id)!.toFixed(1) : '—'}</td>
+                {showBidActions && (
                 <td>
                   {ev.status === 'EVALUATION' && !isReverse && !isRfi && b.state === 'OPENED' && (
                     <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
@@ -475,9 +522,10 @@ export default function EventDetail() {
                     </span>
                   )}
                   {b.state === 'DISQUALIFIED' && b.disqualified_reason && (
-                    <span className="hint" title={b.disqualified_reason}>⛔ {b.disqualified_reason}</span>
+                    <span className="hint" data-tip={b.disqualified_reason}>⛔ {b.disqualified_reason}</span>
                   )}
                 </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -489,30 +537,54 @@ export default function EventDetail() {
         )}
       </div>
 
-      {canAi && <select aria-label={t('lots')} value={aiLot || ev.lots[0]?.id} onChange={e => {setAiLot(e.target.value);setAi(null);}}>
-        {(ev.lots ?? []).map((l: any) => <option key={l.id} value={l.id}>{l.title}</option>)}
-      </select>}
       {canAi && (
         <div className="card" style={{ borderColor: 'var(--accent2)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {/* The lot picker used to float BETWEEN two cards, outside both, labelled only by
+              an aria-label: a bare dropdown in the gap, belonging to nothing the eye could
+              see. It belongs to this card and now sits in it, named. */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
             <h3 style={{ margin: 0 }}>🤖 {t('ai_reco')}</h3>
-            <button className="btn small" data-tip={t('tip_ai')} onClick={askAi}>{ai ? '↻' : t('ai_run')}</button>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              {ev.lots.length > 1 && (
+                <div className="filter-field">
+                  <label htmlFor="ai-lot">{t('lots')}</label>
+                  <select id="ai-lot" value={aiLot || ev.lots[0]?.id} onChange={e => {setAiLot(e.target.value);setAi(null);}}>
+                    {(ev.lots ?? []).map((l: any) => <option key={l.id} value={l.id}>{l.title}</option>)}
+                  </select>
+                </div>
+              )}
+              {/* ↻ alone was the whole label once a ranking had been fetched. */}
+              <button className="btn small" data-tip={t('tip_ai')} onClick={askAi}>{ai ? `↻ ${t('ai_run')}` : t('ai_run')}</button>
+            </div>
           </div>
+          {/* A whole card for one button, and nothing on it said what pressing the button
+              does — or that what comes back is advice and the choice stays the buyer's. */}
+          <p className="hint" style={{ marginTop: 6 }}>{t('ai_reco_hint')}</p>
           {ai && (
             <>
               <div style={{ margin: '10px 0', color: 'var(--accent)' }}>{ai.rationale}</div>
               <table>
-                <thead><tr><th>#</th><th>{t('supplier_org')}</th><th>{t('unit_price')}</th><th>{t('delivery_days')}</th><th>{t('reliability')}</th><th>{t('score')}</th><th></th></tr></thead>
+                {/* Every one of these four columns is a SCORE out of 100, not an amount
+                    and not a number of days: «Price 100» in a column headed «Unit price»
+                    reads as a price of one manat. */}
+                <thead><tr><th>#</th><th>{t('supplier_org')}</th>
+                  <th className="num">{t('crit_price')} / 100</th>
+                  <th className="num">{t('crit_delivery')} / 100</th>
+                  <th className="num">{t('reliability')} / 100</th>
+                  {/* NOT score_col_tip: this total is weighted by the scorer's own three
+                      weights, printed under the table, not by the event's locked criteria. */}
+                  <th className="num">{t('score_col')} / 100</th>
+                  <th></th></tr></thead>
                 <tbody>
                   {ai.ranking.map((r: any, i: number) => (
                     <tr key={r.bidId} style={r.bidId === ai.recommendedBidId ? { outline: '1px solid var(--accent2)' } : undefined}>
                       <td>{i + 1}</td>
                       <td>{r.supplierName}{r.bidId === ai.recommendedBidId ? ' 🤖' : ''}
                         <div className="hint">{r.reasons.join(' · ')}</div></td>
-                      <td>{r.priceScore}</td>
-                      <td>{r.deliveryScore}</td>
-                      <td>{r.reliabilityScore}</td>
-                      <td><b>{r.weightedTotal}</b></td>
+                      <td className="num">{r.priceScore}</td>
+                      <td className="num">{r.deliveryScore}</td>
+                      <td className="num">{r.reliabilityScore}</td>
+                      <td className="num"><b>{r.weightedTotal}</b></td>
                       <td>
                         {ev.status === 'EVALUATION' && !aiLotAwarded && selectedAiLotId && (
                           <button className="btn small" data-tip={t('tip_award_bid')} onClick={() => awardBid(selectedAiLotId, r.bidId)}>{t('award')}</button>
