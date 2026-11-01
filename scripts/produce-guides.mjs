@@ -19,10 +19,16 @@
 //   RESEED=1 re-seeds the stand first — and demo-target.mjs REFUSES anything that is not
 //   an explicitly labelled disposable stack. Never point this at production.
 //
-// TTS engine is per-language (see ENGINE): az and ru → Gemini, en → Azure (free Jenny,
-// saves Gemini quota). Azure DOES have an Azerbaijani neural voice (az-AZ-BanuNeural, kept
-// in AZURE_VOICE and reachable with TTS_AZ=azure), but it was judged too weak by ear, which
-// is why az moved to Gemini. Treat that as a listening decision, not a capability limit.
+// TTS engine per language (see ENGINE): az → Gemini (Google AI Studio), ru and en → Azure.
+// Azerbaijani on Gemini is the owner's decision (2026-11-01). Azure's az-AZ-BanuNeural is
+// kept in AZURE_VOICE and still reachable with TTS_AZ=azure, but it was judged too weak by
+// ear — a listening decision, not a capability limit.
+// The language is passed EXPLICITLY (XLANG → speechConfig.languageCode): Google lists
+// Azerbaijani twice, northern (az-AZ, Latin) and southern (the Iranian variant), and a
+// model left to guess may pick the wrong one. The voice is Kore, also the owner's pick.
+// Measuring comes first and stays engine-agnostic: every engine writes an mp3, ffprobe
+// measures THAT file, and the scene is held for exactly as long. So swapping the model
+// changes the pacing by itself and nothing has to be re-timed by hand.
 //
 // The scenarios themselves were re-written on 2026-11-01 against the interface AFTER the
 // October UI pass — see the comment over SECTIONS below.
@@ -82,7 +88,11 @@ const GEMINI_KEY = GEMINI_KEYS[0];
 const AZURE_VOICE = { ru: 'ru-RU-DmitryNeural', az: 'az-AZ-BanuNeural', en: 'en-US-JennyNeural' };
 const XLANG = { ru: 'ru-RU', az: 'az-AZ', en: 'en-US' };
 const GEMINI_VOICE = { az: 'Kore', ru: 'Kore', en: 'Kore' };
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash-preview-tts';
+// Checked against the live model list on 2026-11-01: gemini-3.8-flash-tts and
+// gemini-3.8-flash-lite-tts both exist and answer, and 2.5 is still a *preview*. Override
+// with GEMINI_MODEL. Mind that 3.8 answers with a WAV container while 2.5 answers with
+// headerless L16 — geminiTts handles both, see there.
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.8-flash-tts';
 
 const P = (ms) => new Promise((r) => setTimeout(r, ms));
 const dur = (f) => parseFloat(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 "${f}"`).toString());
@@ -246,7 +256,14 @@ async function geminiTts(text, lang, out) {
     contents: [{ parts: [{ text }] }],
     generationConfig: {
       responseModalities: ['AUDIO'],
-      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: GEMINI_VOICE[lang] } } },
+      // Say the language, never leave it to the model's guess. Google lists Azerbaijani
+      // TWICE — northern (az-AZ, Azerbaijan, Latin script) and southern (the Iranian
+      // variant, a different norm and a different script). XLANG already holds az-AZ for
+      // Azure's SSML, so both engines are told the same thing from one place.
+      speechConfig: {
+        languageCode: XLANG[lang],
+        voiceConfig: { prebuiltVoiceConfig: { voiceName: GEMINI_VOICE[lang] } },
+      },
     },
   };
   let lastErr;
@@ -276,10 +293,18 @@ async function geminiTts(text, lang, out) {
       const j = await res.json();
       const part = j.candidates?.[0]?.content?.parts?.find((p) => p.inlineData);
       if (!part) throw new Error('Gemini TTS: no audio in response');
-      const rate = (part.inlineData.mimeType.match(/rate=(\d+)/) || [])[1] || '24000';
-      const raw = `${out}.pcm`;
+      // Two answer shapes, and guessing wrong is audible: 2.5-preview returns HEADERLESS
+      // L16 (its rate only in the mime type), 3.8 returns a WAV CONTAINER. Reading a WAV as
+      // raw s16le prepends its 44-byte header as a click and, if the file's real rate is
+      // not the assumed one, shifts the pitch of the whole line. So when there is a
+      // container, let ffmpeg read it; only headerless audio gets the rate supplied.
+      const mime = part.inlineData.mimeType ?? '';
+      const isWav = /wav/i.test(mime);
+      const raw = `${out}.${isWav ? 'wav' : 'pcm'}`;
       writeFileSync(raw, Buffer.from(part.inlineData.data, 'base64'));
-      execSync(`ffmpeg -y -loglevel error -f s16le -ar ${rate} -ac 1 -i "${raw}" -codec:a libmp3lame -q:a 3 "${out}"`);
+      const rate = (mime.match(/rate=(\d+)/) || [])[1] || '24000';
+      const input = isWav ? `-i "${raw}"` : `-f s16le -ar ${rate} -ac 1 -i "${raw}"`;
+      execSync(`ffmpeg -y -loglevel error ${input} -codec:a libmp3lame -q:a 3 "${out}"`);
       await P(1200); // gentle pacing to stay under the per-minute cap
       return;
     } catch (e) {
@@ -357,6 +382,11 @@ const SECTIONS = {
       // that is not there spends the whole scene on a motionless screen, so fall back to
       // the figures the page always has.
       do: async (p, l, h) => { await h.scrollTo('h1'); await h.holdUntil(0.3); const warn = p.locator('.card:has(a[href="/buyer/budgets"])').first(); if (await warn.count()) { await h.moveTo(warn); await h.holdUntil(0.65); await h.moveTo(warn.locator('a[href="/buyer/budgets"]')); } else { await h.moveTo(p.locator('.card').nth(0)); await h.holdUntil(0.65); await h.moveTo(p.locator('.card').nth(1)); } await h.holdUntil(0.92); } },
+    // Ends on a real press. A navigation leaves the stand exactly as it was, which is why
+    // it is the action this section gets: marking notifications read would empty this very
+    // panel for every other recording made against the same stand.
+    { az: 'Və indi göstərək, bu necə işləyir. Tapşırıq sətrindəki «Aç» düyməsini basırıq — və sistem bizi düz lazım olan yerə aparır, axtarmağa ehtiyac qoymadan. Panelin bütün mənası budur: siz bölmələri gəzmirsiniz, iş özü sizi çağırır.',
+      do: async (p, l, h) => { await h.scrollTo('h3:text-is("Tapşırıqlar")'); await h.holdUntil(0.25); const open = p.locator('.card:has(h3:text-is("Tapşırıqlar")) tbody tr a.btn').first(); if (await open.count()) { await h.moveTo(open); await h.holdUntil(0.45); await h.click(open, 2000); await p.waitForSelector('h1', { timeout: 15000 }); await h.holdUntil(0.8); await h.moveTo('h1'); } else { await h.moveTo('table'); } await h.holdUntil(0.95); } },
   ]},
   // Requests. The pass changed this screen most: the table gained the author and the
   // method columns (separation of duties is visible now), and the four procedure
@@ -595,8 +625,12 @@ const SECTIONS = {
     { az: 'Ən aşağıda əsas təchizatçılar: qəbul edilmiş sifarişlərin həcminə görə ilk beşlik və hər biri üzrə sifariş sayı. Bu siyahı danışıqlarda faydalıdır, çünki həcm arqumentdir. Bütün rəqəmlər real vaxtda hesablanır və yalnız sizin təşkilatınızın məlumatlarını əhatə edir — hesabat yığmaq lazım deyil.',
       do: async (p, l, h) => { await h.scrollTo('h3:has-text("Əsas təchizatçılar")'); await h.holdUntil(0.45); await h.moveTo('.card:has(h3:has-text("Əsas təchizatçılar")) tbody tr'); await h.holdUntil(0.75); await h.wheel(-200); await h.holdUntil(0.95); } },
   ]},
-  // Logistics: a read-only board. The pass inserted the order's OWN status beside the
-  // shipment's, which is the one thing worth slowing down for here.
+  // Logistics: a read-only board, and the ONLY section with no action in its recording —
+  // because the page has no control to press. Not an oversight and not something to "fix"
+  // by inventing a click: Logistics.tsx renders a heading, a card and a table, zero buttons
+  // and zero onClick, by design (the supplier drives the timeline from their own orders
+  // screen). The pass inserted the order's OWN status beside the shipment's, which is the
+  // one thing worth slowing down for here.
   'buyer-logistics': { role: 'buyer', path: '/buyer/logistics', scenes: [
     { az: 'Logistika bölməsi. Bu, sifarişləriniz üzrə yolda olan bütün göndərişlərin lövhəsidir. Burada siz izləyirsiniz, hadisələri isə təchizatçı qeyd edir — çünki mal onun əlindədir. Bu bölmə qəsdən yalnız oxunur.',
       do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.4); await h.moveTo('table'); await h.holdUntil(0.95); } },
@@ -628,7 +662,10 @@ const SECTIONS = {
     { az: 'Yoxlama düyməsi KYC işi açır: təchizatçı sənədlərini yükləyir, siz baxıb qərar verirsiniz. Əvvəl bu düymədə yalnız qalxan nişanı vardı və nə etdiyini demirdi — indi yanında sözü də var.',
       do: async (p, l, h) => { const v = p.locator('button:has-text("Yoxlama")').first(); if (await v.count()) { await h.hover(v, 1800); } else { await h.moveTo(p.locator('.card:has(h3:text-is("Reyestr")) tbody tr').first()); } await h.holdUntil(0.95); } },
     { az: 'Reytinq düyməsi çatdırılma qiymətləndirməsini açır: sıfırdan yüzə qədər — vaxtında və tam çatdırılan sifarişlərin payı. Satınalmada bu göstərici OTIF adlanır, və izahda da belə yazılıb.',
-      do: async (p, l, h) => { const r = p.locator('button:has-text("Reytinq")').first(); if (await r.count()) { await h.hover(r, 1800); } else { await h.moveTo('table'); } await h.holdUntil(0.95); } },
+      // Opened and then CANCELLED on purpose. Scoring a supplier would change a figure the
+      // AI-recommendation card reads, on the same stand every other recording uses — and
+      // the dialog is the result worth showing anyway.
+      do: async (p, l, h) => { const r = p.locator('button:has-text("Reytinq")').first(); if (!(await r.count())) { await h.moveTo('table'); await h.holdUntil(0.95); return; } await h.moveTo(r); await h.holdUntil(0.3); await h.click(r, 1200); await h.holdUntil(0.55); const dlg = p.locator('[role=dialog]'); if (await dlg.count()) { await h.moveTo('[data-testid=dialog-input]'); await h.holdUntil(0.75); await h.moveTo(dlg.locator('.hint').first()); await h.holdUntil(0.9); await h.click('[data-testid=dialog-cancel]', 700); } await h.holdUntil(0.95); } },
     { az: 'Rəqəm təkcə bəzək deyil: süni intellekt tövsiyəsi təchizatçının etibarlılığını məhz bu qiymətləndirmələrdən götürür. Yəni bir dəfə qoyulmuş qiymət növbəti tenderin müqayisəsində işləyir.',
       do: async (p, l, h) => { await h.moveTo(p.locator('.card:has(h3:text-is("Reyestr")) tbody tr').first()); await h.holdUntil(0.5); await h.moveTo(p.locator('.card:has(h3:text-is("Reyestr")) tbody tr').last()); await h.holdUntil(0.95); } },
     { az: 'Bloklama isə dağıdıcı əməliyyatdır: bloklanmış təchizatçı bundan sonra heç bir tenderə və sifarişə düşmür. Ona görə o, sətrin sonunda, ayırıcıdan sonra durur — əvvəl «Təsdiqlə» düyməsinin yanında idi, yan-yana.',
@@ -662,7 +699,9 @@ const SECTIONS = {
   // because the only way to the last one used to be the scrollbar.
   'buyer-settings': { role: 'buyer', path: '/buyer/settings', scenes: [
     { az: 'Parametrlər bölməsi. Burada səkkiz ayrı hissə var, ona görə ən yuxarıda keçid sətri durur: istifadəçilər, kateqoriyalar, şöbələr, büdcə hədləri, metod siyasəti, kanallar, inteqrasiyalar və təsdiq zənciri. Əvvəl sonuncuya yalnız sürüşdürmə ilə çatmaq olurdu.',
-      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.35); await h.moveTo(p.locator('.hint a').first()); await h.holdUntil(0.65); await h.moveTo(p.locator('.hint a').last()); await h.holdUntil(0.95); } },
+      // The jump IS the result: the row exists because the last section used to be
+      // reachable only by the scrollbar, and a hover cannot show that.
+      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.3); await h.moveTo(p.locator('.hint a').first()); await h.holdUntil(0.5); const last = p.locator('.hint a').last(); await h.moveTo(last); await h.holdUntil(0.68); await h.click(last, 1200); await h.holdUntil(0.88); await h.moveTo('h3#set-approval'); await h.holdUntil(0.95); } },
     { az: 'İstifadəçilər. Cədvəldə e-poçt, ad, rol və şöbə var. Şöbə sütunu sadəcə məlumat deyil: o, həmin adamın yeni sorğularında standart şöbə olur və onun büdcələrə girişini müəyyən edir.',
       do: async (p, l, h) => { await h.moveTo('h3#set-users'); await h.holdUntil(0.4); await h.moveTo(p.locator('.card:has(h3#set-users) thead th').nth(2)); await h.holdUntil(0.7); await h.moveTo(p.locator('.card:has(h3#set-users) thead th').nth(3)); await h.holdUntil(0.95); } },
     { az: 'Rollar beşdir: administrator, təsdiqləyən, istifadəçi, maliyyəçi və təchizatçı. Öz rolunuzu dəyişmək mümkün deyil — sistem bunu açıq imtina ilə deyir. Rol dəyişəndə həmin adamın bütün sessiyaları bağlanır, yəni yeni hüquq dərhal işə düşür.',
@@ -680,7 +719,10 @@ const SECTIONS = {
     { az: 'Metod siyasəti — ekranın ən vacib hissəsi. Burada yazılır, hansı məbləğə qədər birbaşa sifariş, hansından tender. Sorğunu yaradan adam metodu seçmir: sorğu təsdiqlənən kimi metod bu cədvəldən avtomatik təyin olunur.',
       do: async (p, l, h) => { await h.scrollTo('h3#set-method'); await h.holdUntil(0.4); await h.moveTo('.card:has(h3#set-method) .hint'); await h.holdUntil(0.75); await h.moveTo('.mp-scale'); await h.holdUntil(0.95); } },
     { az: 'Siyasət rəngli şkala kimi göstərilir, hər kateqoriya üçün ayrıca: bir baxışda görünür, hansı aralıq hansı metoda gedir. Aralıqları «Dəyiş» düyməsi ilə qurursunuz — məbləğ sərhədi və metod.',
-      do: async (p, l, h) => { const bands = p.locator('.mp-band'); await h.moveTo(bands.first()); await h.holdUntil(0.4); const n = await bands.count(); await h.moveTo(bands.nth(Math.min(1, n - 1))); await h.holdUntil(0.7); const e = p.locator('.card:has(h3#set-method) button:has-text("Dəyiş")').first(); if (await e.count()) await h.moveTo(e); await h.holdUntil(0.95); } },
+      // Opened and closed: saving would rewrite the org's own bands, and the policy decides
+      // which procedure every approved request gets — on the stand every other recording
+      // reads. The editor itself is the result worth seeing.
+      do: async (p, l, h) => { const card = p.locator('.card:has(h3#set-method)'); const bands = p.locator('.mp-band'); await h.moveTo(bands.first()); await h.holdUntil(0.3); const n = await bands.count(); await h.moveTo(bands.nth(Math.min(1, n - 1))); await h.holdUntil(0.5); const e = card.locator('button:has-text("Dəyiş")').first(); if (await e.count()) { await h.click(e, 1300); await h.holdUntil(0.75); await h.moveTo(card.locator('table').first()); await h.holdUntil(0.9); const cancel = card.locator('button:has-text("Ləğv et")').first(); if (await cancel.count()) await h.click(cancel, 600); } await h.holdUntil(0.95); } },
     { az: 'Göndərmə kanalları: öz e-poçtunuz və WhatsApp. Bunlar avtomatik xatırlatmalar üçündür. Qoşulmayıbsa, sistemin ümumi konfiqi işlədilir, ona görə kanal qoşmaq məcburi deyil — sadəcə məktublar sizin adınızdan getsin deyə.',
       do: async (p, l, h) => { await h.scrollTo('#set-channels'); await h.holdUntil(0.4); await h.moveTo(p.locator('#set-channels .hint').first()); await h.holdUntil(0.7); await h.moveTo(p.locator('#set-channels .badge, #set-channels button').first()); await h.holdUntil(0.95); } },
     { az: 'İnteqrasiyalar. Burada bir düymə var: qaimələri mühasibat üçün fayla çıxarmaq. Yanında isə standart ixracların siyahısı — OCDS tenderin kartında, elektron qaimə üçün UBL isə qaimənin özündə. Yəni məlumat sistemdə qapanıb qalmır.',
@@ -706,8 +748,11 @@ const SECTIONS = {
       do: async (p, l, h) => { await h.scrollTo('h3:text-is("Tapşırıqlar")'); await h.holdUntil(0.4); const r = p.locator('.card:has(h3:text-is("Tapşırıqlar")) tbody tr').first(); await h.moveTo(r.locator('.badge')); await h.holdUntil(0.7); await h.hover(r.locator('a.btn'), 1200); await h.holdUntil(0.95); } },
     { az: 'Aşağıda bildirişlər, sifariş üzrə qruplaşdırılmış: bir sifarişin bütün hadisələri bir blokda durur. Burada da oxunmuş kimi işarələmək olar — əvvəl bu imkan yalnız sifarişçinin panelində idi, halbuki ehtiyac hər iki tərəfdə eynidir.',
       do: async (p, l, h) => { await h.scrollTo('h3:text-is("Bildirişlər")'); await h.holdUntil(0.4); await h.moveTo('.card:has(h3:text-is("Bildirişlər")) table'); await h.holdUntil(0.72); const b = p.locator('.card:has(h3:text-is("Bildirişlər")) button.btn').first(); if (await b.count()) await h.hover(b, 1200); await h.holdUntil(0.95); } },
-    { az: 'Beləliklə iş qaydası sadədir: panelə baxırsınız, tapşırıqları bağlayırsınız. Növbəti addım — açıq tenderlərə baxmaq.',
-      do: async (p, l, h) => { await h.scrollTo('h1'); await h.holdUntil(0.35); await h.moveTo('[data-testid=sup-kpi]'); await h.holdUntil(0.95); } },
+    // Also ends on a real press, and for the same reason as the buyer's panel: a
+    // navigation changes nothing on the stand, while clearing notifications would empty
+    // this panel for every other recording.
+    { az: 'Beləliklə iş qaydası sadədir: panelə baxırsınız, tapşırıqları bağlayırsınız. Göstərək: yoxlama sətrindəki «Aç» düyməsini basırıq — və sistem bizi öz sənədlərimizə aparır. Yoxlama bitəndən sonra isə sizə tender gözləmədən sifariş verə bilərlər.',
+      do: async (p, l, h) => { await h.scrollTo('h1'); await h.holdUntil(0.25); const v = p.locator('[data-testid=sup-verification] a.btn').first(); if (await v.count()) { await h.moveTo(v); await h.holdUntil(0.45); await h.click(v, 2000); await p.waitForSelector('h1', { timeout: 15000 }); await h.holdUntil(0.8); await h.moveTo('h1'); } else { await h.moveTo('[data-testid=sup-kpi]'); } await h.holdUntil(0.95); } },
   ]},
   // Supplier market → a real sealed bid on a live tender. The market list gained the
   // procedure column in PR #79: before it, a closed tender, a live auction and a request
