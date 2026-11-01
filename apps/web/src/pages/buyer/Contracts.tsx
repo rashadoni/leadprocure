@@ -23,6 +23,12 @@ export default function Contracts() {
   const [cPage, setCPage] = useState(1);
   const [oPage, setOPage] = useState(1);
   const isBuyerSide = session?.org.kind !== 'SUPPLIER';
+  // Which buyer role, not merely «a buyer org»: activate, create an order, build a catalog
+  // and amend are @Roles('BUYER_ADMIN','BUYER_APPROVER') on the server, while receiving
+  // goods also admits BUYER_USER. A button a role cannot use is a 403 dressed as an offer.
+  const role = session?.org.role ?? '';
+  const canManage = ['BUYER_ADMIN', 'BUYER_APPROVER'].includes(role);
+  const canReceive = ['BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER'].includes(role);
 
   const contractList = useLoad(
     () => api.get('/contracts', { params: { page: cPage, pageSize: PAGE_SIZE } }).then((r) => r.data),
@@ -94,9 +100,11 @@ export default function Contracts() {
 
   // A column of actions nobody can use still takes its width. A supplier sees neither
   // table's buttons at all, and a closed contract or a finished order has none either.
-  const contractActions = isBuyerSide && contracts.some((c: any) => ['DRAFT', 'ACTIVE'].includes(c.status));
+  const contractActions = canManage && contracts.some((c: any) => ['DRAFT', 'ACTIVE'].includes(c.status));
   const orderActions = isBuyerSide && orders.some((p: any) =>
-    (PO_BUYER_NEXT[p.status] ?? []).length > 0 || ['SHIPPED', 'DELIVERED', 'ISSUED', 'CONFIRMED'].includes(p.status));
+    (PO_BUYER_NEXT[p.status] ?? []).length > 0
+    || (canReceive && ['SHIPPED', 'DELIVERED'].includes(p.status))
+    || (canManage && ['ISSUED', 'CONFIRMED'].includes(p.status)));
 
   return (
     <>
@@ -131,10 +139,10 @@ export default function Contracts() {
                 {contractActions && (
                 <td>
                   <Actions>
-                    {isBuyerSide && c.status === 'DRAFT' && (
+                    {canManage && c.status === 'DRAFT' && (
                       <button className="btn small" data-tip={t('tip_activate')} onClick={() => act(() => api.post(`/contracts/${c.id}/activate`), () => ({ text: t('note_activated') }))}>{t('activate')}</button>
                     )}
-                    {isBuyerSide && c.status === 'ACTIVE' && (
+                    {canManage && c.status === 'ACTIVE' && (
                       <>
                         <button className="btn small" data-tip={t('tip_create_po')} onClick={() => act(() => api.post(`/contracts/${c.id}/orders`), (r) => ({ text: `${t('note_po_made')}: ${r.data.po_no}` }))}>{t('create_po')}</button>
                         <button className="btn small ghost" data-tip={t('tip_catalog_from')} onClick={() => act(() => api.post(`/catalogs/from-contract/${c.id}`), () => ({ text: t('note_catalog_made'), to: '/buyer/catalogs', toLabel: t('catalogs') }))}>📖 {t('catalogs')}</button>
@@ -184,10 +192,10 @@ export default function Contracts() {
                         {t(`po_act_${next}`)}
                       </button>
                     ))}
-                    {isBuyerSide && ['SHIPPED', 'DELIVERED'].includes(p.status) && (
+                    {canReceive && ['SHIPPED', 'DELIVERED'].includes(p.status) && (
                       <button className="btn small" data-tip={t('tip_receive')} onClick={() => receiveAll(p.id)}>📥 {t('receive')}</button>
                     )}
-                    {isBuyerSide && ['ISSUED', 'CONFIRMED'].includes(p.status) && (
+                    {canManage && ['ISSUED', 'CONFIRMED'].includes(p.status) && (
                       <button className="btn small ghost" data-tip={t('tip_amend')} onClick={() => openAmend(p.id)}>✎ {t('amend')}</button>
                     )}
                   </Actions>

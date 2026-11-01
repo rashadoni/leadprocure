@@ -12,6 +12,8 @@ export default function Invoices() {
   const { notify, notifyError, ask } = useDialogs();
   const { session } = useAuth();
   const isBuyer = session?.org.kind !== 'SUPPLIER';
+  // approve / reject / pay are @Roles('BUYER_ADMIN','BUYER_APPROVER') on the server.
+  const canDecide = ['BUYER_ADMIN', 'BUYER_APPROVER'].includes(session?.org.role ?? '');
   const [rows, setRows] = useState<any[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState(false);
@@ -138,7 +140,7 @@ export default function Invoices() {
                 <td><Badge status={i.status} /></td>
                 <td>
                   <Actions>
-                    {isBuyer && ['MATCHED', 'DISPUTED', 'SUBMITTED'].includes(i.status) && (
+                    {canDecide && ['MATCHED', 'DISPUTED', 'SUBMITTED'].includes(i.status) && (
                       <>
                         <button className="btn small"
                           data-tip={i.status === 'DISPUTED' ? t('tip_inv_approve_disputed') : t('tip_inv_approve')}
@@ -146,7 +148,7 @@ export default function Invoices() {
                         <button className="btn small ghost" data-tip={t('tip_inv_reject')} onClick={() => act(i.id, () => api.post(`/invoices/${i.id}/reject`))}>{t('reject')}</button>
                       </>
                     )}
-                    {isBuyer && i.status === 'APPROVED' && (
+                    {canDecide && i.status === 'APPROVED' && (
                       <button className="btn small" data-tip={t('tip_pay')} onClick={() => act(i.id, () => api.post(`/invoices/${i.id}/pay`))}>💳 {t('pay')}</button>
                     )}
                   </Actions>
