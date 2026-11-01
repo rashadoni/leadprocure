@@ -76,8 +76,11 @@ export const fmtMoney = (minor: number | string | null, currency = 'AZN'): strin
 // "125K" — so there is no hand-made suffix table to keep correct in three languages.
 // Takes a plain number, not the nullable money the other helpers take: an axis tick is
 // always computed, and `···` here would mean "sealed" where nothing is sealed.
+// Two fraction digits, not one, because the round-top ladder in Analytics includes 2.5: a
+// scale of 2 500 puts the middle rule at 1 250, and one digit printed that as «1,3 тыс.» —
+// a label sitting 4% away from the line it names, which is worse than no label at all.
 export const fmtNumShort = (minor: number): string =>
-  (minor / 100).toLocaleString(uiLocale(), { notation: 'compact', maximumFractionDigits: 1 });
+  (minor / 100).toLocaleString(uiLocale(), { notation: 'compact', maximumFractionDigits: 2 });
 
 // Every date in the product goes through these two. Calling toLocaleString() with no
 // arguments anywhere else brings back the browser's own locale — which is how one tender's

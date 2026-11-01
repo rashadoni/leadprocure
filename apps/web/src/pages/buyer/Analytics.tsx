@@ -48,9 +48,11 @@ interface Pace {
 // derived highlight would have to pick one of them and be wrong half the time.
 type WinKey = '12m' | 'q' | 'ytd' | '';
 
-// The axis a reader can actually use: a round top tick, so the three labels come out as
-// 0 / 75k / 150k instead of 0 / 62.4k / 124.8k. Bars lose a few per cent of height and the
-// chart gains a scale, which is the trade the whole axis exists to make.
+// The axis a reader can actually use: a round top tick, so a peak of 124 800 gives labels
+// of 0 / 100k / 200k instead of 0 / 62.4k / 124.8k. Bars lose some height and the chart
+// gains a scale, which is the trade the whole axis exists to make. 2.5 is in the ladder
+// because without it a peak just over 2 would be drawn against 5 — a plot less than half
+// used; it is also why the tick labels carry two fraction digits (see fmtNumShort).
 const niceMax = (v: number): number => {
   if (!(v > 0)) return 1;
   const pow = Math.pow(10, Math.floor(Math.log10(v)));
@@ -266,22 +268,30 @@ export default function Analytics() {
               <i className="chart-rule" style={{ bottom: '50%' }} />
               <i className="chart-rule" style={{ bottom: '0%' }} />
             </div>
-            {d.monthly.map((m) => (
-              <div key={m.month} className="chart-col"
-                data-tip={`${m.month}: ${t('fact')} ${money(m.totalMinor)} · ${t('plan')} ${money(m.plannedMinor)} · ${t('yoy_prev')} ${money(m.prevTotalMinor)}`}>
-                {/* the same month a year ago, behind the bar — the eye compares heights without
-                    a legend, and an empty last year simply shows nothing */}
-                {m.prevTotalMinor > 0 && (
-                  <div className="chart-prev" style={{ bottom: `${Math.min(100, (m.prevTotalMinor / scale) * 100)}%` }} />
-                )}
-                <div className="chart-bar" style={{ height: `${Math.min(100, (m.totalMinor / scale) * 100)}%` }} />
-                {/* the plan for that month: the phasing finance entered, or an even proration */}
-                {m.plannedMinor > 0 && (
-                  <div className="chart-plan" style={{ bottom: `${Math.min(100, (m.plannedMinor / scale) * 100)}%` }} />
-                )}
-                <span className="chart-label">{m.month.slice(5)}</span>
-              </div>
-            ))}
+            {d.monthly.map((m) => {
+              // The three figures behind one column, and the only place on the page that
+              // names them month by month. The bubble is drawn by ::after, so it does not
+              // exist for a reader without a mouse: the column is focusable and carries the
+              // same text as its own label. The ‹CSV› button above writes these same four
+              // columns for the window on screen, so none of it is hover-only.
+              const tip = `${m.month}: ${t('fact')} ${money(m.totalMinor)} · ${t('plan')} ${money(m.plannedMinor)} · ${t('yoy_prev')} ${money(m.prevTotalMinor)}`;
+              return (
+                <div key={m.month} className="chart-col" data-tip={tip}
+                  tabIndex={0} role="img" aria-label={tip}>
+                  {/* the same month a year ago, behind the bar — the eye compares heights
+                      without a legend, and an empty last year simply shows nothing */}
+                  {m.prevTotalMinor > 0 && (
+                    <div className="chart-prev" style={{ bottom: `${Math.min(100, (m.prevTotalMinor / scale) * 100)}%` }} />
+                  )}
+                  <div className="chart-bar" style={{ height: `${Math.min(100, (m.totalMinor / scale) * 100)}%` }} />
+                  {/* the plan for that month: the phasing finance entered, or an even proration */}
+                  {m.plannedMinor > 0 && (
+                    <div className="chart-plan" style={{ bottom: `${Math.min(100, (m.plannedMinor / scale) * 100)}%` }} />
+                  )}
+                  <span className="chart-label">{m.month.slice(5)}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
         {/* Three different marks shared one prose paragraph below the chart. Each is now
@@ -291,7 +301,14 @@ export default function Analytics() {
           {hasPlan && <span><i className="k-plan" />{t('plan')}</span>}
           {hasPrev && <span><i className="k-prev" />{t('yoy_prev')}</span>}
         </div>
-        {hasPlan && <div className="hint" style={{ marginTop: 8 }}>{t('plan_line_hint')}</div>}
+        {/* One sentence per mark, each shown only when its own mark is drawn. As one
+            paragraph on hasPlan it told a buyer about a grey last-year line that was not
+            there, and said nothing about the one that was when there were no plans. */}
+        {(hasPlan || hasPrev) && (
+          <div className="hint" style={{ marginTop: 8 }}>
+            {[hasPlan && t('plan_line_hint'), hasPrev && t('prev_line_hint')].filter(Boolean).join(' ')}
+          </div>
+        )}
         {/* Budgets are AZN-only by a database constraint, so in any other currency the plan
             line is absent by design — not missing data to go looking for. */}
         {!hasPlan && d.currency !== 'AZN' && <div className="hint" style={{ marginTop: 8 }}>{t('plan_azn_only')}</div>}
@@ -309,7 +326,9 @@ export default function Analytics() {
                 each heading carries what it holds. «Темп +14%» was a bare number. */}
             <thead><tr>
               <th>{t('department')}</th>
-              <th className="num" data-tip={t('an_plan_tip')}>{t('plan')}</th>
+              {/* `amount`, the word /buyer/budgets uses for this very column, not `plan`:
+                  «План» and «По плану» in one head row are two different things under one word. */}
+              <th className="num" data-tip={t('an_plan_tip')}>{t('amount')}</th>
               <th className="num" data-tip={t('utilization_tip')}>{t('utilization')}</th>
               {/* NOT "period elapsed": the figure is plannedMinor/amountMinor, so under a
                   monthly phasing it is the share of the PLAN due by today, which in a
@@ -320,7 +339,7 @@ export default function Analytics() {
             </tr></thead>
             <tbody>
               {pace.map((p) => {
-                // ahead of the calendar by more than 10 points is the case worth catching
+                // ahead of the PLAN by more than 10 points is the case worth catching
                 const ahead = p.paceDeltaPct > 10;
                 return (
                   <tr key={p.departmentCode ?? 'org'}>
