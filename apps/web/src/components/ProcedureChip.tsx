@@ -26,23 +26,28 @@ export function ProcedureChip({ type, format, visibility }: {
   // by invitation. The product's own legend has always drawn the distinction (🔒 closed
   // against 🌐 open), and the Requests screen names the method in words beside it.
   const open = visibility === 'PUBLIC';
-  // 🌐 means «every supplier sees this» on any type; the auction keeps ⚡, because live
-  // bidding is the louder fact about it and its openness rides in the tip.
-  const ico = open && kind !== 'AUCTION' ? '🌐' : (meta?.ico ?? '•');
+  // 🌐 stays bound to the OPEN TENDER, the way the product's legend has always bound it —
+  // a public RFP keeps 📄 and a public RFI keeps ❓, because losing their own mark would
+  // have the supplier's own card call one RFI two different things in two places. For those
+  // the openness is added to the tip instead of swallowing the type.
+  const openTender = open && kind === 'RFQ';
+  const ico = openTender ? '🌐' : (meta?.ico ?? '•');
   const label = kind === 'AUCTION' ? t('auction')
-    : open && kind === 'RFQ' ? t('open_tender')
+    : openTender ? t('open_tender')
     : (meta?.label || kind);
   // `t()` hands back the key itself when it misses, so an unknown kind would have printed
   // the literal «tip_» into the bubble. The column is NOT NULL in the database; this is the
   // guard for a card drawn before its event has loaded, not for a row that exists.
+  // The suffix says only that everyone SEES it. `vis_PUBLIC_tip` also promises that anyone
+  // may bid, which is false for an RFI: it takes no prices at all, and the API refuses to
+  // evaluate or award one. The acceptance run announces RFI and RFP with PUBLIC, so that
+  // self-contradicting bubble was drawn on every pass.
   const tip = !meta ? undefined
-    : open && kind === 'RFQ' ? t('tip_open_tender')
-    // RFP and RFI are announced by invitation today, but the API accepts PUBLIC for them:
-    // the type keeps its own tip and the openness is added rather than swallowed.
-    : open ? `${t(`tip_${kind.toLowerCase()}`)} · ${t('vis_PUBLIC_tip')}`
+    : openTender ? t('tip_open_tender')
+    : open ? `${t(`tip_${kind.toLowerCase()}`)} · ${t('open_to_all')}`
     : t(`tip_${kind.toLowerCase()}`);
   return (
-    <span className="chip" data-tip={tip}>
+    <span className="chip tip-below" data-tip={tip}>
       <span className="chip-ico">{ico}</span>
       {label}
     </span>
