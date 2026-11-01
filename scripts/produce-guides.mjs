@@ -362,19 +362,22 @@ const SECTIONS = {
   // method columns (separation of duties is visible now), and the four procedure
   // buttons became ONE dropdown with the policy's own choice preselected.
   'buyer-requests': { role: 'buyer', path: '/buyer/requests', scenes: [
-    { az: 'Sorğular bölməsi — hər satınalma buradan başlayır. Sorğu daxili tələbatdır: kimsə nəyəsə ehtiyac duyur, onu rəsmiləşdirir və təsdiqdən keçirir. Yalnız bundan sonra pul hərəkət edir.',
-      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.45); await h.moveTo('form'); await h.holdUntil(0.9); } },
-    { az: 'Yeni sorğu forması yuxarıdadır. Başlıq — nəyin və nə üçün alındığını bir cümlə ilə izah edir. Təsdiqləyən adam ilk növbədə məhz bunu oxuyur.',
-      do: async (p, l, h) => { await h.fill('[data-testid=req-title]', 'Anbar üçün metal rəflər'); await h.holdUntil(0.9); } },
+    { az: 'Sorğular bölməsi — hər satınalma buradan başlayır. Sorğu daxili tələbatdır: kimsə nəyəsə ehtiyac duyur, onu rəsmiləşdirir və təsdiqdən keçirir. Yalnız bundan sonra pul hərəkət edir. Ekran siyahı ilə açılır — gündəlik iş siyahıya baxmaqdır, forma doldurmaq deyil.',
+      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.4); await h.moveTo('table'); await h.holdUntil(0.9); } },
+    // The form is behind «+ Yeni sorğu» since PR #81 (the owner chose "hide it behind a
+    // button"): without the click there is nothing to fill, and a missed selector would
+    // only be logged — the recording would narrate a form that never opens.
+    { az: 'Yeni sorğu «Yeni sorğu» düyməsi ilə yaradılır — forma həmişə açıq dayanmır. Açaq. Başlıq — nəyin və nə üçün alındığını bir cümlə ilə izah edir. Təsdiqləyən adam ilk növbədə məhz bunu oxuyur.',
+      do: async (p, l, h) => { await h.hover('[data-testid=req-new]', 1200); await h.holdUntil(0.35); await h.click('[data-testid=req-new]', 900); await h.holdUntil(0.6); await h.fill('[data-testid=req-title]', 'Anbar üçün metal rəflər'); await h.holdUntil(0.9); } },
     { az: 'Kateqoriya — nə alırıq. O, iki şeyə təsir edir: hansı büdcədən pul gedəcək və satınalma metodu nə olacaq. Siyahı parametrlərdəki vahid kataloqdan gəlir, ona görə «IT» və «it» ayrı kateqoriyaya çevrilmir.',
       do: async (p, l, h) => { await h.fill('[data-testid=req-category]', 'OFFICE'); await h.holdUntil(0.9); } },
     { az: 'Şöbə — kim xərcləyir. Boş buraxsanız, sistem sizin öz şöbənizi qoyur. Bu sahə büdcənin şöbələr üzrə bölgüsünün əsasıdır: sorğu məhz buradan öz məsrəf mərkəzinə düşür. Arxivə göndərilmiş şöbə yeni sorğuda seçilmir.',
       do: async (p, l, h) => { await h.moveTo('[data-testid=req-department]'); await h.holdUntil(0.4); await selectByPrefix(p, '[data-testid=req-department]', 'OPS'); await h.holdUntil(0.92); } },
     { az: 'İndi mövqelər: ad, say və vahid qiymətin smetası. Diqqət edin — siz ümumi məbləği yazmırsınız. Server onu sətirlərdən özü hesablayır, ona görə səhv və ya uydurma cəm mümkün deyil.',
       do: async (p, l, h) => { await h.fill('[data-testid=item-name-0]', 'Metal rəf 200×100'); await h.holdUntil(0.4); await h.fill('[data-testid=item-qty-0]', '6'); await h.holdUntil(0.65); await h.fill('[data-testid=item-price-0]', '180'); await h.holdUntil(0.93); } },
-    { az: 'Bir neçə mövqe lazımdırsa, «Mövqelər» düyməsi yeni sətir əlavə edir. «Yarat» düyməsi sorğunu qaralama kimi yaradır — istənilən vaxt düzəliş etmək olar. Biz indi yaratmırıq, forma yalnız nümayiş üçündür.',
-      do: async (p, l, h) => { await h.hover('form button.ghost', 1100); await h.holdUntil(0.5); await h.moveTo('form button.btn:not(.ghost)'); await h.holdUntil(0.92); } },
-    { az: 'Aşağıda sorğuların reyestri. Yuxarıda axtarış sahəsi və şöbə süzgəci var: başlıqdan axtarırsınız və ya bir şöbənin bütün sorğularını göstərirsiniz.',
+    { az: 'Bir neçə mövqe lazımdırsa, «Mövqelər» düyməsi yeni sətir əlavə edir. «Yarat» düyməsi sorğunu qaralama kimi yaradır — istənilən vaxt düzəliş etmək olar. Forma yaratdıqdan sonra bağlanmır: sorğular dəstə ilə yazılanda hər sorğuya bir əlavə klik düşməsin deyə. Gizlətmək istəsəniz — başlıqdaki «Gizlət» düyməsi.',
+      do: async (p, l, h) => { await h.hover('form button.ghost', 1100); await h.holdUntil(0.4); await h.moveTo('form button.btn:not(.ghost)'); await h.holdUntil(0.7); await h.moveTo(p.locator('button:has-text("Gizlət")').first()); await h.holdUntil(0.92); } },
+    { az: 'İndi reyestrə qayıdaq — ekran onunla açılırdı. Yuxarısında axtarış sahəsi və şöbə süzgəci var: başlıqdan axtarırsınız və ya bir şöbənin bütün sorğularını göstərirsiniz.',
       do: async (p, l, h) => { await h.scrollTo('table'); await h.holdUntil(0.35); await h.moveTo(p.locator('input[placeholder*="Başlıq"]')); await h.holdUntil(0.65); await h.moveTo(p.locator('.card select').first()); await h.holdUntil(0.92); } },
     { az: 'Sütunlar: nömrə, başlıq, kateqoriya, şöbə, tarix, təşəbbüsçü, məbləğ, status və metod. Təşəbbüsçü sütunu təsadüfi deyil — öz sorğusunu təsdiqləmək qadağandır, ona görə kimin yazdığı siyahıda açıq görünməlidir.',
       do: async (p, l, h) => { const th = p.locator('thead th'); await h.moveTo(th.nth(3)); await h.holdUntil(0.3); await h.moveTo(th.nth(5)); await h.holdUntil(0.6); await h.moveTo(p.locator('tbody tr').first().locator('td').nth(5)); await h.holdUntil(0.92); } },
@@ -630,10 +633,10 @@ const SECTIONS = {
       do: async (p, l, h) => { await h.moveTo(p.locator('.card:has(h3:text-is("Reyestr")) tbody tr').first()); await h.holdUntil(0.5); await h.moveTo(p.locator('.card:has(h3:text-is("Reyestr")) tbody tr').last()); await h.holdUntil(0.95); } },
     { az: 'Bloklama isə dağıdıcı əməliyyatdır: bloklanmış təchizatçı bundan sonra heç bir tenderə və sifarişə düşmür. Ona görə o, sətrin sonunda, ayırıcıdan sonra durur — əvvəl «Təsdiqlə» düyməsinin yanında idi, yan-yana.',
       do: async (p, l, h) => { const b = p.locator('button:has-text("Blokla")').first(); if (await b.count()) { await h.hover(b, 1800); } else { await h.moveTo(p.locator('.actions').first()); } await h.holdUntil(0.95); } },
-    { az: 'Aşağıdakı cədvəl isə kataloqdur: sistemdəki bütün təchizatçılar. Bu, sizin siyahınız deyil — buradan reyestrə dəvət edirsiniz. Elə buna görə sütunlar da fərqlidir: statusun yerinə kateqoriyalar durur.',
-      do: async (p, l, h) => { await h.scrollTo('h3:text-is("Kataloq")'); await h.holdUntil(0.4); await h.moveTo('.card:has(h3:text-is("Kataloq")) .hint'); await h.holdUntil(0.7); await h.moveTo(p.locator('.card:has(h3:text-is("Kataloq")) thead th').nth(2)); await h.holdUntil(0.95); } },
+    { az: 'Aşağıdakı cədvəl isə soraq kitabıdır: sistemdəki bütün təchizatçılar. Bu, sizin siyahınız deyil — buradan reyestrə dəvət edirsiniz. Əvvəl bu cədvəl də «Kataloq» adlanırdı — kataloqlar bölməsi ilə eyni sözlə, ona görə adı dəyişdirildi. Sütunlar da fərqlidir: statusun yerinə kateqoriyalar durur.',
+      do: async (p, l, h) => { await h.scrollTo('h3:text-is("Soraq kitabı")'); await h.holdUntil(0.4); await h.moveTo('.card:has(h3:text-is("Soraq kitabı")) .hint'); await h.holdUntil(0.7); await h.moveTo(p.locator('.card:has(h3:text-is("Soraq kitabı")) thead th').nth(2)); await h.holdUntil(0.95); } },
     { az: 'Kateqoriyalar təchizatçının öz profilindən gəlir — nə satdığını özü göstərir. Reyestrdə artıq olan şirkətin yanında dəvət düyməsi görünmür, çünki onu ikinci dəfə dəvət etmək mənasızdır.',
-      do: async (p, l, h) => { const inv = p.locator('.card:has(h3:text-is("Kataloq")) button:text-is("Dəvət et")').first(); if (await inv.count()) { await h.hover(inv, 1600); } else { await h.moveTo('.card:has(h3:text-is("Kataloq")) table'); } await h.holdUntil(0.95); } },
+      do: async (p, l, h) => { const inv = p.locator('.card:has(h3:text-is("Soraq kitabı")) button:text-is("Dəvət et")').first(); if (await inv.count()) { await h.hover(inv, 1600); } else { await h.moveTo('.card:has(h3:text-is("Soraq kitabı")) table'); } await h.holdUntil(0.95); } },
     { az: 'Yekunda: kataloqda təchizatçını tapırsınız, reyestrə dəvət edirsiniz, sənədlərini yoxlayırsınız, təsdiqləyirsiniz — və ondan sonra o, tenderlərə dəvət oluna və birbaşa sifariş ala bilər.',
       do: async (p, l, h) => { await h.scrollTo('h1'); await h.holdUntil(0.4); await h.moveTo('.card:has(h3:text-is("Reyestr")) table'); await h.holdUntil(0.95); } },
   ]},
