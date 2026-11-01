@@ -10,7 +10,9 @@ const TYPE_META: Record<string, { ico: string; label: string }> = {
   RFI: { ico: '❓', label: 'RFI' }, AUCTION: { ico: '⚡', label: '' },
 };
 
-export function ProcedureChip({ type, format }: { type?: string | null; format?: string | null }) {
+export function ProcedureChip({ type, format, visibility }: {
+  type?: string | null; format?: string | null; visibility?: string | null;
+}) {
   const { t } = useI18n();
   // A reverse auction is a FORMAT over a sealed type in the data model, and the pages that
   // decide anything by it read `type === 'AUCTION' || format === 'REVERSE'`. The chip says
@@ -18,14 +20,36 @@ export function ProcedureChip({ type, format }: { type?: string | null; format?:
   // the type column still holds.
   const kind = format === 'REVERSE' ? 'AUCTION' : (type ?? '');
   const meta = TYPE_META[kind];
+  // An OPEN tender is a sealed RFQ whose visibility is PUBLIC — that is literally what
+  // makes procurementMethod "open" in the OCDS export. The product learned to announce one
+  // before this chip existed, so every open tender has been drawn here as «🔒 RFQ»: sealed,
+  // by invitation. The product's own legend has always drawn the distinction (🔒 closed
+  // against 🌐 open), and the Requests screen names the method in words beside it.
+  const open = visibility === 'PUBLIC';
+  // 🌐 stays bound to the OPEN TENDER, the way the product's legend has always bound it —
+  // a public RFP keeps 📄 and a public RFI keeps ❓, because losing their own mark would
+  // have the supplier's own card call one RFI two different things in two places. For those
+  // the openness is added to the tip instead of swallowing the type.
+  const openTender = open && kind === 'RFQ';
+  const ico = openTender ? '🌐' : (meta?.ico ?? '•');
+  const label = kind === 'AUCTION' ? t('auction')
+    : openTender ? t('open_tender')
+    : (meta?.label || kind);
   // `t()` hands back the key itself when it misses, so an unknown kind would have printed
   // the literal «tip_» into the bubble. The column is NOT NULL in the database; this is the
   // guard for a card drawn before its event has loaded, not for a row that exists.
-  const tip = meta ? t(`tip_${kind.toLowerCase()}`) : undefined;
+  // The suffix says only that everyone SEES it. `vis_PUBLIC_tip` also promises that anyone
+  // may bid, which is false for an RFI: it takes no prices at all, and the API refuses to
+  // evaluate or award one. The acceptance run announces RFI and RFP with PUBLIC, so that
+  // self-contradicting bubble was drawn on every pass.
+  const tip = !meta ? undefined
+    : openTender ? t('tip_open_tender')
+    : open ? `${t(`tip_${kind.toLowerCase()}`)} · ${t('open_to_all')}`
+    : t(`tip_${kind.toLowerCase()}`);
   return (
-    <span className="chip" data-tip={tip}>
-      <span className="chip-ico">{meta?.ico ?? '•'}</span>
-      {kind === 'AUCTION' ? t('auction') : (meta?.label || kind)}
+    <span className="chip tip-below" data-tip={tip}>
+      <span className="chip-ico">{ico}</span>
+      {label}
     </span>
   );
 }

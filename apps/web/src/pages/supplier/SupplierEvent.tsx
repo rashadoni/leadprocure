@@ -76,7 +76,7 @@ export default function SupplierEvent() {
       <ListState of={{ loading: false, failed: evFailed, reload: load }} />
       {/* The supplier could not tell a sealed RFQ from a live auction from an RFI by
           looking at the card — only the buyer's side showed the procedure at all. */}
-      <h1>{ev.title} <ProcedureChip type={ev.type} format={ev.format} /> <Badge status={ev.status} /></h1>
+      <h1>{ev.title} <ProcedureChip type={ev.type} format={ev.format} visibility={ev.visibility} /> <Badge status={ev.status} /></h1>
       {won && (
         <div className="card" style={{ borderColor: 'var(--ok)' }}>
           <b>🏆 {t('you_won')}</b>

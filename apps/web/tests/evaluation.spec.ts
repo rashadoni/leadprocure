@@ -52,7 +52,10 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
   // own label (it read «Deadline: 8/12/2026 · INVITED · AZN» — a date and two nameless
   // values, one of them a word straight out of the database); and OCDS is written out in
   // the open, not only inside a hover bubble.
-  await expect(page.locator('h1 .chip')).toHaveText(/🔒\s*RFQ/);
+  // This tender was announced with visibility PUBLIC two dozen lines up, so it is an OPEN
+  // tender — and the chip said «🔒 RFQ», sealed and by invitation. The assertion was
+  // pinning the wrong label.
+  await expect(page.locator('h1 .chip')).toHaveText(/🌐\s*Open tender/);
   const facts = page.locator('.fact');
   await expect(facts).toHaveCount(3);
   await expect(facts.filter({ hasText: 'Visibility' })).toHaveText(/Open/);
