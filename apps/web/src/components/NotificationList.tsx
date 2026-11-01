@@ -11,36 +11,54 @@ type Note = {
 /**
  * Notifications about one order, gathered into one block.
  *
- * The list was flat and newest-first, so three messages about the same delivery sat in
- * three places with the order number repeated in each, and the only question a reader
- * actually has — "what happened to PO-7?" — took reading every line to answer.
+ * The list was flat and newest-first, so four messages about the same delivery sat in four
+ * places, and the only question a reader actually has — "what happened to PO-7?" — took
+ * reading every line to answer. One block per order answers it.
  *
- * A lone message keeps its own row on purpose: a heading over a single line is noise, and
- * `notifText` already names the order inside the sentence. A group stays where its NEWEST
- * message would have been, so the page still reads newest-first — gathering must not
- * promote an old order to the top because it has a long history.
+ * Grouped by `po_id`, NOT by `po_no`: every notification an order emits carries the id,
+ * but only four of the seven types carry the number (`GRN_RECORDED` and the two amendment
+ * decisions do not — contracts.module.ts). Keying on the number left exactly the events a
+ * reader cares about most — a receipt recorded, an amendment accepted — scattered outside
+ * their order's block, and their own text names no order at all, so they read as orphans.
+ * The number is only the heading's label; a group whose messages all lack it is still
+ * gathered, just unlabelled, which beats scattering them.
+ *
+ * No count beside the number: the messages are right there to be counted, and a count taken
+ * after the page's slice to eight rows would say "3" about an order that has five.
+ *
+ * A lone message keeps its own row: a heading over a single line is noise, and `notifText`
+ * names the order inside the sentence for the types that carry the number. A group stays
+ * where its NEWEST message would have been, so the page still reads newest-first —
+ * gathering must not promote an old order to the top because it has a long history.
  */
 export function groupNotes(notes: Note[]): { po?: string; items: Note[] }[] {
   const used = new Set<string>();
   const groups: { po?: string; items: Note[] }[] = [];
-  const poOf = (n: Note): string | undefined =>
-    typeof n.payload?.po_no === 'string' && n.payload.po_no ? n.payload.po_no : undefined;
+  const idOf = (n: Note): string | undefined => {
+    const v = n.payload?.po_id;
+    return v == null || v === '' ? undefined : String(v);
+  };
+  const noOf = (n: Note): string | undefined => {
+    const v = n.payload?.po_no;
+    return v == null || v === '' ? undefined : String(v);
+  };
   for (const n of notes) {
     if (used.has(n.id)) continue;
-    const po = poOf(n);
-    if (!po) { used.add(n.id); groups.push({ items: [n] }); continue; }
-    const items = notes.filter((o) => poOf(o) === po);
+    const id = idOf(n);
+    if (!id) { used.add(n.id); groups.push({ items: [n] }); continue; }
+    const items = notes.filter((o) => idOf(o) === id);
     items.forEach((o) => used.add(o.id));
-    groups.push({ po: items.length > 1 ? po : undefined, items });
+    groups.push({ po: items.length > 1 ? items.map(noOf).find(Boolean) : undefined, items });
   }
   return groups;
 }
 
 /**
  * The notifications card, in ONE place: both panels drew their own table, and only the
- * buyer's learned to mark messages read — the supplier's had no way to clear anything.
- * `onRead`/`onReadAll` are optional so the read controls appear only where the caller
- * supports them, rather than pretending to.
+ * buyer's learned to mark messages read — the supplier's had no way to clear anything,
+ * though the endpoints carry no `@Roles` and RLS already scopes them to the reader's own
+ * organisation. Both panels pass the handlers now. The props stay optional so a caller
+ * that genuinely cannot clear messages does not have to draw controls that fail.
  */
 export function NotificationList({ notes, onRead, onReadAll }: {
   notes: Loader<Note[]>;
@@ -67,8 +85,7 @@ export function NotificationList({ notes, onRead, onReadAll }: {
             {g.po && (
               <tr>
                 <td colSpan={columns} style={{ paddingTop: gi === 0 ? 0 : 10 }}>
-                  <b>{t('order_no')} {g.po}</b>{' '}
-                  <span className="hint">· {g.items.length} {t('notif_group_order')}</span>
+                  <b>{t('order_no')} {g.po}</b>
                 </td>
               </tr>
             )}

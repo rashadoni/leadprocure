@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { api, fmtDate, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
+import { useDialogs } from '../../components/Dialogs';
 import { Badge, statusGroup } from '../../components/Badge';
 import { taskLabel } from '../../components/humanize';
 import { NotificationList } from '../../components/NotificationList';
@@ -14,8 +15,26 @@ const TASK_LINK: Record<string, (id: string) => string> = {
 
 export default function SupplierDashboard() {
   const { t } = useI18n();
+  const { notifyError } = useDialogs();
   const kpi = useLoad<any>(() => api.get('/dashboard/supplier').then((r) => r.data), [], null);
   const notes = useLoad(() => api.get('/notifications').then((r) => r.data.slice(0, 8)), [], [] as any[]);
+
+  // `read-all` and `:id/read` carry no @Roles and are scoped by RLS to the reader's own
+  // organisation, so a supplier has always been allowed to clear its own notifications —
+  // only this screen never offered it, and the supplier is the side that receives most of
+  // the flood (every step a delivery walks is a message to it).
+  const readAll = async () => {
+    try {
+      await api.post('/notifications/read-all');
+      await Promise.all([notes.reload(), kpi.reload()]);
+    } catch (e: any) { notifyError(e); }
+  };
+  const readNote = async (id: string) => {
+    try {
+      await api.post(`/notifications/${id}/read`);
+      await Promise.all([notes.reload(), kpi.reload()]);
+    } catch (e: any) { notifyError(e); }
+  };
 
   // Without the KPI there is no page. A failed load used to leave "…" on screen for ever;
   // now it says what happened and offers the retry.
@@ -36,8 +55,12 @@ export default function SupplierDashboard() {
   // of numbers it broke the grid's rhythm and stood taller than the rest, and it answers a
   // question that comes BEFORE any count: can I be invited at all. So it moved above them,
   // as one line that says what the status means for the reader.
+  // NEW, IN_REVIEW, APPROVED, REJECTED (VERIFICATION_STATUSES). A case already with the
+  // buyer and a case never submitted are two different positions for the reader, and the
+  // whole point of this line is to say what the status means — so they get different words.
   const ver: string | null = kpi.data.verificationStatus ?? null;
   const verOk = ver === 'APPROVED';
+  const verHint = verOk ? 'ver_hint_ok' : ver === 'IN_REVIEW' ? 'ver_hint_review' : 'ver_hint_todo';
   const verBorder = verOk ? undefined
     : statusGroup(ver) === 'is-bad' ? 'var(--bad)' : 'var(--warn)';
 
@@ -51,7 +74,7 @@ export default function SupplierDashboard() {
         {/* A missing case is not «—»: nothing has been submitted yet, and that is the one
             state the supplier can act on. */}
         {ver ? <Badge status={ver} /> : <span className="badge is-neutral">{t('ver_not_started')}</span>}
-        <span className="hint">{t(verOk ? 'ver_hint_ok' : 'ver_hint_todo')}</span>
+        <span className="hint">{t(verHint)}</span>
         <Link className="btn small ghost" to="/supplier/verification"
           style={{ marginLeft: 'auto' }}>{t('open_item')} →</Link>
       </div>
@@ -88,7 +111,7 @@ export default function SupplierDashboard() {
         </table>
       </div>
 
-      <NotificationList notes={notes} />
+      <NotificationList notes={notes} onRead={readNote} onReadAll={readAll} />
     </>
   );
 }
