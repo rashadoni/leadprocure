@@ -1,0 +1,135 @@
+# Disposable DEMO stand — the only kind of target `scripts/demo-fill.mjs` will write to.
+#
+# NOT production and never near it. `scripts/demo-target.mjs` inspects the two containers
+# before any write and refuses unless ALL of this holds, so the names, labels, database
+# name, role and published address below are a CONTRACT, not taste:
+#
+#   · DEMO_ISOLATED=1 in the environment;
+#   · both container names match ^leadprocure-demo-[a-z0-9][a-z0-9-]*$;
+#   · both carry the label leadprocure.disposable=true;
+#   · the database container's POSTGRES_DB is exactly `leadprocure_demo`;
+#   · the API's DATABASE_URL points at that database as `app_user`, over a host name that
+#     resolves on a network BOTH containers share (here: the pg service's own name);
+#   · the API publishes 3000/tcp on 127.0.0.1 — loopback only, never 0.0.0.0 — and
+#     DEMO_API names that exact port.
+#
+# Why a container and not `pnpm --filter api start:dev`: the guard inspects the API
+# container itself, so the API has to BE a labelled disposable container. The web front
+# stays a Vite dev server on the host, because VITE_API_BASE_URL is baked at BUILD time —
+# the shipped web image is built against production and must never serve a recording.
+#
+# Volumes are named with a `-demo` suffix and are meant to be thrown away:
+#   docker compose -f infra/docker-compose.demo.yml -p leadprocure-demo down -v
+#
+# Usage: scripts/demo-stand.sh (which also seeds, fills and prints the recording env).
+services:
+  leadprocure-demo-pg:
+    image: postgres:16
+    container_name: leadprocure-demo-pg
+    labels:
+      leadprocure.disposable: "true"
+    environment:
+      POSTGRES_USER: leadprocure_owner
+      POSTGRES_PASSWORD: demo_owner
+      # The guard compares this literally; changing it makes every demo write refuse.
+      POSTGRES_DB: leadprocure_demo
+      APP_DB_PASSWORD: demo_app
+    ports:
+      # Loopback only, and a port of its own so a real stand on 55440 is left alone.
+      - "127.0.0.1:55441:5432"
+    volumes:
+      - leadprocure_demo_pgdata:/var/lib/postgresql/data
+      # Creates the app_user role with NOBYPASSRLS on an empty volume — the whole point of
+      # the two-role split, so the recording exercises the same RLS the product ships.
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leadprocure_owner -d leadprocure_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  leadprocure-demo-minio:
+    image: leadprocure-object-storage:source-7aac2a2
+    build: ./storage
+    pull_policy: build
+    container_name: leadprocure-demo-minio
+    labels:
+      leadprocure.disposable: "true"
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      # demo-fill uploads the verification documents the way the browser does — presign,
+      # then PUT from the host — so the browser origin has to be allowed.
+      MINIO_API_CORS_ALLOW_ORIGIN: "*"
+    ports:
+      - "127.0.0.1:9010:9000"
+    volumes:
+      - leadprocure_demo_minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  leadprocure-demo-createbuckets:
+    image: leadprocure-object-storage:source-7aac2a2
+    pull_policy: never
+    depends_on:
+      leadprocure-demo-minio:
+        condition: service_healthy
+    environment:
+      S3_ENDPOINT: http://leadprocure-demo-minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      S3_BUCKET: leadprocure
+    entrypoint: ["/usr/local/bin/bootstrap-bucket.sh"]
+    restart: "no"
+
+  leadprocure-demo-api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    image: leadprocure-demo-api:local
+    container_name: leadprocure-demo-api
+    labels:
+      leadprocure.disposable: "true"
+    depends_on:
+      leadprocure-demo-pg:
+        condition: service_healthy
+      leadprocure-demo-createbuckets:
+        condition: service_completed_successfully
+    environment:
+      # Not `production`: no licence file is mounted here, and the entitlement service's
+      # dev fallback is what opens every feature (budgets, catalogues, invoicing) so the
+      # recordings can show them. A demo stand is exactly where that fallback belongs.
+      NODE_ENV: development
+      DATABASE_OWNER_URL: postgres://leadprocure_owner:demo_owner@leadprocure-demo-pg:5432/leadprocure_demo
+      # app_user + /leadprocure_demo + a host name the guard can resolve on the shared
+      # network: all three are checked.
+      DATABASE_URL: postgres://app_user:demo_app@leadprocure-demo-pg:5432/leadprocure_demo
+      JWT_ACCESS_SECRET: demo_access_secret_not_a_real_key
+      JWT_REFRESH_SECRET: demo_refresh_secret_not_a_real_key
+      # Any 32 bytes, base64 — sealed-bid envelope encryption. Demo value, demo data.
+      BID_MASTER_KEY_B64: ZGVtby1vbmx5LTMyLWJ5dGUta2V5LWZvci1zdGFuZCE=
+      # The Vite dev server's origin, or the browser's bid/upload calls fail CORS.
+      WEB_ORIGIN: http://localhost:5173
+      S3_ENDPOINT: http://leadprocure-demo-minio:9000
+      # The PUT is made from the HOST (demo-fill and the browser), so the presigned URL
+      # must carry the published loopback address, not the in-network one.
+      S3_PUBLIC_ENDPOINT: http://127.0.0.1:9010
+      S3_BUCKET: leadprocure
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      S3_FORCE_PATH_STYLE: "true"
+      # No ClamAV on the stand: it adds a 90s start period and a ~1 GB signature download
+      # for a path the guides never show. Turn it on if a recording is ever about the scan.
+      CLAMAV_ENABLED: "false"
+      # Empty SMTP keeps NotifyEmailer on its console provider — a stand must not send mail.
+      SMTP_HOST: ""
+    ports:
+      - "127.0.0.1:3200:3000"
+
+volumes:
+  leadprocure_demo_pgdata:
+  leadprocure_demo_minio:

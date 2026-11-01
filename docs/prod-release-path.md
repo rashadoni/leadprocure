@@ -768,6 +768,150 @@ eicar-live.txt: The specified key does not exist` про оставшийся о
 
 ---
 
+## Выкладка `3cd4d27` (1 ноября 2026, вечер) — подготовлена, подмена за владельцем
+
+Вторая выкладка по этому документу, в тот же день, что и первая, — поэтому названа
+по коммиту, а не по дате. Записано по шагу 9 сразу после подготовки, а не
+после подмены: шаги 1–5 и все проверки, которые можно сделать до подмены, выполнены и
+сошлись, а сам `up` шага 6 классификатор auto mode отказал дважды с причиной
+**[Production Deploy]**. Обход не искался; команда отдана владельцу (ниже). Поэтому
+таблица ниже — про то, что лежит готовым на хосте, а не про то, что уже у
+пользователей.
+
+| | |
+|---|---|
+| Выкладываемый SHA | `3cd4d276af3302cee53c5553508924c46f8fa8e1` — вершина `main`, мерж PR #82 |
+| Что было до него | `4951e02` от 1 ноября (раздел выше) |
+| Образ api | `leadprocure-api:3cd4d27…`, `sha256:baf1c83ca1f4ed54592a9f576e26a427ce7c79b904d81706c8f9f4e9f916873a`, amd64, метка `revision` = выкладываемый SHA |
+| Образ web | `leadprocure-web:3cd4d27…`, `sha256:77265991862e849f1722a948baa9ccc6cbb230b3ad53791eee2b4934e18f7d94`, amd64, метка `revision` = выкладываемый SHA |
+| Точка отката | `leadprocure-prod-api:rollback-4951e02` `sha256:054adbd0b032e9995a4210d66a29771bdf3ed3d21f507eaf6dceac864b72bf21`, `leadprocure-prod-web:rollback-4951e02` `sha256:4051fccded5bd1ad1b95a0ebedb843f819f2bf1394daf1fbcda02f8e523913ae`. Теги поставлены **до** `docker image load`; прежняя точка `rollback-400f861` (`f4472579…` / `3ca1a657…`) не тронута |
+| Резервная копия | `/home/rashad/backups/leadprocure/leadprocure-prod-20261101T204144Z.dump`, 739 475 байт, sha256 `b6831c3d8e740071b974b3b11dba704ffbfe8534b32d348d76b31adcea6cfdc8`, права 600 |
+| Сборка | `release-artifacts.yml`, прогон [41348327372](https://github.com/rashadoni/leadprocure/actions/runs/41348327372), `workflow_dispatch` на `main`, `public_api_url = http://75.119.156.234:3100`. Пакет 249 173 547 байт, sha256 `47f996cb57df5b9e852ce8bf6c170c4e2daa1f5c33e982e1855d95953b1c94a3` |
+| Проверки репозитория | `acceptance` и `fresh-install` SUCCESS на этом же коммите, прогон [41347663801](https://github.com/rashadoni/leadprocure/actions/runs/41347663801), событие `push` на `main` |
+| Воркитри релиза | `/home/rashad/projects/Leadprocure/.claude/worktrees/release-3cd4d27`, detached на выкладываемом SHA, чистый. Держать до конца выкладки — иначе откатываться нечем (шаг 8) |
+
+**Чем эта выкладка проще предыдущей — миграций в ней нет.** В `4951e02` и в
+`3cd4d27` по 52 миграции, дерево `apps/api/src/common/db/migrations/` совпадает файл в
+файл, и в живой базе их тоже 52. То есть схема не меняется, а значит откат образа
+здесь — настоящий откат, а не половинчатый, как в разделе выше. Из девяти коммитов
+трогают код только `apps/web` (7 файлов), остальное — два документа и
+`scripts/produce-guides.mjs`. API пересобран, потому что его образ тащит в себя всё
+дерево репозитория, а не потому, что в нём что-то изменилось.
+
+**Preflight** (шаг 1, на живой базе, `BEGIN READ ONLY … ROLLBACK`):
+`duplicate_invoice_lines = 0`, `duplicate_evaluation_scores = 0`,
+`duplicate_memberships = 0`, `document_namespace_mismatch = 0`,
+`bid_document_namespace_mismatch = 0`, `kyc_namespace_mismatch = 0`,
+`legacy_invoice_lines_requiring_tax_review = 5`, `installed_licenses = 0`. Все три
+блокирующие проверки — нули. `installed_licenses = 0` ожидаемо: лицензия приходит
+файлом, а не строкой в таблице.
+
+**Резервная копия и её разворот.** `pg_dump -Fc` снят 1 ноября 20:41 UTC — то есть
+уже на схеме из 52 миграций, в отличие от копии `…T171956Z`, которая снята до
+прошлой выкладки и описывает схему из 40 миграций. Разворот проверен отдельно: дамп
+восстановлен в одноразовый `postgres:16` с `--network none` и без публикации портов,
+том ушёл с контейнером, контейнер удалён. `pg_restore` код 0, ноль строк в логе
+ошибок. Счёт строк в 14 таблицах совпал с продом до единицы
+(`organizations` 3, `organization_users` 6, `memberships` 6,
+`procurement_requests` 15, `sourcing_events` 6, `bids` 7, `bid_sealed_payloads` 5,
+`awards` 1, `contracts` 1, `purchase_orders` 9, `invoices` 4, `budgets` 6,
+`documents` 2, `audit_events` 3235). Отдельно проверено самое хрупкое: у всех 5
+запечатанных ставок на месте и `ciphertext`, и `wrapped_key`; все 3235 записей журнала
+несут хеш; в `migrations` 52 строки. Модель доступа тоже восстанавливается, а не
+только строки: в оглавлении дампа 65 разделов данных, 69 ACL, 80 политик, 52
+`ROW SECURITY`, 33 функции, триггер журнала, 49 индексов, 212 ограничений и 122 внешних
+ключа, и в развёрнутой базе действительно оказались все 80 политик и 52 таблицы с
+включённым RLS.
+
+**Лицензия — dry-run шага 6 (единственная честная проверка доезда).** Выполнен на
+релизных compose-файлах с живым `.env.prod` (34 строки, тот же файл, что и 1 ноября):
+`LICENSE_PUBLIC_KEY_B64` непустой (152 символа), `LICENSE_FILE` =
+`/run/leadprocure-license/leadprocure.license`, а `source:` над
+`target: /run/leadprocure-license` — абсолютный
+`/home/rashad/projects/Leadprocure/infra/license`, вне воркитри релиза, с
+`read_only: true` и `create_host_path: false`. Сам файл на месте: 1000 байт, формат
+`v4.public.`, права `640`. Значения из `.env.prod` в вывод не печатались — у ключа
+проверялась только длина, потому что `infra/DEPLOY.md` запрещает печатать
+развёрнутую конфигурацию Compose.
+
+**Пакет и образы.** `manifest.cjs verify` — PASS (контрольные суммы архива и
+метаданные). `gzip -dc … | docker image load` поднял оба образа под теми тегами, что в
+манифесте; `manifest.cjs verify-loaded` — PASS, то есть сошлись ID, архитектура
+`linux/amd64` и метки `revision`. Ожидаемый SHA брался из прогона в GitHub, а не из
+скачанного `manifest.json`. Сборка собрала оба образа заново, сама удалила теги,
+загрузила архив обратно и сверила восстановленное — это её встроенный круг, он прошёл.
+
+**Демо-учётные данные в бандле — проверено до подмены, на загруженном образе.**
+Пароль демо-сида вычитан из `apps/api/src/seed.ts` выкладываемого SHA (в документ не
+копируется). На `leadprocure-web:3cd4d27…` — по нулю файлов на пароль сида,
+`acme.test`, `supply-one.test` и `VITE_DEMO_HINT`. Проверка проверена на своём сбое:
+на `leadprocure-prod-web:pre-contabo-url-fix-20260829`, том самом образе, который
+печатал пароль на странице входа, та же команда даёт `1/1/1/0`. То есть нули на новом
+образе — результат, а не молчание сломанной проверки.
+
+### Пакет `3cd4d27` деплоить больше нельзя — `main` ушёл вперёд
+
+Отмечено здесь, чтобы следующий шаг не взял загруженные образы по привычке. PR #84
+(`45e56d8`, «срок оплаты от поставщика и выбор допуска на аукцион») влился в `main`
+**21:03:59 UTC — за минуту до того**, как открылось окно подмены. То есть собранный и
+сверенный пакет `3cd4d27` перестал быть «текущим `main`» ещё до того, как его успели
+выложить, и выкладывать его теперь означало бы выложить не вершину.
+
+- Образы `leadprocure-api:3cd4d27…` и `leadprocure-web:3cd4d27…` в демоне оставлены:
+  места они не жмут, но **точкой следующей выкладки не являются** — её надо собирать
+  заново в Actions на тогдашнем `main`.
+- Теги `leadprocure-prod-{api,web}:rollback-4951e02` оставить как есть: это действующая
+  точка отката для того, что работает у людей сейчас, и она нужна при любой следующей
+  выкладке.
+- Копию базы тоже придётся снять заново. Условие `infra/DEPLOY.md` — не «копия
+  существует», а «копия снята перед этой выкладкой и восстановление проверено»;
+  `…T204144Z.dump` к следующему окну будет многочасовым. Проверенный разворот этой
+  копии своё дело сделал: он показал, что путь копия → разворот работает на настоящем
+  объёме, и в следующий раз повторяется теми же командами.
+
+Что от этой подготовки переносится без переделки: `#84` миграций не принёс — в
+`3cd4d27` и в `45e56d8` по-прежнему по 52, дерево миграций совпадает файл в файл. Так
+что вывод «схема не меняется, откат образа полный» держится и для следующей выкладки,
+пока в `main` не появится новая миграция.
+
+### Что НЕ выполнено и почему
+
+- **Шаг 6, подмена контейнеров.** Классификатор auto mode отказал дважды, причина
+  **[Production Deploy]**. Это не сбой и не нехватка прав на хосте: прод-записи этой
+  сессии закрыты по умолчанию. Готовая команда — одной строкой, из `~`, абсолютными
+  путями:
+
+  ```bash
+  RELEASE_SHA=3cd4d276af3302cee53c5553508924c46f8fa8e1 docker compose -p leadprocure-prod --project-directory /home/rashad/projects/Leadprocure/.claude/worktrees/release-3cd4d27/infra -f /home/rashad/projects/Leadprocure/.claude/worktrees/release-3cd4d27/infra/docker-compose.prod.yml -f /home/rashad/projects/Leadprocure/.claude/worktrees/release-3cd4d27/infra/docker-compose.release.yml --env-file /home/rashad/projects/Leadprocure/.claude/worktrees/budget-by-department-audit-4e2173/infra/.env.prod up -d --no-build --no-deps api web && sleep 25 && curl -fsS http://75.119.156.234:3100/health
+  ```
+
+  Ждать в ответе `status: ok`, `licenseSource: file`, `licenseStatus: valid`.
+  `licenseSource: missing` — лицензия не доехала, откатываться. Откат — та же строка с
+  другим тегом:
+
+  ```bash
+  docker image tag leadprocure-api:4951e02ec2ede513ef77fc8bc99a9e93cc19dd62 leadprocure-api:rollback && docker image tag leadprocure-web:4951e02ec2ede513ef77fc8bc99a9e93cc19dd62 leadprocure-web:rollback && RELEASE_SHA=rollback docker compose -p leadprocure-prod --project-directory /home/rashad/projects/Leadprocure/.claude/worktrees/release-3cd4d27/infra -f /home/rashad/projects/Leadprocure/.claude/worktrees/release-3cd4d27/infra/docker-compose.prod.yml -f /home/rashad/projects/Leadprocure/.claude/worktrees/release-3cd4d27/infra/docker-compose.release.yml --env-file /home/rashad/projects/Leadprocure/.claude/worktrees/budget-by-department-audit-4e2173/infra/.env.prod up -d --no-build --no-deps api web
+  ```
+
+  Поскольку миграций в этой выкладке нет, откат возвращает ровно то состояние, которое
+  работает сейчас, — и поломка `42P10` на `POST /settings/users`, описанная в шаге 8
+  для откату на `400f861`, здесь не возникает: `4951e02` живёт на той же схеме.
+- **Проверки шага 7, требующие входа под настоящей учётной записью:**
+  вход/обновление сессии/выход, изоляция организаций и ролей, согласование заявки,
+  невидимость сумм до вскрытия, загрузка и скачивание документа с антивирусом,
+  presigned-загрузка на `:9002`. Остаются владельцу по той же причине, что и 1 ноября:
+  заводить тестовые данные на проде нельзя, а входить под чужой учётной записью — не
+  дело агента.
+- **Проверка cookie/CORS через настоящий TLS** — по-прежнему NOT RUN: публичного HTTPS
+  нет, маршрут остаётся HTTP на IP.
+
+При подготовке прод не менялся ни в одном месте: контейнеры не перезапускались, тома и
+образы прода не трогались, база читалась только на чтение (`BEGIN READ ONLY`) и
+`pg_dump`. Единственное, что добавилось на хосте, — два новых образа, два тега отката,
+воркитри `release-3cd4d27` и файл резервной копии.
+
+---
+
 ## Что остаётся незакрытым
 
 - **Закрытый ключ эмитента лежит на этом хосте в двух одинаковых копиях** —
