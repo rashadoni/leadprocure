@@ -158,6 +158,7 @@ export default function Settings() {
         <a href="#set-method">{t('method_policy')}</a>
         <a href="#set-integrations">{t('integrations')}</a>
         <a href="#set-approval">{t('approval_chain')}</a>
+        <a href="#set-channels">{t('channels_hdr')}</a>
       </div>
       <ListState of={[userList, policyList, approvalList,
         { loading: false, failed: refFailed, reload: loadOptional }]} />
@@ -177,7 +178,7 @@ export default function Settings() {
                       {BUYER_ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
                     </select>
                   ) : (
-                    <span className="badge is-info" data-tip={u.id === session?.user.id ? t('role_self_locked') : undefined}>{roleLabel(u.role)}</span>
+                    <span className="badge is-info" data-tip={isAdmin && u.id === session?.user.id ? t('role_self_locked') : undefined}>{roleLabel(u.role)}</span>
                   )}
                 </td>
                 <td>
@@ -202,7 +203,7 @@ export default function Settings() {
           <form onSubmit={addUser} className="row" style={{ marginTop: 14, maxWidth: 760 }}>
             <div><label>{t('email')}</label><input type="email" required value={nu.email} onChange={(e) => setNu({ ...nu, email: e.target.value })} /></div>
             <div><label>{t('name')}</label><input required value={nu.fullName} onChange={(e) => setNu({ ...nu, fullName: e.target.value })} /></div>
-            <div><label htmlFor="new-user-password">{t('password')} <span className="hint">· {t('password_min')}</span></label>
+            <div><label htmlFor="new-user-password">{t('password')}</label>
               <input id="new-user-password" type="password" required minLength={8} value={nu.password}
                 onChange={(e) => setNu({ ...nu, password: e.target.value })} /></div>
             <div><label>{t('role')}</label>
@@ -362,10 +363,10 @@ export default function Settings() {
           <h3 id="set-thresholds">{t('bud_thresholds')}</h3>
           <div className="hint" style={{ marginBottom: 12 }}>{t('bud_thresholds_hint')}</div>
           <div className="row" style={{ alignItems: 'flex-end', maxWidth: 880 }}>
-            <div><label htmlFor="bud-warn" data-tip={t('bud_warn_tip')}>{t('bud_warn_label')}</label>
+            <div><label htmlFor="bud-warn">{t('bud_warn_label')}</label>
               <input id="bud-warn" type="number" min={1} max={1000} disabled={!canManageBudgetPolicy} value={policyDraft.warnPct}
                 onChange={(e) => setPolicyDraft({ ...policyDraft, warnPct: e.target.value })} /></div>
-            <div><label htmlFor="bud-block" data-tip={t('bud_block_tip')}>{t('bud_block_label')}</label>
+            <div><label htmlFor="bud-block">{t('bud_block_label')}</label>
               <input id="bud-block" type="number" min={1} max={1000} disabled={!canManageBudgetPolicy} placeholder={t('bud_block_off')}
                 value={policyDraft.blockPct}
                 onChange={(e) => setPolicyDraft({ ...policyDraft, blockPct: e.target.value })} /></div>
@@ -502,7 +503,7 @@ export default function Settings() {
         )}
       </div>
 
-      <ChannelsCard isAdmin={isAdmin} />
+      <div id="set-channels"><ChannelsCard isAdmin={isAdmin} /></div>
 
       <div className="card">
         <h3 id="set-integrations">{t('integrations')}</h3>

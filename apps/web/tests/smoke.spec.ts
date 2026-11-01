@@ -155,10 +155,15 @@ test.describe('buyer panel', () => {
     await page.goto('/buyer/settings');
     const toApproval = page.getByRole('link', { name: 'Approval chain', exact: true });
     await expect(toApproval).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('#new-user-password')).toHaveAttribute('type', 'password');
+    // The top of the page, before the jump: the password field, the thresholds row and its
+    // tick are what this change is about, and after the jump none of them is in frame.
+    await page.screenshot({ path: 'test-results/settings.png' });
+    // Jump only once the lists have arrived: a hash scroll happens once, and everything
+    // above the last card growing afterwards would leave it below the fold for good.
+    await expect(page.locator('table tbody tr').first()).toBeVisible();
     await toApproval.click();
     await expect(page.locator('#set-approval')).toBeInViewport();
-    await expect(page.locator('#new-user-password')).toHaveAttribute('type', 'password');
-    await page.screenshot({ path: 'test-results/settings.png' });
   });
 
   // The product's own dialogs replaced alert / prompt / confirm. What the native prompt
