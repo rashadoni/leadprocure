@@ -35,6 +35,10 @@ export async function cancelDialog(page: Page, expectText?: string | RegExp) {
 export async function expectToast(page: Page, text: string | RegExp) {
   const toast = page.getByTestId('toast').filter({ hasText: text });
   await expect(toast).toBeVisible();
+  // The message is checked EXACTLY, on the text span rather than on the whole toast — the
+  // toast also carries its close button. These assertions replaced `dialog.message()`
+  // comparisons, and `hasText` alone is a case-insensitive substring: a superset would pass.
+  if (typeof text === 'string') await expect(toast.locator('span').first()).toHaveText(text);
   await toast.getByRole('button').click();
   await expect(toast).toHaveCount(0);
 }

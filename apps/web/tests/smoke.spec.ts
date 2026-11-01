@@ -150,6 +150,13 @@ test.describe('buyer panel', () => {
   // Number('потом') — NaN — as a supplier's rating. The seed has one approved supplier,
   // so this row is always here.
   test('a dialog refuses an answer out of range and says why', async () => {
+    // It ends by POSTing a real score, which lands in supplier_scorecard_entries for good
+    // and feeds the reliability index behind the AI ranking. Same guard as the draft-request
+    // test above: against a deployed stand it would quietly inflate a demo supplier's
+    // rating once per run.
+    const remote = !!process.env.BASE_URL && !/localhost|127\.0\.0\.1/.test(process.env.BASE_URL);
+    test.skip(remote && !process.env.SMOKE_ALLOW_WRITES,
+      'writes disabled against a remote stand — set SMOKE_ALLOW_WRITES=1 to allow');
     await page.goto('/buyer/suppliers');
     // a prefix, not an exact name: [data-tip]::after lands in the accessible name
     await page.getByRole('button', { name: /^★ Scorecard\b/ }).first().click();
@@ -207,6 +214,9 @@ test.describe('supplier panel', () => {
     await alert.getByRole('button', { name: 'Retry' }).click();
     await retried;
     await expect(alert).toHaveCount(0);
+    // Deliberately unfiltered, and it stays that way: a filter whose text stops matching
+    // passes for ever. A toast cannot appear here (nothing on this page acts), and it
+    // carries role="status" rather than role="alert" precisely to stay out of such checks.
     await expect(page.getByRole('status')).toHaveCount(0);
     await page.unroute('**/events?**');
   });

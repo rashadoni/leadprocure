@@ -116,7 +116,7 @@ export default function EventDetail() {
   };
   const disqualify = async (bidId: string) => {
     const reason = await ask({
-      title: t('disqualify_prompt'), label: t('reason'), required: true,
+      title: t('disqualify_prompt'), label: t('reason'), required: true, minLength: 3,
       hint: t('disqualify_hint'), confirmLabel: t('disqualify'),
     });
     if (!reason) return;
@@ -125,7 +125,7 @@ export default function EventDetail() {
   };
   const cancelAward = async (lotId: string) => {
     const reason = await ask({
-      title: t('cancel_award_prompt'), label: t('reason'), required: true,
+      title: t('cancel_award_prompt'), label: t('reason'), required: true, minLength: 3,
       hint: t('cancel_award_hint'), confirmLabel: t('cancel_award'), danger: true,
     });
     if (!reason) return;
@@ -376,7 +376,7 @@ export default function EventDetail() {
                             {(f.jobs ?? []).filter((j:any)=>['BUYER_ADMIN','BUYER_APPROVER'].includes(session?.org.role ?? '') && ['UNKNOWN','FAILED','NOT_CONFIGURED'].includes(j.status)).map((j:any)=><div key={j.id}>
                               <span>{t(`delivery_${j.status}`)} · {j.recipient}</span>
                               <button className="btn small ghost" disabled={j.delivery_confirmed} data-tip={j.delivery_confirmed ? t('delivery_already_confirmed') : undefined} onClick={async ()=>{
-                                const reason = await ask({ title: t('delivery_reconcile_reason'), label: t('reason'), required: true });
+                                const reason = await ask({ title: t('delivery_reconcile_reason'), label: t('reason'), required: true, minLength: 10 });
                                 if (!reason) return;
                                 fuAct(()=>api.post(`/events/${id}/followups/jobs/${j.id}/reconcile`,{decision:'CONFIRMED_NOT_SENT',reason}));
                               }}>{t('delivery_confirm_not_sent')}</button>

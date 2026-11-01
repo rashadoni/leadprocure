@@ -129,9 +129,9 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 /* The product's own modal, in place of the browser's prompt/confirm. Short enough that
    nothing inside it ever scrolls: a dialog that scrolls is a form, and a form belongs on
    the page. */
-.modal-back { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center;
-  justify-content: center; padding: 20px; background: rgba(16, 24, 40, .45); }
-.modal { width: 100%; max-width: 440px; background: var(--panel); border: 1px solid var(--border);
+.modal-back { position: fixed; inset: 0; z-index: 120; display: flex; justify-content: center;
+  overflow: auto; padding: 20px; background: rgba(16, 24, 40, .45); }
+.modal { width: 100%; max-width: 440px; margin: auto; background: var(--panel); border: 1px solid var(--border);
   border-radius: 14px; padding: 20px; box-shadow: var(--shadow-lg); }
 .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
 

@@ -189,7 +189,7 @@ export default function Budgets() {
     catch (e: any) { notifyError(e); }
   };
   const withReason = async (id: string, action: string, promptKey: string) => {
-    const reason = await ask({ title: t(promptKey), label: t('reason'), required: true, hint: t('bud_reason_hint') });
+    const reason = await ask({ title: t(promptKey), label: t('reason'), required: true, minLength: 3, hint: t('bud_reason_hint') });
     if (!reason || reason.trim().length < 3) return;
     act(id, action, { reason: reason.trim() });
   };

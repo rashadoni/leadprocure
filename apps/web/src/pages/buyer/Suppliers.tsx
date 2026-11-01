@@ -39,7 +39,7 @@ export default function Suppliers() {
   };
   const rate = async (orgId: string) => {
     const raw = await ask({
-      title: t('otif_prompt'), hint: t('otif_hint'), type: 'number', min: 0, max: 100, defaultValue: '90',
+      title: t('otif_prompt'), hint: t('otif_hint'), type: 'number', integer: true, min: 0, max: 100, defaultValue: '90',
     });
     if (raw == null) return;
     try {
@@ -50,7 +50,7 @@ export default function Suppliers() {
   const openVerification = async (supplierOrgId: string) => {
     try {
       await api.post('/verification/cases', { supplierOrgId });
-      notify(t('verification_opened'), 'ok');
+      notify(t('verification_case_created'), 'ok');
     } catch (e: any) { notifyError(e); }
   };
 
