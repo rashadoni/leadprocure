@@ -160,14 +160,16 @@ export default function Analytics() {
         label, not only an aria-label: the placeholder cannot be set and the shape of the
         control says nothing about which end of the window it holds. The width fits the
         browser's own rendering — at 150px the English long month came out as
-        "December 202!", clipped mid-year, with the picker icon on top of it. */}
+        "December 202!", clipped mid-year, with the picker icon on top of it. maxWidth as
+        well as width: on a narrow screen the line it sits on can be under 200px, and a
+        fixed 200 would then run off the page rather than give up a few pixels. */}
     <div className="filter-field">
       <label htmlFor="an-from">{t('analytics_from')}</label>
-      <input id="an-from" type="month" value={win.from} onChange={(e) => setMonth('from', e.target.value)} style={{ width: 200 }} />
+      <input id="an-from" type="month" value={win.from} onChange={(e) => setMonth('from', e.target.value)} style={{ width: 200, maxWidth: '100%' }} />
     </div>
     <div className="filter-field">
       <label htmlFor="an-to">{t('analytics_to')}</label>
-      <input id="an-to" type="month" value={win.to} onChange={(e) => setMonth('to', e.target.value)} style={{ width: 200 }} />
+      <input id="an-to" type="month" value={win.to} onChange={(e) => setMonth('to', e.target.value)} style={{ width: 200, maxWidth: '100%' }} />
     </div>
     <button className="btn ghost small" disabled={!d} onClick={exportCsv}>⤓ CSV</button>
   </div>;
