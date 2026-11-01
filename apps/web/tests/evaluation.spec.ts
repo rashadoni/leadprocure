@@ -46,6 +46,27 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
   await page.goto('/login'); await page.fill('input[type=email]', `buyer-${tag}@audit.invalid`); await page.fill('input[type=password]', password);
   await page.click('form button.btn:not(.ghost):not([type=button])'); await page.waitForURL(/\/buyer\//);
   await page.goto(`/buyer/events/${event.id}`);
+  // The card used to name almost nothing it showed. The procedure is the chip the tender
+  // LIST draws, out of the same component; the three facts under the title each carry their
+  // own label (it read «Deadline: 8/12/2026 · INVITED · AZN» — a date and two nameless
+  // values, one of them a word straight out of the database); and OCDS is written out in
+  // the open, not only inside a hover bubble.
+  await expect(page.locator('h1 .chip')).toHaveText(/🔒\s*RFQ/);
+  const facts = page.locator('.fact');
+  await expect(facts).toHaveCount(3);
+  await expect(facts.filter({ hasText: 'Visibility' })).toHaveText(/Open/);
+  await expect(facts.filter({ hasText: 'Evaluation currency' })).toHaveText(/AZN/);
+  await expect(page.getByText(/^OCDS is the open international standard/)).toBeVisible();
+  // A noun over the column and a verb on the button, out of the ONE key that used to do
+  // both jobs — the heading read «Score!» — and the figure says out of what.
+  // A PREFIX, not an exact name: `[data-tip]::after { content: attr(data-tip) }` puts the
+  // tooltip into the accessible name, and Playwright reads pseudo-content (opacity:0 does
+  // not hide it from the name). helpers/rfx.ts builds the same shape for the same reason.
+  await expect(page.getByRole('columnheader', { name: /^Score \/ 100(?:\s|$)/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Score', exact: true })).toBeVisible();
+  // Q&A: the field and the button no longer carry one and the same word.
+  await expect(page.getByLabel('Addendum', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^📢 Publish(?:\s|$)/ })).toBeVisible();
   const groupA = page.getByRole('group', { name: lotA.title, exact: true });
   const groupB = page.getByRole('group', { name: lotB.title, exact: true });
   // No cheapest-offer winner hint or actionable award before a real evaluation.
@@ -96,8 +117,16 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
     [lotA.id, bids[1].id, currentEvaluation.evaluation_id], [lotB.id, bids[0].id, currentEvaluation.evaluation_id],
   ]));
   for (const name of ['s1', 's2']) {
-    await expect(page.locator('tr').filter({ hasText: `Browser audit ${name}` }).locator('td').filter({ hasText: '🏆' })).toHaveCount(1);
+    const row = page.locator('tr').filter({ hasText: `Browser audit ${name}` });
+    await expect(row.locator('td').filter({ hasText: '🏆' })).toHaveCount(1);
+    // In WORDS. A trophy next to the company name and a green outline on the row were the
+    // only two marks, and the column they sit in is named after the supplier.
+    await expect(row.locator('.badge.AWARDED')).toHaveText(/🏆\s*Winner/);
   }
+  // Evidence that the card was looked at and not merely built: four screens were redesigned
+  // in this audit before anybody had seen one, and a clipped month field on the analytics
+  // page was found in a picture like this one, never in the code.
+  await page.screenshot({ path: 'test-results/event-card.png', fullPage: true });
   await expect(page.getByRole('button', { name: /^Create contract ·/ })).toHaveCount(2);
   for (const [lot, supplier, total, itemName] of [[lotA, s2, 9500, 'Item A'], [lotB, s1, 15000, 'Item B']] as const) {
     await page.goto(`/buyer/events/${event.id}`);
@@ -127,6 +156,10 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
     await clock.query(`SELECT * FROM close_due_events()`);
   } finally { await clock.end(); }
   await page.goto(`/buyer/events/${auction.id}`);
+  // Said the way the list says it. The card used to print the `type` column, so a SEALED
+  // tender switched to live bidding would have called itself an RFQ with the auction panel
+  // running underneath it; the chip reads `format` too.
+  await expect(page.locator('h1 .chip')).toHaveText(/⚡\s*Auction/);
   const finalized = page.waitForResponse(r => r.url().endsWith(`/events/${auction.id}/auction/finalize`) && r.request().method() === 'POST');
   await page.getByRole('button', { name: /^Finalize\b/ }).click();
   expect((await finalized).status()).toBe(201);
@@ -134,6 +167,14 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
   await expect(auctionLot.getByRole('button').first()).toHaveText(/Browser audit s2.*⭐/);
   await expect(auctionLot.getByRole('button').first()).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Score', exact: true })).toHaveCount(0);
+  // Nothing is ever scored or disqualified in an auction, so the actions column — which
+  // stood empty but took its width in every state but one — is not drawn at all. One lot,
+  // so the lot picker that used to float between the cards is not drawn either.
+  await expect(page.getByRole('columnheader', { name: 'Actions', exact: true })).toHaveCount(0);
+  // Nor the score column: an auction has no criteria, so every row showed «—» under a
+  // heading that promised a scale out of 100.
+  await expect(page.getByRole('columnheader', { name: /^Score \/ 100(?:\s|$)/ })).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: 'Lots', exact: true })).toHaveCount(0);
   await awardThrough(auctionLot.getByRole('button', { name: /Browser audit s2/ }), 'Best accepted auction price', auction.id);
   const auctionContractResponse = page.waitForResponse(r => r.url().includes('/contracts/from-award/') && r.request().method() === 'POST');
   await page.getByRole('button', { name: `Create contract · ${auction.lots[0].title}` }).click();

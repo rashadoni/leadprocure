@@ -5,12 +5,7 @@ import { useI18n } from '../../i18n';
 import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
 import { ListState, useLoad } from '../../components/ListState';
-
-// Procedure chip: icon + label so the list shows WHAT kind of procedure each row is.
-const TYPE_META: Record<string, { ico: string; label: string }> = {
-  RFQ: { ico: '🔒', label: 'RFQ' }, RFP: { ico: '📄', label: 'RFP' },
-  RFI: { ico: '❓', label: 'RFI' }, AUCTION: { ico: '⚡', label: 'AUKSION' },
-};
+import { ProcedureChip } from '../../components/ProcedureChip';
 
 const PAGE_SIZE = 20;
 
@@ -36,12 +31,10 @@ export default function Events() {
             {rows.map((r) => (
               <tr key={r.id}>
                 <td><Link to={`/buyer/events/${r.id}`}>{r.title}</Link></td>
-                <td>
-                  <span className="chip" data-tip={t(`tip_${(r.type ?? '').toLowerCase()}`)}>
-                    <span className="chip-ico">{TYPE_META[r.type]?.ico ?? '•'}</span>
-                    {r.type === 'AUCTION' ? t('auction') : (TYPE_META[r.type]?.label ?? r.type)}
-                  </span>
-                </td>
+                {/* `format` as well as `type`: a tender switched to live bidding keeps
+                    type RFQ in the column, and the list used to call it a sealed RFQ while
+                    the auction panel was running on its card. */}
+                <td><ProcedureChip type={r.type} format={r.format} /></td>
                 <td><Badge status={r.status} /></td>
                 <td className="hint nowrap">{fmtDateTime(r.close_at)}</td>
                 <td>{r.bid_count}</td>

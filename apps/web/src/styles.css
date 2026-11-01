@@ -71,6 +71,17 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 .chip:hover { border-color: var(--accent); background: rgba(4, 120, 87, .06); box-shadow: 0 2px 6px rgba(16, 24, 40, .06); }
 .chip .chip-ico { font-size: 13px; line-height: 1; }
 
+/* The facts under a tender's title: name above value, each standing on its own. They were
+   one sentence of «·» separators in which two of the three values had no name at all. */
+.fact-row { display: flex; flex-wrap: wrap; gap: 10px 28px; }
+.fact { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fact-k { color: var(--muted); font-size: 11px; font-weight: 500; }
+.fact-v { font-size: 14px; font-weight: 600; }
+
+/* Question/answer rows: the field grows, the button keeps its own width. `.row` gives every
+   child flex:1, so the «Ask» button came out exactly as wide as the question field. */
+.qna-row { display: flex; gap: 10px; align-items: flex-end; max-width: 560px; }
+
 /* Follow-up chain editor: each step is a tidy grid row (order · channel · delay · remove),
    so the channel <select> can't stretch full-width and push the rest out of bounds. */
 .fu-editor { margin-top: 10px; max-width: 620px; display: flex; flex-direction: column; gap: 8px; }

@@ -6,6 +6,7 @@ import { AuctionPanel } from '../../components/AuctionPanel';
 import { QnaCard } from '../../components/QnaCard';
 import { BidDocs } from '../../components/BidDocs';
 import { Badge } from '../../components/Badge';
+import { ProcedureChip } from '../../components/ProcedureChip';
 import { ListState } from '../../components/ListState';
 
 export default function SupplierEvent() {
@@ -73,7 +74,9 @@ export default function SupplierEvent() {
     <>
       {/* a reload that failed after the page was drawn: the figures below are stale */}
       <ListState of={{ loading: false, failed: evFailed, reload: load }} />
-      <h1>{ev.title} <Badge status={ev.status} /></h1>
+      {/* The supplier could not tell a sealed RFQ from a live auction from an RFI by
+          looking at the card — only the buyer's side showed the procedure at all. */}
+      <h1>{ev.title} <ProcedureChip type={ev.type} format={ev.format} /> <Badge status={ev.status} /></h1>
       {won && (
         <div className="card" style={{ borderColor: 'var(--ok)' }}>
           <b>🏆 {t('you_won')}</b>
