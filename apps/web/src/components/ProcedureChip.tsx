@@ -6,7 +6,8 @@ import { useI18n } from '../i18n';
 // apart. The list's version is the one that reads, so it moved here and both screens use it.
 const TYPE_META: Record<string, { ico: string; label: string }> = {
   RFQ: { ico: '🔒', label: 'RFQ' }, RFP: { ico: '📄', label: 'RFP' },
-  RFI: { ico: '❓', label: 'RFI' }, AUCTION: { ico: '⚡', label: 'AUKSION' },
+  // AUCTION carries no label: it is the one procedure named in the interface language.
+  RFI: { ico: '❓', label: 'RFI' }, AUCTION: { ico: '⚡', label: '' },
 };
 
 export function ProcedureChip({ type, format }: { type?: string | null; format?: string | null }) {
@@ -17,10 +18,14 @@ export function ProcedureChip({ type, format }: { type?: string | null; format?:
   // the type column still holds.
   const kind = format === 'REVERSE' ? 'AUCTION' : (type ?? '');
   const meta = TYPE_META[kind];
+  // `t()` hands back the key itself when it misses, so an unknown kind would have printed
+  // the literal «tip_» into the bubble. The column is NOT NULL in the database; this is the
+  // guard for a card drawn before its event has loaded, not for a row that exists.
+  const tip = meta ? t(`tip_${kind.toLowerCase()}`) : undefined;
   return (
-    <span className="chip" data-tip={t(`tip_${kind.toLowerCase()}`)}>
+    <span className="chip" data-tip={tip}>
       <span className="chip-ico">{meta?.ico ?? '•'}</span>
-      {kind === 'AUCTION' ? t('auction') : (meta?.label ?? kind)}
+      {kind === 'AUCTION' ? t('auction') : (meta?.label || kind)}
     </span>
   );
 }

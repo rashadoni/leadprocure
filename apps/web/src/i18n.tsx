@@ -45,7 +45,7 @@ const dict: Record<Lang, Record<string, string>> = {
     vis_PUBLIC: 'Açıq', vis_INVITED: 'Dəvətlə',
     vis_PUBLIC_tip: 'Tenderi bütün təchizatçılar görür və təklif verə bilər',
     vis_INVITED_tip: 'Tenderi yalnız dəvət olunmuş təchizatçılar görür',
-    ocds_hint: 'OCDS — satınalmaların açıq beynəlxalq dərc standartı: ixrac tenderi və qalib seçimini bir JSON faylında verir, hesabatlıq və xarici audit üçün.',
+    ocds_hint: 'OCDS — satınalmaların açıq beynəlxalq dərc standartı: ixrac tenderi və qalib seçimini bir JSON faylında verir, hesabatlılıq və xarici audit üçün.',
     ai_reco_hint: 'Açılmış təklifləri qiymət, çatdırılma müddəti və təchizatçının etibarlılığı üzrə sıralayır və hər sətri izah edir. Bu tövsiyədir, qərar deyil: qalibi siz seçirsiniz və siyahının birincisi deyilsə, əsaslandırma tələb olunur.',
     tip_award_leader: 'Qalib seç: qiymətləndirmədə birinci (auksionda — ən yaxşı qiymət)',
     qna_question: 'Sual', qna_answer_field: 'Cavab', qna_unpublished: 'dərc edilməyib',

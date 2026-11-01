@@ -143,6 +143,10 @@ export default function EventDetail() {
   // The actions column of the bids table is empty in every state but EVALUATION (and for a
   // bid that was disqualified with a reason), yet it took its share of the width in all of
   // them — a heading over nothing, on the screen where the widths matter most.
+  // Scores exist only where there IS a formal evaluation: an auction is decided on price
+  // alone and an RFI is never scored, so in both the column promised a scale out of 100
+  // that does not exist there and printed «—» down every row.
+  const showScores = !isReverse && !isRfi;
   const showBidActions = (ev.bids ?? []).some((b: any) =>
     (ev.status === 'EVALUATION' && !isReverse && !isRfi && b.state === 'OPENED')
     || (b.state === 'DISQUALIFIED' && b.disqualified_reason));
@@ -486,7 +490,7 @@ export default function EventDetail() {
           <thead><tr>
             <th>{t('supplier_org')}</th><th>{t('status')}</th>
             <th className="num">{t('total')}</th><th>{t('delivery_days')}</th>
-            <th className="num" data-tip={t('score_col_tip')}>{t('score_col')} / 100</th>
+            {showScores && <th className="num" data-tip={t('score_col_tip')}>{t('score_col')} / 100</th>}
             {showBidActions && <th>{t('actions')}</th>}
           </tr></thead>
           <tbody>
@@ -507,7 +511,7 @@ export default function EventDetail() {
                 <td><Badge status={b.state} /></td>
                 <td className="num">{ev.amounts_visible ? fmtMoney(b.total_minor, b.currency) : '🔒'}</td>
                 <td>{ev.amounts_visible ? (b.delivery_days ?? '—') : '🔒'}</td>
-                <td className="num">{weightedByBid.has(b.id) ? weightedByBid.get(b.id)!.toFixed(1) : '—'}</td>
+                {showScores && <td className="num">{weightedByBid.has(b.id) ? weightedByBid.get(b.id)!.toFixed(1) : '—'}</td>}
                 {showBidActions && (
                 <td>
                   {ev.status === 'EVALUATION' && !isReverse && !isRfi && b.state === 'OPENED' && (

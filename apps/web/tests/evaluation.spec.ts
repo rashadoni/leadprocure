@@ -59,11 +59,14 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
   await expect(page.getByText(/^OCDS is the open international standard/)).toBeVisible();
   // A noun over the column and a verb on the button, out of the ONE key that used to do
   // both jobs — the heading read «Score!» — and the figure says out of what.
-  await expect(page.getByRole('columnheader', { name: 'Score / 100', exact: true })).toBeVisible();
+  // A PREFIX, not an exact name: `[data-tip]::after { content: attr(data-tip) }` puts the
+  // tooltip into the accessible name, and Playwright reads pseudo-content (opacity:0 does
+  // not hide it from the name). helpers/rfx.ts builds the same shape for the same reason.
+  await expect(page.getByRole('columnheader', { name: /^Score \/ 100(?:\s|$)/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Score', exact: true })).toBeVisible();
   // Q&A: the field and the button no longer carry one and the same word.
   await expect(page.getByLabel('Addendum', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '📢 Publish', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^📢 Publish(?:\s|$)/ })).toBeVisible();
   const groupA = page.getByRole('group', { name: lotA.title, exact: true });
   const groupB = page.getByRole('group', { name: lotB.title, exact: true });
   // No cheapest-offer winner hint or actionable award before a real evaluation.
@@ -168,6 +171,9 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
   // stood empty but took its width in every state but one — is not drawn at all. One lot,
   // so the lot picker that used to float between the cards is not drawn either.
   await expect(page.getByRole('columnheader', { name: 'Actions', exact: true })).toHaveCount(0);
+  // Nor the score column: an auction has no criteria, so every row showed «—» under a
+  // heading that promised a scale out of 100.
+  await expect(page.getByRole('columnheader', { name: /^Score \/ 100(?:\s|$)/ })).toHaveCount(0);
   await expect(page.getByRole('combobox', { name: 'Lots', exact: true })).toHaveCount(0);
   await awardThrough(auctionLot.getByRole('button', { name: /Browser audit s2/ }), 'Best accepted auction price', auction.id);
   const auctionContractResponse = page.waitForResponse(r => r.url().includes('/contracts/from-award/') && r.request().method() === 'POST');

@@ -35,10 +35,10 @@ export function QnaCard({ eventId, isBuyer }: { eventId: string; isBuyer: boolea
             {!r.is_published && <span className="sealed"> · {t('qna_unpublished')}</span>}
           </div>
           {r.answer && <div style={{ color: 'var(--ok)', marginTop: 4 }}>↳ {r.answer}</div>}
+          {/* The field was labelled by its placeholder with the VERB «Ответить» — the same
+              word as the button beside it — and the placeholder vanished the moment anything
+              was typed. Noun on the field, verb on the button. */}
           {isBuyer && r.kind === 'QUESTION' && !r.answer && (
-            {/* The field was labelled by its placeholder with the VERB «Ответить» — the
-                same word as the button beside it — and the placeholder vanished the moment
-                anything was typed. Noun on the field, verb on the button. */}
             <div className="qna-row" style={{ marginTop: 6 }}>
               <div className="filter-field" style={{ flex: 1 }}>
                 <label htmlFor={`qna-a-${r.id}`}>{t('qna_answer_field')}</label>
@@ -70,10 +70,10 @@ export function QnaCard({ eventId, isBuyer }: { eventId: string; isBuyer: boolea
           </button>
         </div>
       )}
+      {/* Field and button both read «Əlavə» in Azerbaijani — the same word twice, one of
+          them meant as «publish this». The field is named for what it holds, the button for
+          what it does. */}
       {isBuyer && (
-        {/* Field and button both read «Əlavə» in Azerbaijani — the same word twice, one of
-            them meant as «publish this». The field is named for what it holds, the button
-            for what it does. */}
         <div className="qna-row" style={{ marginTop: 12 }}>
           <div className="filter-field" style={{ flex: 1 }}>
             <label htmlFor="qna-add">{t('addendum')}</label>
