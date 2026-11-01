@@ -8,6 +8,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { AccessTokenPayload } from '@leadprocure/shared';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
+import { assertVisibilityAllowed } from './visibility-rule';
 import { SignatureProvider } from '../../common/signature/signature.provider';
 import { SealedCryptoService } from '../../common/crypto/sealed.service';
 import { EntitlementService, QuotaService } from '../../common/license/entitlement.service';
@@ -49,20 +50,11 @@ export class AuctionService {
     const closeAt = new Date(dto.closeAt);
     if (!(closeAt.getTime() > Date.now())) throw new BadRequestException('closeAt must be in the future');
 
-    // Кого пускать на живые торги — решение закупочное, и продукт его за покупателя не
-    // принимает. Но когда политика по сумме отнесла заявку к ОТКРЫТОМУ тендеру, а аукцион
-    // объявляют по приглашениям, это отклонение от собственного правила организации, и оно
-    // должно быть записано словами — тем же приёмом, что обоснование присуждения не лучшей
-    // ставке. Обратное направление (открытый аукцион там, где политика разрешала закрытый)
-    // обоснования не требует: оно расширяет круг участников, а не сужает.
     const visibility = dto.visibility ?? 'INVITED';
-    const visibilityReason = dto.visibilityReason?.trim() || null;
-    if (req.method_resolved === 'OPEN_TENDER' && visibility === 'INVITED'
-        && (!visibilityReason || visibilityReason.length < 3)) {
-      throw new BadRequestException(
-        'The policy banded this request as an open tender: a written reason is required to run the auction by invitation',
-      );
-    }
+    // Одно правило на обе процедуры — см. visibility-rule.ts. Возвращает обоснование
+    // только когда отклонение было: лишняя строка в append-only журнале остаётся в нём
+    // навсегда, поэтому «обоснование прислали» и «обосновывать было что» — разные вещи.
+    const visibilityReason = assertVisibilityAllowed(req.method_resolved, visibility, dto.visibilityReason);
 
     const ev = (
       await m.query(

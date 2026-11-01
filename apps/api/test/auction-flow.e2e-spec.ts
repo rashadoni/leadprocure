@@ -240,8 +240,27 @@ describe('reverse auction + Q&A flow', () => {
         .send(body({ visibility: 'INVITED' })).expect(400);
       expect(String(res.body.message)).toMatch(/open tender/i);
       // и отговоркой из пары символов не отделаться
-      await http().post(`/events/reverse/from-request/${openRequestId}`).set(auth(buyerToken))
+      const weak = await http().post(`/events/reverse/from-request/${openRequestId}`).set(auth(buyerToken))
         .send(body({ visibility: 'INVITED', visibilityReason: '.' })).expect(400);
+      expect(String(weak.body.message)).toMatch(/open tender/i);
+    });
+
+    // Правило не должно быть привязано к маршруту: запечатанный RFQ — основная процедура,
+    // объявляется тем же списком на том же экране и сужает круг ровно так же.
+    it('the same rule covers the sealed tender, not just the auction', async () => {
+      const sealed = { closeAt: new Date(Date.now() + 3600_000).toISOString() };
+      const refused = await http().post(`/events/from-request/${openRequestId}`).set(auth(buyerToken))
+        .send({ ...sealed, visibility: 'INVITED' }).expect(400);
+      expect(String(refused.body.message)).toMatch(/open tender/i);
+
+      const ok = await http().post(`/events/from-request/${openRequestId}`).set(auth(buyerToken))
+        .send({ ...sealed, visibility: 'INVITED', visibilityReason: 'Режимный объект: допуск у трёх поставщиков' })
+        .expect(201);
+      const audit = await db.query(
+        `SELECT payload FROM audit_events WHERE entity_id=$1 AND action='AUCTION_VISIBILITY_OVERRIDDEN'`,
+        [ok.body.id]);
+      expect(audit.rowCount).toBe(1);
+      expect(audit.rows[0].payload.type).toBe('RFQ');
     });
 
     it('an open auction needs no reason: it widens the field, not narrows it', async () => {
@@ -251,6 +270,15 @@ describe('reverse auction + Q&A flow', () => {
       expect(row.rows[0].visibility).toBe('PUBLIC');
       const audit = await db.query(
         `SELECT 1 FROM audit_events WHERE entity_id=$1 AND action='AUCTION_VISIBILITY_OVERRIDDEN'`, [ev.body.id]);
+      expect(audit.rowCount).toBe(0);
+    });
+
+    it('a reason sent where none was needed writes no override into the log', async () => {
+      const ev = await http().post(`/events/reverse/from-request/${openRequestId}`).set(auth(buyerToken))
+        .send(body({ visibility: 'PUBLIC', visibilityReason: 'на всякий случай' })).expect(201);
+      const audit = await db.query(
+        `SELECT 1 FROM audit_events WHERE entity_id=$1 AND action='AUCTION_VISIBILITY_OVERRIDDEN'`, [ev.body.id]);
+      // append-only: лишняя строка про отклонение, которого не было, остаётся навсегда
       expect(audit.rowCount).toBe(0);
     });
 

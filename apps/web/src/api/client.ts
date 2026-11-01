@@ -85,8 +85,14 @@ export const fmtNumShort = (minor: number): string =>
 // Every date in the product goes through these two. Calling toLocaleString() with no
 // arguments anywhere else brings back the browser's own locale — which is how one tender's
 // deadline came to be written four different ways on four screens.
+// `ГГГГ-ММ-ДД` без времени разбирается спецификацией как полночь UTC, а печатается в поясе
+// ЧИТАТЕЛЯ — и к западу от Гринвича срок оплаты 1 декабря показывался как 30 ноября. Дата
+// без времени — это день, а не момент, поэтому читаем её как местную полночь. Колонки
+// `date` в базе (срок оплаты, периоды бюджета) приходят именно в этом виде.
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 export const fmtDate = (iso: string | Date | null | undefined): string =>
-  iso ? new Date(iso).toLocaleDateString(uiLocale()) : '—';
+  iso ? new Date(typeof iso === 'string' && DATE_ONLY.test(iso) ? `${iso}T00:00:00` : iso)
+    .toLocaleDateString(uiLocale()) : '—';
 export const fmtDateTime = (iso: string | Date | null | undefined): string =>
   iso ? new Date(iso).toLocaleString(uiLocale(), { dateStyle: 'short', timeStyle: 'short' }) : '—';
 // Anti-sniping moves an auction's close_at by seconds, so the one clock on that panel has

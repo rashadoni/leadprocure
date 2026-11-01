@@ -1,0 +1,35 @@
+import { BadRequestException } from '@nestjs/common';
+
+/**
+ * Кого пускать к участию — решение закупочное, и продукт его за покупателя не принимает.
+ * Но когда политика по сумме отнесла заявку к ОТКРЫТОМУ тендеру, а процедуру объявляют по
+ * приглашениям, это отклонение от собственного правила организации: оно разрешено и должно
+ * быть записано словами — тем же приёмом, что обоснование присуждения не лучшей ставке.
+ *
+ * Обратное направление обоснования не требует: открытый тендер там, где политика
+ * допускала закрытый, расширяет круг участников, а не сужает.
+ *
+ * Правило живёт ОТДЕЛЬНО от обоих сервисов намеренно. Сначала оно стояло только в
+ * `AuctionService` — и оставляло открытой ровно ту дверь, которой пользуются чаще:
+ * запечатанный RFQ объявляется тем же списком на том же экране, он основная процедура,
+ * и там то же сужение проходило молча. Контроль, написанный в одном из двух мест, — это
+ * не контроль, а видимость контроля.
+ *
+ * @returns обоснование, если оно требовалось и дано; иначе null — и тогда писать в журнал
+ *          нечего, потому что отклонения не было.
+ */
+export function assertVisibilityAllowed(
+  methodResolved: string | null | undefined,
+  visibility: 'PUBLIC' | 'INVITED',
+  reason: string | null | undefined,
+): string | null {
+  const isOverride = methodResolved === 'OPEN_TENDER' && visibility === 'INVITED';
+  if (!isOverride) return null;
+  const trimmed = reason?.trim() || null;
+  if (!trimmed || trimmed.length < 3) {
+    throw new BadRequestException(
+      'The policy banded this request as an open tender: a written reason is required to invite a limited list instead',
+    );
+  }
+  return trimmed;
+}

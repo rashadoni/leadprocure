@@ -269,7 +269,9 @@ class SubmitInvoiceDto {
   @IsArray() @ValidateNested({ each: true }) @Type(() => InvoiceLineDto) items!: InvoiceLineDto[];
   // Дата, а не любая строка: колонка в базе `date`, и мусор здесь превратился бы в
   // ошибку драйвера на вставке вместо внятного 400.
-  @IsOptional() @IsISO8601() dueDate?: string;
+  // `strict`: без него это просто регулярка по форме, и «2026-02-31» доезжает до колонки
+  // `date`, где падает уже драйвер — то есть 500 вместо внятного 400.
+  @IsOptional() @IsISO8601({ strict: true }) dueDate?: string;
 }
 
 @Controller('invoices')

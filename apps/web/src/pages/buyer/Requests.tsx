@@ -13,6 +13,10 @@ const PAGE_SIZE = 20;
 
 interface Item { name: string; qty: number; price: string }
 
+/** «Отменил» — не то же, что «причина не нужна»: склеив их в undefined, мы объявили бы
+ *  тендер после отказа объяснять. */
+const CANCELLED = Symbol('cancelled');
+
 export default function Requests() {
   const { t } = useI18n();
   const { notifyError, notify, ask } = useDialogs();
@@ -103,8 +107,8 @@ export default function Requests() {
     }
     // Only the open procedure publishes to everyone; the other three are addressed to the
     // suppliers the buyer invites, which is what their labels say.
-    if (pick === 'OPEN') return makeRfq(r.id, 'RFQ', 'PUBLIC');
-    return makeRfq(r.id, pick as 'RFQ' | 'RFP' | 'RFI');
+    if (pick === 'OPEN') return makeRfq(r, 'RFQ', 'PUBLIC');
+    return makeRfq(r, pick as 'RFQ' | 'RFP' | 'RFI');
   };
 
   // The chosen supplier used to be read back out of the DOM by element id at click time.
@@ -200,10 +204,26 @@ export default function Requests() {
     setImpact((m) => { const q = { ...m }; delete q[id]; return q; });
   };
 
-  const makeRfq = async (id: string, type: 'RFQ' | 'RFP' | 'RFI' = 'RFQ', visibility: 'PUBLIC' | 'INVITED' = 'INVITED') => {
+  // Сужение круга участников вопреки политике спрашивают ОДИНАКОВО у обеих процедур:
+  // запечатанный RFQ объявляется тем же списком на том же экране и сужает так же, как
+  // аукцион. Правило на сервере тоже одно — `visibility-rule.ts`.
+  const askVisibilityReason = async (
+    r: any, visibility: 'PUBLIC' | 'INVITED',
+  ): Promise<string | undefined | typeof CANCELLED> => {
+    if (visibility !== 'INVITED' || r.method_resolved !== 'OPEN_TENDER') return undefined;
+    const reason = await ask({
+      title: t('visibility_reason_prompt'), label: t('reason'), hint: t('visibility_reason_hint'),
+      required: true, minLength: 3, confirmLabel: t('announce'),
+    });
+    return reason ? reason.trim() : CANCELLED;
+  };
+
+  const makeRfq = async (r: any, type: 'RFQ' | 'RFP' | 'RFI' = 'RFQ', visibility: 'PUBLIC' | 'INVITED' = 'INVITED') => {
+    const visibilityReason = await askVisibilityReason(r, visibility);
+    if (visibilityReason === CANCELLED) return;
     try {
       const closeAt = new Date(Date.now() + 24 * 3600_000).toISOString();
-      const ev = await api.post(`/events/from-request/${id}`, { closeAt, visibility, type });
+      const ev = await api.post(`/events/from-request/${r.id}`, { closeAt, visibility, visibilityReason, type });
       nav(`/buyer/events/${ev.data.id}`);
     } catch (e: any) { notifyError(e); }
   };
@@ -215,15 +235,8 @@ export default function Requests() {
   // при присуждении не лучшей ставке. Обратный случай — открытый аукцион там, где хватило
   // бы закрытого — вопросов не вызывает: круг участников шире, а не уже.
   const makeAuction = async (r: any, visibility: 'PUBLIC' | 'INVITED') => {
-    let visibilityReason: string | undefined;
-    if (visibility === 'INVITED' && r.method_resolved === 'OPEN_TENDER') {
-      const reason = await ask({
-        title: t('auction_reason_prompt'), label: t('reason'), hint: t('auction_reason_hint'),
-        required: true, minLength: 3, confirmLabel: t('announce'),
-      });
-      if (!reason) return;
-      visibilityReason = reason.trim();
-    }
+    const visibilityReason = await askVisibilityReason(r, visibility);
+    if (visibilityReason === CANCELLED) return;
     try {
       const start = Number(r.estimated_total_minor);
       const ev = await api.post(`/events/reverse/from-request/${r.id}`, {
