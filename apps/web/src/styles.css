@@ -130,20 +130,36 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 [data-tip]::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 9px);
   transform: translateX(-50%) translateY(4px); background: #10231c; color: #fff; font-size: 12px;
   font-weight: 500; line-height: 1.35; letter-spacing: normal; text-align: left; padding: 7px 10px;
-  border-radius: 8px; white-space: normal; width: max-content; max-width: 240px; box-shadow: var(--shadow-lg);
-  opacity: 0; pointer-events: none; transition: opacity .14s ease, transform .14s ease; z-index: 90; }
+  border-radius: 8px; white-space: normal; width: max-content; box-shadow: var(--shadow-lg);
+  opacity: 0; pointer-events: none; transition: opacity .14s ease, transform .14s ease; z-index: 90;
+  /* Nothing until it is shown. `opacity: 0` hides the bubble from the eye but NOT from the
+     page: an absolutely positioned box is part of the width the page can scroll, so a 240px
+     bubble centred on a chip near the right edge of the window put a horizontal scrollbar on
+     the whole product — 104px of it on Бюджеты at 1440px, and on Настройки and Поставщики
+     too. Measured by the browser spec, which hides every bubble and asks for the width
+     again: without them the overflow is 0 on all three.
+     `max-width: 0` with the text clipped rather than `display: none`, for two reasons: a
+     display:none pseudo-element leaves the accessible name, and this product's specs are
+     built around that text BEING in the name (`controlName()` in tests/helpers/rfx.ts); and
+     a box that is still there can still fade in — the cap is not transitioned, so it lifts
+     at once and the bubble fades in at full size exactly as it did before. */
+  max-width: 0; overflow: hidden; }
 [data-tip]::before { content: ''; position: absolute; left: 50%; bottom: calc(100% + 4px);
   transform: translateX(-50%); border: 5px solid transparent; border-top-color: #10231c;
-  opacity: 0; pointer-events: none; transition: opacity .14s ease; z-index: 90; }
-[data-tip]:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); }
-[data-tip]:hover::before { opacity: 1; }
-/* A bubble drawn by ::after is not in the accessibility tree and there is no hover on a
-   touch screen, so focus has to open it too — :focus rather than :focus-visible, because a
+  opacity: 0; pointer-events: none; transition: opacity .14s ease; z-index: 90;
+  /* All border and no text, so this one can simply not exist until it is wanted — its five
+     pixels either side counted towards the page's width exactly as the bubble's did. */
+  display: none; }
+[data-tip]:hover::after { opacity: 1; max-width: 240px; transform: translateX(-50%) translateY(0); }
+[data-tip]:hover::before { opacity: 1; display: block; }
+/* A bubble drawn by ::after is not an element anyone can reach — it does land in its host's
+   accessible NAME, which is why tests/helpers/rfx.ts has to match control labels by prefix —
+   and there is no hover on a touch screen, so focus has to open it too — :focus rather than :focus-visible, because a
    tap gives plain focus and would otherwise reach nothing. This only fires where an element
    was deliberately made focusable (the spend chart's columns), and the ring below is keyboard
    only, so a mouse click does not leave one behind. */
-[data-tip]:focus::after { opacity: 1; transform: translateX(-50%) translateY(0); }
-[data-tip]:focus::before { opacity: 1; }
+[data-tip]:focus::after { opacity: 1; max-width: 240px; transform: translateX(-50%) translateY(0); }
+[data-tip]:focus::before { opacity: 1; display: block; }
 /* For an element at the very top of the page — the section's help line — where a bubble
    drawn above would sit off the top of the window with nowhere to scroll to it. */
 [data-tip].tip-below::after { bottom: auto; top: calc(100% + 9px); transform: translateX(-50%) translateY(-4px); }
@@ -423,13 +439,17 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
      the side of a 375px screen — and it hung off it even while invisible, because a box at
      opacity 0 is still laid out and still counts towards the width the page can scroll. */
   [data-tip]::after { position: fixed; left: 12px; right: 12px; top: auto; bottom: 12px;
-    width: auto; max-width: none; transform: none; }
+    width: auto; transform: none; }
+  /* The cap is lifted on the way IN, not at rest: at rest the base's `max-width: 0` holds
+     here too, which is what keeps a hidden bubble out of the page's width. */
   [data-tip]:hover::after, [data-tip]:focus::after, [data-tip]:active::after,
-  [data-tip].tip-below:hover::after, [data-tip].tip-below:focus::after { transform: none; }
+  [data-tip].tip-below:hover::after, [data-tip].tip-below:focus::after { transform: none; max-width: none; }
   [data-tip].tip-below::after { top: auto; bottom: 12px; }
   [data-tip]:active::after { opacity: 1; }
-  /* the arrow pointed at an element the bubble no longer sits above */
-  [data-tip]::before, [data-tip].tip-below::before { display: none; }
+  /* the arrow pointed at an element the bubble no longer sits above, so it stays undrawn
+     here even while the bubble is shown */
+  [data-tip]::before, [data-tip].tip-below::before,
+  [data-tip]:hover::before, [data-tip]:focus::before { display: none; }
   /* A transform — and a filter just as much — makes an element the containing block for its
      OWN fixed-position bubble, so the hover lift and the hover brightening would both move
      the bubble out of the window's corner and onto the button. The hover shadow stays, so a
