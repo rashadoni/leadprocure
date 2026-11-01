@@ -92,6 +92,12 @@ export default function Contracts() {
     await act(() => api.post(`/orders/${poId}/receipts`, { items: remaining }), () => ({ text: t('note_received') }));
   };
 
+  // A column of actions nobody can use still takes its width. A supplier sees neither
+  // table's buttons at all, and a closed contract or a finished order has none either.
+  const contractActions = isBuyerSide && contracts.some((c: any) => ['DRAFT', 'ACTIVE'].includes(c.status));
+  const orderActions = isBuyerSide && orders.some((p: any) =>
+    (PO_BUYER_NEXT[p.status] ?? []).length > 0 || ['SHIPPED', 'DELIVERED', 'ISSUED', 'CONFIRMED'].includes(p.status));
+
   return (
     <>
       <h1>{t('contracts')}</h1>
@@ -105,7 +111,7 @@ export default function Contracts() {
       <div className="card">
         <ListState of={contractList} empty={!contracts.length} />
         <table>
-          <thead><tr><th>#</th><th>{t('title')}</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('validity')}</th><th className="num">{t('total')}</th><th className="num">{t('drawn')}</th><th>{t('status')}</th><th className="num">{t('orders_n')}</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>#</th><th>{t('title')}</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('validity')}</th><th className="num">{t('total')}</th><th className="num" data-tip={t('drawn_tip')}>{t('drawn')}</th><th>{t('status')}</th><th className="num">{t('orders_n')}</th>{contractActions && <th>{t('actions')}</th>}</tr></thead>
           <tbody>
             {contracts.map((c) => {
               const over = Number(c.drawn_minor) > Number(c.total_minor);
@@ -122,6 +128,7 @@ export default function Contracts() {
                 </td>
                 <td><Badge status={c.status} /></td>
                 <td className="num">{c.po_count}</td>
+                {contractActions && (
                 <td>
                   <Actions>
                     {isBuyerSide && c.status === 'DRAFT' && (
@@ -135,6 +142,7 @@ export default function Contracts() {
                     )}
                   </Actions>
                 </td>
+                )}
               </tr>
             );})}
           </tbody>
@@ -142,11 +150,13 @@ export default function Contracts() {
         <Pager total={cTotal} page={cPage} pageSize={PAGE_SIZE} onPage={setCPage} />
       </div>
 
-      <h1>{t('orders')}</h1>
+      {/* The second table used to carry an <h1> of its own, drawn exactly as large as the
+          page's: one screen, two page headings. It belongs inside its card. */}
       <div className="card">
+        <h3>{t('orders')}</h3>
         <ListState of={orderList} empty={!orders.length} />
         <table>
-          <thead><tr><th>#</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>#</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th>{orderActions && <th>{t('actions')}</th>}</tr></thead>
           <tbody>
             {orders.map((p) => (
               <tr key={p.id}>
@@ -155,6 +165,7 @@ export default function Contracts() {
                 <td className="hint nowrap">{fmtDate(p.created_at)}</td>
                 <td className="num">{fmtMoney(p.total_minor, p.currency)}</td>
                 <td><Badge status={p.status} /></td>
+                {orderActions && (
                 <td>
                   {/* Stopping an order is the destructive end of the same status list, so it
                       is split out rather than sitting first because the enum happened to
@@ -181,6 +192,7 @@ export default function Contracts() {
                     )}
                   </Actions>
                 </td>
+                )}
               </tr>
             ))}
           </tbody>

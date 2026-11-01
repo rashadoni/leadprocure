@@ -140,7 +140,9 @@ export default function Invoices() {
                   <Actions>
                     {isBuyer && ['MATCHED', 'DISPUTED', 'SUBMITTED'].includes(i.status) && (
                       <>
-                        <button className="btn small" data-tip={t('tip_inv_approve')} onClick={() => approveInvoice(i)}>{t('approve')}</button>
+                        <button className="btn small"
+                          data-tip={i.status === 'DISPUTED' ? t('tip_inv_approve_disputed') : t('tip_inv_approve')}
+                          onClick={() => approveInvoice(i)}>{t('approve')}</button>
                         <button className="btn small ghost" data-tip={t('tip_inv_reject')} onClick={() => act(i.id, () => api.post(`/invoices/${i.id}/reject`))}>{t('reject')}</button>
                       </>
                     )}
