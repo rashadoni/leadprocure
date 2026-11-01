@@ -156,12 +156,12 @@ test.describe('buyer panel', () => {
     const toApproval = page.getByRole('link', { name: 'Approval chain', exact: true });
     await expect(toApproval).toBeVisible({ timeout: 20_000 });
     await expect(page.locator('#new-user-password')).toHaveAttribute('type', 'password');
-    // The top of the page, before the jump: the password field, the thresholds row and its
-    // tick are what this change is about, and after the jump none of them is in frame.
-    await page.screenshot({ path: 'test-results/settings.png' });
-    // Jump only once the lists have arrived: a hash scroll happens once, and everything
-    // above the last card growing afterwards would leave it below the fold for good.
+    // Wait for the lists FIRST, for two reasons: a hash scroll happens once, so a card
+    // growing afterwards would stay below the fold; and a picture of a half-loaded page
+    // answers nothing. The shot is still taken before the jump — the password field and
+    // the section links are what this change is about, and the jump moves them off frame.
     await expect(page.locator('table tbody tr').first()).toBeVisible();
+    await page.screenshot({ path: 'test-results/settings.png' });
     await toApproval.click();
     await expect(page.locator('#set-approval')).toBeInViewport();
   });
