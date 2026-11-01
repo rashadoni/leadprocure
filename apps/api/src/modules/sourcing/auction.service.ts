@@ -54,7 +54,10 @@ export class AuctionService {
     // Одно правило на обе процедуры — см. visibility-rule.ts. Возвращает обоснование
     // только когда отклонение было: лишняя строка в append-only журнале остаётся в нём
     // навсегда, поэтому «обоснование прислали» и «обосновывать было что» — разные вещи.
-    const visibilityReason = assertVisibilityAllowed(req.method_resolved, visibility, dto.visibilityReason);
+    // RLS держит выборку в своей организации
+    const hasPolicies = (await m.query(`SELECT 1 FROM procurement_method_policies LIMIT 1`)).length > 0;
+    const visibilityReason = assertVisibilityAllowed(
+      req.method_resolved, visibility, dto.visibilityReason, hasPolicies);
 
     const ev = (
       await m.query(

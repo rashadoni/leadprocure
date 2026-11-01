@@ -282,6 +282,30 @@ describe('reverse auction + Q&A flow', () => {
       expect(audit.rowCount).toBe(0);
     });
 
+    // Правило ловит отклонение от ПОЛИТИКИ, а не от умолчания. При пустом наборе полос
+    // `resolveMethod` ставит OPEN_TENDER на каждую заявку нарочно — пробел политики должен
+    // идти самым состязательным путём, — и требовать за это объяснений было бы требованием
+    // объяснить умолчание. Проверка стоит здесь, потому что именно этот случай уронил
+    // чужой набор (followups), когда правило было написано без него.
+    it('with no policies configured at all, the open-tender default needs no reason', async () => {
+      await http().put('/requests/method-policies').set(auth(buyerToken)).send({ policies: [] }).expect(200);
+      const req = await http().post('/requests').set(auth(buyerToken))
+        .send({ title: `No policy ${tag}`, items: [{ name: 'Rope m', qty: 5, estUnitPriceMinor: 100_000 }] })
+        .expect(201);
+      await http().post(`/requests/${req.body.id}/submit`).set(auth(buyerToken)).expect(201);
+      await http().post(`/requests/${req.body.id}/approve`).set(auth(approverToken)).expect(201);
+      const ev = await http().post(`/events/from-request/${req.body.id}`).set(auth(buyerToken))
+        .send({ closeAt: new Date(Date.now() + 3600_000).toISOString(), visibility: 'INVITED' })
+        .expect(201);
+      const audit = await db.query(
+        `SELECT 1 FROM audit_events WHERE entity_id=$1 AND action='AUCTION_VISIBILITY_OVERRIDDEN'`, [ev.body.id]);
+      expect(audit.rowCount).toBe(0);
+      // вернуть полосу, на которой держатся остальные случаи этого блока
+      await http().put('/requests/method-policies').set(auth(buyerToken))
+        .send({ policies: [{ category: '*', minAmountMinor: 0, maxAmountMinor: null, method: 'OPEN_TENDER' }] })
+        .expect(200);
+    });
+
     it('accepts the invited auction with a reason and writes it into the log', async () => {
       const reason = 'Поставщики проходят допуск по режимному объекту';
       const ev = await http().post(`/events/reverse/from-request/${openRequestId}`).set(auth(buyerToken))

@@ -36,6 +36,7 @@ export default function Requests() {
   const [page, setPage] = useState(1);
   const [directFor, setDirectFor] = useState<string | null>(null);
   const [approvedSuppliers, setApprovedSuppliers] = useState<any[]>([]);
+  const [hasPolicies, setHasPolicies] = useState(false);
   const [cats, setCats] = useState<string[]>([]);
   // Departments (cost centres) — which budget this spend lands on. Only active ones can
   // be picked for new requests; retired ones stay on their historic requests.
@@ -69,6 +70,12 @@ export default function Requests() {
     const broken = () => setRefFailed(true);
     api.get('/categories').then((r) => setCats(r.data.map((c: any) => c.code))).catch(broken);
     api.get('/departments').then((r) => setDeps(r.data)).catch(broken);
+    // Нужны не сами полосы, а только факт, что они заведены: без них `resolveMethod`
+    // ставит OPEN_TENDER на КАЖДУЮ заявку (пробел политики идёт самым состязательным
+    // путём, а не молча прямой). Спрашивать обоснование у организации, которая политику
+    // не настраивала, значило бы требовать объяснений за умолчание. Сервер проверяет то
+    // же самое и остаётся последним словом — это лишь чтобы человек не упёрся в отказ.
+    api.get('/requests/method-policies').then((r) => setHasPolicies(r.data.length > 0)).catch(broken);
   };
   useEffect(loadRefs, []);
   const canApprove = ['BUYER_ADMIN', 'BUYER_APPROVER'].includes(session?.org.role ?? '');
@@ -210,7 +217,7 @@ export default function Requests() {
   const askVisibilityReason = async (
     r: any, visibility: 'PUBLIC' | 'INVITED',
   ): Promise<string | undefined | typeof CANCELLED> => {
-    if (visibility !== 'INVITED' || r.method_resolved !== 'OPEN_TENDER') return undefined;
+    if (!hasPolicies || visibility !== 'INVITED' || r.method_resolved !== 'OPEN_TENDER') return undefined;
     const reason = await ask({
       title: t('visibility_reason_prompt'), label: t('reason'), hint: t('visibility_reason_hint'),
       required: true, minLength: 3, confirmLabel: t('announce'),

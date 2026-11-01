@@ -9,6 +9,13 @@ import { BadRequestException } from '@nestjs/common';
  * Обратное направление обоснования не требует: открытый тендер там, где политика
  * допускала закрытый, расширяет круг участников, а не сужает.
  *
+ * `hasPolicies` — не мелочь, а условие осмысленности правила. `resolveMethod` при пустом
+ * наборе полос ВОЗВРАЩАЕТ `OPEN_TENDER` нарочно: закупка в пробеле политики должна идти
+ * самым состязательным путём, а не молча прямой. Значит у организации, которая полос не
+ * заводила, открытый тендер стоит на КАЖДОЙ заявке — и правило без этой проверки требовало
+ * бы обоснования у всех подряд, включая свежий стенд. Отклоняться можно только от правила,
+ * которое кто-то установил.
+ *
  * Правило живёт ОТДЕЛЬНО от обоих сервисов намеренно. Сначала оно стояло только в
  * `AuctionService` — и оставляло открытой ровно ту дверь, которой пользуются чаще:
  * запечатанный RFQ объявляется тем же списком на том же экране, он основная процедура,
@@ -22,8 +29,9 @@ export function assertVisibilityAllowed(
   methodResolved: string | null | undefined,
   visibility: 'PUBLIC' | 'INVITED',
   reason: string | null | undefined,
+  hasPolicies: boolean,
 ): string | null {
-  const isOverride = methodResolved === 'OPEN_TENDER' && visibility === 'INVITED';
+  const isOverride = hasPolicies && methodResolved === 'OPEN_TENDER' && visibility === 'INVITED';
   if (!isOverride) return null;
   const trimmed = reason?.trim() || null;
   if (!trimmed || trimmed.length < 3) {

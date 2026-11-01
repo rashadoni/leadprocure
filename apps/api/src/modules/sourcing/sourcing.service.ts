@@ -106,7 +106,10 @@ export class SourcingService {
     const visibility = dto.visibility ?? 'INVITED';
     // Запечатанный RFQ — ОСНОВНАЯ процедура, и сужение круга здесь проходило молча, пока
     // то же правило стояло только у аукциона. Правило одно на оба пути: visibility-rule.ts.
-    const visibilityReason = assertVisibilityAllowed(req.method_resolved, visibility, dto.visibilityReason);
+    // RLS держит выборку в своей организации
+    const hasPolicies = (await m.query(`SELECT 1 FROM procurement_method_policies LIMIT 1`)).length > 0;
+    const visibilityReason = assertVisibilityAllowed(
+      req.method_resolved, visibility, dto.visibilityReason, hasPolicies);
 
     const ev = (
       await m.query(
