@@ -167,6 +167,9 @@ test.describe('buyer panel', () => {
     await input.fill('150');
     await expect(confirm).toBeDisabled();
     await expect(page.getByRole('dialog').locator('.error')).toContainText('100');
+    // The refusal is the frame worth keeping: the question, the hint written from the
+    // server's own rule, the dead button and the reason it is dead.
+    await page.screenshot({ path: 'test-results/dialog.png' });
     await input.fill('');
     await expect(confirm).toBeDisabled();
     const posted = page.waitForResponse(
