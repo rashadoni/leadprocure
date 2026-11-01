@@ -140,6 +140,12 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
     const r = await response; expect(r.status(), await r.text()).toBe(201);
     const contract = await r.json();
     await page.waitForURL('**/buyer/contracts');
+    // The OTHER half of the rule the smoke checks for a supplier: this contract was just
+    // activated, so there IS something to press and the column is drawn. Without this
+    // direction, hiding it unconditionally would keep both suites green.
+    // `.first()` + toBeVisible, not `count()`: count is a snapshot and does not wait, and
+    // right after the URL changes the list has not arrived yet — zero rows mean no column.
+    await expect(page.getByRole('columnheader', { name: 'Actions', exact: true }).first()).toBeVisible();
     expect(contract.supplier_org_id).toBe(supplier.org.id); expect(Number(contract.total_minor)).toBe(total);
     const po = await call(`/contracts/${contract.id}/orders`, {}, buyer.accessToken);
     expect(po.items.map((i: any) => i.name)).toEqual([itemName]);

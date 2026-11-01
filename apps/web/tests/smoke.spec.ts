@@ -256,4 +256,15 @@ test.describe('supplier panel', () => {
     // Protected redirects a supplier away from buyer routes
     await page.waitForURL((url) => !url.pathname.startsWith('/buyer'), { timeout: 10_000 });
   });
+
+  // Two page headings on one screen, and a column of buttons a supplier can never press.
+  // Both tables on this page belong to the buyer's side of the contract; the supplier only
+  // reads them, so the actions column is not drawn at all rather than taking its width on
+  // every row. The check is not vacuous on an empty list: the heading row renders anyway.
+  test('contracts page has one heading and no actions column for a supplier', async () => {
+    await page.goto('/supplier/contracts');
+    await expect(page.getByRole('heading', { name: 'Orders', exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('h1')).toHaveCount(1);
+    await expect(page.getByRole('columnheader', { name: 'Actions', exact: true })).toHaveCount(0);
+  });
 });

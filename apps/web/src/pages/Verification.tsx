@@ -60,17 +60,20 @@ export default function Verification() {
       <div className="card">
         <ListState of={caseList} />
         <table>
-          <thead><tr><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th>{t('status')}</th><th>{t('attachments')}</th></tr></thead>
+          <thead><tr><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th>{t('status')}</th><th className="num" data-tip={t('attachments_count_tip')}>{t('attachments')}</th></tr></thead>
           <tbody>
             {cases.map((c) => (
               <tr key={c.id}>
                 <td><a href="#" onClick={(e) => { e.preventDefault(); expand(c.id); }}>{isBuyer ? c.supplier_name : c.buyer_name}</a></td>
                 <td><Badge status={c.status} /></td>
-                <td>{c.doc_count}</td>
+                <td className="num">{c.doc_count}</td>
               </tr>
             ))}
           </tbody>
         </table>
+        {/* The decision lives in the expanded card, and the only way in was a company name
+            that looks like a name. Nothing on the list said so. */}
+        {cases.length > 0 && <div className="hint">{t(isBuyer ? 'verification_open_hint' : 'verification_open_hint_supplier')}</div>}
         {!caseList.loading && !caseList.failed && cases.length === 0 && <div className="hint">—{isBuyer ? ` ${t('hint_verification_empty')}` : ''}</div>}
       </div>
 
@@ -79,7 +82,7 @@ export default function Verification() {
           <h3>{isBuyer ? c.supplier_name : c.buyer_name} <Badge status={c.status} /></h3>
           {c.documents.map((d: any) => (
             <div key={d.id} style={{ fontSize: 13, padding: '3px 0' }}>
-              <span className="badge is-info">{d.doc_type}</span>{' '}
+              <span className="badge is-info">{t(`vd_${d.doc_type}`)}</span>{' '}
               <a href="#" onClick={(e) => { e.preventDefault(); download(d.id); }}>{d.filename}</a>{' '}
               {/* The stored fingerprint, shown: an auditor asks "is this the file that was
                   uploaded?", and the answer has to be visible, not merely kept in a column. */}
@@ -93,7 +96,8 @@ export default function Verification() {
           {!isBuyer && (
             <div className="row" style={{ marginTop: 10, maxWidth: 460 }}>
               <select value={docType} onChange={(e) => setDocType(e.target.value)}>
-                {VERIFICATION_DOC_TYPES.map((dt) => <option key={dt} value={dt}>{dt}</option>)}
+                {/* the enum was the label: VOEN, LICENSE, BANK… in all three languages */}
+                {VERIFICATION_DOC_TYPES.map((dt) => <option key={dt} value={dt}>{t(`vd_${dt}`)}</option>)}
               </select>
               <input ref={fileRef} type="file" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(c.id, f); }} />
             </div>
