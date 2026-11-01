@@ -17,21 +17,19 @@
 # the same name from another source does not count — is GitHub's description
 # of them. Nobody here tried.
 #
-# THIS IS STILL NOT WHAT GITHUB HAS, and that is known (read again 2026-10-31,
-# unchanged since 2026-10-11). The pull-request requirement, `enforce_admins`
-# and the two "no" rules are on GitHub as written here. The required checks are
-# not: GitHub has the single context `agent-review`, so nothing has tested the
-# code of a mergeable pull request. `--check` ends in "RESULT: MISMATCH" with
-# exit code 1, naming `required_status_checks`, until the owner writes:
-#   bash scripts/ci/configure-main-protection.sh --apply
-# The test keeps the 2026-10-11 reading as the fixture it is
+# THIS IS WHAT GITHUB HAS. Written 2026-11-01 and read back the same day:
+# `--check` ends in "RESULT: match" with exit code 0. Until that day the
+# required checks were the single context `agent-review`, so nothing had tested
+# the code of a mergeable pull request; the pull-request requirement,
+# `enforce_admins` and the two "no" rules were already as written here. The
+# test keeps the 2026-10-11 reading as the fixture it is
 # (scripts/ci/tests/fixtures/).
 #
 # Why `agent-review` is not in the payload, and why the acceptance jobs are.
 # The owner's decision for all his repositories (2026-09-11): the gate before
 # `main` is the CI that GitHub itself runs; no paid AI reviewer in CI, and never
-# a required one. This repository has the reviewer required and its own tests
-# required of nothing — the one state that decision rules out.
+# a required one. Until 2026-11-01 this repository had the reviewer required and
+# its own tests required of nothing — the one state that decision rules out.
 # agent-review.yml is red by design in two cases: a blocking finding of its
 # model, and a diff over 400 000 bytes (refused whenever a key is set, before
 # the API is called). When its API key is missing, or the API answers with an
@@ -48,9 +46,11 @@
 # this change two were red, and both refused the diff instead of reading it:
 # 40455295157 on PR #2 (3 471 359 bytes) and 40584090620 on PR #3
 # (404 283 bytes). Seven more were cancelled, which is not green either.
-# While it is the only required check, a pull request can be merged with
+# While it was the only required check, a pull request could be merged with
 # nothing having tested the code and nobody having read it. Requiring the
-# acceptance jobs instead is what makes a red test stop a merge.
+# acceptance jobs instead is what makes a red test stop a merge. The 400 is
+# still there as of 2026-11-01 ("credit balance is too low", run 41349728232),
+# so this check still reads nothing — it just no longer stands in for a gate.
 #
 # Usage:
 #   bash scripts/ci/configure-main-protection.sh --check [owner/repo]
