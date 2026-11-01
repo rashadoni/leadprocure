@@ -3,8 +3,21 @@
 //
 // Recordings are Azerbaijani only: the narration is cloud TTS on a metered quota, and one
 // well-paced track that every user can follow beats three that drift apart as the UI moves.
-// The card in components/Guide.tsx therefore always loads the .az asset, whatever the
-// interface language.
+// The bar in components/Guide.tsx therefore always loads the .az asset, whatever the
+// interface language. Settled by the owner on 2026-11-01, with the two leftover
+// buyer-settings .ru/.en files deleted — nothing had ever loaded them.
+//
+// Two gaps, both deliberate rather than forgotten:
+//  · `sup-auction` is recorded (scripts/produce-guides.mjs has its scenario) but is NOT in
+//    the map below and cannot be: a reverse auction lives on the same /supplier/events/:id
+//    route as a sealed tender, and this map keys on the route alone, so that route plays
+//    `sup-market`. Wiring it needs the bar to choose by the event's own format, not by path.
+//  · `/supplier/catalogs` and `/supplier/contracts` are real routes with no entry here, so
+//    they show no help line. They render the SAME components as the buyer's pages but
+//    without the buyer's controls, so pointing them at `buyer-catalogs` / `buyer-contracts`
+//    would hand a supplier a walkthrough of buttons they do not have; covering them properly
+//    means two more recordings. Adding a key whose file does not exist gives the player a
+//    404, so the entry must land together with the recording, never before it.
 
 export interface SectionGuide { key: string }
 
