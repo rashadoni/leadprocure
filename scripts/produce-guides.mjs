@@ -37,7 +37,7 @@ import { createRequire } from 'module';
 import { createHash } from 'crypto';
 import { execSync,execFileSync } from 'child_process';
 import {assertDemoTarget} from './demo-target.mjs';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync, renameSync } from 'fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -1003,7 +1003,13 @@ async function login(ctx, email) {
       const mix = scenes.map((_, i) => `[a${i}]`).join('') + `amix=inputs=${scenes.length}:normalize=0[a]`;
       const out = join(tmp, `${key}.${lang}.final.webm`);
       execSync(`ffmpeg -y -loglevel error -i "${src}" ${inputs} -filter_complex "${delays};${mix}" -map 0:v -map "[a]" -c:v copy -c:a libopus -b:a 64k "${out}"`);
-      renameSync(out, join(OUT, `${key}.${lang}.webm`));
+      // copy+unlink, not rename: the scratch dir comes from os.tmpdir(), which on a box
+      // with TMPDIR on a mounted volume is a DIFFERENT filesystem from the checkout, and
+      // rename(2) across devices fails with EXDEV — after the recording and the mux have
+      // already been paid for. Same filesystem or not, this costs one copy of a file we
+      // are about to stop using.
+      copyFileSync(out, join(OUT, `${key}.${lang}.webm`));
+      rmSync(out, { force: true });
       console.log(`🎬 ${key}.${lang}.webm (${dur(join(OUT, `${key}.${lang}.webm`)).toFixed(1)}s)`);
     }
   }

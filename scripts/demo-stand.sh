@@ -71,8 +71,13 @@ cat <<EOF
 
 Next, in two more terminals:
 
-  1) the web front — the API address is baked at BUILD time, so it must be passed here:
-     VITE_API_BASE_URL=$DEMO_API pnpm --filter web dev
+  1) the web front — the API address is baked at BUILD time, so it must be passed here.
+     Note http://localhost:3200 and NOT $DEMO_API: the two must be the SAME HOST as the
+     page. The refresh cookie is SameSite=lax, and to a browser localhost:5173 →
+     127.0.0.1:3200 is cross-site, so the cookie is withheld, /auth/refresh answers 401
+     and every full page load bounces back to the login screen — which is exactly what a
+     recording does on every section.
+     VITE_API_BASE_URL=http://localhost:3200 pnpm --filter web dev
 
   2) the recording (needs AZURE_SPEECH_KEY/REGION for en and GEMINI_API_KEY for az/ru):
      DEMO_ISOLATED=1 \\
