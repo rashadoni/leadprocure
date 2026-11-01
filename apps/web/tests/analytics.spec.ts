@@ -73,8 +73,10 @@ test('the spend chart carries a scale, a grid and a legend that names every mark
   // looked for three ticks and the word AZN would stay green if the scale went ten times
   // too big and squashed the whole chart into a tenth of the plot.
   await expect(page.locator('.chart-tick')).toHaveCount(3);
-  await expect(page.locator('.chart-tick').nth(0)).toHaveText('10K AZN');
-  await expect(page.locator('.chart-tick').nth(1)).toHaveText('5K');
+  // Lower-case "k": the UI's English is en-GB, and Intl's compact notation writes the
+  // abbreviation in the interface language — ru gives «10 тыс.», en-US "10K", en-GB "10k".
+  await expect(page.locator('.chart-tick').nth(0)).toHaveText('10k AZN');
+  await expect(page.locator('.chart-tick').nth(1)).toHaveText('5k');
   await expect(page.locator('.chart-tick').nth(2)).toHaveText('0');
   await expect(page.locator('.chart-rule')).toHaveCount(3);
   await expect(page.locator('.chart-col')).toHaveCount(MONTHS.length);
@@ -128,7 +130,7 @@ test('a foreign currency explains the missing plan line and claims no mark it ha
   await page.goto('/buyer/analytics');
   // Budgets are AZN-only by a database constraint, so the absence is by design, not a gap.
   await expect(page.getByText('Budgets are kept in AZN only, so there is no plan line in this currency.', { exact: true })).toBeVisible();
-  await expect(page.locator('.chart-tick').nth(0)).toHaveText('10K USD');
+  await expect(page.locator('.chart-tick').nth(0)).toHaveText('10k USD');
   const key = page.locator('.chart-key span');
   await expect(key).toHaveCount(1);
   await expect(key.nth(0)).toHaveText('Actual');
