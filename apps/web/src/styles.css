@@ -17,7 +17,7 @@ a { color: var(--accent); text-decoration: none; }
 
 .shell { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
 .side { background: var(--side-bg); border-right: 1px solid rgba(255, 255, 255, .06); padding: 20px 14px; display: flex; flex-direction: column; gap: 3px;
-  position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; }
+  position: sticky; top: 0; align-self: start; max-height: 100vh; overflow-y: auto; }
 /* A plain text control in the sidebar's footer, shaped like its links. */
 .side-link { background: none; border: 0; color: var(--side-text); font: inherit; font-size: 12px;
   text-align: left; padding: 8px 12px; cursor: pointer; border-radius: 8px; }
@@ -130,6 +130,12 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
    only, so a mouse click does not leave one behind. */
 [data-tip]:focus::after { opacity: 1; transform: translateX(-50%) translateY(0); }
 [data-tip]:focus::before { opacity: 1; }
+/* For an element at the very top of the page — the section's help line — where a bubble
+   drawn above would sit off the top of the window with nowhere to scroll to it. */
+[data-tip].tip-below::after { bottom: auto; top: calc(100% + 9px); transform: translateX(-50%) translateY(-4px); }
+[data-tip].tip-below::before { bottom: auto; top: calc(100% + 4px);
+  border-top-color: transparent; border-bottom-color: #10231c; }
+[data-tip].tip-below:hover::after, [data-tip].tip-below:focus::after { transform: translateX(-50%) translateY(0); }
 
 /* The product's own modal, in place of the browser's prompt/confirm. Short enough that
    nothing inside it ever scrolls: a dialog that scrolls is a form, and a form belongs on

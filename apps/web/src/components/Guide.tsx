@@ -11,7 +11,7 @@ import { GUIDES, SECTION_TITLE_KEY, SectionGuide } from '../guides';
 // product, shared with the checkbox in Settings.
 //
 // The root carries data-help-video-widget: scripts/produce-guides.mjs hides that selector
-// while recording, so the help card never appears inside the guide it belongs to.
+// while recording, so the help line never appears inside the guide it belongs to.
 
 function resolveGuide(pathname: string): SectionGuide | null {
   if (GUIDES[pathname]) return GUIDES[pathname];
@@ -36,12 +36,20 @@ function resolveTitleKey(pathname: string): string | undefined {
 const HIDDEN = 'guide_hidden';
 const EVENT = 'guides-visibility';
 
-export const guidesHidden = (): boolean => {
+// The switch itself lives in this module variable, with localStorage only remembering it
+// between visits. Reading storage back inside the listeners would break in a private
+// window, where the write throws and the read then answers «visible»: the component that
+// flipped it would hide while the sidebar went on thinking otherwise — and the way back,
+// which only the sidebar draws, would never appear.
+let hidden = ((): boolean => {
   try { return localStorage.getItem(HIDDEN) === '1'; } catch { return false; }
-};
+})();
+
+export const guidesHidden = (): boolean => hidden;
 /** Flips the one switch and tells every mounted reader of it: the bar and the sidebar. */
-export const setGuidesHidden = (hidden: boolean): void => {
-  try { localStorage.setItem(HIDDEN, hidden ? '1' : '0'); } catch { /* private mode */ }
+export const setGuidesHidden = (next: boolean): void => {
+  hidden = next;
+  try { localStorage.setItem(HIDDEN, next ? '1' : '0'); } catch { /* private window */ }
   window.dispatchEvent(new Event(EVENT));
 };
 
@@ -50,14 +58,16 @@ export const setGuidesHidden = (hidden: boolean): void => {
  * rather than in Settings because suppliers have no Settings page at all — a switch one
  * role cannot reach is a one-way door.
  */
-export function useGuidesHidden(): [boolean, (hidden: boolean) => void] {
-  const [hidden, setHidden] = useState(guidesHidden);
+export function useGuidesHidden(): [boolean, (next: boolean) => void] {
+  const [value, setValue] = useState(guidesHidden);
   useEffect(() => {
-    const sync = () => setHidden(guidesHidden());
+    const sync = () => setValue(guidesHidden());
     window.addEventListener(EVENT, sync);
     return () => window.removeEventListener(EVENT, sync);
   }, []);
-  return [hidden, (next: boolean) => { setGuidesHidden(next); setHidden(next); }];
+  // No extra setState here: the event is dispatched synchronously and reaches every
+  // subscriber, this one included, so both components move together or neither does.
+  return [value, setGuidesHidden];
 }
 
 export default function Guide() {
@@ -65,7 +75,7 @@ export default function Guide() {
   const { t } = useI18n();
   const guide = resolveGuide(pathname);
   const [open, setOpen] = useState(false);
-  const [hidden, setHidden] = useGuidesHidden();
+  const [isHidden, setHidden] = useGuidesHidden();
 
   // a new section starts collapsed, whatever the previous one was doing
   useEffect(() => { setOpen(false); }, [pathname]);
@@ -78,7 +88,7 @@ export default function Guide() {
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  if (!guide || hidden) return null;
+  if (!guide || isHidden) return null;
 
   // Recordings are Azerbaijani only — see guides.ts. Asking for the interface language
   // would 404 on every non-az UI and fall back a moment later, so ask for az directly.
@@ -93,10 +103,13 @@ export default function Guide() {
           one anywhere. The section's own name rides on the first so the line says what it
           would play. */}
       <div className="help-bar" data-help-video-widget>
-        <button className="btn small ghost" onClick={() => setOpen(true)} data-tip={t('guide_sub')}>
+        {/* `tip-below`: this bar is the FIRST element on the page, and a bubble drawn above
+            it is clipped by the top of the window with nowhere to scroll — including the
+            one line that says how to bring the guides back. */}
+        <button className="btn small ghost tip-below" onClick={() => setOpen(true)} data-tip={t('guide_sub')}>
           🎥 {t('guide')}{title ? `: ${title}` : ''}
         </button>
-        <button className="btn small ghost" data-tip={t('guide_hide_all_tip')}
+        <button className="btn small ghost tip-below" data-tip={t('guide_hide_all_tip')}
           onClick={() => setHidden(true)}>
           ✕ {t('guide_hide_all')}
         </button>

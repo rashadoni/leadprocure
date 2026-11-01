@@ -188,8 +188,15 @@ test.describe('buyer panel', () => {
     await expect(bar).toBeVisible();
     const box = await bar.boundingBox();
     expect(box!.height).toBeLessThan(60);
-    // The menu follows the page down instead of scrolling away from a long list.
-    expect(await page.locator('.side').evaluate((el) => getComputedStyle(el).position)).toBe('sticky');
+    // The menu follows the page down instead of scrolling away from a long list. Measured,
+    // not read off the declaration: `position: sticky` keeps reporting itself as sticky
+    // after any ancestor grows an `overflow` that silently disables it.
+    await page.setViewportSize({ width: 1280, height: 420 });
+    await page.evaluate(() => window.scrollTo(0, 300));
+    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
+    expect(await page.locator('.side').evaluate((el) => el.getBoundingClientRect().top)).toBeLessThan(2);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.evaluate(() => window.scrollTo(0, 0));
     // a prefix: [data-tip]::after lands in the accessible name
     await bar.getByRole('button', { name: /^✕/ }).click();
     await expect(bar).toHaveCount(0);
