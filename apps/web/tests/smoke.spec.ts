@@ -22,6 +22,94 @@ async function assertRenders(page: Page, path: string, headingHint: RegExp): Pro
   await expect(page.locator('text=Unexpected Application Error')).toHaveCount(0);
 }
 
+// ── narrow screens ────────────────────────────────────────────────────────────────────
+// The four widths the layout has to be right at: a desktop, a tablet on its side, a tablet
+// held upright, a phone. 1440 is the wide layout, unchanged by this work; the other three
+// are below the 1100px breakpoint, where the rail is a drawer and a row is drawn as a card.
+// Widest FIRST so that 375 — the width that matters and the one that fails first — is
+// measured last, on the most settled page there is.
+const WIDTHS = [1440, 1024, 768, 375];
+
+// Pages whose list cannot be empty on the seeded stack, so the measurement below is made
+// WITH rows in it — and these four are the widest tables in the product (requests has ten
+// columns, budgets eleven). An empty table is still worth measuring for its heading, form,
+// filters and pager, but rows can only add width: a page that overflows once it has rows
+// would pass on an empty one, so at least the wide tables have to be caught holding them.
+// `/buyer/requests` has the draft this suite creates above; budgets has the seed's three
+// plans; settings lists the organization's own users; suppliers has the seed's approved one.
+const WITH_ROWS = ['/buyer/requests', '/buyer/budgets', '/buyer/settings', '/buyer/suppliers'];
+
+// The measurement the whole narrow layout answers to. «Let the table scroll inside itself»
+// is the option the owner refused, so sideways scrolling is not a blemish here — it is the
+// failure. One pixel of tolerance and no more: `scrollWidth` is an integer rounded UP from
+// a fractional layout width, so a page that fits exactly can report 1px over.
+//
+// `expect.soft`, so one run reports EVERY screen and width that breaks instead of only the
+// first. The suite runs with `--max-failures=1` and takes eleven minutes, so a hard
+// assertion here spends a whole cycle to learn about one page at one width.
+async function assertNoSidewaysScroll(page: Page, where: string): Promise<void> {
+  const { over, blame } = await page.evaluate(() => {
+    const root = document.scrollingElement!;
+    const limit = root.clientWidth;
+    const over = root.scrollWidth - limit;
+    if (over <= 1) return { over, blame: '' };
+    // A failure has to NAME what sticks out. «Scrolls by 104px» sends the next reader
+    // measuring nineteen screens by hand; this says which box, and answers first the one
+    // question a box cannot answer — whether it is a box at all. A hint bubble is an
+    // `::after`, which no query can enumerate and which does not grow its own element's
+    // rectangle, so it is found by taking every bubble away and asking again.
+    const style = document.createElement('style');
+    style.textContent = '[data-tip]::after, [data-tip]::before { display: none !important }';
+    document.head.appendChild(style);
+    const withoutTips = root.scrollWidth - limit;
+    style.remove();
+    // Deepest elements only: a parent that sticks out because its child does is reported by
+    // the child, and printing both buries the answer. Fixed boxes are skipped because they
+    // are outside the page's scrollable width by construction.
+    const out: string[] = [];
+    for (const el of Array.from(document.body.querySelectorAll<HTMLElement>('*'))) {
+      const r = el.getBoundingClientRect();
+      if (!r.width || r.right <= limit + 1) continue;
+      if (getComputedStyle(el).position === 'fixed') continue;
+      if (Array.from(el.children).some((c) => c.getBoundingClientRect().right > limit + 1)) continue;
+      const cls = String(el.className || '').trim().split(/\s+/).filter(Boolean).join('.');
+      out.push(`${el.tagName.toLowerCase()}${cls ? '.' + cls : ''}`
+        + ` right=${Math.round(r.right)} w=${Math.round(r.width)} min=${el.scrollWidth}`);
+      if (out.length === 6) break;
+    }
+    const blame = `without hint bubbles it would be ${withoutTips}px; `
+      + (out.length ? `widest boxes past ${limit}px: ${out.join(' | ')}`
+        : `no element past ${limit}px — a pseudo-element, a margin or a shadow`);
+    return { over, blame };
+  });
+  expect.soft(over, `${where} scrolls sideways by ${over}px — ${blame}`).toBeLessThanOrEqual(1);
+}
+
+// Resized, not revisited: four visits per page would spend this test's whole budget on
+// loading pages it has already loaded.
+async function assertFitsEveryWidth(page: Page, path: string): Promise<void> {
+  await page.goto(path);
+  await expect(page.locator('h1').first()).toBeVisible({ timeout: 20_000 });
+  // Then wait for the LISTS to have answered, not just for the heading to be painted. The
+  // access token lives in memory only, so every visit is a cold load — bundle,
+  // `/auth/refresh`, mount — and the heading appears at about the moment the list request
+  // goes out. Measuring on that frame measures an empty <tbody>, and since rows can only
+  // add width, every overflow this test exists to catch would pass.
+  // `ListState` is what every list on every page reports itself through, and its loading
+  // line is the only `role="status"` on a page nobody has acted on yet — so this is one
+  // signal for all nineteen screens, satisfied by rows, by «nothing here yet» and by a
+  // failure alike.
+  await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+  if (WITH_ROWS.includes(path)) {
+    expect.soft(await page.locator('tbody tr').count(),
+      `${path} is measured for its rows and had none`).toBeGreaterThan(0);
+  }
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 900 });
+    await assertNoSidewaysScroll(page, `${path} at ${width}px`);
+  }
+}
+
 // ONE login per panel, not one per test. /auth/login is throttled to 10/min as a
 // brute-force guard, so a per-test login put the suite one test away from tripping its own
 // security control — and two consecutive runs tripped it for sure. Tests share a page
@@ -220,18 +308,30 @@ test.describe('buyer panel', () => {
     // fixed 420px window left only 20–83px to scroll and the measurement stopped being a
     // measurement. The page is made to scroll by the window, not by how much the app
     // happens to draw — and we scroll as far as it goes rather than to a guessed offset.
+    //
+    // Asked of BOTH menus, each at a width where it IS the menu: 1280 is the wide layout,
+    // where the menu is the rail down the left; below the 1100px breakpoint the rail is a
+    // drawer and the thing that must not scroll away is the top bar holding the «Menu»
+    // button. The rail stopped being the answer to this question on a narrow screen, so the
+    // question is now put to each layout separately rather than to the rail at every width.
+    const staysOnScreen = async (selector: string) => {
+      const scrollable = await page.evaluate(() =>
+        document.scrollingElement!.scrollHeight - document.scrollingElement!.clientHeight);
+      // without this the assertions below pass on a page that cannot scroll at all
+      expect(scrollable).toBeGreaterThan(100);
+      await page.evaluate(() => window.scrollTo(0, document.scrollingElement!.scrollHeight));
+      expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
+      // |top|, не top: отлипшее меню уезжает ВВЕРХ и его `top` становится отрицательным,
+      // то есть «< 2» проходило и когда меню приклеено (0), и когда его унесло (−176) —
+      // ровно тот сбой, который этот замер и существует чтобы поймать.
+      const top = await page.locator(selector).evaluate((el) => el.getBoundingClientRect().top);
+      expect(Math.abs(top), `${selector} did not stay on screen`).toBeLessThan(2);
+    };
     await page.setViewportSize({ width: 1280, height: 240 });
-    const scrollable = await page.evaluate(() =>
-      document.scrollingElement!.scrollHeight - document.scrollingElement!.clientHeight);
-    // without this the assertions below pass on a page that cannot scroll at all
-    expect(scrollable).toBeGreaterThan(100);
-    await page.evaluate(() => window.scrollTo(0, document.scrollingElement!.scrollHeight));
-    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
-    // |top|, не top: отлипшее меню уезжает ВВЕРХ и его `top` становится отрицательным,
-    // то есть «< 2» проходило и когда меню приклеено (0), и когда его унесло (−176) —
-    // ровно тот сбой, который этот замер и существует чтобы поймать.
-    const railTop = await page.locator('.side').evaluate((el) => el.getBoundingClientRect().top);
-    expect(Math.abs(railTop)).toBeLessThan(2);
+    await staysOnScreen('.side');
+    await expect(page.locator('.topbar')).toBeHidden();
+    await page.setViewportSize({ width: 375, height: 240 });
+    await staysOnScreen('.topbar');
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.evaluate(() => window.scrollTo(0, 0));
     // a prefix: [data-tip]::after lands in the accessible name
@@ -242,6 +342,87 @@ test.describe('buyer panel', () => {
     // The way back lives in the sidebar, which a supplier has too — unlike Settings.
     await page.locator('.side-link').click();
     await expect(page.locator('.help-bar')).toBeVisible();
+  });
+
+  // Narrow screens, down to a phone — the owner's decision of 1 November 2026 («И телефон
+  // тоже»). Three statements, and the first one decides the other two: no screen may scroll
+  // sideways at any width, because the way of getting out of that which was refused is a
+  // table that scrolls inside itself.
+  test('every buyer screen fits a phone, a tablet and a desktop, and the menu is reachable at each', async () => {
+    // Twelve cold loads, each waited out to its list, then measured at four widths. Well
+    // inside this on a warm bundle, but the suite's own 90s default leaves no room on a
+    // slow hosted runner, and a timeout here would read as an overflow.
+    test.setTimeout(180_000);
+    for (const path of ['/buyer/dashboard', '/buyer/requests', '/buyer/events', '/buyer/contracts',
+      '/buyer/invoices', '/buyer/catalogs', '/buyer/budgets', '/buyer/analytics', '/buyer/logistics',
+      '/buyer/suppliers', '/buyer/verification', '/buyer/settings']) {
+      await assertFitsEveryWidth(page, path);
+    }
+    // A tender's own page is the widest thing a buyer opens, and the only one that needs an
+    // id — so it is taken from the list rather than written in here. The wait is the whole
+    // point of the shape below: `count()` does NOT auto-wait, so asking it straight after a
+    // `goto` answers 0 while the list is still in flight and this page would be skipped on
+    // every run. The seed publishes no tender, so an empty list here is a fact about the
+    // stand and not a failure — but it has to be the settled list that says so.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/buyer/events');
+    await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+    const tender = page.locator('a[href^="/buyer/events/"]').first();
+    if (await tender.count()) await assertFitsEveryWidth(page, (await tender.getAttribute('href'))!);
+
+    // Below the breakpoint the page has the whole window and the way into the menu is a
+    // button that says the word: an icon on its own is not read.
+    await page.setViewportSize({ width: 375, height: 820 });
+    await page.goto('/buyer/budgets');
+    const rail = page.locator('.side');
+    const menu = page.getByRole('button', { name: /^☰/ });
+    await expect(rail).toBeHidden();
+    await expect(menu).toContainText('Menu');
+    await menu.click();
+    await expect(rail).toBeVisible();
+    // and it shuts itself the moment it is used — on a phone it covers the page it came from
+    await rail.getByRole('link', { name: 'Requests', exact: true }).click();
+    await page.waitForURL('**/buyer/requests');
+    await expect(rail).toBeHidden();
+
+    // A row is a card of «name: value» lines, and the name is the table's own column
+    // heading: CSS cannot reach a header from the body, so components/narrow.ts puts it on
+    // the cell. The settings page is where this is asked because its first table lists the
+    // organization's users — it cannot be empty, whatever the other specs have left behind.
+    await page.goto('/buyer/settings');
+    // The FIRST table, pinned — the organization's own users, which cannot be empty. Not
+    // «the first table that has a row»: that one re-resolves on every poll, and the users
+    // and the departments below them are filled by two independent requests, so whichever
+    // answered first would supply the heading and the other one the cell, failing later
+    // with a message that reads as a stamping bug.
+    const table = page.locator('table').first();
+    const cell = table.locator('tbody td').first();
+    await expect(cell).toBeVisible({ timeout: 20_000 });
+    // Against the heading itself rather than a word typed in here: the contract is that the
+    // label on a card IS the column it came from, in whatever language the panel is in.
+    // Polled, because the stamping follows the rows into the DOM one frame behind them.
+    const heading = (await table.locator('thead th').first().textContent())!.trim();
+    expect(heading.length).toBeGreaterThan(0);
+    await expect(cell).toHaveAttribute('data-label', heading);
+    const card = await cell.evaluate((td) => ({
+      display: getComputedStyle(td).display,
+      printed: getComputedStyle(td, '::before').content,
+      width: td.getBoundingClientRect().width,
+      window: document.documentElement.clientWidth,
+    }));
+    expect(card.display).toBe('block');
+    // and the stylesheet really prints it — a stamped attribute nothing draws is not a label
+    expect(card.printed).not.toBe('none');
+    // the table has the window now, not the strip that was left beside a 232px rail
+    expect(card.width).toBeGreaterThan(card.window * 0.7);
+
+    // And above the breakpoint none of it applies: the rail is back, the button is not
+    // drawn, and a cell is a cell again.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(rail).toBeVisible();
+    await expect(menu).toBeHidden();
+    expect(await cell.evaluate((td) => getComputedStyle(td).display)).toBe('table-cell');
+    await page.setViewportSize({ width: 1280, height: 900 });
   });
 });
 
@@ -326,5 +507,34 @@ test.describe('supplier panel', () => {
     await expect(grid.locator('> div')).toHaveCount(5, { timeout: 20_000 });
     await expect(grid.locator('> div[data-tip]')).toHaveCount(5);
     await expect(page.getByTestId('sup-verification')).toBeVisible();
+  });
+
+  // The same narrow-screen contract on the supplier's side. These are different pages, and
+  // of the two readers the supplier is the likelier one to be holding a phone.
+  test('every supplier screen fits a phone and a tablet, and the menu is reachable there', async () => {
+    test.setTimeout(180_000);
+    // The card layout itself is proved on the buyer's side, on a table that cannot be empty;
+    // it is one shared mechanism, so what is asked here is the widths and the menu.
+    for (const path of ['/supplier/dashboard', '/supplier/market', '/supplier/orders',
+      '/supplier/contracts', '/supplier/invoices', '/supplier/catalogs', '/supplier/verification']) {
+      await assertFitsEveryWidth(page, path);
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/supplier/market');
+    await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+    const tender = page.locator('a[href^="/supplier/events/"]').first();
+    if (await tender.count()) await assertFitsEveryWidth(page, (await tender.getAttribute('href'))!);
+
+    await page.setViewportSize({ width: 375, height: 820 });
+    await page.goto('/supplier/orders');
+    const rail = page.locator('.side');
+    await expect(rail).toBeHidden();
+    const menu = page.getByRole('button', { name: /^☰/ });
+    await expect(menu).toContainText('Menu');
+    await menu.click();
+    // the supplier's own sections, not the buyer's, and the language switcher with them
+    await expect(rail.getByRole('link', { name: 'Open tenders', exact: true })).toBeVisible();
+    await expect(rail.locator('.lang')).toBeVisible();
+    await page.setViewportSize({ width: 1280, height: 900 });
   });
 });

@@ -158,6 +158,7 @@ const dict: Record<Lang, Record<string, string>> = {
     // Dialogs of the product's own, in place of the browser's alert / prompt / confirm,
     // whose buttons stayed in the BROWSER's language whatever the interface was set to.
     close: 'Bağla', error_generic: 'Əməliyyat alınmadı',
+    menu: 'Menyu',
     order_no: 'Sifariş №', orders_n: 'Sifariş sayı',
     password_show: 'Göstər', password_hide: 'Gizlət', password_min: 'Ən azı 8 simvol',
     nothing_to_save: 'Dəyişiklik yoxdur', role_self_locked: 'Öz rolunuzu dəyişə bilməzsiniz',
@@ -471,6 +472,7 @@ const dict: Record<Lang, Record<string, string>> = {
     make_contract: 'Создать контракт', history: 'История',
     method_pick: 'Способ закупки', announce: 'Объявить', confirm: 'Подтвердить',
     close: 'Закрыть', error_generic: 'Действие не выполнено',
+    menu: 'Меню',
     order_no: 'Заказ', orders_n: 'Заказы',
     password_show: 'Показать', password_hide: 'Скрыть', password_min: 'Не меньше 8 символов',
     nothing_to_save: 'Изменений нет', role_self_locked: 'Свою роль изменить нельзя',
@@ -784,6 +786,7 @@ const dict: Record<Lang, Record<string, string>> = {
     make_contract: 'Create contract', history: 'History',
     method_pick: 'Procurement method', announce: 'Announce', confirm: 'Confirm',
     close: 'Close', error_generic: 'The action did not go through',
+    menu: 'Menu',
     order_no: 'Order', orders_n: 'Orders',
     password_show: 'Show', password_hide: 'Hide', password_min: 'at least 8 characters',
     nothing_to_save: 'Nothing has changed', role_self_locked: 'You cannot change your own role',
