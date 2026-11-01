@@ -214,8 +214,18 @@ test.describe('buyer panel', () => {
     // The menu follows the page down instead of scrolling away from a long list. Measured,
     // not read off the declaration: `position: sticky` keeps reporting itself as sticky
     // after any ancestor grows an `overflow` that silently disables it.
-    await page.setViewportSize({ width: 1280, height: 420 });
-    await page.evaluate(() => window.scrollTo(0, 300));
+    //
+    // The window is this short on purpose, and it got shorter when the request form moved
+    // behind a button: this screen now FITS, which is the whole point of that change, so a
+    // fixed 420px window left only 20–83px to scroll and the measurement stopped being a
+    // measurement. The page is made to scroll by the window, not by how much the app
+    // happens to draw — and we scroll as far as it goes rather than to a guessed offset.
+    await page.setViewportSize({ width: 1280, height: 240 });
+    const scrollable = await page.evaluate(() =>
+      document.scrollingElement!.scrollHeight - document.scrollingElement!.clientHeight);
+    // without this the assertions below pass on a page that cannot scroll at all
+    expect(scrollable).toBeGreaterThan(100);
+    await page.evaluate(() => window.scrollTo(0, document.scrollingElement!.scrollHeight));
     expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
     expect(await page.locator('.side').evaluate((el) => el.getBoundingClientRect().top)).toBeLessThan(2);
     await page.setViewportSize({ width: 1280, height: 900 });
