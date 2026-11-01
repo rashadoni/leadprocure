@@ -1,6 +1,7 @@
 import { test, expect, type Locator } from '@playwright/test';
 import { createRequire } from 'node:module';
 import { verifyRfiRfp } from './helpers/rfx';
+import { answerDialog } from './helpers/dialogs';
 const apiRequire = createRequire(new URL('../../api/package.json', import.meta.url));
 
 // Real fixtures/API/auth/RLS. Keep one browser login for the entire scenario:
@@ -93,10 +94,11 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
   await expect(groupA.getByRole('button').first()).toHaveText(/Browser audit s2.*⭐/);
   await expect(groupB.getByRole('button').first()).toHaveText(/Browser audit s2.*⭐/);
   expect(currentEvaluation.ranking[0].bid_id).toBe(bids[1].id);
+  // The justification is a field in the product's own dialog now, not a browser prompt.
   const awardThrough = async (button: Locator, reason: string, targetEventId = event.id) => {
-    const dialog = page.waitForEvent('dialog').then(async d => { expect(d.type()).toBe('prompt'); await d.accept(reason); });
     const response = page.waitForResponse(r => r.url().endsWith(`/events/${targetEventId}/award`) && r.request().method() === 'POST');
-    await button.click(); await dialog;
+    await button.click();
+    await answerDialog(page, reason);
     const r = await response; expect(r.status(), await r.text()).toBe(201);
   };
   await awardThrough(groupA.getByRole('button', { name: /Browser audit s2/ }), 'Best current formal evaluation');

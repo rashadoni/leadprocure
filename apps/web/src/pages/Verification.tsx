@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { api } from '../api/client';
 import { useAuth } from '../auth/auth';
 import { useI18n } from '../i18n';
+import { useDialogs } from '../components/Dialogs';
 import { VERIFICATION_DOC_TYPES } from '@leadprocure/shared';
 import { Badge } from '../components/Badge';
 import { ListState, useLoad } from '../components/ListState';
@@ -14,6 +15,7 @@ async function sha256(file: File): Promise<string> {
 
 export default function Verification() {
   const { t } = useI18n();
+  const { notifyError } = useDialogs();
   const { session } = useAuth();
   const isBuyer = session?.org.kind !== 'SUPPLIER';
   const [open, setOpen] = useState<Record<string, any>>({});
@@ -33,7 +35,7 @@ export default function Verification() {
 
   const decide = async (id: string, status: string) => {
     try { await api.post(`/verification/cases/${id}/decide`, { status }); refresh(id); }
-    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    catch (e: any) { notifyError(e); }
   };
 
   const upload = async (caseId: string, file: File) => {
@@ -43,7 +45,7 @@ export default function Verification() {
       if (!put.ok) throw new Error(`upload failed (${put.status})`);
       await api.post(`/verification/cases/${caseId}/documents`, { docType, storageKey: pre.storageKey, filename: file.name, sha256: await sha256(file) });
       refresh(caseId);
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? e.message ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
     finally { if (fileRef.current) fileRef.current.value = ''; }
   };
 

@@ -5,6 +5,7 @@ import { Actions } from '../../components/Actions';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
+import { useDialogs } from '../../components/Dialogs';
 import { isDenied, ListState } from '../../components/ListState';
 
 interface Budget {
@@ -49,6 +50,7 @@ const empty = {
 
 export default function Budgets() {
   const { t } = useI18n();
+  const { notify, notifyError, ask, confirm } = useDialogs();
   const { session } = useAuth();
   const canManagePlans = ['BUYER_ADMIN', 'BUYER_FINANCE'].includes(session?.org.role ?? '');
   const canReadOrgReports = ['BUYER_ADMIN', 'BUYER_FINANCE', 'BUYER_APPROVER'].includes(session?.org.role ?? '');
@@ -133,7 +135,7 @@ export default function Budgets() {
       setForm({ ...empty });
       setEditId(null);
       load();
-    } catch (e: any) { setErr(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { setErr(e.response?.data?.message?.toString() ?? t('error_generic')); }
   };
 
   const edit = (b: Budget) => {
@@ -152,9 +154,9 @@ export default function Budgets() {
     });
   };
   const remove = async (id: string) => {
-    if (!confirm(t('bud_delete_confirm'))) return;
+    if (!await confirm({ title: t('bud_delete_confirm'), hint: t('bud_delete_hint'), danger: true, confirmLabel: t('delete') })) return;
     try { await api.delete(`/budgets/${id}`); load(); }
-    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    catch (e: any) { notifyError(e); }
   };
 
   // Auth-guarded CSV download (a plain <a> would hit the API without the bearer token).
@@ -175,7 +177,7 @@ export default function Budgets() {
       const a = document.createElement('a');
       a.href = url; a.download = name; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
   const exportCsv = () => download('/budgets/export', 'budgets.csv');
   const export1c = () => download('/budgets/export/1c', 'budgets-1c.csv');
@@ -184,10 +186,10 @@ export default function Budgets() {
   // else, and finally closed when the period is signed off.
   const act = async (id: string, action: string, body?: Record<string, unknown>) => {
     try { await api.post(`/budgets/${id}/${action}`, body ?? {}); load(); }
-    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    catch (e: any) { notifyError(e); }
   };
-  const withReason = (id: string, action: string, promptKey: string) => {
-    const reason = prompt(t(promptKey));
+  const withReason = async (id: string, action: string, promptKey: string) => {
+    const reason = await ask({ title: t(promptKey), label: t('reason'), required: true, minLength: 3, hint: t('bud_reason_hint') });
     if (!reason || reason.trim().length < 3) return;
     act(id, action, { reason: reason.trim() });
   };
@@ -240,20 +242,23 @@ export default function Budgets() {
       });
       setPhasing((p) => ({ ...p, [id]: data }));
       load();
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
 
   // Rollover: carry another period's unspent remainder into this budget.
   const rollover = async (targetId: string) => {
     const candidates = rows.filter((b) => b.id !== targetId && b.remainingMinor > 0);
-    if (!candidates.length) { alert(t('bud_rollover_none')); return; }
-    const pick = prompt(
-      `${t('bud_rollover_prompt')}\n\n${candidates.map((b, i) => `${i + 1}. ${b.name} (${b.periodLabel}) — ${fmtMoney(b.remainingMinor, b.currency)}`).join('\n')}`,
-    );
-    const idx = Number(pick) - 1;
-    if (!(idx >= 0 && idx < candidates.length)) return;
-    try { await api.post(`/budgets/${targetId}/rollover`, { sourceBudgetId: candidates[idx].id }); load(); }
-    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    if (!candidates.length) { notify(t('bud_rollover_none'), 'info'); return; }
+    const sourceBudgetId = await ask({
+      title: t('bud_rollover_pick'), label: t('budgets'), hint: t('bud_rollover_hint'),
+      options: candidates.map((b) => ({
+        value: b.id,
+        label: `${b.name} (${b.periodLabel}) — ${fmtMoney(b.remainingMinor, b.currency)}`,
+      })),
+    });
+    if (!sourceBudgetId) return;
+    try { await api.post(`/budgets/${targetId}/rollover`, { sourceBudgetId }); load(); }
+    catch (e: any) { notifyError(e); }
   };
 
   // The column's name and its explanation come from the basis the ROWS declare, not from
@@ -434,9 +439,9 @@ export default function Budgets() {
                   if (!file) return;
                   try {
                     const res = await api.post('/budgets/import', { csv: await file.text() });
-                    alert(`${t('bud_imported')}: ${res.data.imported}`);
+                    notify(`${t('bud_imported')}: ${res.data.imported}`, 'ok');
                     load();
-                  } catch (err: any) { alert(err.response?.data?.message?.toString() ?? 'Error'); }
+                  } catch (err: any) { notifyError(err); }
                 }} />
             </>
           )}

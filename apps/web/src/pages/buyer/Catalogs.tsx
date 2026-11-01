@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { api, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
+import { useDialogs } from '../../components/Dialogs';
 import { Badge } from '../../components/Badge';
 import { ListState, useLoad } from '../../components/ListState';
 
 export default function Catalogs() {
   const { t } = useI18n();
+  const { notify, notifyError } = useDialogs();
   const { session } = useAuth();
   const nav = useNavigate();
   const isBuyer = session?.org.kind !== 'SUPPLIER';
@@ -33,7 +35,7 @@ export default function Catalogs() {
   useEffect(loadDeps, [isBuyer]);
 
   const run = async (fn: () => Promise<unknown>) => {
-    try { await fn(); load(); } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    try { await fn(); load(); } catch (e: any) { notifyError(e); }
   };
   const expand = async (id: string) => {
     if (open[id]) { setOpen((o) => ({ ...o, [id]: null })); return; }
@@ -42,12 +44,12 @@ export default function Catalogs() {
   };
   const order = async (catalogId: string, items: any[]) => {
     const lines = items.filter((i) => Number(qty[i.id]) > 0).map((i) => ({ catalogItemId: i.id, qty: Number(qty[i.id]) }));
-    if (!lines.length) { alert('Enter quantities'); return; }
+    if (!lines.length) { notify(t('catalog_need_qty'), 'info'); return; }
     try {
       await api.post(`/catalogs/${catalogId}/order`, { items: lines, ...(orderDep ? { departmentId: orderDep } : {}) });
       setQty({});
       nav('/buyer/contracts');
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
 
   return (

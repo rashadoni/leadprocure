@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { api, fmtDate, fmtMoney } from '../api/client';
 import { useAuth } from '../auth/auth';
 import { useI18n } from '../i18n';
+import { useDialogs } from '../components/Dialogs';
 import { Badge } from '../components/Badge';
 import { Actions } from '../components/Actions';
 import { isDenied } from '../components/ListState';
 
 export default function Invoices() {
   const { t } = useI18n();
+  const { notify, notifyError, ask } = useDialogs();
   const { session } = useAuth();
   const isBuyer = session?.org.kind !== 'SUPPLIER';
   const [rows, setRows] = useState<any[]>([]);
@@ -67,7 +69,7 @@ export default function Invoices() {
         ? { ...current, [id]: { ...current[id], ...result.data } }
         : current);
       await load();
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
   const expand = async (id: string) => {
     const wantsOpen = !(detailIntent.current[id]?.open ?? !!open[id]);
@@ -92,7 +94,7 @@ export default function Invoices() {
     } catch (e: any) {
       if (!isCurrent()) return;
       detailIntent.current[id] = { request, open: false };
-      alert(e.response?.data?.message?.toString() ?? t('invoice_details_error'));
+      notify(e.response?.data?.message?.toString() ?? t('invoice_details_error'), 'error');
     }
   };
 
@@ -100,7 +102,10 @@ export default function Invoices() {
   const approveInvoice = (i: any) => act(i.id, async () => {
     let reason: string | undefined;
     if (i.status === 'DISPUTED') {
-      reason = window.prompt(t('override_reason_prompt')) ?? undefined;
+      reason = await ask({
+        title: t('override_reason_prompt'), label: t('reason'), required: true,
+        hint: t('override_reason_hint'), confirmLabel: t('approve'),
+      }) ?? undefined;
       if (!reason) return;
     }
     return api.post(`/invoices/${i.id}/approve`, reason ? { reason } : {});

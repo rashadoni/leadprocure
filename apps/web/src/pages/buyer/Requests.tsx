@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, fmtDate, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
+import { useDialogs } from '../../components/Dialogs';
 import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
 import { isDenied, ListState, useLoad } from '../../components/ListState';
@@ -14,6 +15,7 @@ interface Item { name: string; qty: number; price: string }
 
 export default function Requests() {
   const { t } = useI18n();
+  const { notifyError, notify, ask } = useDialogs();
   const { session } = useAuth();
   const nav = useNavigate();
   const [title, setTitle] = useState('');
@@ -110,7 +112,7 @@ export default function Requests() {
       await api.post(`/orders/direct/from-request/${requestId}`, { supplierOrgId });
       setDirectFor(null);
       nav('/buyer/contracts');
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
 
   const create = async (e: FormEvent) => {
@@ -130,20 +132,23 @@ export default function Requests() {
       setDepartment('');
       setItems([{ name: '', qty: 1, price: '' }]);
       load();
-    } catch (e: any) { setErr(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { setErr(e.response?.data?.message?.toString() ?? t('error_generic')); }
   };
 
   const act = async (id: string, action: string) => {
     try { await api.post(`/requests/${id}/${action}`); load(); }
-    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    catch (e: any) { notifyError(e); }
   };
 
   // Cancelling releases the budget commitment, so the reason is required and audited.
   const cancelRequest = async (id: string) => {
-    const reason = prompt(t('cancel_reason_prompt'));
+    const reason = await ask({
+      title: t('cancel_reason_prompt'), label: t('reason'), required: true, minLength: 3,
+      hint: t('cancel_request_hint'), confirmLabel: t('cancel_request'), danger: true,
+    });
     if (!reason || reason.trim().length < 3) return;
     try { await api.post(`/requests/${id}/cancel`, { reason: reason.trim() }); load(); }
-    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    catch (e: any) { notifyError(e); }
   };
 
   // Forced look-before-approve: the first click reveals the line items, the second
@@ -155,7 +160,7 @@ export default function Requests() {
       case 'BUDGET_LIMIT_EXCEEDED': return t('bud_approval_blocked');
       case 'BUDGET_OVERRIDE_FORBIDDEN': return t('bud_override_forbidden');
       case 'REQUEST_SELF_APPROVAL_FORBIDDEN': return t('request_self_approval_forbidden');
-      default: return e.response?.data?.message?.toString() ?? 'Error';
+      default: return e.response?.data?.message?.toString() ?? t('error_generic');
     }
   };
   const approveGuard = async (id: string) => {
@@ -173,11 +178,14 @@ export default function Requests() {
       const msg = approvalError(e);
       if (e.response?.status === 403 && e.response.data?.code === 'BUDGET_LIMIT_EXCEEDED'
         && e.response.data.canOverride === true && isAdmin) {
-        const reason = prompt(t('bud_override_prompt'));
+        const reason = await ask({
+          title: t('bud_override_prompt'), label: t('reason'), required: true, minLength: 3,
+          hint: t('bud_override_hint'), confirmLabel: t('approve'),
+        });
         if (!reason || reason.trim().length < 3) return;
         try { await api.post(`/requests/${id}/approve`, { budgetOverrideReason: reason.trim() }); }
-        catch (e2: any) { alert(approvalError(e2)); return; }
-      } else { alert(msg); return; }
+        catch (e2: any) { notify(approvalError(e2), 'error'); return; }
+      } else { notify(msg, 'error'); return; }
     }
     load();
     setPreview((p) => { const q = { ...p }; delete q[id]; return q; });
@@ -189,7 +197,7 @@ export default function Requests() {
       const closeAt = new Date(Date.now() + 24 * 3600_000).toISOString();
       const ev = await api.post(`/events/from-request/${id}`, { closeAt, visibility, type });
       nav(`/buyer/events/${ev.data.id}`);
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
 
   // Reverse auction: start at the estimate, min decrement = 1% (floor 1 AZN).
@@ -203,7 +211,7 @@ export default function Requests() {
         minDecrementMinor: Math.max(Math.round(start / 100), 100),
       });
       nav(`/buyer/events/${ev.data.id}`);
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
 
   return (

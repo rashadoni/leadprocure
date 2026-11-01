@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { useI18n } from '../i18n';
+import { useDialogs } from './Dialogs';
 import { isDenied, ListState } from './ListState';
 
 // Per-org sending channels (Email/SMTP + WhatsApp gateway) the buyer connects for the
@@ -21,6 +22,7 @@ const META = {
 
 export function ChannelsCard({ isAdmin }: { isAdmin: boolean }) {
   const { t } = useI18n();
+  const { notifyError, notify, ask, confirm } = useDialogs();
   const [rows, setRows] = useState<ChannelState[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, any>>({});
@@ -45,7 +47,7 @@ export function ChannelsCard({ isAdmin }: { isAdmin: boolean }) {
   const syncTemplates = async () => {
     setBusy(true);
     try { const r = await api.get('/channels/WHATSAPP/templates'); setTemplates(r.data); }
-    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); setTemplates([]); }
+    catch (e: any) { notifyError(e); setTemplates([]); }
     finally { setBusy(false); }
   };
 
@@ -59,21 +61,24 @@ export function ChannelsCard({ isAdmin }: { isAdmin: boolean }) {
   const save = async (channel: string) => {
     setBusy(true);
     try { await api.put(`/channels/${channel}`, draft); await load(); setEditing(null); }
-    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    catch (e: any) { notifyError(e); }
     finally { setBusy(false); }
   };
   const test = async (channel: string) => {
-    const to = window.prompt(channel === 'EMAIL' ? t('ch_test_email_prompt') : t('ch_test_wa_prompt'));
+    const to = await ask({
+      title: channel === 'EMAIL' ? t('ch_test_email_prompt') : t('ch_test_wa_prompt'),
+      label: channel === 'EMAIL' ? t('email') : t('phone'), required: true,
+    });
     if (!to) return;
     setBusy(true);
-    try { await api.post(`/channels/${channel}/test`, { to }); alert(t('ch_test_ok')); await load(); }
-    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    try { await api.post(`/channels/${channel}/test`, { to }); notify(t('ch_test_ok'), 'ok'); await load(); }
+    catch (e: any) { notifyError(e); }
     finally { setBusy(false); }
   };
   const disconnect = async (channel: string) => {
-    if (!window.confirm(t('ch_disconnect_confirm'))) return;
+    if (!await confirm({ title: t('ch_disconnect_confirm'), hint: t('ch_disconnect_hint'), danger: true, confirmLabel: t('ch_disconnect') })) return;
     try { await api.delete(`/channels/${channel}`); await load(); }
-    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    catch (e: any) { notifyError(e); }
   };
 
   const field = (key: string, label: string, type = 'text', ph = '') => (

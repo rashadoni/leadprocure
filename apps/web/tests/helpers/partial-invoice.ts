@@ -1,5 +1,6 @@
 import {expect,test,type Page} from '@playwright/test';
 import {verifyInvoiceCancellationAndRejection} from './invoice-negative';
+import {expectToast} from './dialogs';
 type Call=(path:string,body:any,token?:string,method?:string,status?:number)=>Promise<any>;
 
 // Reuse actual authenticated contexts; API setup prepares partial receipts, while
@@ -54,8 +55,8 @@ export async function verifyPartialInvoices({supplierPage,buyerPage,call,buyerTo
         ['EN','Invoice','No received quantity remains to invoice.'],
       ]) {
         await supplierPage.locator('.lang').getByRole('button',{name:lang,exact:true}).click();
-        const shown=supplierPage.waitForEvent('dialog').then(async d=>{expect(d.type()).toBe('alert');expect(d.message()).toBe(message);await d.accept();});
-        await order.getByRole('button',{name:`🧾 ${label}`,exact:true}).click();await shown;
+        await order.getByRole('button',{name:`🧾 ${label}`,exact:true}).click();
+        await expectToast(supplierPage,message);
         await expect(supplierPage).toHaveURL(/\/supplier\/orders$/);
       }
       expect(submitted).toHaveLength(2);

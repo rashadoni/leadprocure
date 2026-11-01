@@ -9,12 +9,14 @@ import { QnaCard } from '../../components/QnaCard';
 import { BidDocs } from '../../components/BidDocs';
 import { Badge } from '../../components/Badge';
 import { ProcedureChip } from '../../components/ProcedureChip';
+import { useDialogs } from '../../components/Dialogs';
 import { isDenied, ListState } from '../../components/ListState';
 
 export default function EventDetail() {
   const { id } = useParams();
   const { t, lang } = useI18n();
   const { session } = useAuth();
+  const { notify, notifyError, ask } = useDialogs();
   const [ev, setEv] = useState<any>(null);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [inviteOrg, setInviteOrg] = useState('');
@@ -67,7 +69,7 @@ export default function EventDetail() {
 
   const act = async (action: string, body?: any) => {
     try { await api.post(`/events/${id}/${action}`, body ?? {}); load(); }
-    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    catch (e: any) { notifyError(e); }
   };
 
   // The OCDS endpoint is auth-guarded; a plain <a href> opens a tab without the
@@ -83,13 +85,13 @@ export default function EventDetail() {
       a.download = `ocds-${id}.json`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
 
   const doEvaluate = async () => {
     // criteria are the ones locked on the event before opening — we submit only scores
     const list = (ev.bids ?? []).filter((b: any) => b.state === 'OPENED');
-    if (list.some((b: any) => (ev.evaluation_criteria ?? []).some((c: any) => !Number.isFinite(scores[b.id]?.[c.key])))) { alert(t('score_hint')); return; }
+    if (list.some((b: any) => (ev.evaluation_criteria ?? []).some((c: any) => !Number.isFinite(scores[b.id]?.[c.key])))) { notify(t('score_hint'), 'info'); return; }
     await act('evaluate', {
       scores: list.flatMap((b: any) => (ev.evaluation_criteria ?? []).map((c: any) => ({
         bidId:b.id,key:c.key,score:scores[b.id]?.[c.key] ?? NaN,
@@ -98,24 +100,37 @@ export default function EventDetail() {
   };
 
   // Award needs a justification when the winner isn't the top-ranked or is the sole bid.
+  // Cancelling now ABORTS the award. The native prompt returned null on Cancel and the
+  // `?? undefined` below sent the award anyway, so backing out of the question awarded the
+  // tender — the one thing on this page that cannot be undone without a written reason.
   const awardBid = async (lotId: string, bidId: string) => {
-    const justification = window.prompt(t('award_justification_prompt')) ?? undefined;
+    const justification = await ask({
+      title: t('award_justification_prompt'), label: t('justification'),
+      hint: t('award_justification_hint'), confirmLabel: t('award'),
+    });
+    if (justification === null) return;
     try {
-      await api.post(`/events/${id}/award`, { lotId, bidId, justification });
+      await api.post(`/events/${id}/award`, { lotId, bidId, justification: justification || undefined });
       load();
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
   const disqualify = async (bidId: string) => {
-    const reason = window.prompt(t('disqualify_prompt'));
+    const reason = await ask({
+      title: t('disqualify_prompt'), label: t('reason'), required: true, minLength: 3,
+      hint: t('disqualify_hint'), confirmLabel: t('disqualify'),
+    });
     if (!reason) return;
     try { await api.post(`/events/${id}/bids/${bidId}/disqualify`, { reason }); load(); }
-    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    catch (e: any) { notifyError(e); }
   };
   const cancelAward = async (lotId: string) => {
-    const reason = window.prompt(t('cancel_award_prompt'));
+    const reason = await ask({
+      title: t('cancel_award_prompt'), label: t('reason'), required: true, minLength: 3,
+      hint: t('cancel_award_hint'), confirmLabel: t('cancel_award'), danger: true,
+    });
     if (!reason) return;
     try { await api.post(`/events/${id}/cancel-award`, { lotId, reason }); load(); }
-    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    catch (e: any) { notifyError(e); }
   };
 
   const weightedByBid = useMemo(() => {
@@ -126,7 +141,7 @@ export default function EventDetail() {
 
   const askAi = async () => {
     try { setAi((await api.get(`/events/${id}/ai-recommendation?lotId=${aiLot || ev.lots[0]?.id}&language=${lang}`)).data); }
-    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    catch (e: any) { notifyError(e); }
   };
 
   // Until the event is here this page is only a spinner, and a failed load used to
@@ -196,7 +211,7 @@ export default function EventDetail() {
                 const c = await api.post(`/contracts/from-award/${a.id}`);
                 await api.post(`/contracts/${c.data.id}/activate`);
                 window.location.href = '/buyer/contracts';
-              } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+              } catch (e: any) { notifyError(e); }
             }}>{t('make_contract')} · {ev.lots.find((l: any) => l.id === a.lot_id)?.title}</button>
           ))}
         </div>
@@ -228,8 +243,8 @@ export default function EventDetail() {
         const eligible = fups.filter((f: any) => !f.enrolled && !f.has_bid);
         const fuAct = async (fn: () => Promise<unknown>) => {
           try { await fn(); loadFups(); } catch (e: any) {
-            if (e.response?.data?.code==='DELIVERY_ALREADY_CONFIRMED') { loadFups(); alert(t('delivery_already_confirmed')); }
-            else alert(e.response?.data?.message?.toString() ?? 'Error');
+            if (e.response?.data?.code==='DELIVERY_ALREADY_CONFIRMED') { loadFups(); notify(t('delivery_already_confirmed'), 'info'); }
+            else notifyError(e);
           }
         };
         // One visual step chip: icon + channel + when; state colours the chip.
@@ -360,8 +375,9 @@ export default function EventDetail() {
                             )}
                             {(f.jobs ?? []).filter((j:any)=>['BUYER_ADMIN','BUYER_APPROVER'].includes(session?.org.role ?? '') && ['UNKNOWN','FAILED','NOT_CONFIGURED'].includes(j.status)).map((j:any)=><div key={j.id}>
                               <span>{t(`delivery_${j.status}`)} · {j.recipient}</span>
-                              <button className="btn small ghost" disabled={j.delivery_confirmed} title={j.delivery_confirmed ? t('delivery_already_confirmed') : undefined} onClick={()=>{
-                                const reason=window.prompt(t('delivery_reconcile_reason'));if(!reason)return;
+                              <button className="btn small ghost" disabled={j.delivery_confirmed} data-tip={j.delivery_confirmed ? t('delivery_already_confirmed') : undefined} onClick={async ()=>{
+                                const reason = await ask({ title: t('delivery_reconcile_reason'), label: t('reason'), required: true, minLength: 10 });
+                                if (!reason) return;
                                 fuAct(()=>api.post(`/events/${id}/followups/jobs/${j.id}/reconcile`,{decision:'CONFIRMED_NOT_SENT',reason}));
                               }}>{t('delivery_confirm_not_sent')}</button>
                             </div>)}
@@ -407,7 +423,12 @@ export default function EventDetail() {
         <h3>{t('items')} · {t('lots')}</h3>
         {ev.status === 'DRAFT' && (
           <button className="btn small ghost" style={{ marginBottom: 8 }} data-tip={t('tip_add_lot')}
-            onClick={async () => { const title = prompt(`${t('lots')}:`, `Lot ${ev.lots.length + 1}`); if (title) { await api.post(`/events/${id}/lots`, { title }); load(); } }}>
+            onClick={async () => {
+              const title = await ask({ title: t('lot_new_title'), label: t('title'), required: true,
+                defaultValue: `Lot ${ev.lots.length + 1}` });
+              if (!title) return;
+              try { await api.post(`/events/${id}/lots`, { title }); load(); } catch (e: any) { notifyError(e); }
+            }}>
             + {t('lots')}
           </button>
         )}

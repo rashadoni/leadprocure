@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
+import { expectToast } from './dialogs';
 import { verifyInvoiceListRetry, verifyRefreshFailureDuringDetail } from './invoice-list-retry';
 
 const renderFinished = (page: Page) => page.evaluate(() => new Promise<void>(resolve =>
@@ -83,11 +84,9 @@ async function verifyInvoiceDetailCloseAndRetry({ page, row, heading, id, error 
     const fail = (route: Route) => route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
     await page.route(pattern, fail);
     try {
-      const alert = page.waitForEvent('dialog').then(async d => {
-        try { expect(d.type()).toBe('alert'); expect(d.message()).toBe(error); } finally { await d.accept(); }
-      });
       const failed = page.waitForResponse(r => new URL(r.url()).pathname === path && r.request().method() === 'GET');
-      await Promise.all([link.click(), alert]); expect((await failed).status()).toBe(503);
+      await link.click(); expect((await failed).status()).toBe(503);
+      await expectToast(page, error);
       await expect(heading).toHaveCount(0);
     } finally { await page.unroute(pattern, fail); }
     await link.click(); await expect(heading.locator('.badge.PAID')).toBeVisible();

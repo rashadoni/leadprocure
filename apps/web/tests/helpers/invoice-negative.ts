@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { cancelDialog, expectToast } from './dialogs';
 
 type Call = (path: string, body: any, token?: string, method?: string, status?: number) => Promise<any>;
 const controlName = (label: string) => new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$)`);
@@ -23,11 +24,9 @@ export async function verifyInvoiceMutationFailure({ page, row, heading, call, b
     };
     await page.route(pattern, fail);
     try {
-      const alert = page.waitForEvent('dialog').then(async d => {
-        try { expect(d.type()).toBe('alert'); expect(d.message()).toBe(message); } finally { await d.accept(); }
-      });
       const failed = page.waitForResponse(r => new URL(r.url()).pathname === path && r.request().method() === 'POST');
-      await Promise.all([click(), alert]); expect((await failed).status()).toBe(503);
+      await click(); expect((await failed).status()).toBe(503);
+      await expectToast(page, message);
       await expect(row.locator('.badge')).toHaveText(rowBadge!);
       await expect(heading.locator('.badge')).toHaveText(cardBadge!);
       const after = await call(`/invoices/${id}`, undefined, buyerToken, 'get', 200);
@@ -65,10 +64,14 @@ export async function verifyInvoiceCancellationAndRejection({ page, supplierPage
         ['EN', 'Approve', 'Invoice failed the 3-way match. Enter a justification to approve it:', 'Invoice discrepancy'],
       ]) {
         await page.locator('.lang').getByRole('button', { name: lang, exact: true }).click();
-        const cancelled = page.waitForEvent('dialog').then(async d => {
-          try { expect(d.type()).toBe('prompt'); expect(d.message()).toBe(prompt); } finally { await d.dismiss(); }
-        });
-        await Promise.all([row.getByRole('button', { name: controlName(approve) }).click(), cancelled]);
+        await row.getByRole('button', { name: controlName(approve) }).click();
+        // The reason is required: with nothing typed the confirm button is dead AND the
+        // dialog says why — the native prompt simply took the empty string.
+        await expect(page.getByTestId('dialog-confirm')).toBeDisabled();
+        await expect(page.getByRole('dialog').locator('.error')).toBeVisible();
+        // Backing out must send nothing — the native prompt's Cancel did the same, and that
+        // is the behaviour under test.
+        await cancelDialog(page, prompt);
         // Flush the cancelled handler's promise before checking that it made no request.
         await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
         expect(unexpectedApprovals).toBe(0);
