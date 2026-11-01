@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import type { AccessTokenPayload, InvoiceStatus } from '@leadprocure/shared';
-import { IsArray, IsInt, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsInt, IsISO8601, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
@@ -115,7 +115,12 @@ export class InvoicesService {
 
   async list() {
     return this.rc.manager.query(
-      `SELECT i.*, ob.legal_name AS buyer_name, os.legal_name AS supplier_name, p.po_no
+      // `due_date` отдаётся ОТДЕЛЬНОЙ строковой колонкой: `date` драйвер возвращает
+      // объектом Date, и на клиенте он становится полуночью UTC — в часовом поясе позади
+      // UTC это вчерашнее число. `i.*` оставлен как есть, чтобы не было двух колонок с
+      // одним именем и гадания, какая из них доедет.
+      `SELECT i.*, to_char(i.due_date, 'YYYY-MM-DD') AS due_date_text,
+              ob.legal_name AS buyer_name, os.legal_name AS supplier_name, p.po_no
        FROM invoices i
        JOIN organizations ob ON ob.id = i.buyer_org_id
        JOIN organizations os ON os.id = i.supplier_org_id
@@ -146,7 +151,12 @@ export class InvoicesService {
   }
 
   async get(id: string) {
-    const inv = (await this.rc.manager.query(`SELECT * FROM invoices WHERE id = $1`, [id]))[0];
+    // та же строковая колонка, что и в списке: один ответ на срок оплаты из обеих ручек,
+    // иначе раскрытие строки затирало бы её на экране неопределённым значением
+    const inv = (await this.rc.manager.query(
+      `SELECT *, to_char(due_date, 'YYYY-MM-DD') AS due_date_text FROM invoices WHERE id = $1`,
+      [id],
+    ))[0];
     if (!inv) throw new NotFoundException('Invoice not found');
     const items = await this.rc.manager.query(`SELECT * FROM invoice_items WHERE invoice_id = $1`, [id]);
     return { ...inv, items };
@@ -257,7 +267,11 @@ class InvoiceLineDto {
 }
 class SubmitInvoiceDto {
   @IsArray() @ValidateNested({ each: true }) @Type(() => InvoiceLineDto) items!: InvoiceLineDto[];
-  @IsOptional() @IsString() dueDate?: string;
+  // Дата, а не любая строка: колонка в базе `date`, и мусор здесь превратился бы в
+  // ошибку драйвера на вставке вместо внятного 400.
+  // `strict`: без него это просто регулярка по форме, и «2026-02-31» доезжает до колонки
+  // `date`, где падает уже драйвер — то есть 500 вместо внятного 400.
+  @IsOptional() @IsISO8601({ strict: true }) dueDate?: string;
 }
 
 @Controller('invoices')

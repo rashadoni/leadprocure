@@ -8,6 +8,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { AccessTokenPayload } from '@leadprocure/shared';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
+import { assertVisibilityAllowed } from './visibility-rule';
 import { SignatureProvider } from '../../common/signature/signature.provider';
 import { SealedCryptoService } from '../../common/crypto/sealed.service';
 import { EntitlementService, QuotaService } from '../../common/license/entitlement.service';
@@ -30,6 +31,7 @@ export class AuctionService {
   async createFromRequest(
     requestId: string,
     dto: { title?: string; closeAt: string; visibility?: 'PUBLIC' | 'INVITED';
+           visibilityReason?: string;
            startPriceMinor: number; minDecrementMinor: number; qnaCutoffAt?: string },
     auth: AccessTokenPayload,
   ) {
@@ -48,6 +50,15 @@ export class AuctionService {
     const closeAt = new Date(dto.closeAt);
     if (!(closeAt.getTime() > Date.now())) throw new BadRequestException('closeAt must be in the future');
 
+    const visibility = dto.visibility ?? 'INVITED';
+    // Одно правило на обе процедуры — см. visibility-rule.ts. Возвращает обоснование
+    // только когда отклонение было: лишняя строка в append-only журнале остаётся в нём
+    // навсегда, поэтому «обоснование прислали» и «обосновывать было что» — разные вещи.
+    // RLS держит выборку в своей организации
+    const hasPolicies = (await m.query(`SELECT 1 FROM procurement_method_policies LIMIT 1`)).length > 0;
+    const visibilityReason = assertVisibilityAllowed(
+      req.method_resolved, visibility, dto.visibilityReason, hasPolicies);
+
     const ev = (
       await m.query(
         `INSERT INTO sourcing_events(buyer_org_id, request_id, type, format, status, visibility, title,
@@ -55,7 +66,7 @@ export class AuctionService {
            auction_start_price_minor, auction_min_decrement_minor, qna_cutoff_at)
          VALUES ($1,$2,'AUCTION','REVERSE','DRAFT',$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
         [
-          auth.org_id, requestId, dto.visibility ?? 'INVITED', dto.title ?? req.title,
+          auth.org_id, requestId, visibility, dto.title ?? req.title,
           req.currency, req.vat_mode, closeAt.toISOString(), auth.sub,
           dto.startPriceMinor, dto.minDecrementMinor, dto.qnaCutoffAt ?? null,
         ],
@@ -72,6 +83,12 @@ export class AuctionService {
        FROM request_items WHERE request_id=$1 ORDER BY line_no`,
       [requestId, ev.id, lot.id],
     );
+    if (visibilityReason) {
+      await this.audit.record('AUCTION_VISIBILITY_OVERRIDDEN', 'sourcing_event', ev.id, {
+        request_id: requestId, method_resolved: req.method_resolved, visibility,
+        reason: visibilityReason,
+      });
+    }
     return { id: ev.id };
   }
 

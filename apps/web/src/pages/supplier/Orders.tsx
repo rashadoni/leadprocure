@@ -52,7 +52,18 @@ export default function Orders() {
         unitPriceMinor: Number(i.unit_price_minor),
       }));
       if (!items.length) { notify(t('invoice_no_billable'), 'info'); return; }
-      await api.post(`/invoices/from-po/${poId}`, { items });
+      // Спрашиваем ПОСЛЕ проверки: иначе человек называет дату, а в ответ узнаёт, что
+      // выставлять нечего. Срок берётся у поставщика, а не вычисляется от даты счёта:
+      // он из договорённости, и придуманная цифра выглядела бы как настоящая.
+      // Местная дата, а не UTC: в Баку между полуночью и четырьмя утра UTC ещё вчера, и
+      // граница пропускала вчерашний день — ровно то, что она существует отвергать.
+      const today = new Date().toLocaleDateString('en-CA');
+      const dueDate = await ask({
+        title: t('due_date_prompt'), label: t('due_date'), hint: t('due_date_hint'),
+        type: 'date', minDate: today, required: true, confirmLabel: t('invoice'),
+      });
+      if (!dueDate) return;
+      await api.post(`/invoices/from-po/${poId}`, { items, dueDate });
       nav('/supplier/invoices');
     } catch (e: any) { notifyError(e); }
   };
