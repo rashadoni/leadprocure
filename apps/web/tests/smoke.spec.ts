@@ -130,6 +130,8 @@ test.describe('buyer panel', () => {
     await expect(dep).toBeVisible({ timeout: 10_000 });
 
     await page.goto('/buyer/requests');
+    // The form is behind a button now: the list of requests is what this screen opens on.
+    await page.getByTestId('req-new').click();
     const title = `PW smoke ${Date.now()}`;
     await page.fill('[data-testid=req-title]', title);
     await page.selectOption('[data-testid=req-department]', { label: code });
