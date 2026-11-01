@@ -149,6 +149,18 @@ test.describe('buyer panel', () => {
     await expect(row).toContainText(code); // the department round-tripped through the API
   });
 
+  // Seven unrelated sections one under another, and an admin's new-user password typed in
+  // the clear: the field had no `type`, so the browser gave it `text`.
+  test('settings jumps to its sections and hides the password it asks for', async () => {
+    await page.goto('/buyer/settings');
+    const toApproval = page.getByRole('link', { name: 'Approval chain', exact: true });
+    await expect(toApproval).toBeVisible({ timeout: 20_000 });
+    await toApproval.click();
+    await expect(page.locator('#set-approval')).toBeInViewport();
+    await expect(page.locator('#new-user-password')).toHaveAttribute('type', 'password');
+    await page.screenshot({ path: 'test-results/settings.png' });
+  });
+
   // The product's own dialogs replaced alert / prompt / confirm. What the native prompt
   // could NOT do is refuse an answer: «OTIF score 0-100» accepted any text at all and sent
   // Number('потом') — NaN — as a supplier's rating. The seed has one approved supplier,
