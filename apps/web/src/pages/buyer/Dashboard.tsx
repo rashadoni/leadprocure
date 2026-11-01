@@ -31,6 +31,13 @@ export default function Dashboard() {
   };
   useEffect(loadOverBudgets, []);
 
+  const readAll = async () => {
+    try {
+      await api.post('/notifications/read-all');
+      await Promise.all([notes.reload(), kpi.reload()]);
+    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+  };
+
   const readNote = async (id: string) => {
     try {
       await api.post(`/notifications/${id}/read`);
@@ -44,12 +51,15 @@ export default function Dashboard() {
   // now it says what happened and offers the retry.
   if (!kpi.data) return <><h1>{t('dashboard')}</h1><div className="card"><ListState of={kpi} /></div></>;
 
+  // Each tip is written from the query behind it (dashboard.module.ts): the two money
+  // figures are net of VAT, cover ALL time rather than a period, and count AZN awards only —
+  // none of which the bare number said.
   const cards = [
-    { label: t('spend'), value: fmtMoney(kpi.data.awardedSpend) },
-    { label: t('savings'), value: fmtMoney(kpi.data.savings) },
-    { label: t('active_events'), value: kpi.data.activeEvents },
-    { label: t('pending'), value: kpi.data.pendingApprovals },
-    { label: t('orders'), value: kpi.data.openPos },
+    { label: t('spend'), value: fmtMoney(kpi.data.awardedSpend), tip: t('tip_spend') },
+    { label: t('savings'), value: fmtMoney(kpi.data.savings), tip: t('tip_savings') },
+    { label: t('active_events'), value: kpi.data.activeEvents, tip: t('tip_active_events') },
+    { label: t('pending'), value: kpi.data.pendingApprovals, tip: t('tip_pending') },
+    { label: t('orders'), value: kpi.data.openPos, tip: t('tip_orders') },
   ];
 
   return (
@@ -60,7 +70,7 @@ export default function Dashboard() {
         { loading: false, failed: budgetsFailed, reload: loadOverBudgets }]} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
         {cards.map((c) => (
-          <div className="card" key={c.label} style={{ marginBottom: 0 }}>
+          <div className="card" key={c.label} style={{ marginBottom: 0 }} data-tip={c.tip}>
             <div style={{ color: 'var(--muted)', fontSize: 12 }}>{c.label}</div>
             <div style={{ fontSize: 22, fontWeight: 800, marginTop: 6 }}>{c.value}</div>
           </div>
@@ -94,7 +104,10 @@ export default function Dashboard() {
                   {task.amount_minor != null && <> · {fmtMoney(task.amount_minor, task.currency ?? 'AZN')}</>}
                   {task.at && <span className="hint"> · {fmtDate(task.at)}</span>}
                 </td>
-                <td><Link to={TASK_LINK[task.kind]?.(task.id) ?? '#'}>→</Link></td>
+                {/* The badge on the left names the action and the arrow on the right was
+                    the only thing clickable — two halves of one instruction, a screen apart
+                    and only one of them in words. */}
+                <td className="nowrap"><Link className="btn small ghost" to={TASK_LINK[task.kind]?.(task.id) ?? '#'}>{t('open_item')} →</Link></td>
               </tr>
             ))}
           </tbody>
@@ -102,7 +115,12 @@ export default function Dashboard() {
       </div>
 
       <div className="card">
-        <h3>{t('notifications')}</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <h3 style={{ margin: 0 }}>{t('notifications')}</h3>
+          {notes.data.some((n: any) => !n.read_at) && (
+            <button className="btn small ghost" onClick={readAll}>✓ {t('mark_all_read')}</button>
+          )}
+        </div>
         <ListState of={notes} empty={!notes.data.length} />
         <table>
           <tbody>
