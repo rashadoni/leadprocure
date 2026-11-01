@@ -144,6 +144,31 @@ test.describe('buyer panel', () => {
     await expect(row.locator('.badge')).toHaveClass(/DRAFT/);
     await expect(row).toContainText(code); // the department round-tripped through the API
   });
+
+  // The product's own dialogs replaced alert / prompt / confirm. What the native prompt
+  // could NOT do is refuse an answer: «OTIF score 0-100» accepted any text at all and sent
+  // Number('потом') — NaN — as a supplier's rating. The seed has one approved supplier,
+  // so this row is always here.
+  test('a dialog refuses an answer out of range and says why', async () => {
+    await page.goto('/buyer/suppliers');
+    // a prefix, not an exact name: [data-tip]::after lands in the accessible name
+    await page.getByRole('button', { name: /^★ Scorecard\b/ }).first().click();
+    const input = page.getByTestId('dialog-input');
+    const confirm = page.getByTestId('dialog-confirm');
+    await expect(input).toHaveValue('90');
+    await expect(confirm).toBeEnabled();
+    await input.fill('150');
+    await expect(confirm).toBeDisabled();
+    await expect(page.getByRole('dialog').locator('.error')).toContainText('100');
+    await input.fill('');
+    await expect(confirm).toBeDisabled();
+    const posted = page.waitForResponse(
+      (r) => /\/suppliers\/[^/]+\/scorecard$/.test(r.url()) && r.request().method() === 'POST');
+    await input.fill('88');
+    await confirm.click();
+    expect((await posted).ok()).toBe(true);
+    await expect(input).toHaveCount(0);
+  });
 });
 
 test.describe('supplier panel', () => {

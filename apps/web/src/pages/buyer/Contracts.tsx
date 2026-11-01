@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, fmtDate, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
+import { useDialogs } from '../../components/Dialogs';
 import { PO_BUYER_NEXT } from '@leadprocure/shared';
 import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
@@ -17,6 +18,7 @@ const STOP_PO = new Set(['CANCELLED', 'REJECTED']);
 
 export default function Contracts() {
   const { t } = useI18n();
+  const { notify, notifyError } = useDialogs();
   const { session } = useAuth();
   const [cPage, setCPage] = useState(1);
   const [oPage, setOPage] = useState(1);
@@ -48,7 +50,7 @@ export default function Contracts() {
       const res = await fn();
       load();
       setNote(done ? done(res) : null);
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
 
   // PO amendment (change order): buyer proposes new qty/price per line + reason.
@@ -75,7 +77,7 @@ export default function Contracts() {
         return out.qty !== undefined || out.unitPriceMinor !== undefined ? out : null;
       })
       .filter(Boolean);
-    if (!items.length) { alert('—'); return; }
+    if (!items.length) { notify(t('no_items'), 'info'); return; }
     await act(() => api.post(`/orders/${amendFor}/amendments`, { reason: amendReason, items }), () => ({ text: t('note_amend_sent') }));
     setAmendFor(null);
   };
@@ -86,7 +88,7 @@ export default function Contracts() {
     const remaining = data.summary
       .filter((s: any) => Number(s.received) < Number(s.ordered))
       .map((s: any) => ({ poItemId: s.po_item_id, qty: Number(s.ordered) - Number(s.received) }));
-    if (!remaining.length) { alert('Nothing left to receive'); return; }
+    if (!remaining.length) { notify(t('nothing_to_receive'), 'info'); return; }
     await act(() => api.post(`/orders/${poId}/receipts`, { items: remaining }), () => ({ text: t('note_received') }));
   };
 

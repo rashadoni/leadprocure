@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { api, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
+import { useDialogs } from '../../components/Dialogs';
 import { Actions } from '../../components/Actions';
 import { BUYER_ROLES } from '@leadprocure/shared';
 import { ChannelsCard } from '../../components/ChannelsCard';
@@ -9,6 +10,7 @@ import { isDenied, ListState, useLoad } from '../../components/ListState';
 
 export default function Settings() {
   const { t } = useI18n();
+  const { notifyError } = useDialogs();
   const { session } = useAuth();
   const userList = useLoad(() => api.get('/settings/users').then((r) => r.data), [], [] as any[]);
   const policyList = useLoad(() => api.get('/requests/method-policies').then((r) => r.data), [], [] as any[]);
@@ -63,7 +65,7 @@ export default function Settings() {
   const load = () => { userList.reload(); policyList.reload(); approvalList.reload(); loadOptional(); };
 
   const run = async (fn: () => Promise<unknown>) => {
-    try { await fn(); load(); } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    try { await fn(); load(); } catch (e: any) { notifyError(e); }
   };
 
   // Human-readable role name; falls back to the raw code if no translation exists.
@@ -77,7 +79,7 @@ export default function Settings() {
       const a = document.createElement('a');
       a.href = url; a.download = 'invoices-1c.csv'; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
 
   // Approval-chain presets the admin can switch between (fixes the "one-shot button").
@@ -129,7 +131,7 @@ export default function Settings() {
       setPolicy(data);
       setPolicySaved(true);
       setTimeout(() => setPolicySaved(false), 2500);
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
   const policyDirty = !!policy && !!policyDraft && (
     Number(policyDraft.warnPct) !== policy.warnPct

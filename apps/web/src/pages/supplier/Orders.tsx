@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
+import { useDialogs } from '../../components/Dialogs';
 import { PO_SUPPLIER_TRANSITIONS, SHIPMENT_STATUSES } from '@leadprocure/shared';
 import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
@@ -15,6 +16,7 @@ const PAGE_SIZE = 20;
 // CONFIRMED → PACKED → SHIPPED → DELIVERED; transitions are validated by the DB seam.
 export default function Orders() {
   const { t } = useI18n();
+  const { notify, notifyError, ask } = useDialogs();
   const nav = useNavigate();
   const [page, setPage] = useState(1);
 
@@ -32,7 +34,7 @@ export default function Orders() {
 
   const advance = async (id: string, next: string) => {
     try { await api.post(`/orders/${id}/status`, { status: next }); load(); }
-    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    catch (e: any) { notifyError(e); }
   };
 
   const submitInvoice = async (poId: string) => {
@@ -48,10 +50,10 @@ export default function Orders() {
         qty: billable[i.id],
         unitPriceMinor: Number(i.unit_price_minor),
       }));
-      if (!items.length) { alert(t('invoice_no_billable')); return; }
+      if (!items.length) { notify(t('invoice_no_billable'), 'info'); return; }
       await api.post(`/invoices/from-po/${poId}`, { items });
       nav('/supplier/invoices');
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
 
   // Pending amendments (change orders) proposed by the buyer — supplier decides.
@@ -64,7 +66,7 @@ export default function Orders() {
     try {
       await api.post(`/orders/${poId}/amendments/${amendmentId}/decision`, { accept });
       await loadAmends(poId); load();
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
 
   // All three used to reject unhandled: the shipment simply did not appear, or the
@@ -73,25 +75,32 @@ export default function Orders() {
     try {
       const r = await api.get(`/logistics/po/${poId}`);
       setShip((s) => ({ ...s, [poId]: r.data }));
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
   const startShipment = async (poId: string) => {
-    const carrier = prompt(`${t('carrier')}:`, 'AzərPost');
+    const carrier = await ask({ title: t('carrier'), required: true, defaultValue: 'AzərPost' });
     if (carrier == null) return;
-    const trackingNo = prompt(`${t('tracking_no')}:`, 'AZ' + Math.floor(Math.random() * 1e8));
+    const trackingNo = await ask({ title: t('tracking_no'), required: true,
+      defaultValue: 'AZ' + Math.floor(Math.random() * 1e8) });
+    if (trackingNo == null) return;
     try {
       await api.post(`/logistics/po/${poId}/shipment`, { carrier, trackingNo });
       await loadShip(poId);
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
   const addEvent = async (poId: string, status: string) => {
-    const location = prompt(`Location for ${status}:`, 'Baku');
+    // «Location for SHIPPED:» was English on all three languages, and the status came out
+    // of the enum rather than out of the dictionary.
+    const location = await ask({
+      title: `${t('shipment_location')} — ${t(`st_${status}`)}`, label: t('shipment_location'),
+      required: true, defaultValue: 'Baku',
+    });
     if (location == null) return;
     try {
       await api.post(`/logistics/po/${poId}/events`, { status, location });
       await loadShip(poId);
       load();
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
 
   return (
@@ -158,7 +167,9 @@ export default function Orders() {
                           {SHIPMENT_STATUSES
                             .filter((st) => s.shipment.status !== 'DELIVERED'
                               || st === 'DELIVERED' || st === 'EXCEPTION')
-                            .map((st) => <option key={st} value={st}>{st}</option>)}
+                            // the raw enum used to be the option's label, while the dialog
+                            // it opens says the status in words
+                            .map((st) => <option key={st} value={st}>{t(`st_${st}`)}</option>)}
                         </select>
                       </div>
                     )}

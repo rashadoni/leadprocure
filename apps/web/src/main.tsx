@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import { AuthProvider, Protected, useAuth } from './auth/auth';
 import { I18nProvider } from './i18n';
+import { DialogsProvider } from './components/Dialogs';
 import Shell from './layouts/Shell';
 import Login from './pages/Login';
 import ResetPassword from './pages/ResetPassword';
@@ -84,9 +85,13 @@ const router = createBrowserRouter([
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <I18nProvider>
-      <AuthProvider>
-        <RouterProvider router={router} />
-      </AuthProvider>
+      {/* Inside i18n (the dialogs speak the interface's language, which is the whole point)
+          and outside the router, so the login page can raise one too. */}
+      <DialogsProvider>
+        <AuthProvider>
+          <RouterProvider router={router} />
+        </AuthProvider>
+      </DialogsProvider>
     </I18nProvider>
   </React.StrictMode>,
 );

@@ -1,6 +1,7 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { createRequire } from 'node:module';
 import { verifyPartialInvoices } from './partial-invoice';
+import { answerDialog } from './dialogs';
 import { verifyInvoiceMutationFailure } from './invoice-negative';
 import { verifyInvoiceDetailConcurrency } from './invoice-detail-race';
 const apiRequire = createRequire(new URL('../../../api/package.json', import.meta.url));
@@ -148,9 +149,11 @@ async function verifyRfpPayment({buyerPage,supplierPage,call,buyerToken,event,op
     }
     await clicked(buyerPage,`/events/${event.id}/evaluate`,()=>buyerPage.getByRole('button',{name:controlName(copy.score)}).click());
     const group=buyerPage.getByRole('group',{name:event.lots[0].title,exact:true});
-    const decision=buyerPage.waitForEvent('dialog').then(async d=>{expect(d.type()).toBe('prompt');await d.accept(copy.reason);});
-    await clicked(buyerPage,`/events/${event.id}/award`,()=>group.getByRole('button',{name:new RegExp(opened.bids[0].supplier_name)}).click());
-    await decision;
+    // The award's justification is asked inside the page now; the POST follows the confirm.
+    await clicked(buyerPage,`/events/${event.id}/award`,async()=>{
+      await group.getByRole('button',{name:new RegExp(opened.bids[0].supplier_name)}).click();
+      await answerDialog(buyerPage,copy.reason);
+    });
     await expect(group.locator('.badge.AWARDED')).toBeVisible();
     const award=(await call(`/events/${event.id}`,undefined,buyerToken,'get',200)).awards.find((a:any)=>!a.cancelled_at);
     const activation=buyerPage.waitForResponse(r=>/\/contracts\/[^/]+\/activate$/.test(r.url())&&r.request().method()==='POST');

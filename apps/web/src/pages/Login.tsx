@@ -33,7 +33,7 @@ export default function Login() {
       if (mode === 'login') go(await login(f.email, f.password));
       else go(await register(kind, { legalName: f.legalName, voen: f.voen, email: f.email, password: f.password, fullName: f.fullName }));
     } catch (e: any) {
-      setErr(e.response?.data?.message?.toString() ?? 'Error');
+      setErr(e.response?.data?.message?.toString() ?? t('error_generic'));
     }
   };
 

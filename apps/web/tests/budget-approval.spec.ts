@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { answerDialog, expectToast } from './helpers/dialogs';
 import { createRequire } from 'node:module';
 const apiRequire = createRequire(new URL('../../api/package.json', import.meta.url));
 
@@ -42,13 +43,8 @@ test('approval dialogs respect current budget policy and show AZ/RU/EN reasons',
     expect((await (await impactResponse).json()).wouldBlock).toBe(true);
     // Wait for the real preview too: a stale wouldBlock must not authorize an override.
     await expect(row.getByRole('button', { name: locale.confirm, exact: true })).toBeVisible();
-    const dialogPromise = page.waitForEvent('dialog').then(async (dialog) => {
-      const observed = { type: dialog.type(), message: dialog.message() };
-      await dialog.dismiss(); return observed;
-    });
     await row.getByRole('button', { name: locale.confirm, exact: true }).click();
-    const dialog = await dialogPromise;
-    expect(dialog.type).toBe('alert'); expect(dialog.message).toBe(locale.blocked);
+    await expectToast(page, locale.blocked);
     const persisted = await call(`/requests/${r.id}`, undefined, buyer.accessToken, 'get');
     expect(persisted.status).toBe('SUBMITTED');
   }
@@ -61,21 +57,13 @@ test('approval dialogs respect current budget policy and show AZ/RU/EN reasons',
   await row.getByRole('button', { name: 'Approve', exact: true }).click();
   expect((await (await enabledImpact).json()).wouldBlock).toBe(true);
   await policy(false); // policy disabled after the preview
-  const deniedPromise = page.waitForEvent('dialog').then(async (dialog) => {
-    const observed = { type: dialog.type(), message: dialog.message() };
-    await dialog.dismiss(); return observed;
-  });
   await row.getByRole('button', { name: 'Confirm approval', exact: true }).click();
-  expect(await deniedPromise).toEqual({ type: 'alert', message: locales[2].blocked });
+  await expectToast(page, locales[2].blocked);
   await policy(true);
-  const dialogPromise = page.waitForEvent('dialog').then(async (dialog) => {
-    const type = dialog.type();
-    if (type === 'prompt') await dialog.accept('Urgent purchase approved by CFO');
-    else await dialog.dismiss();
-    return type;
-  });
   await row.getByRole('button', { name: 'Confirm approval', exact: true }).click();
-  expect(await dialogPromise).toBe('prompt');
+  // A QUESTION, not a refusal: the override is offered, and answering it approves. If the
+  // server refused instead there would be no field to fill and this would fail here.
+  await answerDialog(page, 'Urgent purchase approved by CFO');
   await expect(row.locator('.badge')).toHaveClass(/APPROVED/);
   // Another 403 must never become a budget override, even when the preview blocks.
   const own = await makeRequest('Own request', admin);
@@ -84,13 +72,9 @@ test('approval dialogs respect current budget policy and show AZ/RU/EN reasons',
   const ownImpact = page.waitForResponse((response) => response.url().endsWith(`/budgets/impact/${own.id}`));
   await ownRow.getByRole('button', { name: 'Approve', exact: true }).click();
   expect((await (await ownImpact).json()).wouldBlock).toBe(true);
-  const ownDialogPromise = page.waitForEvent('dialog').then(async (dialog) => {
-    const observed = { type: dialog.type(), message: dialog.message() };
-    await dialog.dismiss(); return observed;
-  });
   await ownRow.getByRole('button', { name: 'Confirm approval', exact: true }).click();
-  const ownDialog = await ownDialogPromise;
-  expect(ownDialog.type).toBe('alert');
-  expect(ownDialog.message).toBe('You cannot approve your own request. Another approver is required.');
+  // Any other 403 is a refusal, never an override offer: a message, with no field to fill.
+  await expectToast(page, 'You cannot approve your own request. Another approver is required.');
+  await expect(page.getByTestId('dialog-input')).toHaveCount(0);
   expect((await call(`/requests/${own.id}`, undefined, admin, 'get')).status).toBe('SUBMITTED');
 });

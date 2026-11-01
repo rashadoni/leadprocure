@@ -126,6 +126,27 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 [data-tip]:focus::after { opacity: 1; transform: translateX(-50%) translateY(0); }
 [data-tip]:focus::before { opacity: 1; }
 
+/* The product's own modal, in place of the browser's prompt/confirm. Short enough that
+   nothing inside it ever scrolls: a dialog that scrolls is a form, and a form belongs on
+   the page. */
+.modal-back { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center;
+  justify-content: center; padding: 20px; background: rgba(16, 24, 40, .45); }
+.modal { width: 100%; max-width: 440px; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 14px; padding: 20px; box-shadow: var(--shadow-lg); }
+.modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+
+/* Toasts, in place of alert(). A success fades on its own; a failure waits to be read and
+   closed by hand, because an error nobody saw is the one that mattered. */
+.toasts { position: fixed; right: 16px; bottom: 16px; z-index: 130; display: flex;
+  flex-direction: column; gap: 8px; max-width: min(420px, calc(100vw - 32px)); }
+.toast { display: flex; align-items: flex-start; gap: 12px; padding: 11px 13px; border-radius: 12px;
+  background: var(--panel); border: 1px solid var(--border); box-shadow: var(--shadow-lg);
+  font-size: 13px; line-height: 1.4; }
+.toast > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.toast .btn { flex: none; }
+.toast.error { border-color: var(--bad); }
+.toast.ok { border-color: var(--ok); }
+
 /* Status colour by MEANING, not by enum name. Five groups, assigned in one table in
    components/Badge.tsx; the raw status also stays in the class list, for the browser specs
    that identify a row by its state. Colouring by enum is what this replaces: 24 of the 38

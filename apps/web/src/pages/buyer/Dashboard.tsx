@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, fmtDate, fmtDateTime, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
+import { useDialogs } from '../../components/Dialogs';
 import { notifText, taskLabel } from '../../components/humanize';
 import { isDenied, ListState, useLoad } from '../../components/ListState';
 
@@ -14,6 +15,7 @@ const TASK_LINK: Record<string, (id: string) => string> = {
 
 export default function Dashboard() {
   const { t } = useI18n();
+  const { notifyError } = useDialogs();
   const kpi = useLoad<any>(() => api.get('/dashboard/buyer').then((r) => r.data), [], null);
   const notes = useLoad(() => api.get('/notifications').then((r) => r.data.slice(0, 8)), [], [] as any[]);
   const [overBudgets, setOverBudgets] = useState<any[]>([]);
@@ -35,7 +37,7 @@ export default function Dashboard() {
     try {
       await api.post('/notifications/read-all');
       await Promise.all([notes.reload(), kpi.reload()]);
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
 
   const readNote = async (id: string) => {
@@ -44,7 +46,7 @@ export default function Dashboard() {
       // the whole front page moves with a notification, not just the list it came from
       await Promise.all([notes.reload(), kpi.reload()]);
       loadOverBudgets();
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
 
   // Without the KPI there is no page. A failed load used to leave "…" on screen for ever;

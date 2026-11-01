@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { api } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
+import { useDialogs } from '../../components/Dialogs';
 import { Badge } from '../../components/Badge';
 import { Actions } from '../../components/Actions';
 import { ListState, useLoad } from '../../components/ListState';
 
 export default function Suppliers() {
   const { t } = useI18n();
+  const { notify, notifyError, ask } = useDialogs();
   const { session } = useAuth();
   // Every write on this page — invite, approve, block, rate, open a verification case —
   // takes BUYER_ADMIN or BUYER_APPROVER. They were all drawn for everyone, so a plain
@@ -22,7 +24,7 @@ export default function Suppliers() {
   // unchanged with no explanation.
   const act = async (fn: () => Promise<unknown>) => {
     try { await fn(); reload(); }
-    catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    catch (e: any) { notifyError(e); }
   };
   const invite = (orgId: string) => act(() => api.post(`/suppliers/${orgId}/invite`));
   const setStatus = (relId: string, status: string) =>
@@ -33,21 +35,23 @@ export default function Suppliers() {
     try {
       const r = await api.get(`/suppliers/${orgId}/scorecard`);
       setScores((s) => ({ ...s, [orgId]: r.data.averages }));
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
   const rate = async (orgId: string) => {
-    const raw = prompt('OTIF score 0-100:', '90');
+    const raw = await ask({
+      title: t('otif_prompt'), hint: t('otif_hint'), type: 'number', min: 0, max: 100, defaultValue: '90',
+    });
     if (raw == null) return;
     try {
       await api.post(`/suppliers/${orgId}/scorecard`, { metric: 'OTIF', score: Number(raw) });
       await loadScore(orgId);
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { notifyError(e); }
   };
   const openVerification = async (supplierOrgId: string) => {
     try {
       await api.post('/verification/cases', { supplierOrgId });
-      alert(t('verification') + ' →');
-    } catch (e: any) { alert(e.response?.data?.message?.toString() ?? 'Error'); }
+      notify(t('verification_opened'), 'ok');
+    } catch (e: any) { notifyError(e); }
   };
 
   const inRegistry = new Set(registry.data.map((r) => r.supplier_org_id));
