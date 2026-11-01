@@ -15,7 +15,12 @@ body { background: var(--bg); color: var(--text); font: 14px/1.5 'Inter', system
 a { color: var(--accent); text-decoration: none; }
 .center { display: grid; place-items: center; min-height: 60vh; }
 
-.shell { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+/* The dark stripe is painted by the GRID, not by the rail. Since the rail became sticky it
+   is only as tall as its own links, so its own fill stopped partway down the page and the
+   light page background showed through beneath it — the left column has to read as one
+   continuous fill whatever the menu's height. */
+.shell { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh;
+  background: linear-gradient(to right, var(--side-bg) 0 232px, transparent 232px); }
 .side { background: var(--side-bg); border-right: 1px solid rgba(255, 255, 255, .06); padding: 20px 14px; display: flex; flex-direction: column; gap: 3px;
   position: sticky; top: 0; align-self: start; max-height: 100vh; overflow-y: auto; }
 /* A plain text control in the sidebar's footer, shaped like its links. */
