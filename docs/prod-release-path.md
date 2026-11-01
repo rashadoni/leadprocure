@@ -226,7 +226,9 @@ CI этого не поймает и не должен: `fresh-install.sh` ка�
 
 #### Лицензия выпущена 1 ноября 2026
 
-Условие закрыто наполовину: файл есть, в окружение он ещё не прописан.
+Чья лицензия — решил владелец 1 ноября 2026: своя лицензия оператора, не
+клиентская. Файл по этому решению выпущен в тот же день. Условие закрыто наполовину:
+файл есть, в окружение он ещё не прописан.
 
 | | |
 |---|---|
@@ -246,7 +248,7 @@ CI этого не поймает и не должен: `fresh-install.sh` ка�
 хранить его отдельную копию не нужно. Проверка: `docker run --rm` над уже собранным
 `leadprocure-prod-api` прогнал файл через скомпилированный `paseto-license.js` и
 `FEATURE_KEYS` самого образа — подпись принята, все 13 фич образу известны. Проверок
-claims (даты, `features ⊆ FEATURE_KEYS`, `schema_version`) в образе от 12 августа ещё
+claims (даты, `features ⊆ FEATURE_KEYS`, `limits`, `schema_version`) в образе от 12 августа ещё
 нет — там `verify()` только сверяет подпись, остальное добавлено позже. Поэтому их
 прогнали отдельно, в том виде, в котором они написаны на `main`, то есть в том, какой
 и будет читать этот файл: пройдены, статус `valid`, создание нового разрешено.
@@ -525,7 +527,7 @@ RELEASE_SHA="$SHA" docker compose -p leadprocure-prod \
   --project-directory "$REL/infra" \
   -f "$REL/infra/docker-compose.prod.yml" \
   -f "$REL/infra/docker-compose.release.yml" \
-  --env-file "$ENVP" config | grep -iE 'license|source:'
+  --env-file "$ENVP" config | grep -iE -A3 'license'
 
 RELEASE_SHA="$SHA" \
 docker compose -p leadprocure-prod \
@@ -538,11 +540,22 @@ docker compose -p leadprocure-prod \
 `-p leadprocure-prod` обязателен — иначе compose создаст новый проект вместо того,
 чтобы заменить работающие контейнеры. `--project-directory` задаёт каталог, от
 которого считаются относительные пути в compose-файле — поэтому `LICENSE_DIR` в
-`.env.prod` и обязан быть абсолютным. Dry-run должен показать
-`LICENSE_PUBLIC_KEY_B64` у службы api и `source:` монтирования — абсолютный путь к
-каталогу с лицензией, `read_only: true`, `create_host_path: false`. Если вместо него
-виден путь внутри `$REL`, переменная не доехала: `up` не запускать, вернуться к
-условию из §1.
+`.env.prod` и обязан быть абсолютным. В выводе dry-run читать ровно два места, и
+читать глазами: команда выходит с нулём в любом случае.
+
+1. `LICENSE_PUBLIC_KEY_B64` у службы api — **непустой**. Пустая строка `""`
+   печатается и тогда, когда переменной нет вовсе, а с пустым ключом `verify()`
+   бросает `LICENSE_PUBLIC_KEY_B64 not configured`, смонтированный файл не читается,
+   и api уходит в ограниченный режим — то есть именно эта поломка выглядит в выводе
+   почти как норма.
+2. `source:` **прямо над** `target: /run/leadprocure-license` — абсолютный путь к
+   каталогу с лицензией; следом за ним должны идти `read_only: true` и
+   `create_host_path: false`. Другие `source:` с путями внутри `$REL` в выводе есть и
+   в норме (`infra/postgres/init`), так что монтирование лицензии опознаётся только по
+   своему `target`.
+
+Пустой ключ или `source:` внутри `$REL` — `up` не запускать, вернуться к условию из
+§1.
 
 `infra/docker-compose.release.yml` добавлен этим документом: он подставляет api и web
 готовые образы `leadprocure-api:${RELEASE_SHA}` / `leadprocure-web:${RELEASE_SHA}` с
