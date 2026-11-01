@@ -12,6 +12,8 @@ export default function Invoices() {
   const { notify, notifyError, ask } = useDialogs();
   const { session } = useAuth();
   const isBuyer = session?.org.kind !== 'SUPPLIER';
+  // approve / reject / pay are @Roles('BUYER_ADMIN','BUYER_APPROVER') on the server.
+  const canDecide = ['BUYER_ADMIN', 'BUYER_APPROVER'].includes(session?.org.role ?? '');
   const [rows, setRows] = useState<any[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState(false);
@@ -111,6 +113,12 @@ export default function Invoices() {
     return api.post(`/invoices/${i.id}/approve`, reason ? { reason } : {});
   });
 
+  // The column follows the buttons. A BUYER_USER decides nothing here — approve, reject
+  // and pay are all BUYER_ADMIN/BUYER_APPROVER — so the heading stood over a column of
+  // dashes, taking width from the numbers and promising an action that was never coming.
+  const invoiceActions = canDecide
+    && rows.some((i: any) => ['MATCHED', 'DISPUTED', 'SUBMITTED', 'APPROVED'].includes(i.status));
+
   return (
     <>
       <h1>{t('invoices')}</h1>
@@ -121,7 +129,7 @@ export default function Invoices() {
           <button className="btn small ghost" onClick={() => load()}>{t('invoice_list_retry')}</button>
         </div>}
         <table>
-          <thead><tr><th>#</th><th>{t('order_no')}</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>#</th><th>{t('order_no')}</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th>{invoiceActions && <th>{t('actions')}</th>}</tr></thead>
           <tbody>
             {rows.map((i) => (
               <tr key={i.id}>
@@ -136,9 +144,10 @@ export default function Invoices() {
                     payment terms become a real field rather than standing empty meanwhile. */}
                 <td className="num">{fmtMoney(i.gross_minor, i.currency)}</td>
                 <td><Badge status={i.status} /></td>
+                {invoiceActions && (
                 <td>
                   <Actions>
-                    {isBuyer && ['MATCHED', 'DISPUTED', 'SUBMITTED'].includes(i.status) && (
+                    {canDecide && ['MATCHED', 'DISPUTED', 'SUBMITTED'].includes(i.status) && (
                       <>
                         <button className="btn small"
                           data-tip={i.status === 'DISPUTED' ? t('tip_inv_approve_disputed') : t('tip_inv_approve')}
@@ -146,11 +155,12 @@ export default function Invoices() {
                         <button className="btn small ghost" data-tip={t('tip_inv_reject')} onClick={() => act(i.id, () => api.post(`/invoices/${i.id}/reject`))}>{t('reject')}</button>
                       </>
                     )}
-                    {isBuyer && i.status === 'APPROVED' && (
+                    {canDecide && i.status === 'APPROVED' && (
                       <button className="btn small" data-tip={t('tip_pay')} onClick={() => act(i.id, () => api.post(`/invoices/${i.id}/pay`))}>💳 {t('pay')}</button>
                     )}
                   </Actions>
                 </td>
+                )}
               </tr>
             ))}
           </tbody>

@@ -14,6 +14,10 @@ export default function Catalogs() {
   const { session } = useAuth();
   const nav = useNavigate();
   const isBuyer = session?.org.kind !== 'SUPPLIER';
+  // Activating a catalog is admin/approver work; ordering from one also admits BUYER_USER.
+  const role = session?.org.role ?? '';
+  const canActivate = ['BUYER_ADMIN', 'BUYER_APPROVER'].includes(role);
+  const canOrder = ['BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER'].includes(role);
   const [open, setOpen] = useState<Record<string, any>>({});
   const [qty, setQty] = useState<Record<string, string>>({});
   // A call-off has no request behind it, so this select is the only place it can be told
@@ -55,7 +59,7 @@ export default function Catalogs() {
 
   // Only a buyer can activate, and only a draft can be activated: for a supplier, and on a
   // list with nothing in draft, the column was a heading over nothing.
-  const catalogActions = isBuyer && rows.some((c: any) => c.status === 'DRAFT');
+  const catalogActions = canActivate && rows.some((c: any) => c.status === 'DRAFT');
 
   return (
     <>
@@ -74,7 +78,7 @@ export default function Catalogs() {
                 {catalogActions && (
                 <td>
                   <Actions>
-                    {c.status === 'DRAFT' && (
+                    {canActivate && c.status === 'DRAFT' && (
                       <button className="btn small" data-tip={t('tip_catalog_activate')}
                         onClick={() => run(() => api.post(`/catalogs/${c.id}/activate`))}>{t('activate')}</button>
                     )}
@@ -92,21 +96,21 @@ export default function Catalogs() {
         <div className="card" key={id}>
           <h3>{cat.title} <Badge status={cat.status} /></h3>
           <table>
-            <thead><tr><th>{t('name')}</th><th className="num" data-tip={t('moq_tip')}>{t('moq')}</th><th className="num">{t('unit_price')}</th>{isBuyer && cat.status === 'ACTIVE' && <th>{t('qty')}</th>}</tr></thead>
+            <thead><tr><th>{t('name')}</th><th className="num" data-tip={t('moq_tip')}>{t('moq')}</th><th className="num">{t('unit_price')}</th>{canOrder && cat.status === 'ACTIVE' && <th>{t('qty')}</th>}</tr></thead>
             <tbody>
               {cat.items.map((i: any) => (
                 <tr key={i.id}>
                   <td>{i.name}</td>
                   <td className="num">{Number(i.moq)}</td>
                   <td className="num">{fmtMoney(i.unit_price_minor, cat.currency)}</td>
-                  {isBuyer && cat.status === 'ACTIVE' && (
+                  {canOrder && cat.status === 'ACTIVE' && (
                     <td><input style={{ width: 80 }} type="number" min={0} value={qty[i.id] ?? ''} onChange={(e) => setQty({ ...qty, [i.id]: e.target.value })} /></td>
                   )}
                 </tr>
               ))}
             </tbody>
           </table>
-          {isBuyer && cat.status === 'ACTIVE' && (
+          {canOrder && cat.status === 'ACTIVE' && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginTop: 10 }}>
               <div>
                 <label>{t('department')}</label>
