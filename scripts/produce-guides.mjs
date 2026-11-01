@@ -324,7 +324,10 @@ const SECTIONS = {
   ]},
   'buyer-requests': { role: 'buyer', path: '/buyer/requests', scenes: [
     { az: 'Sifarişlər bölməsi — hər satınalma buradan başlayır. Sifariş daxili tələbatdır: kimsə nəyəsə ehtiyac duyur, onu rəsmiləşdirir, təsdiqdən keçirir. Yalnız bundan sonra pul hərəkət edir.',
-      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.45); await h.moveTo('form'); await h.holdUntil(0.9); } },
+      // Форма ушла за кнопку «Новая заявка»: без нажатия дальше нечего ни заполнять, ни
+      // показывать, а per-scene обработчик такой промах только пишет в лог — запись вышла
+      // бы с рассказом поверх экрана, который ничего из рассказанного не делает.
+      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.45); await h.click('[data-testid=req-new]'); await h.moveTo('form'); await h.holdUntil(0.9); } },
     { az: 'Yeni sifariş formasından başlayaq. Başlıq — nəyin və nə üçün alındığını bir cümlə ilə izah edir. Təsdiqləyən adam ilk növbədə məhz bunu oxuyur.',
       do: async (p, l, h) => { await h.fill('[data-testid=req-title]', 'Anbar üçün rəflər'); await h.holdUntil(0.9); } },
     { az: 'Kateqoriya — nə alırıq. O, iki şeyə təsir edir: hansı büdcədən pul gedəcək və satınalma metodu nə olacaq. Siyahı parametrlərdəki vahid kataloqdan gəlir, ona görə «IT» və «it» ayrılmır.',

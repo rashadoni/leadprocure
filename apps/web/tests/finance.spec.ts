@@ -24,7 +24,10 @@ test('finance sees and completes its assigned approval step without procurement 
   await page.goto('/buyer/requests');
   const row = page.locator('tr').filter({ hasText: title });
   await expect(row.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
-  await expect(page.locator('[data-testid=req-title]')).toHaveCount(0);
+  // Кнопку, а не поле: форма теперь за кнопкой, и поля нет ни у одной роли, пока её не
+  // нажали, — проверка на поле стала зелёной при любом исходе. Запрет для финансиста
+  // держится на том, что ему не достаётся даже кнопки.
+  await expect(page.getByTestId('req-new')).toHaveCount(0);
   await row.getByRole('button', { name: 'Approve', exact: true }).click();
   await row.getByRole('button', { name: /Confirm approval/ }).click();
   await expect(row.locator('.badge')).toHaveClass(/APPROVED/);
