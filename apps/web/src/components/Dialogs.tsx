@@ -41,8 +41,10 @@ export type AskOpts = BaseOpts & {
    * action silently — «ок» was accepted, the dialog shut, and nothing happened.
    */
   minLength?: number;
-  type?: 'text' | 'number';
+  type?: 'text' | 'number' | 'date';
   min?: number;
+  /** Нижняя граница для `type: 'date'` — отдельно от числового `min`, в виде ГГГГ-ММ-ДД. */
+  minDate?: string;
   max?: number;
   /** Whole numbers only — a score is an integer and the API validates it as one. */
   integer?: boolean;
@@ -140,6 +142,12 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
     if (o.minLength && value.trim().length < o.minLength) {
       return t('dialog_min').replace('{min}', String(o.minLength));
     }
+    if (o.type === 'date') {
+      // Срок в прошлом — это не придирка к формату: счёт с просроченной датой приходит
+      // заказчику уже нарушенным, и разбираться в этом будет человек, а не поле ввода.
+      if (!value) return t('dialog_required');
+      if (o.minDate && value < o.minDate) return t('dialog_date_past');
+    }
     if (o.type === 'number') {
       const n = Number(value);
       if (value.trim() === '' || !Number.isFinite(n)) return t('dialog_required');
@@ -198,8 +206,10 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
                   <input id="dialog-input" data-testid="dialog-input"
                     aria-labelledby={pending.opts.label ? undefined : 'dialog-title'}
                     ref={(el) => { field.current = el; }}
-                    type={pending.opts.type === 'number' ? 'number' : 'text'}
-                    min={pending.opts.min} max={pending.opts.max}
+                    type={pending.opts.type === 'number' ? 'number'
+                      : pending.opts.type === 'date' ? 'date' : 'text'}
+                    min={pending.opts.type === 'date' ? pending.opts.minDate : pending.opts.min}
+                    max={pending.opts.max}
                     step={pending.opts.integer ? 1 : undefined}
                     value={value} onChange={(e) => setValue(e.target.value)} />
                 )}

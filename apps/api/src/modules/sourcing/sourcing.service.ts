@@ -11,6 +11,7 @@ import { AMOUNTS_VISIBLE_FROM, type AccessTokenPayload } from '@leadprocure/shar
 import { pageFrom, parsePaging, Paging } from '../../common/http/paging';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
+import { assertVisibilityAllowed } from './visibility-rule';
 import { SealedCryptoService } from '../../common/crypto/sealed.service';
 import { SignatureProvider } from '../../common/signature/signature.provider';
 import { EntitlementService, QuotaService } from '../../common/license/entitlement.service';
@@ -77,7 +78,8 @@ export class SourcingService {
   async createFromRequest(
     requestId: string,
     dto: {
-      title?: string; closeAt: string; visibility?: 'PUBLIC' | 'INVITED'; type?: 'RFQ' | 'RFP' | 'RFI';
+      title?: string; closeAt: string; visibility?: 'PUBLIC' | 'INVITED'; visibilityReason?: string;
+      type?: 'RFQ' | 'RFP' | 'RFI';
       criteria?: Array<{ key: string; weight: number }>;
     },
     auth: AccessTokenPayload,
@@ -101,13 +103,21 @@ export class SourcingService {
     const type = dto.type ?? 'RFQ';
     const criteria = type === 'RFI' ? [] : this.normalizeCriteria(dto.criteria);
 
+    const visibility = dto.visibility ?? 'INVITED';
+    // Запечатанный RFQ — ОСНОВНАЯ процедура, и сужение круга здесь проходило молча, пока
+    // то же правило стояло только у аукциона. Правило одно на оба пути: visibility-rule.ts.
+    // RLS держит выборку в своей организации
+    const hasPolicies = (await m.query(`SELECT 1 FROM procurement_method_policies LIMIT 1`)).length > 0;
+    const visibilityReason = assertVisibilityAllowed(
+      req.method_resolved, visibility, dto.visibilityReason, hasPolicies);
+
     const ev = (
       await m.query(
         `INSERT INTO sourcing_events(buyer_org_id, request_id, type, format, status, visibility, title,
            evaluation_currency, vat_mode, close_at, created_by, evaluation_criteria)
          VALUES ($1,$2,$9,'SEALED','DRAFT',$3,$4,$5,$6,$7,$8,$10::jsonb) RETURNING id`,
         [
-          auth.org_id, requestId, dto.visibility ?? 'INVITED', dto.title ?? req.title,
+          auth.org_id, requestId, visibility, dto.title ?? req.title,
           req.currency, req.vat_mode, closeAt.toISOString(), auth.sub,
           type, JSON.stringify(criteria),
         ],
@@ -126,6 +136,12 @@ export class SourcingService {
        FROM request_items WHERE request_id = $1 ORDER BY line_no`,
       [requestId, ev.id, lot.id],
     );
+    if (visibilityReason) {
+      await this.audit.record('AUCTION_VISIBILITY_OVERRIDDEN', 'sourcing_event', ev.id, {
+        request_id: requestId, method_resolved: req.method_resolved, visibility, type,
+        reason: visibilityReason,
+      });
+    }
     return this.detail(ev.id, auth);
   }
 

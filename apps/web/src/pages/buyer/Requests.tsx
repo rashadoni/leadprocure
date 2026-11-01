@@ -13,6 +13,10 @@ const PAGE_SIZE = 20;
 
 interface Item { name: string; qty: number; price: string }
 
+/** «Отменил» — не то же, что «причина не нужна»: склеив их в undefined, мы объявили бы
+ *  тендер после отказа объяснять. */
+const CANCELLED = Symbol('cancelled');
+
 export default function Requests() {
   const { t } = useI18n();
   const { notifyError, notify, ask } = useDialogs();
@@ -32,6 +36,7 @@ export default function Requests() {
   const [page, setPage] = useState(1);
   const [directFor, setDirectFor] = useState<string | null>(null);
   const [approvedSuppliers, setApprovedSuppliers] = useState<any[]>([]);
+  const [hasPolicies, setHasPolicies] = useState(false);
   const [cats, setCats] = useState<string[]>([]);
   // Departments (cost centres) — which budget this spend lands on. Only active ones can
   // be picked for new requests; retired ones stay on their historic requests.
@@ -65,6 +70,12 @@ export default function Requests() {
     const broken = () => setRefFailed(true);
     api.get('/categories').then((r) => setCats(r.data.map((c: any) => c.code))).catch(broken);
     api.get('/departments').then((r) => setDeps(r.data)).catch(broken);
+    // Нужны не сами полосы, а только факт, что они заведены: без них `resolveMethod`
+    // ставит OPEN_TENDER на КАЖДУЮ заявку (пробел политики идёт самым состязательным
+    // путём, а не молча прямой). Спрашивать обоснование у организации, которая политику
+    // не настраивала, значило бы требовать объяснений за умолчание. Сервер проверяет то
+    // же самое и остаётся последним словом — это лишь чтобы человек не упёрся в отказ.
+    api.get('/requests/method-policies').then((r) => setHasPolicies(r.data.length > 0)).catch(broken);
   };
   useEffect(loadRefs, []);
   const canApprove = ['BUYER_ADMIN', 'BUYER_APPROVER'].includes(session?.org.role ?? '');
@@ -98,11 +109,13 @@ export default function Requests() {
       : ['RFQ', 'RFP', 'RFI'].includes(r.method_resolved) ? r.method_resolved : 'RFQ');
   const announce = (r: any) => {
     const pick = procedure[r.id] ?? defaultProcedure(r);
-    if (pick === 'AUCTION') return makeAuction(r);
+    if (pick === 'AUCTION' || pick === 'AUCTION_OPEN') {
+      return makeAuction(r, pick === 'AUCTION_OPEN' ? 'PUBLIC' : 'INVITED');
+    }
     // Only the open procedure publishes to everyone; the other three are addressed to the
     // suppliers the buyer invites, which is what their labels say.
-    if (pick === 'OPEN') return makeRfq(r.id, 'RFQ', 'PUBLIC');
-    return makeRfq(r.id, pick as 'RFQ' | 'RFP' | 'RFI');
+    if (pick === 'OPEN') return makeRfq(r, 'RFQ', 'PUBLIC');
+    return makeRfq(r, pick as 'RFQ' | 'RFP' | 'RFI');
   };
 
   // The chosen supplier used to be read back out of the DOM by element id at click time.
@@ -198,21 +211,44 @@ export default function Requests() {
     setImpact((m) => { const q = { ...m }; delete q[id]; return q; });
   };
 
-  const makeRfq = async (id: string, type: 'RFQ' | 'RFP' | 'RFI' = 'RFQ', visibility: 'PUBLIC' | 'INVITED' = 'INVITED') => {
+  // Сужение круга участников вопреки политике спрашивают ОДИНАКОВО у обеих процедур:
+  // запечатанный RFQ объявляется тем же списком на том же экране и сужает так же, как
+  // аукцион. Правило на сервере тоже одно — `visibility-rule.ts`.
+  const askVisibilityReason = async (
+    r: any, visibility: 'PUBLIC' | 'INVITED',
+  ): Promise<string | undefined | typeof CANCELLED> => {
+    if (!hasPolicies || visibility !== 'INVITED' || r.method_resolved !== 'OPEN_TENDER') return undefined;
+    const reason = await ask({
+      title: t('visibility_reason_prompt'), label: t('reason'), hint: t('visibility_reason_hint'),
+      required: true, minLength: 3, confirmLabel: t('announce'),
+    });
+    return reason ? reason.trim() : CANCELLED;
+  };
+
+  const makeRfq = async (r: any, type: 'RFQ' | 'RFP' | 'RFI' = 'RFQ', visibility: 'PUBLIC' | 'INVITED' = 'INVITED') => {
+    const visibilityReason = await askVisibilityReason(r, visibility);
+    if (visibilityReason === CANCELLED) return;
     try {
       const closeAt = new Date(Date.now() + 24 * 3600_000).toISOString();
-      const ev = await api.post(`/events/from-request/${id}`, { closeAt, visibility, type });
+      const ev = await api.post(`/events/from-request/${r.id}`, { closeAt, visibility, visibilityReason, type });
       nav(`/buyer/events/${ev.data.id}`);
     } catch (e: any) { notifyError(e); }
   };
 
   // Reverse auction: start at the estimate, min decrement = 1% (floor 1 AZN).
-  const makeAuction = async (r: any) => {
+  // Аукцион по приглашениям на заявке, которую политика отнесла к открытому тендеру, —
+  // отклонение от собственного правила организации. Продукт его не запрещает: кого пускать
+  // на живые торги, решает закупщик. Но спрашивает причину и записывает её в журнал, как и
+  // при присуждении не лучшей ставке. Обратный случай — открытый аукцион там, где хватило
+  // бы закрытого — вопросов не вызывает: круг участников шире, а не уже.
+  const makeAuction = async (r: any, visibility: 'PUBLIC' | 'INVITED') => {
+    const visibilityReason = await askVisibilityReason(r, visibility);
+    if (visibilityReason === CANCELLED) return;
     try {
       const start = Number(r.estimated_total_minor);
       const ev = await api.post(`/events/reverse/from-request/${r.id}`, {
         closeAt: new Date(Date.now() + 24 * 3600_000).toISOString(),
-        visibility: 'INVITED',
+        visibility, visibilityReason,
         startPriceMinor: start,
         minDecrementMinor: Math.max(Math.round(start / 100), 100),
       });
@@ -358,7 +394,11 @@ export default function Requests() {
                           <option value="OPEN">🌐 {t('open_tender')}</option>
                           <option value="RFP">📄 RFP</option>
                           <option value="RFI">❓ RFI</option>
-                          <option value="AUCTION">⚡ {t('auction')}</option>
+                          {/* Два варианта аукциона стоят в ЭТОМ списке, а не вторым
+                              списком рядом: допуск — часть выбора процедуры, а не
+                              настройка поверх неё. */}
+                          <option value="AUCTION">⚡ {t('auction_invited')}</option>
+                          <option value="AUCTION_OPEN">⚡ {t('auction_open')}</option>
                         </select>
                         <button className="btn small" data-tip={t('tip_announce')} onClick={() => announce(r)}>{t('announce')}</button>
                       </>

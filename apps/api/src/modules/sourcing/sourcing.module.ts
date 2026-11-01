@@ -25,6 +25,9 @@ class CreateEventDto {
   @IsOptional() @IsString() title?: string;
   @IsISO8601() closeAt!: string;
   @IsOptional() @IsIn(['PUBLIC', 'INVITED']) visibility?: 'PUBLIC' | 'INVITED';
+  // как и у аукциона: нужен, только когда политика отнесла заявку к открытому тендеру,
+  // а процедуру объявляют по приглашениям — проверяет сервис
+  @IsOptional() @IsString() visibilityReason?: string;
   @IsOptional() @IsIn(['RFQ', 'RFP', 'RFI']) type?: 'RFQ' | 'RFP' | 'RFI';
   // evaluation criteria are LOCKED here, before opening (default 70/30 if omitted)
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => CriterionDto) criteria?: CriterionDto[];
@@ -70,6 +73,9 @@ class CreateAuctionDto {
   @IsOptional() @IsString() title?: string;
   @IsISO8601() closeAt!: string;
   @IsOptional() @IsIn(['PUBLIC', 'INVITED']) visibility?: 'PUBLIC' | 'INVITED';
+  // Требуется, только когда политика отнесла заявку к открытому тендеру, а аукцион
+  // объявляют по приглашениям. Проверяет сервис: здесь не видно ни заявки, ни политики.
+  @IsOptional() @IsString() visibilityReason?: string;
   @IsInt() @Min(0) startPriceMinor!: number;
   @IsInt() @Min(0) minDecrementMinor!: number;
   @IsOptional() @IsISO8601() qnaCutoffAt?: string;
