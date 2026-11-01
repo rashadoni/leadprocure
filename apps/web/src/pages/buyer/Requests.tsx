@@ -98,7 +98,9 @@ export default function Requests() {
       : ['RFQ', 'RFP', 'RFI'].includes(r.method_resolved) ? r.method_resolved : 'RFQ');
   const announce = (r: any) => {
     const pick = procedure[r.id] ?? defaultProcedure(r);
-    if (pick === 'AUCTION') return makeAuction(r);
+    if (pick === 'AUCTION' || pick === 'AUCTION_OPEN') {
+      return makeAuction(r, pick === 'AUCTION_OPEN' ? 'PUBLIC' : 'INVITED');
+    }
     // Only the open procedure publishes to everyone; the other three are addressed to the
     // suppliers the buyer invites, which is what their labels say.
     if (pick === 'OPEN') return makeRfq(r.id, 'RFQ', 'PUBLIC');
@@ -207,12 +209,26 @@ export default function Requests() {
   };
 
   // Reverse auction: start at the estimate, min decrement = 1% (floor 1 AZN).
-  const makeAuction = async (r: any) => {
+  // Аукцион по приглашениям на заявке, которую политика отнесла к открытому тендеру, —
+  // отклонение от собственного правила организации. Продукт его не запрещает: кого пускать
+  // на живые торги, решает закупщик. Но спрашивает причину и записывает её в журнал, как и
+  // при присуждении не лучшей ставке. Обратный случай — открытый аукцион там, где хватило
+  // бы закрытого — вопросов не вызывает: круг участников шире, а не уже.
+  const makeAuction = async (r: any, visibility: 'PUBLIC' | 'INVITED') => {
+    let visibilityReason: string | undefined;
+    if (visibility === 'INVITED' && r.method_resolved === 'OPEN_TENDER') {
+      const reason = await ask({
+        title: t('auction_reason_prompt'), label: t('reason'), hint: t('auction_reason_hint'),
+        required: true, minLength: 3, confirmLabel: t('announce'),
+      });
+      if (!reason) return;
+      visibilityReason = reason.trim();
+    }
     try {
       const start = Number(r.estimated_total_minor);
       const ev = await api.post(`/events/reverse/from-request/${r.id}`, {
         closeAt: new Date(Date.now() + 24 * 3600_000).toISOString(),
-        visibility: 'INVITED',
+        visibility, visibilityReason,
         startPriceMinor: start,
         minDecrementMinor: Math.max(Math.round(start / 100), 100),
       });
@@ -358,7 +374,11 @@ export default function Requests() {
                           <option value="OPEN">🌐 {t('open_tender')}</option>
                           <option value="RFP">📄 RFP</option>
                           <option value="RFI">❓ RFI</option>
-                          <option value="AUCTION">⚡ {t('auction')}</option>
+                          {/* Два варианта аукциона стоят в ЭТОМ списке, а не вторым
+                              списком рядом: допуск — часть выбора процедуры, а не
+                              настройка поверх неё. */}
+                          <option value="AUCTION">⚡ {t('auction_invited')}</option>
+                          <option value="AUCTION_OPEN">⚡ {t('auction_open')}</option>
                         </select>
                         <button className="btn small" data-tip={t('tip_announce')} onClick={() => announce(r)}>{t('announce')}</button>
                       </>

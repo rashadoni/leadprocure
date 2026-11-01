@@ -30,6 +30,7 @@ export class AuctionService {
   async createFromRequest(
     requestId: string,
     dto: { title?: string; closeAt: string; visibility?: 'PUBLIC' | 'INVITED';
+           visibilityReason?: string;
            startPriceMinor: number; minDecrementMinor: number; qnaCutoffAt?: string },
     auth: AccessTokenPayload,
   ) {
@@ -48,6 +49,21 @@ export class AuctionService {
     const closeAt = new Date(dto.closeAt);
     if (!(closeAt.getTime() > Date.now())) throw new BadRequestException('closeAt must be in the future');
 
+    // Кого пускать на живые торги — решение закупочное, и продукт его за покупателя не
+    // принимает. Но когда политика по сумме отнесла заявку к ОТКРЫТОМУ тендеру, а аукцион
+    // объявляют по приглашениям, это отклонение от собственного правила организации, и оно
+    // должно быть записано словами — тем же приёмом, что обоснование присуждения не лучшей
+    // ставке. Обратное направление (открытый аукцион там, где политика разрешала закрытый)
+    // обоснования не требует: оно расширяет круг участников, а не сужает.
+    const visibility = dto.visibility ?? 'INVITED';
+    const visibilityReason = dto.visibilityReason?.trim() || null;
+    if (req.method_resolved === 'OPEN_TENDER' && visibility === 'INVITED'
+        && (!visibilityReason || visibilityReason.length < 3)) {
+      throw new BadRequestException(
+        'The policy banded this request as an open tender: a written reason is required to run the auction by invitation',
+      );
+    }
+
     const ev = (
       await m.query(
         `INSERT INTO sourcing_events(buyer_org_id, request_id, type, format, status, visibility, title,
@@ -55,7 +71,7 @@ export class AuctionService {
            auction_start_price_minor, auction_min_decrement_minor, qna_cutoff_at)
          VALUES ($1,$2,'AUCTION','REVERSE','DRAFT',$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
         [
-          auth.org_id, requestId, dto.visibility ?? 'INVITED', dto.title ?? req.title,
+          auth.org_id, requestId, visibility, dto.title ?? req.title,
           req.currency, req.vat_mode, closeAt.toISOString(), auth.sub,
           dto.startPriceMinor, dto.minDecrementMinor, dto.qnaCutoffAt ?? null,
         ],
@@ -72,6 +88,12 @@ export class AuctionService {
        FROM request_items WHERE request_id=$1 ORDER BY line_no`,
       [requestId, ev.id, lot.id],
     );
+    if (visibilityReason) {
+      await this.audit.record('AUCTION_VISIBILITY_OVERRIDDEN', 'sourcing_event', ev.id, {
+        request_id: requestId, method_resolved: req.method_resolved, visibility,
+        reason: visibilityReason,
+      });
+    }
     return { id: ev.id };
   }
 

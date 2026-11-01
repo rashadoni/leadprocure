@@ -207,4 +207,65 @@ describe('reverse auction + Q&A flow', () => {
       expect(forS1.body.some((r: any) => r.kind === 'ADDENDUM')).toBe(true);
     });
   });
+
+  // Кого пускать на живые торги — решение закупочное, и продукт его не отнимает. Но когда
+  // политика по сумме отнесла заявку к ОТКРЫТОМУ тендеру, а аукцион объявляют по
+  // приглашениям, это отклонение от собственного правила организации: оно разрешено и
+  // записывается словами, как и обоснование присуждения не лучшей ставке.
+  describe('auction by invitation against an open-tender band', () => {
+    let openRequestId: string;
+
+    beforeAll(async () => {
+      // эта политика живёт до конца файла: блок последний, после него проверок нет
+      await http().put('/requests/method-policies').set(auth(buyerToken))
+        .send({ policies: [{ category: '*', minAmountMinor: 0, maxAmountMinor: null, method: 'OPEN_TENDER' }] })
+        .expect(200);
+      const req = await http().post('/requests').set(auth(buyerToken))
+        .send({ title: `Open band ${tag}`, items: [{ name: 'Fibre km', qty: 10, estUnitPriceMinor: 100_000 }] })
+        .expect(201);
+      openRequestId = req.body.id;
+      // Что полоса действительно OPEN_TENDER, доказывает первая же проверка ниже: будь
+      // она другой, приглашённый аукцион прошёл бы без всякой причины и проверка упала.
+      await http().post(`/requests/${openRequestId}/submit`).set(auth(buyerToken)).expect(201);
+      await http().post(`/requests/${openRequestId}/approve`).set(auth(approverToken)).expect(201);
+    });
+
+    const body = (extra: Record<string, unknown>) => ({
+      closeAt: new Date(Date.now() + 3600_000).toISOString(),
+      startPriceMinor: 1_000_000, minDecrementMinor: 10_000, ...extra,
+    });
+
+    it('refuses an invited auction without a written reason', async () => {
+      const res = await http().post(`/events/reverse/from-request/${openRequestId}`).set(auth(buyerToken))
+        .send(body({ visibility: 'INVITED' })).expect(400);
+      expect(String(res.body.message)).toMatch(/open tender/i);
+      // и отговоркой из пары символов не отделаться
+      await http().post(`/events/reverse/from-request/${openRequestId}`).set(auth(buyerToken))
+        .send(body({ visibility: 'INVITED', visibilityReason: '.' })).expect(400);
+    });
+
+    it('an open auction needs no reason: it widens the field, not narrows it', async () => {
+      const ev = await http().post(`/events/reverse/from-request/${openRequestId}`).set(auth(buyerToken))
+        .send(body({ visibility: 'PUBLIC' })).expect(201);
+      const row = await db.query(`SELECT visibility FROM sourcing_events WHERE id=$1`, [ev.body.id]);
+      expect(row.rows[0].visibility).toBe('PUBLIC');
+      const audit = await db.query(
+        `SELECT 1 FROM audit_events WHERE entity_id=$1 AND action='AUCTION_VISIBILITY_OVERRIDDEN'`, [ev.body.id]);
+      expect(audit.rowCount).toBe(0);
+    });
+
+    it('accepts the invited auction with a reason and writes it into the log', async () => {
+      const reason = 'Поставщики проходят допуск по режимному объекту';
+      const ev = await http().post(`/events/reverse/from-request/${openRequestId}`).set(auth(buyerToken))
+        .send(body({ visibility: 'INVITED', visibilityReason: reason })).expect(201);
+      const row = await db.query(`SELECT visibility FROM sourcing_events WHERE id=$1`, [ev.body.id]);
+      expect(row.rows[0].visibility).toBe('INVITED');
+      const audit = await db.query(
+        `SELECT payload FROM audit_events WHERE entity_id=$1 AND action='AUCTION_VISIBILITY_OVERRIDDEN'`,
+        [ev.body.id]);
+      expect(audit.rowCount).toBe(1);
+      expect(audit.rows[0].payload.reason).toBe(reason);
+      expect(audit.rows[0].payload.method_resolved).toBe('OPEN_TENDER');
+    });
+  });
 });
