@@ -129,6 +129,17 @@ services:
       SMTP_HOST: ""
     ports:
       - "127.0.0.1:3200:3000"
+    # Without this, `compose up --wait` waits only for the container to be RUNNING — and
+    # this container RUNS for a while before it serves anything: its entrypoint applies the
+    # migrations first. The stand then seeded into an empty schema and died on
+    # `relation "organization_users" does not exist`. The healthcheck is what makes --wait
+    # mean "the API answers", which is the same thing as "the migrations are done".
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
 
 volumes:
   leadprocure_demo_pgdata:
