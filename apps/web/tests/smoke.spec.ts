@@ -23,10 +23,21 @@ async function assertRenders(page: Page, path: string, headingHint: RegExp): Pro
 }
 
 // ── narrow screens ────────────────────────────────────────────────────────────────────
-// The four widths the layout has to be right at: a phone, a tablet held upright, a tablet
-// on its side, a desktop. The first three are below the 1100px breakpoint, where the rail
-// is a drawer and a row is drawn as a card; 1440 is the wide layout, unchanged.
-const WIDTHS = [375, 768, 1024, 1440];
+// The four widths the layout has to be right at: a desktop, a tablet on its side, a tablet
+// held upright, a phone. 1440 is the wide layout, unchanged by this work; the other three
+// are below the 1100px breakpoint, where the rail is a drawer and a row is drawn as a card.
+// Widest FIRST so that 375 — the width that matters and the one that fails first — is
+// measured last, on the most settled page there is.
+const WIDTHS = [1440, 1024, 768, 375];
+
+// Pages whose list cannot be empty on the seeded stack, so the measurement below is made
+// WITH rows in it — and these four are the widest tables in the product (requests has ten
+// columns, budgets eleven). An empty table is still worth measuring for its heading, form,
+// filters and pager, but rows can only add width: a page that overflows once it has rows
+// would pass on an empty one, so at least the wide tables have to be caught holding them.
+// `/buyer/requests` has the draft this suite creates above; budgets has the seed's three
+// plans; settings lists the organization's own users; suppliers has the seed's approved one.
+const WITH_ROWS = ['/buyer/requests', '/buyer/budgets', '/buyer/settings', '/buyer/suppliers'];
 
 // The measurement the whole narrow layout answers to. «Let the table scroll inside itself»
 // is the option the owner refused, so sideways scrolling is not a blemish here — it is the
@@ -40,11 +51,25 @@ async function assertNoSidewaysScroll(page: Page, where: string): Promise<void> 
   expect(over, `${where} scrolls sideways by ${over}px`).toBeLessThanOrEqual(1);
 }
 
-// Resized, not revisited: the server compiles a route on its first visit, and four visits
-// per page would spend this test's whole budget on compiling pages it has already seen.
+// Resized, not revisited: four visits per page would spend this test's whole budget on
+// loading pages it has already loaded.
 async function assertFitsEveryWidth(page: Page, path: string): Promise<void> {
   await page.goto(path);
   await expect(page.locator('h1').first()).toBeVisible({ timeout: 20_000 });
+  // Then wait for the LISTS to have answered, not just for the heading to be painted. The
+  // access token lives in memory only, so every visit is a cold load — bundle,
+  // `/auth/refresh`, mount — and the heading appears at about the moment the list request
+  // goes out. Measuring on that frame measures an empty <tbody>, and since rows can only
+  // add width, every overflow this test exists to catch would pass.
+  // `ListState` is what every list on every page reports itself through, and its loading
+  // line is the only `role="status"` on a page nobody has acted on yet — so this is one
+  // signal for all nineteen screens, satisfied by rows, by «nothing here yet» and by a
+  // failure alike.
+  await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+  if (WITH_ROWS.includes(path)) {
+    expect(await page.locator('tbody tr').count(),
+      `${path} is measured for its rows and had none`).toBeGreaterThan(0);
+  }
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
     await assertNoSidewaysScroll(page, `${path} at ${width}px`);
@@ -272,15 +297,24 @@ test.describe('buyer panel', () => {
   // sideways at any width, because the way of getting out of that which was refused is a
   // table that scrolls inside itself.
   test('every buyer screen fits a phone, a tablet and a desktop, and the menu is reachable at each', async () => {
+    // Twelve cold loads, each waited out to its list, then measured at four widths. Well
+    // inside this on a warm bundle, but the suite's own 90s default leaves no room on a
+    // slow hosted runner, and a timeout here would read as an overflow.
+    test.setTimeout(180_000);
     for (const path of ['/buyer/dashboard', '/buyer/requests', '/buyer/events', '/buyer/contracts',
       '/buyer/invoices', '/buyer/catalogs', '/buyer/budgets', '/buyer/analytics', '/buyer/logistics',
       '/buyer/suppliers', '/buyer/verification', '/buyer/settings']) {
       await assertFitsEveryWidth(page, path);
     }
     // A tender's own page is the widest thing a buyer opens, and the only one that needs an
-    // id — so it is taken from the list rather than written in here.
+    // id — so it is taken from the list rather than written in here. The wait is the whole
+    // point of the shape below: `count()` does NOT auto-wait, so asking it straight after a
+    // `goto` answers 0 while the list is still in flight and this page would be skipped on
+    // every run. The seed publishes no tender, so an empty list here is a fact about the
+    // stand and not a failure — but it has to be the settled list that says so.
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/buyer/events');
+    await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
     const tender = page.locator('a[href^="/buyer/events/"]').first();
     if (await tender.count()) await assertFitsEveryWidth(page, (await tender.getAttribute('href'))!);
 
@@ -304,9 +338,12 @@ test.describe('buyer panel', () => {
     // the cell. The settings page is where this is asked because its first table lists the
     // organization's users — it cannot be empty, whatever the other specs have left behind.
     await page.goto('/buyer/settings');
-    // The first table that actually HAS a row, so the heading and the cell below are read
-    // off the same table whatever any one card happens to be holding.
-    const table = page.locator('table').filter({ has: page.locator('tbody td') }).first();
+    // The FIRST table, pinned — the organization's own users, which cannot be empty. Not
+    // «the first table that has a row»: that one re-resolves on every poll, and the users
+    // and the departments below them are filled by two independent requests, so whichever
+    // answered first would supply the heading and the other one the cell, failing later
+    // with a message that reads as a stamping bug.
+    const table = page.locator('table').first();
     const cell = table.locator('tbody td').first();
     await expect(cell).toBeVisible({ timeout: 20_000 });
     // Against the heading itself rather than a word typed in here: the contract is that the
@@ -423,12 +460,16 @@ test.describe('supplier panel', () => {
   // The same narrow-screen contract on the supplier's side. These are different pages, and
   // of the two readers the supplier is the likelier one to be holding a phone.
   test('every supplier screen fits a phone and a tablet, and the menu is reachable there', async () => {
+    test.setTimeout(180_000);
+    // The card layout itself is proved on the buyer's side, on a table that cannot be empty;
+    // it is one shared mechanism, so what is asked here is the widths and the menu.
     for (const path of ['/supplier/dashboard', '/supplier/market', '/supplier/orders',
       '/supplier/contracts', '/supplier/invoices', '/supplier/catalogs', '/supplier/verification']) {
       await assertFitsEveryWidth(page, path);
     }
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/supplier/market');
+    await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
     const tender = page.locator('a[href^="/supplier/events/"]').first();
     if (await tender.count()) await assertFitsEveryWidth(page, (await tender.getAttribute('href'))!);
 

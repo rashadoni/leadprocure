@@ -9,6 +9,19 @@ for(const [language,title] of [['az','Analitika'],['ru','Аналитика'],['
     await page.getByTestId('analytics-currency').selectOption('USD');
     expect((await (await request).json()).currency).toBe('USD');
     await expect(page.getByText('Unexpected Application Error')).toHaveCount(0);
+    // The narrow layout is otherwise only ever measured in English, and Russian and
+    // Azerbaijani labels are materially longer — on a card the column's name and its value
+    // share one line. Analytics is the page to ask it of: a hand-rolled chart of twelve
+    // columns, two month pickers and four lists of figures, all on one screen. Measured
+    // here because this test already has a browser standing on it in this language and
+    // spends no login of the 10/min budget to do it.
+    await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+    await page.setViewportSize({ width: 375, height: 820 });
+    const over = await page.evaluate(() => {
+      const el = document.scrollingElement!;
+      return el.scrollWidth - el.clientWidth;
+    });
+    expect(over, `/buyer/analytics in ${language} scrolls sideways by ${over}px`).toBeLessThanOrEqual(1);
   });
 }
 

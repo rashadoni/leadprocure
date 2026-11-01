@@ -94,7 +94,12 @@ export function useNarrowLayout(): void {
     // Rows arrive from the API long after this effect runs, and a page re-renders on every
     // filter and page change — so the stamping follows the DOM instead of a render.
     // Coalesced into one frame: a list of twenty rows is one burst of mutations, not twenty.
-    // The observer watches childList only, so writing attributes cannot wake it again.
+    // `characterData` as well as `childList`, and this is load-bearing: a header is almost
+    // always a lone text child (`<th>{t('email')}</th>`), and React rewrites that kind of
+    // node in place — so switching the interface language changes every heading WITHOUT
+    // touching a child list, and the cards would have kept the previous language's labels
+    // over the new language's values. Attributes are still not observed, so the stamping
+    // cannot wake the observer that triggers it.
     const schedule = () => {
       if (frame) return;
       frame = requestAnimationFrame(() => { frame = 0; stampTables(); stampTips(); });
@@ -103,7 +108,7 @@ export function useNarrowLayout(): void {
       if (mq.matches) {
         if (!observer) {
           observer = new MutationObserver(schedule);
-          observer.observe(document.body, { childList: true, subtree: true });
+          observer.observe(document.body, { childList: true, characterData: true, subtree: true });
         }
         stampTables();
         stampTips();
