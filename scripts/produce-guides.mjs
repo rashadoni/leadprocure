@@ -87,11 +87,14 @@ const gExhausted = new Set();
 const GEMINI_KEY = GEMINI_KEYS[0];
 const AZURE_VOICE = { ru: 'ru-RU-DmitryNeural', az: 'az-AZ-BanuNeural', en: 'en-US-JennyNeural' };
 const XLANG = { ru: 'ru-RU', az: 'az-AZ', en: 'en-US' };
+// Kore is the owner's pick too (2026-11-01), approved on the same samples.
 const GEMINI_VOICE = { az: 'Kore', ru: 'Kore', en: 'Kore' };
-// Checked against the live model list on 2026-11-01: gemini-3.8-flash-tts and
-// gemini-3.8-flash-lite-tts both exist and answer, and 2.5 is still a *preview*. Override
-// with GEMINI_MODEL. Mind that 3.8 answers with a WAV container while 2.5 answers with
-// headerless L16 — geminiTts handles both, see there.
+// gemini-3.8-flash-tts is the OWNER'S choice, made by ear on 2026-11-01 from three
+// samples of the same Azerbaijani line (3.8-flash, 3.8-flash-lite, 2.5-preview) — so do
+// not "upgrade" or "simplify" it away without playing the alternative to him first. It is
+// also the only one of the three that is not a preview. Override with GEMINI_MODEL.
+// Mind that 3.8 answers with a WAV container while 2.5 answers with headerless L16 —
+// geminiTts handles both, see there.
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.8-flash-tts';
 
 const P = (ms) => new Promise((r) => setTimeout(r, ms));
