@@ -54,7 +54,7 @@ export default function Catalogs() {
 
   return (
     <>
-      <h1>📖 {t('catalogs')}</h1>
+      <h1>{t('catalogs')}</h1>
       <div className="card">
         <ListState of={[catalogs, { loading: false, failed: depsFailed, reload: loadDeps }]} />
         <table>

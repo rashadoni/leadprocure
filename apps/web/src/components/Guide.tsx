@@ -3,14 +3,15 @@ import { useLocation } from 'react-router-dom';
 import { useI18n } from '../i18n';
 import { GUIDES, SECTION_TITLE_KEY, SectionGuide } from '../guides';
 
-// Section help video, presented as a CARD IN THE FLOW at the top of the section — not a
-// floating overlay. The old widget sat fixed in the bottom-right corner and covered the
-// working screen; this one occupies its own row, so nothing is ever hidden behind it.
-// Clicking expands into a centered modal; the × dismisses the card (remembered per
-// section in localStorage).
+// Section help video, offered as ONE LINE above the section — not a floating overlay and
+// no longer a 190px card. The card pushed the heading the reader came for below the fold
+// and cost three tab stops (thumbnail, open, dismiss) before any content on every page;
+// worse, it was dismissed per section, so clearing it from sight took twelve closes.
+// Clicking opens the player in a centered modal. Hiding it is ONE switch for the whole
+// product, shared with the checkbox in Settings.
 //
 // The root carries data-help-video-widget: scripts/produce-guides.mjs hides that selector
-// while recording, so the help card never appears inside the guide it belongs to.
+// while recording, so the help line never appears inside the guide it belongs to.
 
 function resolveGuide(pathname: string): SectionGuide | null {
   if (GUIDES[pathname]) return GUIDES[pathname];
@@ -30,17 +31,51 @@ function resolveTitleKey(pathname: string): string | undefined {
   return prefix ? SECTION_TITLE_KEY[prefix] : undefined;
 }
 
-const DISMISSED = 'guide_dismissed';
-const dismissedSet = (): Set<string> => {
-  try { return new Set(JSON.parse(localStorage.getItem(DISMISSED) ?? '[]')); } catch { return new Set(); }
+// One key, not one per section. The old `guide_dismissed` list is simply no longer read:
+// whoever had hidden a few sections sees a single line there again, which is the point.
+const HIDDEN = 'guide_hidden';
+const EVENT = 'guides-visibility';
+
+// The switch itself lives in this module variable, with localStorage only remembering it
+// between visits. Reading storage back inside the listeners would break in a private
+// window, where the write throws and the read then answers «visible»: the component that
+// flipped it would hide while the sidebar went on thinking otherwise — and the way back,
+// which only the sidebar draws, would never appear.
+let hidden = ((): boolean => {
+  try { return localStorage.getItem(HIDDEN) === '1'; } catch { return false; }
+})();
+
+export const guidesHidden = (): boolean => hidden;
+/** Flips the one switch and tells every mounted reader of it: the bar and the sidebar. */
+export const setGuidesHidden = (next: boolean): void => {
+  hidden = next;
+  try { localStorage.setItem(HIDDEN, next ? '1' : '0'); } catch { /* private window */ }
+  window.dispatchEvent(new Event(EVENT));
 };
+
+/**
+ * The switch, for whoever draws a control over it. The way back lives in the sidebar
+ * rather than in Settings because suppliers have no Settings page at all — a switch one
+ * role cannot reach is a one-way door.
+ */
+export function useGuidesHidden(): [boolean, (next: boolean) => void] {
+  const [value, setValue] = useState(guidesHidden);
+  useEffect(() => {
+    const sync = () => setValue(guidesHidden());
+    window.addEventListener(EVENT, sync);
+    return () => window.removeEventListener(EVENT, sync);
+  }, []);
+  // No extra setState here: the event is dispatched synchronously and reaches every
+  // subscriber, this one included, so both components move together or neither does.
+  return [value, setGuidesHidden];
+}
 
 export default function Guide() {
   const { pathname } = useLocation();
   const { t } = useI18n();
   const guide = resolveGuide(pathname);
   const [open, setOpen] = useState(false);
-  const [dismissed, setDismissed] = useState<Set<string>>(dismissedSet);
+  const [isHidden, setHidden] = useGuidesHidden();
 
   // a new section starts collapsed, whatever the previous one was doing
   useEffect(() => { setOpen(false); }, [pathname]);
@@ -53,7 +88,7 @@ export default function Guide() {
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  if (!guide || dismissed.has(guide.key)) return null;
+  if (!guide || isHidden) return null;
 
   // Recordings are Azerbaijani only — see guides.ts. Asking for the interface language
   // would 404 on every non-az UI and fall back a moment later, so ask for az directly.
@@ -62,28 +97,22 @@ export default function Guide() {
   const titleKey = resolveTitleKey(pathname);
   const title = titleKey ? t(titleKey) : '';
 
-  const hide = () => {
-    const next = new Set(dismissed).add(guide.key);
-    localStorage.setItem(DISMISSED, JSON.stringify([...next]));
-    setDismissed(next);
-  };
-
   return (
     <>
-      <div className="help-card" data-help-video-widget>
-        <button className="help-thumb" onClick={() => setOpen(true)} aria-label={t('guide_open')}>
-          <img src={posterUrl} alt="" />
-          <span className="help-play">▶</span>
+      {/* Two controls, both of them words: open this section's guide, or stop being offered
+          one anywhere. The section's own name rides on the first so the line says what it
+          would play. */}
+      <div className="help-bar" data-help-video-widget>
+        {/* `tip-below`: this bar is the FIRST element on the page, and a bubble drawn above
+            it is clipped by the top of the window with nowhere to scroll — including the
+            one line that says how to bring the guides back. */}
+        <button className="btn small ghost tip-below" onClick={() => setOpen(true)} data-tip={t('guide_sub')}>
+          🎥 {t('guide')}{title ? `: ${title}` : ''}
         </button>
-        <div className="help-text">
-          <div className="help-kicker">🎥 {t('guide')}</div>
-          {title && <div className="help-title">{title}</div>}
-          <div className="help-sub">{t('guide_sub')}</div>
-        </div>
-        <div className="help-actions">
-          <button className="btn help-open" onClick={() => setOpen(true)}>▶ {t('guide_open')}</button>
-          <button className="help-x" onClick={hide} aria-label="✕">✕</button>
-        </div>
+        <button className="btn small ghost tip-below" data-tip={t('guide_hide_all_tip')}
+          onClick={() => setHidden(true)}>
+          ✕ {t('guide_hide_all')}
+        </button>
       </div>
 
       {open && (

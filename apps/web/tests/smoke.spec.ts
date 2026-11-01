@@ -179,6 +179,33 @@ test.describe('buyer panel', () => {
     expect((await posted).ok()).toBe(true);
     await expect(input).toHaveCount(0);
   });
+
+  // The section guide used to be a 190px card above every heading, dismissed per section:
+  // clearing it from sight took twelve closes. One line now, and one switch for all of it.
+  test('the section guide is one line, and hiding it hides it everywhere', async () => {
+    await page.goto('/buyer/requests');
+    const bar = page.locator('.help-bar');
+    await expect(bar).toBeVisible();
+    const box = await bar.boundingBox();
+    expect(box!.height).toBeLessThan(60);
+    // The menu follows the page down instead of scrolling away from a long list. Measured,
+    // not read off the declaration: `position: sticky` keeps reporting itself as sticky
+    // after any ancestor grows an `overflow` that silently disables it.
+    await page.setViewportSize({ width: 1280, height: 420 });
+    await page.evaluate(() => window.scrollTo(0, 300));
+    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
+    expect(await page.locator('.side').evaluate((el) => el.getBoundingClientRect().top)).toBeLessThan(2);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    // a prefix: [data-tip]::after lands in the accessible name
+    await bar.getByRole('button', { name: /^✕/ }).click();
+    await expect(bar).toHaveCount(0);
+    await page.goto('/buyer/budgets');
+    await expect(page.locator('.help-bar')).toHaveCount(0);
+    // The way back lives in the sidebar, which a supplier has too — unlike Settings.
+    await page.locator('.side-link').click();
+    await expect(page.locator('.help-bar')).toBeVisible();
+  });
 });
 
 test.describe('supplier panel', () => {

@@ -113,7 +113,7 @@ export default function Invoices() {
 
   return (
     <>
-      <h1>🧾 {t('invoices')}</h1>
+      <h1>{t('invoices')}</h1>
       <div className="card">
         {listLoading && <div role="status" className="hint">{t('invoice_list_loading')}</div>}
         {listError && <div role="alert">
@@ -121,7 +121,7 @@ export default function Invoices() {
           <button className="btn small ghost" onClick={() => load()}>{t('invoice_list_retry')}</button>
         </div>}
         <table>
-          <thead><tr><th>#</th><th>PO</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>#</th><th>{t('order_no')}</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th></tr></thead>
           <tbody>
             {rows.map((i) => (
               <tr key={i.id}>

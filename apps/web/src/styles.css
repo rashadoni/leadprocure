@@ -15,8 +15,18 @@ body { background: var(--bg); color: var(--text); font: 14px/1.5 'Inter', system
 a { color: var(--accent); text-decoration: none; }
 .center { display: grid; place-items: center; min-height: 60vh; }
 
-.shell { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
-.side { background: var(--side-bg); border-right: 1px solid rgba(255, 255, 255, .06); padding: 20px 14px; display: flex; flex-direction: column; gap: 3px; }
+/* The dark stripe is painted by the GRID, not by the rail. Since the rail became sticky it
+   is only as tall as its own links, so its own fill stopped partway down the page and the
+   light page background showed through beneath it — the left column has to read as one
+   continuous fill whatever the menu's height. */
+.shell { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh;
+  background: linear-gradient(to right, var(--side-bg) 0 232px, transparent 232px); }
+.side { background: var(--side-bg); border-right: 1px solid rgba(255, 255, 255, .06); padding: 20px 14px; display: flex; flex-direction: column; gap: 3px;
+  position: sticky; top: 0; align-self: start; max-height: 100vh; overflow-y: auto; }
+/* A plain text control in the sidebar's footer, shaped like its links. */
+.side-link { background: none; border: 0; color: var(--side-text); font: inherit; font-size: 12px;
+  text-align: left; padding: 8px 12px; cursor: pointer; border-radius: 8px; }
+.side-link:hover { background: rgba(255, 255, 255, .08); color: #fff; }
 .brand { font-weight: 800; font-size: 18px; letter-spacing: -.01em; background: linear-gradient(90deg, #34d399, #a7f3d0); -webkit-background-clip: text; background-clip: text; color: transparent; margin-bottom: 18px; padding: 0 4px; }
 .side a { padding: 9px 12px; border-radius: 8px; color: var(--side-text); font-weight: 500; transition: background .12s, color .12s; }
 .side a.active { background: rgba(255, 255, 255, .14); color: #fff; font-weight: 600; }
@@ -125,6 +135,12 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
    only, so a mouse click does not leave one behind. */
 [data-tip]:focus::after { opacity: 1; transform: translateX(-50%) translateY(0); }
 [data-tip]:focus::before { opacity: 1; }
+/* For an element at the very top of the page — the section's help line — where a bubble
+   drawn above would sit off the top of the window with nowhere to scroll to it. */
+[data-tip].tip-below::after { bottom: auto; top: calc(100% + 9px); transform: translateX(-50%) translateY(-4px); }
+[data-tip].tip-below::before { bottom: auto; top: calc(100% + 4px);
+  border-top-color: transparent; border-bottom-color: #10231c; }
+[data-tip].tip-below:hover::after, [data-tip].tip-below:focus::after { transform: translateX(-50%) translateY(0); }
 
 /* The product's own modal, in place of the browser's prompt/confirm. Short enough that
    nothing inside it ever scrolls: a dialog that scrolls is a form, and a form belongs on
@@ -197,6 +213,11 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 .lang { display: flex; gap: 6px; }
 .lang button { background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .2); color: rgba(255, 255, 255, .6); border-radius: 6px; padding: 2px 8px; cursor: pointer; font-size: 11px; }
 .lang button.on { color: #fff; border-color: #34d399; }
+/* AFTER `.lang button`, not before: the two have the same specificity, so whichever comes
+   last wins — and the sidebar's white-on-dark would have painted the sign-in switcher
+   white on a white card. */
+.lang-light button { background: var(--panel2); border-color: var(--border); color: var(--muted); }
+.lang-light button.on { background: #fff; color: var(--text); border-color: var(--accent); }
 .sealed { color: var(--warn); font-size: 13px; }
 .pager { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 12px; }
 .pager-info { color: var(--muted); font-size: 12px; }
@@ -241,36 +262,15 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 .filter-field { display: flex; flex-direction: column; gap: 3px; }
 .filter-field label, .filter-field .filter-label { margin: 0; font-size: 11px; font-weight: 500; color: var(--muted); }
 
-/* ---- section help video: a card IN THE FLOW above the section, never an overlay ---- */
-.help-card { display: flex; align-items: center; gap: 18px; margin-bottom: 16px;
-  background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px 18px;
-  box-shadow: var(--shadow-sm); }
-.help-thumb { position: relative; flex: 0 0 auto; width: 260px; aspect-ratio: 16/9; padding: 0;
-  border: 1px solid var(--border); border-radius: 12px; overflow: hidden; cursor: pointer; background: none; }
-.help-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.help-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: 48px; height: 48px; border-radius: 50%; background: rgba(255, 255, 255, .82); color: #0f172a;
-  display: flex; align-items: center; justify-content: center; font-size: 17px; padding-left: 3px;
-  box-shadow: var(--shadow-sm); transition: transform .15s; }
-.help-thumb:hover .help-play { transform: translate(-50%, -50%) scale(1.08); }
-.help-text { flex: 1 1 auto; min-width: 0; }
-.help-kicker { color: var(--accent); font-size: 13px; font-weight: 700; letter-spacing: .01em; }
-.help-title { font-size: 22px; font-weight: 800; margin: 4px 0 6px; }
-.help-sub { color: var(--muted); font-size: 15px; }
-.help-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
-.help-open { border-radius: 999px; padding: 11px 20px; }
-.help-x { width: 34px; height: 34px; border: 0; background: none; color: var(--muted);
-  font-size: 17px; cursor: pointer; border-radius: 50%; }
-.help-x:hover { background: var(--bg); color: var(--text); }
+/* ---- section help video: ONE LINE above the section, never an overlay ----
+   It used to be a 190px card with a thumbnail: on every page the heading the reader came
+   for started below it, against the rule that a screen answers without scrolling, and the
+   first three Tab stops on every page belonged to the help. */
+.help-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
 .help-modal { position: fixed; inset: 0; z-index: 70; background: rgba(15, 23, 42, .6);
   display: flex; align-items: center; justify-content: center; }
 .help-modal-inner { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
 .help-modal video { max-width: 86vw; max-height: 80vh; border-radius: 12px; border: 1px solid var(--border); }
-@media (max-width: 900px) {
-  .help-card { flex-wrap: wrap; }
-  .help-thumb { width: 180px; }
-  .help-actions { margin-left: auto; }
-}
 
 /* Budget lifecycle badges carry their own vocabulary (bud_status_*) but go through the
    same five groups, so they need no rules of their own any more. */

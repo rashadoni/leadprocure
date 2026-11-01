@@ -12,15 +12,15 @@ type Call = (path: string, body: any, token?: string, method?: string, status?: 
 // Selecting localized controls verifies both authenticated sides use the chosen language.
 const paymentCopy = {
   az: { open: 'Zərfləri aç', score: 'Qiymətləndir', award: 'Qalib seç', analyze: 'Təhlil et',
-    contract: 'Müqavilə yarat', po: 'PO yarat', issue: 'Sifarişi ver', receive: 'Qəbul et',
+    contract: 'Müqavilə yarat', po: 'Sifariş yarat', issue: 'Sifarişi ver', receive: 'Qəbul et',
     supplierSteps: ['Təsdiqlə', 'Qablaşdırıldı', 'Göndər', 'Çatdırıldı'], invoice: 'Qaimə', approve: 'Təsdiqlə', pay: 'Ödə',
     match: 'Üçtərəfli uyğunlaşdırma', price: 'Qaimə qiyməti', reason: 'Yeganə RFP təklifi dərc olunmuş tələblərə cavab verir' },
   ru: { open: 'Вскрыть ставки', score: 'Оценить', award: 'Выбрать победителя', analyze: 'Проанализировать',
-    contract: 'Создать контракт', po: 'Создать PO', issue: 'Выпустить', receive: 'Приёмка',
+    contract: 'Создать контракт', po: 'Создать заказ', issue: 'Выпустить', receive: 'Приёмка',
     supplierSteps: ['Подтвердить', 'Упаковано', 'Отгрузить', 'Доставлено'], invoice: 'Счёт', approve: 'Утвердить', pay: 'Оплатить',
     match: 'Трёхсторонняя сверка', price: 'Цена в счёте', reason: 'Единственное предложение RFP соответствует опубликованным требованиям' },
   en: { open: 'Open bids', score: 'Score', award: 'Award winner', analyze: 'Analyze',
-    contract: 'Create contract', po: 'Create PO', issue: 'Issue', receive: 'Receive',
+    contract: 'Create contract', po: 'Create order', issue: 'Issue', receive: 'Receive',
     supplierSteps: ['Confirm', 'Packed', 'Ship', 'Delivered'], invoice: 'Invoice', approve: 'Approve', pay: 'Pay',
     match: 'Three-way match', price: 'Invoice price', reason: 'Sole RFP proposal meets the published requirements' },
 } as const;

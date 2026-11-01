@@ -371,7 +371,7 @@ export default function Analytics() {
               unnamed numbers per row */}
           {d.byDepartment.length > 0 && (
             <div className="hint" style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 11, marginBottom: 6 }}>
-              <span>{t('department')}</span><span>{t('total')} · PO</span>
+              <span>{t('department')}</span><span>{t('total')} · {t('orders_n')}</span>
             </div>
           )}
           {d.byDepartment.length === 0 && <div className="hint">—</div>}
@@ -379,7 +379,7 @@ export default function Analytics() {
             <div key={c.department} style={{ marginBottom: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13 }}>
                 <span>{c.department}</span>
-                <span className="nowrap">{money(c.totalMinor)} · {c.poCount} PO {delta(c)}</span>
+                <span className="nowrap">{money(c.totalMinor)} · {c.poCount} {delta(c)}</span>
               </div>
               <div className="budget-bar"><div className="budget-fill" style={{ width: `${Math.round((c.totalMinor / maxDep) * 100)}%` }} /></div>
             </div>
@@ -391,7 +391,7 @@ export default function Analytics() {
               unnamed numbers per row */}
           {d.byCategory.length > 0 && (
             <div className="hint" style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 11, marginBottom: 6 }}>
-              <span>{t('category')}</span><span>{t('total')} · PO</span>
+              <span>{t('category')}</span><span>{t('total')} · {t('orders_n')}</span>
             </div>
           )}
           {d.byCategory.length === 0 && <div className="hint">—</div>}
@@ -399,7 +399,7 @@ export default function Analytics() {
             <div key={c.category} style={{ marginBottom: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13 }}>
                 <span>{c.category}</span>
-                <span className="nowrap">{money(c.totalMinor)} · {c.poCount} PO {delta(c)}</span>
+                <span className="nowrap">{money(c.totalMinor)} · {c.poCount} {delta(c)}</span>
               </div>
               <div className="budget-bar"><div className="budget-fill" style={{ width: `${Math.round((c.totalMinor / maxCat) * 100)}%` }} /></div>
             </div>
@@ -408,7 +408,7 @@ export default function Analytics() {
         <div className="card" style={{ marginBottom: 0 }}>
           <h3>{t('top_suppliers')}</h3>
           <table>
-            <thead><tr><th>{t('supplier_org')}</th><th className="num">{t('total')}</th><th className="num">PO</th></tr></thead>
+            <thead><tr><th>{t('supplier_org')}</th><th className="num">{t('total')}</th><th className="num">{t('orders_n')}</th></tr></thead>
             <tbody>
               {d.topSuppliers.map((s) => (
                 <tr key={s.name}><td>{s.name}</td><td className="num">{money(s.totalMinor)}</td><td className="num">{s.poCount}</td></tr>
