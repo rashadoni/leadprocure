@@ -924,6 +924,12 @@ async function login(ctx, email) {
     for (const role of ['buyer', 'sup']) {
       if (!todo.some((k) => SECTIONS[k].role === role)) continue;
       const ctx = await browser.newContext({
+        // 1280 is above the narrow-layout breakpoint (NARROW = max-width 1100px, see
+        // apps/web/src/components/narrow.ts), and that is load-bearing, not a taste: below
+        // it the stylesheet stops laying tables out as tables and `thead` goes away
+        // entirely. Every scene that points at a column heading — and there are many —
+        // would then miss silently and play its narration over a motionless screen.
+        // Do not lower this without re-checking every `thead th` selector below.
         viewport: { width: 1280, height: 720 },
         recordVideo: { dir: tmp, size: { width: 1280, height: 720 } },
       });
