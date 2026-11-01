@@ -129,7 +129,7 @@ export default function Invoices() {
           <button className="btn small ghost" onClick={() => load()}>{t('invoice_list_retry')}</button>
         </div>}
         <table>
-          <thead><tr><th>#</th><th>{t('order_no')}</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th>{invoiceActions && <th>{t('actions')}</th>}</tr></thead>
+          <thead><tr><th>#</th><th>{t('order_no')}</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="nowrap">{t('due_date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th>{invoiceActions && <th>{t('actions')}</th>}</tr></thead>
           <tbody>
             {rows.map((i) => (
               <tr key={i.id}>
@@ -137,11 +137,12 @@ export default function Invoices() {
                 <td className="nowrap">{i.po_no}</td>
                 <td>{isBuyer ? i.supplier_name : i.buyer_name}</td>
                 <td className="hint nowrap">{fmtDate(i.issued_at ?? i.created_at)}</td>
-                {/* No payment-due column: `invoices.due_date` exists and the submit endpoint
-                    stores `dueDate` when it is sent, but nothing in the product ever sends
-                    it — the supplier's invoice action is a single button with no form — so
-                    the column was a dash on every row in every org. It comes back the day
-                    payment terms become a real field rather than standing empty meanwhile. */}
+                {/* The column was removed while nothing in the product ever filled it: the
+                    supplier's invoice action was a single button with no form, so it was a
+                    dash on every row in every org. The supplier names the term now, so the
+                    column is back — and it comes back filled. Historic invoices carry no
+                    term and keep the dash; nothing invents one for them. */}
+                <td className="hint nowrap">{i.due_date_text ? fmtDate(i.due_date_text) : '—'}</td>
                 <td className="num">{fmtMoney(i.gross_minor, i.currency)}</td>
                 <td><Badge status={i.status} /></td>
                 {invoiceActions && (

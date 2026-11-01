@@ -1,6 +1,6 @@
 import {expect,test,type Page} from '@playwright/test';
 import {verifyInvoiceCancellationAndRejection} from './invoice-negative';
-import {expectToast} from './dialogs';
+import {answerDialog,expectToast} from './dialogs';
 type Call=(path:string,body:any,token?:string,method?:string,status?:number)=>Promise<any>;
 
 // Reuse actual authenticated contexts; API setup prepares partial receipts, while
@@ -34,9 +34,12 @@ export async function verifyPartialInvoices({supplierPage,buyerPage,call,buyerTo
     const capture=(r:any)=>{if(r.method()==='POST'&&r.url().endsWith(`/invoices/from-po/${po.id}`))submitted.push(r.postDataJSON());};
     supplierPage.on('request',capture);
     try {
+      const due=new Date(Date.now()+30*864e5).toISOString().slice(0,10);
       const invoice=async()=>{
         const pending=supplierPage.waitForResponse(r=>r.url().endsWith(`/invoices/from-po/${po.id}`)&&r.request().method()==='POST');
         await order.getByRole('button',{name:'🧾 Invoice',exact:true}).click();
+        // срок оплаты спрашивают у поставщика перед отправкой
+        await answerDialog(supplierPage,due);
         const response=await pending;expect(response.status(),await response.text()).toBe(201);
         await supplierPage.waitForURL('**/supplier/invoices');return response.json();
       };
@@ -48,6 +51,8 @@ export async function verifyPartialInvoices({supplierPage,buyerPage,call,buyerTo
       const second=await invoice();expect(second.status).toBe('MATCHED');expect(Number(second.gross_minor)).toBe(600);
       expect(second.items.map((i:any)=>[i.po_item_id,Number(i.qty)])).toEqual([[bolt.id,6]]);
       expect(submitted.map(v=>v.items.map((i:any)=>[i.poItemId,i.qty]))).toEqual([[[bolt.id,4],[washer.id,5]],[[bolt.id,6]]]);
+      // срок доезжает до сервера, а не остаётся в диалоге
+      expect(submitted.map(v=>v.dueDate)).toEqual([due,due]);
       await supplierPage.goto('/supplier/orders');
       for(const [lang,label,message] of [
         ['AZ','Qaimə','Qaimə üçün qəbul edilmiş qalıq yoxdur.'],

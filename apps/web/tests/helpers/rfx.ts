@@ -182,7 +182,15 @@ async function verifyRfpPayment({buyerPage,supplierPage,call,buyerToken,event,op
     const receipt=await call(`/orders/${po.id}/receipts`,undefined,buyerToken,'get',200);
     expect(receipt.summary).toHaveLength(1);expect(Number(receipt.summary[0].received)).toBe(1);
     await supplierPage.reload();
-    const invoice=await clicked(supplierPage,`/invoices/from-po/${po.id}`,()=>supplied.getByRole('button',{name:`🧾 ${copy.invoice}`,exact:true}).click());
+    // Выставление счёта теперь спрашивает срок оплаты: поставщик называет дату из
+    // договорённости. Ответ входит в action — ожидание ответа сервера уже взведено, а
+    // POST уходит только после подтверждения диалога.
+    const due=new Date(Date.now()+30*864e5).toISOString().slice(0,10);
+    const invoice=await clicked(supplierPage,`/invoices/from-po/${po.id}`,async()=>{
+      await supplied.getByRole('button',{name:`🧾 ${copy.invoice}`,exact:true}).click();
+      await answerDialog(supplierPage,due);
+    });
+    expect(invoice.due_date_text).toBe(due);
     await supplierPage.waitForURL('**/supplier/invoices');
     expect(invoice.status).toBe('MATCHED');
     expect([invoice.net_minor,invoice.vat_minor,invoice.gross_minor].map(Number)).toEqual([1200,216,1416]);
