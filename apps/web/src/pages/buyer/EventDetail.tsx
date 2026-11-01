@@ -500,7 +500,16 @@ export default function EventDetail() {
                   {/* A trophy beside the name and a green outline on the row were the only
                       marks the winner carried — neither of them a word. */}
                   {b.supplier_name}
-                  {winningBidIds.has(b.id) && <> <span className="badge is-good AWARDED">🏆 {t('winner')}</span></>}
+                  {winningBidIds.has(b.id) && (() => {
+                    // WHICH lot. On a multi-lot tender two different suppliers each win one,
+                    // and the bids table has no lot column — so two rows both marked
+                    // «Winner» read as a contradiction. Found by looking at the screenshot
+                    // the acceptance run leaves behind; it is invisible in the code.
+                    const won = activeAwards.find((a: any) => a.winning_bid_id === b.id);
+                    const lot = (ev.lots ?? []).length > 1
+                      ? (ev.lots ?? []).find((l: any) => l.id === won?.lot_id)?.title : null;
+                    return <> <span className="badge is-good AWARDED">🏆 {t('winner')}{lot ? ` · ${lot}` : ''}</span></>;
+                  })()}
                   {b.proposal_text && (
                     <div className="hint" style={{ whiteSpace: 'pre-wrap', maxWidth: 420, marginTop: 4 }}>
                       📝 {b.proposal_text}
