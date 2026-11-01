@@ -189,12 +189,16 @@ export default function Analytics() {
   const hasPlan = d.monthly.some((m) => m.plannedMinor > 0);
   const hasPrev = d.monthly.some((m) => m.prevTotalMinor > 0);
   // Growth reads as a cost, so up is red and down is green — the opposite of a sales chart.
+  // A key with nothing behind it last year is the exception: deltaPct is null there, and
+  // «new» in alarm red said something the figure does not mean — a category bought for the
+  // first time is news, not a problem.
   const delta = (r: { prevTotalMinor: number; deltaMinor: number; deltaPct: number | null }) => {
     if (r.prevTotalMinor === 0 && r.deltaMinor === 0) return null;
+    const isNew = r.deltaPct == null;
     const up = r.deltaMinor > 0;
     return (
-      <span className={up ? 'error' : 'hint'} data-tip={`${t('yoy_prev')}: ${money(r.prevTotalMinor)}`}>
-        {up ? '▲' : '▼'} {r.deltaPct == null ? t('yoy_new') : `${Math.abs(r.deltaPct)}%`}
+      <span className={!isNew && up ? 'error' : 'hint'} data-tip={`${t('yoy_prev')}: ${money(r.prevTotalMinor)}`}>
+        {up ? '▲' : '▼'} {isNew ? t('yoy_new') : `${Math.abs(r.deltaPct)}%`}
       </span>
     );
   };
@@ -342,6 +346,13 @@ export default function Analytics() {
         <div className="card" style={{ marginBottom: 0 }}>
           <h3>{t('by_department')} <span className="hint" style={{ fontWeight: 400, fontSize: 12 }}>· {t('yoy_note')}</span></h3>
           {/* keyed off the PO's own department, so direct and catalog orders count too */}
+          {/* the two bar lists sit beside a table that has a header; theirs was two
+              unnamed numbers per row */}
+          {d.byDepartment.length > 0 && (
+            <div className="hint" style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 11, marginBottom: 6 }}>
+              <span>{t('department')}</span><span>{t('total')} · PO</span>
+            </div>
+          )}
           {d.byDepartment.length === 0 && <div className="hint">—</div>}
           {d.byDepartment.map((c) => (
             <div key={c.department} style={{ marginBottom: 10 }}>
@@ -355,6 +366,13 @@ export default function Analytics() {
         </div>
         <div className="card" style={{ marginBottom: 0 }}>
           <h3>{t('by_category')} <span className="hint" style={{ fontWeight: 400, fontSize: 12 }}>· {t('yoy_note')}</span></h3>
+          {/* the two bar lists sit beside a table that has a header; theirs was two
+              unnamed numbers per row */}
+          {d.byCategory.length > 0 && (
+            <div className="hint" style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 11, marginBottom: 6 }}>
+              <span>{t('category')}</span><span>{t('total')} · PO</span>
+            </div>
+          )}
           {d.byCategory.length === 0 && <div className="hint">—</div>}
           {d.byCategory.map((c) => (
             <div key={c.category} style={{ marginBottom: 10 }}>
