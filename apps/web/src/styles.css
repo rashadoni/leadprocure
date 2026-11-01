@@ -194,8 +194,6 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 .state-empty { padding: 18px 0; text-align: center; }
 
 .auth-wrap { display: grid; place-items: center; min-height: 100vh; }
-.lang-light button { background: var(--panel2); border-color: var(--border); color: var(--muted); }
-.lang-light button.on { background: #fff; color: var(--text); border-color: var(--accent); }
 .auth { width: 380px; }
 .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
 .tabs button { flex: 1; }
@@ -204,6 +202,11 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 .lang { display: flex; gap: 6px; }
 .lang button { background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .2); color: rgba(255, 255, 255, .6); border-radius: 6px; padding: 2px 8px; cursor: pointer; font-size: 11px; }
 .lang button.on { color: #fff; border-color: #34d399; }
+/* AFTER `.lang button`, not before: the two have the same specificity, so whichever comes
+   last wins — and the sidebar's white-on-dark would have painted the sign-in switcher
+   white on a white card. */
+.lang-light button { background: var(--panel2); border-color: var(--border); color: var(--muted); }
+.lang-light button.on { background: #fff; color: var(--text); border-color: var(--accent); }
 .sealed { color: var(--warn); font-size: 13px; }
 .pager { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 12px; }
 .pager-info { color: var(--muted); font-size: 12px; }
