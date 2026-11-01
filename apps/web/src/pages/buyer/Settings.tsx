@@ -147,10 +147,23 @@ export default function Settings() {
   return (
     <>
       <h1>{t('settings')}</h1>
+      {/* Seven unrelated sections one under another, and the only way to the last one was
+          the scrollbar. Links, not a sticky rail: the page is long, not deep. A link is
+          drawn only for a section that is actually on the page. */}
+      <div className="hint" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginBottom: 14 }}>
+        <a href="#set-users">{t('users')}</a>
+        <a href="#set-categories">{t('cat_hdr')}</a>
+        <a href="#set-departments">{t('dep_hdr')}</a>
+        {policyDraft && <a href="#set-thresholds">{t('bud_thresholds')}</a>}
+        <a href="#set-method">{t('method_policy')}</a>
+        <a href="#set-integrations">{t('integrations')}</a>
+        <a href="#set-approval">{t('approval_chain')}</a>
+        <a href="#set-channels">{t('channels_hdr')}</a>
+      </div>
       <ListState of={[userList, policyList, approvalList,
         { loading: false, failed: refFailed, reload: loadOptional }]} />
       <div className="card">
-        <h3>{t('users')}</h3>
+        <h3 id="set-users">{t('users')}</h3>
         <table>
           <thead><tr><th>{t('email')}</th><th>{t('name')}</th><th>{t('role')}</th><th>{t('department')}</th></tr></thead>
           <tbody>
@@ -165,7 +178,7 @@ export default function Settings() {
                       {BUYER_ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
                     </select>
                   ) : (
-                    <span className="badge is-info">{roleLabel(u.role)}</span>
+                    <span className="badge is-info" data-tip={isAdmin && u.id === session?.user.id ? t('role_self_locked') : undefined}>{roleLabel(u.role)}</span>
                   )}
                 </td>
                 <td>
@@ -190,7 +203,9 @@ export default function Settings() {
           <form onSubmit={addUser} className="row" style={{ marginTop: 14, maxWidth: 760 }}>
             <div><label>{t('email')}</label><input type="email" required value={nu.email} onChange={(e) => setNu({ ...nu, email: e.target.value })} /></div>
             <div><label>{t('name')}</label><input required value={nu.fullName} onChange={(e) => setNu({ ...nu, fullName: e.target.value })} /></div>
-            <div><label>{t('password')}</label><input required minLength={8} value={nu.password} onChange={(e) => setNu({ ...nu, password: e.target.value })} /></div>
+            <div><label htmlFor="new-user-password">{t('password')}</label>
+              <input id="new-user-password" type="password" required minLength={8} value={nu.password}
+                onChange={(e) => setNu({ ...nu, password: e.target.value })} /></div>
             <div><label>{t('role')}</label>
               <select value={nu.role} onChange={(e) => setNu({ ...nu, role: e.target.value })}>
                 {BUYER_ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
@@ -202,7 +217,7 @@ export default function Settings() {
       </div>
 
       <div className="card">
-        <h3>{t('cat_hdr')}</h3>
+        <h3 id="set-categories">{t('cat_hdr')}</h3>
         <div className="hint" style={{ marginBottom: 10 }}>{t('cat_hint')}</div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: isAdmin ? 12 : 0 }}>
           {cats.length === 0 && <span className="hint">—</span>}
@@ -227,7 +242,7 @@ export default function Settings() {
       </div>
 
       <div className="card">
-        <h3>{t('dep_hdr')}</h3>
+        <h3 id="set-departments">{t('dep_hdr')}</h3>
         <div className="hint" style={{ marginBottom: 10 }}>{t('dep_hint')}</div>
         <table>
           <thead><tr>
@@ -345,25 +360,29 @@ export default function Settings() {
 
       {policyDraft && (
         <div className="card">
-          <h3>{t('bud_thresholds')}</h3>
+          <h3 id="set-thresholds">{t('bud_thresholds')}</h3>
           <div className="hint" style={{ marginBottom: 12 }}>{t('bud_thresholds_hint')}</div>
           <div className="row" style={{ alignItems: 'flex-end', maxWidth: 880 }}>
-            <div><label>{t('bud_warn_label')}</label>
-              <input type="number" min={1} max={1000} disabled={!canManageBudgetPolicy} value={policyDraft.warnPct}
+            <div><label htmlFor="bud-warn">{t('bud_warn_label')}</label>
+              <input id="bud-warn" type="number" min={1} max={1000} disabled={!canManageBudgetPolicy} value={policyDraft.warnPct}
                 onChange={(e) => setPolicyDraft({ ...policyDraft, warnPct: e.target.value })} /></div>
-            <div><label>{t('bud_block_label')}</label>
-              <input type="number" min={1} max={1000} disabled={!canManageBudgetPolicy} placeholder={t('bud_block_off')}
+            <div><label htmlFor="bud-block">{t('bud_block_label')}</label>
+              <input id="bud-block" type="number" min={1} max={1000} disabled={!canManageBudgetPolicy} placeholder={t('bud_block_off')}
                 value={policyDraft.blockPct}
                 onChange={(e) => setPolicyDraft({ ...policyDraft, blockPct: e.target.value })} /></div>
-            <div><label>{t('bud_override_label')}</label>
-              <select disabled={!canManageBudgetPolicy} value={policyDraft.allowOverride ? '1' : '0'}
-                onChange={(e) => setPolicyDraft({ ...policyDraft, allowOverride: e.target.value === '1' })}>
-                <option value="1">{t('yes')}</option>
-                <option value="0">{t('no')}</option>
-              </select></div>
+            {/* A yes/no question drawn as a dropdown of two: one tick says it in one move. */}
+            <div style={{ flex: '0 0 auto' }}>
+              <label htmlFor="bud-override" style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 9px' }}>
+                <input id="bud-override" type="checkbox" style={{ width: 'auto' }}
+                  disabled={!canManageBudgetPolicy} checked={policyDraft.allowOverride}
+                  onChange={(e) => setPolicyDraft({ ...policyDraft, allowOverride: e.target.checked })} />
+                {t('bud_override_label')}
+              </label>
+            </div>
             {canManageBudgetPolicy && (
               <div style={{ flex: '0 0 auto' }}>
-                <button className="btn" disabled={!policyDirty} onClick={savePolicy}>{t('save')}</button>
+                <button className="btn" disabled={!policyDirty} onClick={savePolicy}
+                  data-tip={policyDirty ? undefined : t('nothing_to_save')}>{t('save')}</button>
               </div>
             )}
           </div>
@@ -375,7 +394,7 @@ export default function Settings() {
       )}
 
       <div className="card">
-        <h3>⚖️ {t('method_policy')}</h3>
+        <h3 id="set-method">⚖️ {t('method_policy')}</h3>
         <p className="hint" style={{ marginTop: 2 }}>{t('method_policy_desc')}</p>
 
         {/* One coloured scale per category: the whole policy is visible at a glance —
@@ -484,16 +503,16 @@ export default function Settings() {
         )}
       </div>
 
-      <ChannelsCard isAdmin={isAdmin} />
+      <div id="set-channels"><ChannelsCard isAdmin={isAdmin} /></div>
 
       <div className="card">
-        <h3>{t('integrations')}</h3>
+        <h3 id="set-integrations">{t('integrations')}</h3>
         <div className="hint" style={{ marginBottom: 10 }}>{t('integ_standards')}</div>
         <button className="btn small ghost" onClick={download1c}>📤 {t('integ_1c')}</button>
       </div>
 
       <div className="card">
-        <h3>🖊 {t('approval_chain')}</h3>
+        <h3 id="set-approval">🖊 {t('approval_chain')}</h3>
         <div className="hint" style={{ marginBottom: 4 }}>{t('chain_explain')}</div>
         <div className="hint" style={{ marginBottom: 10 }}>🛡 {t('chain_sod_note')}</div>
 
