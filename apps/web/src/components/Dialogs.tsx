@@ -181,16 +181,22 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
             }}>
             <h3 id="dialog-title" style={{ margin: 0 }}>{pending.opts.title}</h3>
             {pending.kind === 'ask' && (
+              {/* A visible label only where it says something the title does not: with no
+                  `label` the question sits directly above the field and IS its name, and
+                  repeating it word for word read as a stutter («OTIF score / OTIF score»).
+                  The control is still named for a screen reader, by the title. */}
               <div className="filter-field" style={{ marginTop: 12 }}>
-                <label htmlFor="dialog-input">{pending.opts.label ?? pending.opts.title}</label>
+                {pending.opts.label && <label htmlFor="dialog-input">{pending.opts.label}</label>}
                 {pending.opts.options ? (
                   <select id="dialog-input" data-testid="dialog-input"
+                    aria-labelledby={pending.opts.label ? undefined : 'dialog-title'}
                     ref={(el) => { field.current = el; }}
                     value={value} onChange={(e) => setValue(e.target.value)}>
                     {pending.opts.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 ) : (
                   <input id="dialog-input" data-testid="dialog-input"
+                    aria-labelledby={pending.opts.label ? undefined : 'dialog-title'}
                     ref={(el) => { field.current = el; }}
                     type={pending.opts.type === 'number' ? 'number' : 'text'}
                     min={pending.opts.min} max={pending.opts.max}
@@ -199,9 +205,8 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
                 )}
               </div>
             )}
-            {(pending.opts.hint || why) && (
-              <div className={why ? 'error' : 'hint'} style={{ marginTop: 8 }}>{why ?? pending.opts.hint}</div>
-            )}
+            {pending.opts.hint && <div className="hint" style={{ marginTop: 8 }}>{pending.opts.hint}</div>}
+            {why && <div className="error" style={{ marginTop: 6 }}>{why}</div>}
             {/* Main action first, then the way out — the order the rest of the product uses. */}
             <div className="modal-actions">
               <button type="submit" data-testid="dialog-confirm" disabled={!!why} ref={accept}
