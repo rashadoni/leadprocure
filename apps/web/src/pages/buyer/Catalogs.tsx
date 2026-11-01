@@ -4,6 +4,7 @@ import { api, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import { useDialogs } from '../../components/Dialogs';
+import { Actions } from '../../components/Actions';
 import { Badge } from '../../components/Badge';
 import { ListState, useLoad } from '../../components/ListState';
 
@@ -62,7 +63,7 @@ export default function Catalogs() {
       <div className="card">
         <ListState of={[catalogs, { loading: false, failed: depsFailed, reload: loadDeps }]} />
         <table>
-          <thead><tr><th>{t('title')}</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th>{t('status')}</th><th className="num">{t('items')}</th>{catalogActions && <th>{t('actions')}</th>}</tr></thead>
+          <thead><tr><th>{t('title')}</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th>{t('status')}</th><th className="num" data-tip={t('items_count_tip')}>{t('items')}</th>{catalogActions && <th>{t('actions')}</th>}</tr></thead>
           <tbody>
             {rows.map((c) => (
               <tr key={c.id}>
@@ -72,9 +73,12 @@ export default function Catalogs() {
                 <td className="num">{c.item_count}</td>
                 {catalogActions && (
                 <td>
-                  <button className="btn small" data-tip={t('tip_catalog_activate')}
-                    disabled={c.status !== 'DRAFT'}
-                    onClick={() => run(() => api.post(`/catalogs/${c.id}/activate`))}>{t('activate')}</button>
+                  <Actions>
+                    {c.status === 'DRAFT' && (
+                      <button className="btn small" data-tip={t('tip_catalog_activate')}
+                        onClick={() => run(() => api.post(`/catalogs/${c.id}/activate`))}>{t('activate')}</button>
+                    )}
+                  </Actions>
                 </td>
                 )}
               </tr>

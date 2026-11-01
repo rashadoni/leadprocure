@@ -60,20 +60,20 @@ export default function Verification() {
       <div className="card">
         <ListState of={caseList} />
         <table>
-          <thead><tr><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th>{t('status')}</th><th>{t('attachments')}</th></tr></thead>
+          <thead><tr><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th>{t('status')}</th><th className="num" data-tip={t('attachments_count_tip')}>{t('attachments')}</th></tr></thead>
           <tbody>
             {cases.map((c) => (
               <tr key={c.id}>
                 <td><a href="#" onClick={(e) => { e.preventDefault(); expand(c.id); }}>{isBuyer ? c.supplier_name : c.buyer_name}</a></td>
                 <td><Badge status={c.status} /></td>
-                <td>{c.doc_count}</td>
+                <td className="num">{c.doc_count}</td>
               </tr>
             ))}
           </tbody>
         </table>
         {/* The decision lives in the expanded card, and the only way in was a company name
             that looks like a name. Nothing on the list said so. */}
-        {cases.length > 0 && <div className="hint">{t('verification_open_hint')}</div>}
+        {cases.length > 0 && <div className="hint">{t(isBuyer ? 'verification_open_hint' : 'verification_open_hint_supplier')}</div>}
         {!caseList.loading && !caseList.failed && cases.length === 0 && <div className="hint">—{isBuyer ? ` ${t('hint_verification_empty')}` : ''}</div>}
       </div>
 
