@@ -37,18 +37,27 @@ fi
 echo "→ building and starting the stand (first run builds the API image — minutes, not seconds)"
 "${COMPOSE[@]}" up -d --build --wait --wait-timeout 600
 
-# The API entrypoint runs the migrations itself on every boot, so by the time --wait
-# returns the schema is there. The seed is separate: it creates the orgs, the users and
-# the method policy the demo story is then built on top of.
-echo "→ seeding base accounts (orgs, users, method policy, fx rate)"
-"${COMPOSE[@]}" exec -T leadprocure-demo-api pnpm --filter api seed
-
-echo "→ waiting for the API to answer on $DEMO_API"
-for i in $(seq 1 60); do
+# WAIT FIRST, SEED SECOND — the order is the whole point. The API entrypoint applies the
+# migrations and only then starts serving, so "the API answers" is the only cheap proof
+# that the schema exists. Seeding before that fails with
+# `relation "organization_users" does not exist`, which reads like a broken migration and
+# is really just a race. The compose healthcheck says the same thing to `--wait`; this
+# loop stays because a healthcheck can be edited away and the cost here is one curl.
+echo "→ waiting for the API to answer on $DEMO_API (migrations run at its boot)"
+for i in $(seq 1 90); do
   if curl -fsS "$DEMO_API/health" >/dev/null 2>&1; then break; fi
-  if [ "$i" = 60 ]; then echo "✗ API never answered on $DEMO_API" >&2; exit 1; fi
+  if [ "$i" = 90 ]; then
+    echo "✗ API never answered on $DEMO_API — its log says why:" >&2
+    "${COMPOSE[@]}" logs --tail 40 leadprocure-demo-api >&2
+    exit 1
+  fi
   sleep 2
 done
+
+# Separate from the migrations: this creates the orgs, the users and the method policy the
+# demo story is then built on top of.
+echo "→ seeding base accounts (orgs, users, method policy, fx rate)"
+"${COMPOSE[@]}" exec -T leadprocure-demo-api pnpm --filter api seed
 
 # DEMO_LANG=az: the story's titles are what the Azerbaijani scenarios click by name
 # ("Tender: noutbuk və monitorlar", "Auksion: ofis kağızı"). Seeded in another language,
