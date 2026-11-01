@@ -174,7 +174,7 @@ export default function EventDetail() {
       <h1>
         {/* The list draws the procedure as «🔒 RFQ» with a tip explaining what a sealed
             tender is; the card drew the bare enum in a pill. One component now, both screens. */}
-        {ev.title} <ProcedureChip type={ev.type} format={ev.format} />{' '}
+        {ev.title} <ProcedureChip type={ev.type} format={ev.format} visibility={ev.visibility} />{' '}
         <Badge status={ev.status} />
       </h1>
       <div className="card">

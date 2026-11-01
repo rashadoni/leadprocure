@@ -34,7 +34,7 @@ export default function Events() {
                 {/* `format` as well as `type`: a tender switched to live bidding keeps
                     type RFQ in the column, and the list used to call it a sealed RFQ while
                     the auction panel was running on its card. */}
-                <td><ProcedureChip type={r.type} format={r.format} /></td>
+                <td><ProcedureChip type={r.type} format={r.format} visibility={r.visibility} /></td>
                 <td><Badge status={r.status} /></td>
                 <td className="hint nowrap">{fmtDateTime(r.close_at)}</td>
                 <td>{r.bid_count}</td>
