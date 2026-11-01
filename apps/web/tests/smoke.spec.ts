@@ -288,4 +288,27 @@ test.describe('supplier panel', () => {
     await expect(page.locator('h1')).toHaveCount(1);
     await expect(page.getByRole('columnheader', { name: 'Actions', exact: true })).toHaveCount(0);
   });
+
+  // The market is the one list where the procedure decides whether to bid at all, and it
+  // was the one tender list without the chip the buyer's list has carried since PR #71: a
+  // closed tender, a live auction and a request for information looked identical until the
+  // row was opened. Asserted on the heading, which renders even on an empty market — how
+  // many rows are open depends on what the other specs left behind.
+  test('the market names the procedure of every tender', async () => {
+    await page.goto('/supplier/market');
+    await expect(page.getByRole('columnheader', { name: 'Method', exact: true }))
+      .toBeVisible({ timeout: 20_000 });
+  });
+
+  // Two halves of one finding: the buyer's panel got a hint under every figure in PR #68
+  // and the supplier's got none, and verification sat in the row of numbers as a sixth
+  // tile — a standing condition among counts, taller than the other five and breaking the
+  // grid. Counting the tiles is what catches it coming back.
+  test('supplier panel explains its figures and states verification beside them', async () => {
+    await page.goto('/supplier/dashboard');
+    const grid = page.getByTestId('sup-kpi');
+    await expect(grid.locator('> div')).toHaveCount(5, { timeout: 20_000 });
+    await expect(grid.locator('> div[data-tip]')).toHaveCount(5);
+    await expect(page.getByTestId('sup-verification')).toBeVisible();
+  });
 });

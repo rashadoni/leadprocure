@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, fmtDate, fmtDateTime, fmtMoney } from '../../api/client';
+import { api, fmtDate, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { useDialogs } from '../../components/Dialogs';
-import { notifText, taskLabel } from '../../components/humanize';
+import { taskLabel } from '../../components/humanize';
+import { NotificationList } from '../../components/NotificationList';
 import { isDenied, ListState, useLoad } from '../../components/ListState';
 
 const TASK_LINK: Record<string, (id: string) => string> = {
@@ -116,30 +117,7 @@ export default function Dashboard() {
         </table>
       </div>
 
-      <div className="card">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <h3 style={{ margin: 0 }}>{t('notifications')}</h3>
-          {notes.data.some((n: any) => !n.read_at) && (
-            <button className="btn small ghost" onClick={readAll}>✓ {t('mark_all_read')}</button>
-          )}
-        </div>
-        <ListState of={notes} empty={!notes.data.length} />
-        <table>
-          <tbody>
-            {notes.data.map((n) => (
-              <tr key={n.id} style={{ opacity: n.read_at ? 0.5 : 1 }}>
-                <td>{notifText(t, n)}</td>
-                <td className="hint nowrap">{fmtDateTime(n.created_at)}</td>
-                <td>
-                  {!n.read_at && (
-                    <button className="btn small ghost" onClick={() => readNote(n.id)}>✓ {t('mark_read')}</button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <NotificationList notes={notes} onRead={readNote} onReadAll={readAll} />
     </>
   );
 }

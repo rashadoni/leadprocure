@@ -6,6 +6,7 @@ import { useDialogs } from '../../components/Dialogs';
 import { PO_SUPPLIER_TRANSITIONS, SHIPMENT_STATUSES } from '@leadprocure/shared';
 import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
+import { statusLabel } from '../../components/humanize';
 import { Actions } from '../../components/Actions';
 import { ListState, useLoad } from '../../components/ListState';
 
@@ -157,7 +158,12 @@ export default function Orders() {
                     {s && s.shipment && (
                       <div style={{ fontSize: 12 }}>
                         <b>{s.shipment.carrier}</b> · {s.shipment.tracking_no} · <Badge status={s.shipment.status} />
-                        <div className="hint">{s.events.map((e: any) => `${e.status}@${e.location ?? '—'}`).join(' → ')}</div>
+                        {/* `SHIPPED@Baku → CUSTOMS@Baku` — raw status codes joined by an
+                            `@`, the one machine text left on this screen after PR #72 put
+                            the rest of logistics into words. The dropdown right below it
+                            already says the same statuses in the reader's language. */}
+                        <div className="hint">{s.events.map((e: any) =>
+                          [statusLabel(t, e.status), e.location].filter(Boolean).join(' · ')).join(' → ')}</div>
                         <select style={{ width: 150, marginTop: 4 }} value="" onChange={(e) => e.target.value && addEvent(p.id, e.target.value)}>
                           <option value="">+ {t('history')}…</option>
                           {/* The same rule the API enforces, and only that one: a
