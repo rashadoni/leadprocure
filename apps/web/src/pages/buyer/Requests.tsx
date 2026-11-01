@@ -224,16 +224,22 @@ export default function Requests() {
     <>
       <h1>{t('requests')}</h1>
       <ListState of={{ loading: false, failed: refFailed, reload: loadRefs }} />
+      {/* `tip-below`: кнопка стоит почти под заголовком страницы, а пузырь подсказки
+          рисуется ВВЕРХ — на трёх строках ему там не хватает места, и он обрезается
+          верхом окна, где прокрутить его уже нечем. */}
       {!isFinance && !formOpen && (
-        <button className="btn" data-testid="req-new" data-tip={t('tip_new_request')}
-          onClick={() => setFormOpen(true)} style={{ marginBottom: 12 }}>
+        <button className="btn tip-below" data-testid="req-new" data-tip={t('tip_new_request')}
+          onClick={() => { setErr(''); setFormOpen(true); }} style={{ marginBottom: 12 }}>
           + {t('new_request')}
         </button>
       )}
       {!isFinance && formOpen && <div className="card">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
           <h3 style={{ margin: 0 }}>{t('new_request')}</h3>
-          <button type="button" className="btn small ghost" onClick={() => setFormOpen(false)}>
+          {/* Ошибку надо погасить вместе с формой: она рисуется ВНУТРИ этой карточки, и
+              без сброса повторное открытие встречало сообщением от прошлой попытки —
+              рядом с полями, которые человек с тех пор мог поменять. */}
+          <button type="button" className="btn small ghost" onClick={() => { setErr(''); setFormOpen(false); }}>
             ✕ {t('form_hide')}
           </button>
         </div>

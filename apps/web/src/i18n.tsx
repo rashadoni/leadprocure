@@ -270,7 +270,7 @@ const dict: Record<Lang, Record<string, string>> = {
     chain_explain: 'Məbləğdən asılı olaraq sifarişi kim təsdiqləyir. Öz sifarişini təsdiqləmək olmaz; iki addımlı zəncirdə addımları müxtəlif şəxslər keçir.',
     chain_presets: 'Hazır sxemlər:', chain_p0: 'Zəncirsiz (bir təsdiqləyən)', chain_p1: 'Bir addım: təsdiqləyən', chain_p2: 'İki addım: təsdiqləyən → administrator', chain_current: 'Cari sxem',
     crit_price: 'Qiymət', crit_delivery: 'Müddət', score_hint: 'Qiymətləndirmə 0–100',
-    cat_hdr: 'Kateqoriya kataloqu', cat_code: 'Kod', cat_hint: 'Vahid siyahı — «IT», «it», «AyTi» siyasət, büdcə və analitikada ayrılmasın deyə.',
+    cat_hdr: 'Kateqoriya soraq kitabı', cat_code: 'Kod', cat_hint: 'Vahid siyahı — «IT», «it», «AyTi» siyasət, büdcə və analitikada ayrılmasın deyə.',
     department: 'Şöbə', dep_hdr: 'Şöbələr (məsrəf mərkəzləri)', dep_code: 'Kod', dep_parent: 'Yuxarı şöbə',
     dep_usage: 'Sorğular', dep_active: 'Aktiv', dep_inactive: 'Arxiv', dep_activate: 'Aktivləşdir', dep_deactivate: 'Arxivə göndər',
     dep_all: 'Bütün şöbələr', dep_default: 'Öz şöbəm', dep_none: 'Şöbə təyin edilməyib',

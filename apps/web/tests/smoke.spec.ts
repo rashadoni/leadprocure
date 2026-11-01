@@ -227,7 +227,11 @@ test.describe('buyer panel', () => {
     expect(scrollable).toBeGreaterThan(100);
     await page.evaluate(() => window.scrollTo(0, document.scrollingElement!.scrollHeight));
     expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
-    expect(await page.locator('.side').evaluate((el) => el.getBoundingClientRect().top)).toBeLessThan(2);
+    // |top|, не top: отлипшее меню уезжает ВВЕРХ и его `top` становится отрицательным,
+    // то есть «< 2» проходило и когда меню приклеено (0), и когда его унесло (−176) —
+    // ровно тот сбой, который этот замер и существует чтобы поймать.
+    const railTop = await page.locator('.side').evaluate((el) => el.getBoundingClientRect().top);
+    expect(Math.abs(railTop)).toBeLessThan(2);
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.evaluate(() => window.scrollTo(0, 0));
     // a prefix: [data-tip]::after lands in the accessible name
