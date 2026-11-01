@@ -53,7 +53,7 @@ export default function Login() {
           </div>
         </div>
         <div className="brand" style={{ marginBottom: 4 }}>Leadprocure</div>
-        <div className="hint" style={{ marginBottom: 14 }}>{t('app_tagline')}</div>
+        <div className="hint" style={{ margin: '0 0 14px' }}>{t('app_tagline')}</div>
         <div className="tabs">
           <button type="button" className={`btn ${mode === 'login' ? '' : 'ghost'}`} onClick={() => setMode('login')}>{t('login')}</button>
           <button type="button" className={`btn ${mode === 'register' ? '' : 'ghost'}`} onClick={() => setMode('register')}>{t('register')}</button>
@@ -74,7 +74,7 @@ export default function Login() {
         )}
         <label htmlFor="login-email">{t('email')}</label>
         <input id="login-email" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required />
-        <label htmlFor="login-password">{t('password')}</label>
+        <label htmlFor="login-password">{t('password')} <span className="hint">· {t('password_min')}</span></label>
         <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
           <input id="login-password" type={showPassword ? 'text' : 'password'} value={f.password}
             onChange={(e) => setF({ ...f, password: e.target.value })} required minLength={8} />
@@ -83,7 +83,6 @@ export default function Login() {
             {showPassword ? t('password_hide') : t('password_show')}
           </button>
         </div>
-        <div className="hint" style={{ marginTop: 4 }}>{t('password_min')}</div>
         <div style={{ marginTop: 16 }}>
           <button className="btn" style={{ width: '100%' }}>{mode === 'login' ? t('login') : t('register')}</button>
         </div>

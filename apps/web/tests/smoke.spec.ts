@@ -136,6 +136,10 @@ test.describe('buyer panel', () => {
     await page.fill('[data-testid=item-name-0]', 'Playwright item');
     await page.fill('[data-testid=item-qty-0]', '2');
     await page.fill('[data-testid=item-price-0]', '10');
+    // BEFORE the submit: the form clears itself on success, and the layout this picture
+    // exists to answer for — field widths against what each field holds, labels level
+    // across inputs and a select — cannot be read off empty fields.
+    await page.screenshot({ path: 'test-results/request-form.png' });
     await page.click('form button.btn:not(.ghost):not([type=button])');
 
     const row = page.locator(`tr:has-text("${title}")`);
@@ -143,10 +147,6 @@ test.describe('buyer panel', () => {
     // the badge TEXT is localized ("Черновик"), so assert on the status class instead
     await expect(row.locator('.badge')).toHaveClass(/DRAFT/);
     await expect(row).toContainText(code); // the department round-tripped through the API
-    // The form's own layout is the thing the audit complained about and the thing a
-    // compiler cannot see: field widths against what each field holds, and labels sitting
-    // on one line across inputs and a select of slightly different heights.
-    await page.screenshot({ path: 'test-results/request-form.png', fullPage: false });
   });
 
   // The product's own dialogs replaced alert / prompt / confirm. What the native prompt

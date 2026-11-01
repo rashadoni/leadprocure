@@ -209,6 +209,11 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 
 .auth-wrap { display: grid; place-items: center; min-height: 100vh; }
 .auth { width: 380px; }
+/* The sign-in card is outside `.main`, so the product's link-hover rule never reached it:
+   «Forgot your password?» was green text the same size as the field labels, distinguished
+   by colour and nothing else. Underlined at rest, since there is no hover on a phone. */
+.auth a { text-decoration: underline; }
+.auth a:hover { color: var(--accent2); }
 .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
 .tabs button { flex: 1; }
 .error { color: var(--bad); font-size: 13px; margin-top: 10px; }

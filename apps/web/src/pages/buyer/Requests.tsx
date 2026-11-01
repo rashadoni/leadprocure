@@ -347,7 +347,7 @@ export default function Requests() {
                             {approvedSuppliers.map((s) => <option key={s.supplier_org_id} value={s.supplier_org_id}>{s.legal_name}</option>)}
                           </select>
                           <button className="btn small" disabled={!directSupplier}
-                            data-tip={directSupplier ? t('tip_direct') : t('pick_supplier_first')}
+                            data-tip={directSupplier ? t('tip_place_direct') : t('pick_supplier_first')}
                             onClick={() => placeDirect(r.id, directSupplier)}>{t('confirm')}</button>
                         </>
                       ) : (
