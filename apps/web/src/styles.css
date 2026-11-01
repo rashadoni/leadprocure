@@ -118,6 +118,13 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
   opacity: 0; pointer-events: none; transition: opacity .14s ease; z-index: 90; }
 [data-tip]:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); }
 [data-tip]:hover::before { opacity: 1; }
+/* A bubble drawn by ::after is not in the accessibility tree and there is no hover on a
+   touch screen, so focus has to open it too — :focus rather than :focus-visible, because a
+   tap gives plain focus and would otherwise reach nothing. This only fires where an element
+   was deliberately made focusable (the spend chart's columns), and the ring below is keyboard
+   only, so a mouse click does not leave one behind. */
+[data-tip]:focus::after { opacity: 1; transform: translateX(-50%) translateY(0); }
+[data-tip]:focus::before { opacity: 1; }
 
 /* Status colour by MEANING, not by enum name. Five groups, assigned in one table in
    components/Badge.tsx; the raw status also stays in the class list, for the browser specs
@@ -176,10 +183,42 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 .budget-bar { height: 8px; background: var(--panel2); border-radius: 6px; overflow: hidden; margin-bottom: 3px; }
 .budget-fill { height: 100%; background: var(--accent); border-radius: 6px; transition: width .2s; }
 .budget-fill.over { background: var(--bad); }
-.chart { display: flex; align-items: flex-end; gap: 6px; height: 160px; padding-top: 8px; }
-.chart-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+/* Hand-rolled spend chart — this app carries no charting library. `.chart` IS the plot box:
+   its height is what every percentage below is measured against. The month labels hang
+   BELOW it, absolutely positioned, because while they sat inside the column they ate part
+   of that height — a bar and a plan line of the same value then came out some 15px apart,
+   and comparing those two is the one thing the chart is for. */
+/* The top tick is centred ON its own rule, so half of its line sits ABOVE the plot box and
+   the frame has to give it that room — without it the label crossed the heading overhead,
+   through the descenders of «Monthly spend». 84px wide, not 68: the abbreviation is written
+   in the interface language, and «100 тыс. AZN» is half again as wide as "100K AZN". */
+.chart-frame { display: flex; gap: 8px; align-items: flex-start; margin-top: 14px; }
+.chart-y { position: relative; width: 84px; height: 170px; flex: none; }
+.chart-tick { position: absolute; right: 0; transform: translateY(50%); color: var(--muted);
+  font-size: 10px; white-space: nowrap; }
+.chart { position: relative; flex: 1; min-width: 0; display: flex; align-items: flex-end;
+  gap: 6px; height: 170px; margin-bottom: 22px; }
+.chart-grid { position: absolute; inset: 0; pointer-events: none; }
+.chart-rule { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid var(--border); }
+.chart-col { position: relative; flex: 1; min-width: 0; height: 100%; display: flex; align-items: flex-end; }
+.chart-col:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .chart-bar { width: 100%; min-height: 2px; background: linear-gradient(180deg, var(--accent2), var(--accent)); border-radius: 4px 4px 0 0; }
-.chart-label { color: var(--muted); font-size: 10px; margin-top: 4px; }
+.chart-label { position: absolute; top: 100%; left: 0; right: 0; text-align: center;
+  padding-top: 5px; color: var(--muted); font-size: 10px; }
+/* The three marks on the plot, each named beside the mark itself. They shared one prose
+   paragraph under the chart, which is not a legend a reader can look things up in. */
+.chart-key { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; font-size: 12px; color: var(--muted); }
+.chart-key span { display: inline-flex; align-items: center; gap: 6px; }
+.chart-key i { width: 14px; display: inline-block; }
+.chart-key i.k-fact { height: 9px; border-radius: 2px; background: linear-gradient(180deg, var(--accent2), var(--accent)); }
+.chart-key i.k-plan { height: 0; border-top: 2px dashed var(--warn); }
+.chart-key i.k-prev { height: 0; border-top: 2px solid var(--muted); opacity: .55; }
+
+/* A control whose value cannot be guessed from the control itself. An empty
+   <input type="month"> draws itself as "---- --" and takes no placeholder, so the only way
+   to say which end of the window it holds is a label the eye can see. */
+.filter-field { display: flex; flex-direction: column; gap: 3px; }
+.filter-field label, .filter-field .filter-label { margin: 0; font-size: 11px; font-weight: 500; color: var(--muted); }
 
 /* ---- section help video: a card IN THE FLOW above the section, never an overlay ---- */
 .help-card { display: flex; align-items: center; gap: 18px; margin-bottom: 16px;
@@ -222,7 +261,6 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 
 /* plan marker on a spend column: the month's prorated budget, so bar vs line reads as
    fact vs plan without a charting library */
-.chart-col { position: relative; }
 .chart-plan { position: absolute; left: 8%; right: 8%; height: 0; border-top: 2px dashed var(--warn); }
 
 /* Same month a year ago, marked the way the plan is marked — a line across the column. A
