@@ -13,6 +13,7 @@ export default function Login() {
   const [err, setErr] = useState('');
   const [info, setInfo] = useState('');
   const [f, setF] = useState({ email: '', password: '', legalName: '', fullName: '', voen: '' });
+  const [showPassword, setShowPassword] = useState(false);
 
   const forgot = async () => {
     setErr(''); setInfo('');
@@ -51,7 +52,8 @@ export default function Login() {
             ))}
           </div>
         </div>
-        <div className="brand" style={{ marginBottom: 14 }}>Leadprocure</div>
+        <div className="brand" style={{ marginBottom: 4 }}>Leadprocure</div>
+        <div className="hint" style={{ margin: '0 0 14px' }}>{t('app_tagline')}</div>
         <div className="tabs">
           <button type="button" className={`btn ${mode === 'login' ? '' : 'ghost'}`} onClick={() => setMode('login')}>{t('login')}</button>
           <button type="button" className={`btn ${mode === 'register' ? '' : 'ghost'}`} onClick={() => setMode('register')}>{t('register')}</button>
@@ -70,10 +72,17 @@ export default function Login() {
             <input value={f.fullName} onChange={(e) => setF({ ...f, fullName: e.target.value })} required />
           </>
         )}
-        <label>{t('email')}</label>
-        <input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required />
-        <label>{t('password')}</label>
-        <input type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} required minLength={8} />
+        <label htmlFor="login-email">{t('email')}</label>
+        <input id="login-email" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required />
+        <label htmlFor="login-password">{t('password')} <span className="hint">· {t('password_min')}</span></label>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+          <input id="login-password" type={showPassword ? 'text' : 'password'} value={f.password}
+            onChange={(e) => setF({ ...f, password: e.target.value })} required minLength={8} />
+          <button type="button" className="btn ghost small" style={{ flex: 'none' }}
+            onClick={() => setShowPassword(!showPassword)}>
+            {showPassword ? t('password_hide') : t('password_show')}
+          </button>
+        </div>
         <div style={{ marginTop: 16 }}>
           <button className="btn" style={{ width: '100%' }}>{mode === 'login' ? t('login') : t('register')}</button>
         </div>
@@ -81,7 +90,7 @@ export default function Login() {
         {info && <div className="hint">{info}</div>}
         {mode === 'login' && (
           <div style={{ marginTop: 8 }}>
-            <a href="#" onClick={(e) => { e.preventDefault(); forgot(); }} className="hint">{t('forgot')}</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); forgot(); }}>{t('forgot')}</a>
           </div>
         )}
         {/* Demo credentials are shown only when the build opts in (dev / demo stand) —

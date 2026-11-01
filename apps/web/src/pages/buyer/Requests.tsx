@@ -223,9 +223,9 @@ export default function Requests() {
           <div className="row">
             <div style={{ flex: 2 }}><label htmlFor="request-title">{t('title')}</label>
               <input id="request-title" data-testid="req-title" value={title} onChange={(e) => setTitle(e.target.value)} required /></div>
-            <div style={{ flex: 1 }}><label>{t('category')}</label>
+            <div style={{ flex: 1 }}><label htmlFor="request-category">{t('category')}</label>
               {/* category drives the method policy, budgets and per-category analytics */}
-              <input data-testid="req-category" value={category} onChange={(e) => setCategory(e.target.value)}
+              <input id="request-category" data-testid="req-category" value={category} onChange={(e) => setCategory(e.target.value)}
                 placeholder="IT, construction…" list="req-categories" />
               <datalist id="req-categories">
                 {/* curated categories (Settings) first, plus any already used on requests */}
@@ -233,9 +233,9 @@ export default function Requests() {
                   <option key={c} value={c} />
                 ))}
               </datalist></div>
-            <div style={{ flex: 1 }}><label>{t('department')}</label>
+            <div style={{ flex: 1 }}><label htmlFor="request-department">{t('department')}</label>
               {/* the department owns the budget this spend is charged to */}
-              <select data-testid="req-department" value={department} onChange={(e) => setDepartment(e.target.value)}>
+              <select id="request-department" data-testid="req-department" value={department} onChange={(e) => setDepartment(e.target.value)}>
                 <option value="">{t('dep_default')}</option>
                 {deps.filter((d) => d.is_active).map((d) => (
                   <option key={d.id} value={d.id}>{d.code}{d.name ? ` · ${d.name}` : ''}</option>
@@ -245,11 +245,11 @@ export default function Requests() {
           <h3>{t('items')}</h3>
           {items.map((it, idx) => (
             <div className="row" key={idx}>
-              <div><label htmlFor={`request-item-${idx}-name`}>{t('name')}</label>
+              <div style={{ flex: 3 }}><label htmlFor={`request-item-${idx}-name`}>{t('name')}</label>
                 <input id={`request-item-${idx}-name`} data-testid={`item-name-${idx}`} value={it.name} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))} /></div>
-              <div><label htmlFor={`request-item-${idx}-qty`}>{t('qty')}</label>
+              <div style={{ flex: '0 0 110px' }}><label htmlFor={`request-item-${idx}-qty`}>{t('qty')}</label>
                 <input id={`request-item-${idx}-qty`} data-testid={`item-qty-${idx}`} type="number" min={1} value={it.qty} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, qty: Number(e.target.value) } : x)))} /></div>
-              <div><label htmlFor={`request-item-${idx}-price`}>{t('unit_price')} (AZN)</label>
+              <div style={{ flex: '0 0 170px' }}><label htmlFor={`request-item-${idx}-price`}>{t('unit_price')} (AZN)</label>
                 <input id={`request-item-${idx}-price`} data-testid={`item-price-${idx}`} type="number" step="0.01" min={0} value={it.price} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, price: e.target.value } : x)))} /></div>
             </div>
           ))}
@@ -294,7 +294,7 @@ export default function Requests() {
                 <td>
                   <Badge status={r.status} />
                   {r.status === 'SUBMITTED' && r.steps_total > 0 && (
-                    <div className="hint">✔ {r.steps_done}/{r.steps_total} · {r.current_role}</div>
+                    <div className="hint">✔ {r.steps_done}/{r.steps_total} · {r.current_role ? t(`role_${r.current_role}`) : '—'}</div>
                   )}
                 </td>
                 {/* RFQ and DIRECT read as themselves; OPEN_TENDER read as a database
@@ -346,7 +346,9 @@ export default function Requests() {
                             <option value="" disabled>{t('supplier_org')}…</option>
                             {approvedSuppliers.map((s) => <option key={s.supplier_org_id} value={s.supplier_org_id}>{s.legal_name}</option>)}
                           </select>
-                          <button className="btn small" disabled={!directSupplier} onClick={() => placeDirect(r.id, directSupplier)}>{t('confirm')}</button>
+                          <button className="btn small" disabled={!directSupplier}
+                            data-tip={directSupplier ? t('tip_place_direct') : t('pick_supplier_first')}
+                            onClick={() => placeDirect(r.id, directSupplier)}>{t('confirm')}</button>
                         </>
                       ) : (
                         <button className="btn small" data-tip={t('tip_direct')} onClick={() => openDirect(r.id)}>📦 {t('direct_order')}</button>

@@ -21,9 +21,12 @@ test('the sign-in page offers all three languages and switches at once', async (
   await page.goto('/login');
   const picker = page.locator('.auth .lang');
   await expect(picker.getByRole('button')).toHaveCount(3);
-  await expect(page.getByText('Password', { exact: true })).toBeVisible();
+  // The label carries the password rule beside the word, so match the LABEL and not the
+  // whole string: an exact match broke the moment the rule moved into it.
+  const passwordLabel = page.locator('label[for="login-password"]');
+  await expect(passwordLabel).toContainText('Password');
   await picker.getByRole('button', { name: 'RU', exact: true }).click();
-  await expect(page.getByText('Пароль', { exact: true })).toBeVisible();
+  await expect(passwordLabel).toContainText('Пароль');
   await picker.getByRole('button', { name: 'AZ', exact: true }).click();
-  await expect(page.getByText('Şifrə', { exact: true })).toBeVisible();
+  await expect(passwordLabel).toContainText('Şifrə');
 });

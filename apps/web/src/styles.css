@@ -62,6 +62,12 @@ tr:hover td { background: rgba(4, 120, 87, .05); }
 .btn.small { padding: 4px 10px; font-size: 12px; }
 .btn:disabled { opacity: 0.45; cursor: default; box-shadow: none; }
 input, select, textarea { background: #fff; border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 10px; font: inherit; width: 100%; transition: border-color .12s, box-shadow .12s; }
+/* One height for every text-like control. A <select> renders a couple of pixels taller than
+   an <input> of the same padding and font, and `.row { align-items: end }` lines boxes up by
+   their BOTTOM — so the taller control pushed its own label down and the labels across a
+   form row sat on three different lines. Visible on the request form's screenshot in the
+   acceptance artefact. Checkboxes, radios, file pickers and textareas keep their own size. */
+input:not([type=checkbox]):not([type=radio]):not([type=file]), select { height: 38px; }
 input:focus, select:focus, textarea:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(4, 120, 87, .14); }
 label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; margin: 10px 0 4px; }
 .row { display: flex; gap: 10px; align-items: end; }
@@ -209,6 +215,11 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 
 .auth-wrap { display: grid; place-items: center; min-height: 100vh; }
 .auth { width: 380px; }
+/* The sign-in card is outside `.main`, so the product's link-hover rule never reached it:
+   «Forgot your password?» was green text the same size as the field labels, distinguished
+   by colour and nothing else. Underlined at rest, since there is no hover on a phone. */
+.auth a { text-decoration: underline; }
+.auth a:hover { color: var(--accent2); }
 .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
 .tabs button { flex: 1; }
 .error { color: var(--bad); font-size: 13px; margin-top: 10px; }
