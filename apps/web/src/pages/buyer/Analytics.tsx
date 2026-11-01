@@ -198,7 +198,7 @@ export default function Analytics() {
     const up = r.deltaMinor > 0;
     return (
       <span className={!isNew && up ? 'error' : 'hint'} data-tip={`${t('yoy_prev')}: ${money(r.prevTotalMinor)}`}>
-        {up ? '▲' : '▼'} {isNew ? t('yoy_new') : `${Math.abs(r.deltaPct)}%`}
+        {up ? '▲' : '▼'} {r.deltaPct == null ? t('yoy_new') : `${Math.abs(r.deltaPct)}%`}
       </span>
     );
   };
