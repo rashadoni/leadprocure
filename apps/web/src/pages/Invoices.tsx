@@ -113,6 +113,12 @@ export default function Invoices() {
     return api.post(`/invoices/${i.id}/approve`, reason ? { reason } : {});
   });
 
+  // The column follows the buttons. A BUYER_USER decides nothing here — approve, reject
+  // and pay are all BUYER_ADMIN/BUYER_APPROVER — so the heading stood over a column of
+  // dashes, taking width from the numbers and promising an action that was never coming.
+  const invoiceActions = canDecide
+    && rows.some((i: any) => ['MATCHED', 'DISPUTED', 'SUBMITTED', 'APPROVED'].includes(i.status));
+
   return (
     <>
       <h1>{t('invoices')}</h1>
@@ -123,7 +129,7 @@ export default function Invoices() {
           <button className="btn small ghost" onClick={() => load()}>{t('invoice_list_retry')}</button>
         </div>}
         <table>
-          <thead><tr><th>#</th><th>{t('order_no')}</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th>#</th><th>{t('order_no')}</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th>{invoiceActions && <th>{t('actions')}</th>}</tr></thead>
           <tbody>
             {rows.map((i) => (
               <tr key={i.id}>
@@ -138,6 +144,7 @@ export default function Invoices() {
                     payment terms become a real field rather than standing empty meanwhile. */}
                 <td className="num">{fmtMoney(i.gross_minor, i.currency)}</td>
                 <td><Badge status={i.status} /></td>
+                {invoiceActions && (
                 <td>
                   <Actions>
                     {canDecide && ['MATCHED', 'DISPUTED', 'SUBMITTED'].includes(i.status) && (
@@ -153,6 +160,7 @@ export default function Invoices() {
                     )}
                   </Actions>
                 </td>
+                )}
               </tr>
             ))}
           </tbody>

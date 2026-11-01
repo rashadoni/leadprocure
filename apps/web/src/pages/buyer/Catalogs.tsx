@@ -78,7 +78,7 @@ export default function Catalogs() {
                 {catalogActions && (
                 <td>
                   <Actions>
-                    {c.status === 'DRAFT' && (
+                    {canActivate && c.status === 'DRAFT' && (
                       <button className="btn small" data-tip={t('tip_catalog_activate')}
                         onClick={() => run(() => api.post(`/catalogs/${c.id}/activate`))}>{t('activate')}</button>
                     )}
@@ -96,7 +96,7 @@ export default function Catalogs() {
         <div className="card" key={id}>
           <h3>{cat.title} <Badge status={cat.status} /></h3>
           <table>
-            <thead><tr><th>{t('name')}</th><th className="num" data-tip={t('moq_tip')}>{t('moq')}</th><th className="num">{t('unit_price')}</th>{canOrder && cat.status === 'ACTIVE' && <th className="num">{t('qty')}</th>}</tr></thead>
+            <thead><tr><th>{t('name')}</th><th className="num" data-tip={t('moq_tip')}>{t('moq')}</th><th className="num">{t('unit_price')}</th>{canOrder && cat.status === 'ACTIVE' && <th>{t('qty')}</th>}</tr></thead>
             <tbody>
               {cat.items.map((i: any) => (
                 <tr key={i.id}>
