@@ -1,0 +1,31 @@
+# Overlay: run api and web from an already-built release image instead of building here.
+#
+# docker-compose.prod.yml describes api and web with `build:` only, so an image from the
+# release package (scripts/release/README.md) has nowhere to be plugged in — the archive
+# is built, verified and downloaded, and then the deploy falls back to `up --build` on the
+# host, which is what both scripts/release/README.md and ~/.claude/CLAUDE.md forbid. This
+# overlay closes that gap the same way `minio` already does it in the base file: a pinned
+# `image:` plus a pull policy, so Compose neither builds nor fetches anything.
+#
+# Full procedure, preconditions and rollback: docs/prod-release-path.md, step 6. Take the
+# exact invocation from there rather than improvising one — this pair of files has to be
+# read from a checkout of the RELEASED SHA, while `.env.prod` stays the live one in the
+# worktree the running containers are labelled with, and the two are not the same place.
+#
+# `--no-deps` is not optional: without it Compose also acts on postgres/createbuckets and
+# wants to replace the running MinIO image over its existing volume, which infra/DEPLOY.md
+# forbids. `--no-build` keeps the `build:` sections in the base file inert. `-p
+# leadprocure-prod` is what makes this replace the running containers instead of starting
+# a second stack beside them.
+#
+# The tags are the ones scripts/release/build-images.sh produces and
+# `manifest.cjs verify-loaded` checks, including the org.opencontainers.image.revision
+# label that says which commit is in the image.
+services:
+  api:
+    image: leadprocure-api:${RELEASE_SHA:?set RELEASE_SHA to the released full commit SHA}
+    pull_policy: never
+
+  web:
+    image: leadprocure-web:${RELEASE_SHA:?set RELEASE_SHA to the released full commit SHA}
+    pull_policy: never
