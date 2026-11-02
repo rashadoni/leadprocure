@@ -1,5 +1,5 @@
 import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
-import { Explain } from '../../components/Explain';
+import { Explain, hintOf } from '../../components/Explain';
 import { api, fmtAmount, fmtDate, fmtMoney, tableCurrency } from '../../api/client';
 import { Cur } from '../../components/Cur';
 import { statusGroup } from '../../components/Badge';
@@ -288,7 +288,6 @@ export default function Budgets() {
   // the right edge of the card. A foreign row (there should be none) brings it back.
   const cur = tableCurrency(rows);
   const money = (v: number | string | null, c?: string) => (cur ? fmtAmount(v) : fmtMoney(v, c));
-  const paidBasisTip = `paid_basis_tip_${depSummary[0]?.paidBasis}`;
   const paidBasisNote = `paid_basis_note_${depSummary[0]?.paidBasis}`;
 
   return (
@@ -404,7 +403,12 @@ export default function Budgets() {
                     <td className="num">{fmtMoney(d.committedMinor, d.currency)}</td>
                     <td className="num">{fmtMoney(d.actualMinor, d.currency)}</td>
                     {/* settlement of orders already counted as actual — shown beside, never summed in */}
-                    <td className="hint num" data-tip={t(paidBasisTip)}>{fmtMoney(d.paidMinor, d.currency)}</td>
+                    {/* No `data-tip` here any more. It held 561 characters — a 273px black slab
+                        that opened on hover over three cells at once and covered the rows
+                        above them. The same thing is said under the table, in the open, by
+                        the `Explain` below; a column does not need to explain itself twice,
+                        and never in a bubble. */}
+                    <td className="hint num">{fmtMoney(d.paidMinor, d.currency)}</td>
                     <td className={`num ${over ? 'error' : ''}`}>{fmtMoney(d.remainingMinor, d.currency)}</td>
                     {/* where the period lands at the current rate — the question that follows "how much is left" */}
                     <td className={`num ${d.forecastOverMinor > 0 ? 'error' : 'hint'}`} data-tip={t('forecast_hint')}>
@@ -421,10 +425,12 @@ export default function Budgets() {
                           landed on top of the long sentence and ate its middle. A nested
                           `data-tip` always draws two. The wrapper exists because
                           `.budget-bar` is `overflow: hidden` and would clip its own bubble. */}
-                      <div data-tip={`${d.utilizationPct}%${over ? ` · ${t('budget_over')}` : ''}`}>
+                      <div className="bar-row">
                         <div className="budget-bar">
                           <div className={`budget-fill ${over ? 'over' : ''}`} style={{ width: `${Math.min(100, d.utilizationPct)}%` }} />
                         </div>
+                        <span className={`bar-pct${over ? ' error' : ''}`}
+                          data-tip={over ? t('budget_over') : undefined}>{d.utilizationPct}%</span>
                       </div>
 
                       {/* pace: spent versus what the plan says should be spent by now. A bare
@@ -472,7 +478,7 @@ export default function Budgets() {
             <>
               {/* Bulk entry: thirty department budgets through a one-row form is what pushes
                   finance back into a spreadsheet. Everything lands as a draft. */}
-              <button className="btn ghost small" data-tip={t('bud_import_tip')}
+              <button className="btn ghost small" data-tip={hintOf(t('bud_import_tip'))}
                 onClick={() => document.getElementById('bud-import')?.click()}>⤒ {t('bud_import')}</button>
               <input id="bud-import" type="file" accept=".csv,text/csv" style={{ display: 'none' }}
                 onChange={async (e) => {
@@ -518,11 +524,17 @@ export default function Budgets() {
                     <button className="linklike" onClick={() => toggleDocs(b.id, 'actual')}>{money(b.actualMinor, b.currency)}</button>
                   </td>
                   <td className={`num ${over ? 'error' : ''}`}>{money(b.remainingMinor, b.currency)}</td>
-                  {/* The bar and the figure under it made the cell two lines tall in every
-                       row. The bar carries the reading; the exact percent is one hover away. */}
-                  <td className="nowrap" data-tip={`${b.utilizationPct}%${over ? ` · ${t('budget_over')}` : ''}`}>
-                    <div className="budget-bar" style={{ marginBottom: 0 }}>
-                      <div className={`budget-fill ${over ? 'over' : ''}`} style={{ width: `${Math.min(100, b.utilizationPct)}%` }} />
+                  {/* Bar AND figure, side by side on one line. Stacking them made the row two
+                       lines tall, which is why the figure was moved into a hover bubble — but
+                       that hid the one number this column exists for. Beside the bar it costs
+                       width, not height, and width is what this cell has. */}
+                  <td className="nowrap">
+                    <div className="bar-row">
+                      <div className="budget-bar">
+                        <div className={`budget-fill ${over ? 'over' : ''}`} style={{ width: `${Math.min(100, b.utilizationPct)}%` }} />
+                      </div>
+                      <span className={`bar-pct${over ? ' error' : ''}`}
+                        data-tip={over ? t('budget_over') : undefined}>{b.utilizationPct}%</span>
                     </div>
                   </td>
                   {canManagePlans && (
