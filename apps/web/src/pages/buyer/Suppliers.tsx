@@ -5,7 +5,6 @@ import { useI18n } from '../../i18n';
 import { useDialogs } from '../../components/Dialogs';
 import { Badge } from '../../components/Badge';
 import { Actions } from '../../components/Actions';
-import { MenuSep, RowMenu } from '../../components/RowMenu';
 import { ListState, useLoad } from '../../components/ListState';
 
 export default function Suppliers() {
@@ -75,34 +74,29 @@ export default function Suppliers() {
                 <td>
                   {/* Blocking a supplier cuts them out of every future tender — last, and set
                       apart from approving, which used to sit right next to it. */}
-                  <Actions>
+                  {/* No menu here: this table has four columns, so the cell has the room —
+                      measured at 1280 it was already one line before any of this work. */}
+                  <Actions
+                    danger={canManage && r.status !== 'BLOCKED' && (
+                      <button className="btn small ghost danger" data-tip={t('tip_supplier_block')} onClick={() => setStatus(r.id, 'BLOCKED')}>{t('block')}</button>
+                    )}
+                  >
                   {scores[r.supplier_org_id] && (
                     <span className="hint" style={{ marginRight: 6 }}>
                       {scores[r.supplier_org_id].map((a: any) => `${a.metric}: ${a.avg_score}`).join(' · ')}
                     </span>
                   )}
-                  {canManage && r.status !== 'APPROVED' && (
-                    <button className="btn small" data-tip={t('tip_supplier_approve')} onClick={() => setStatus(r.id, 'APPROVED')}>{t('approve')}</button>
-                  )}
-                  {/* Admitting a supplier is the decision this row is waiting for. Opening
-                      their KYC, rating them and blocking them are all things done to a
-                      supplier already admitted, so they live behind the one button. */}
-                  <RowMenu>
-                    {canManage && (
-                      /* was a bare 🛡 */
-                      <button className="btn small ghost" data-tip={t('tip_verify_open')} onClick={() => openVerification(r.supplier_org_id)}>🛡 {t('verification')}</button>
-                    )}
-                    {/* Rating is an approver's call, but the figures are everyone's to read —
-                        and they only ever appeared as a side effect of rating someone. */}
-                    <button className="btn small ghost" data-tip={t('tip_scorecard')}
-                      onClick={() => (canManage ? rate(r.supplier_org_id) : loadScore(r.supplier_org_id))}>
-                      ★ {t('scorecard')}
-                    </button>
-                    {canManage && r.status !== 'BLOCKED' && <MenuSep />}
-                    {canManage && r.status !== 'BLOCKED' && (
-                      <button className="btn small ghost danger" data-tip={t('tip_supplier_block')} onClick={() => setStatus(r.id, 'BLOCKED')}>{t('block')}</button>
-                    )}
-                  </RowMenu>
+                  {canManage && <>
+                    {r.status !== 'APPROVED' && <button className="btn small" data-tip={t('tip_supplier_approve')} onClick={() => setStatus(r.id, 'APPROVED')}>{t('approve')}</button>}
+                    {/* was a bare 🛡 */}
+                    <button className="btn small ghost" data-tip={t('tip_verify_open')} onClick={() => openVerification(r.supplier_org_id)}>🛡 {t('verification')}</button>
+                  </>}
+                  {/* Rating is an approver's call, but the figures are everyone's to read —
+                      and they only ever appeared as a side effect of rating someone. */}
+                  <button className="btn small ghost" data-tip={t('tip_scorecard')}
+                    onClick={() => (canManage ? rate(r.supplier_org_id) : loadScore(r.supplier_org_id))}>
+                    ★ {t('scorecard')}
+                  </button>
                   </Actions>
                 </td>
               </tr>

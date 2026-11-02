@@ -8,7 +8,6 @@ import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
 import { statusLabel } from '../../components/humanize';
 import { Actions } from '../../components/Actions';
-import { RowMenu } from '../../components/RowMenu';
 import { ListState, useLoad } from '../../components/ListState';
 
 const PAGE_SIZE = 20;
@@ -135,17 +134,17 @@ export default function Orders() {
                   <td><Badge status={p.status} /></td>
                   <td>
                     <Actions>
+                    {/* No menu here: the two secondary actions belong to states that
+                        cannot both be true — an invoice follows DELIVERED/ACCEPTED, change
+                        orders exist while ISSUED/CONFIRMED — so the cell never holds more
+                        than the forward step and one of them. */}
                     {next && <button className="btn small" onClick={() => advance(p.id, next)}>→ {t(`po_act_${next}`)}</button>}
-                    {/* Moving the order on is what this row is for; issuing the invoice and
-                        reading the buyer's change orders are the two things that follow. */}
-                    <RowMenu>
-                      {['DELIVERED', 'ACCEPTED'].includes(p.status) && (
-                        <button className="btn small ghost" onClick={() => submitInvoice(p.id)}>🧾 {t('invoice')}</button>
-                      )}
-                      {['ISSUED', 'CONFIRMED'].includes(p.status) && (
-                        <button className="btn small ghost" onClick={() => loadAmends(p.id)}>✎ {t('amendments')}</button>
-                      )}
-                    </RowMenu>
+                    {['DELIVERED', 'ACCEPTED'].includes(p.status) && (
+                      <button className="btn small ghost" onClick={() => submitInvoice(p.id)}>🧾 {t('invoice')}</button>
+                    )}
+                    {['ISSUED', 'CONFIRMED'].includes(p.status) && (
+                      <button className="btn small ghost" onClick={() => loadAmends(p.id)}>✎ {t('amendments')}</button>
+                    )}
                     </Actions>
                     {(amends[p.id] ?? []).filter((a) => a.status === 'PROPOSED').map((a) => (
                       <div key={a.id} className="card" style={{ marginTop: 8, padding: 10 }}>
