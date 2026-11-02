@@ -189,6 +189,15 @@ async function selectByPrefix(page, sel, prefix) {
 // first — and must be able to find out that it is not on THIS stand (a budget's menu holds
 // different items per status) instead of spending the scene on a motionless cursor.
 // Returns the item's locator, or null.
+// A form field addressed by its own LABEL, not by its position in the form. The budget
+// form is seven fields of three kinds, and `form input` nth(0) means «whichever input is
+// first today»: add a field above it and the cursor quietly types the plan's name into the
+// category. Nothing is logged — the selector still matches something — so the only trace is
+// a wrong word on screen in a finished recording. The UI smoke records this same trap on
+// this same form (AGENTS.md: «never address form fields by position»); the cure is the same.
+const budField = (p, label, tag = 'input') =>
+  p.locator(`form div:has(> label:has-text("${label}")) ${tag}`).first();
+
 async function openRowMenu(page, rowSel, itemText, h) {
   const row = page.locator(rowSel).first();
   if (!(await row.count())) return null;
@@ -664,11 +673,11 @@ const SECTIONS = {
     { az: 'Xərclənməmiş qalığı başqa büdcəyə köçürmək olar — «Köçür» düyməsi ilə. Köçürmə hədəf büdcənin tarixçəsində mənbəyə istinad edən dəyişiklik kimi yazılır, yəni pulun haradan gəldiyi sonradan da görünür.',
       do: async (p, l, h) => { const ro = await openRowMenu(p, '[data-testid=budget-list] tbody tr:has(.badge.APPROVED)', 'Köçür', h); if (ro) { await h.holdUntil(0.5); await h.hover(ro, 1600); await p.keyboard.press('Escape'); } else { await h.moveTo('[data-testid=budget-list] tbody tr'); } await h.holdUntil(0.95); } },
     { az: 'Yeni büdcə «Yeni büdcə» düyməsi ilə yaradılır — forma həmişə açıq dayanmır, açaq. Ad, kateqoriya, şöbə və dövr. Şöbə boş qalsa, büdcə bütün təşkilata aid olur; konkret şöbə seçiləndə onun xərcləri məhz ora yazılır və şöbə büdcəsi ümumidən üstün olur.',
-      do: async (p, l, h) => { await h.scrollTo('h1'); await h.holdUntil(0.18); await h.click('[data-testid=bud-new]', 900); await h.holdUntil(0.45); await h.fill(p.locator('form input').nth(0), 'Marketinq 2026'); await h.holdUntil(0.75); await h.moveTo(p.locator('form select').nth(0)); await h.holdUntil(0.95); } },
+      do: async (p, l, h) => { await h.scrollTo('h1'); await h.holdUntil(0.18); await h.click('[data-testid=bud-new]', 900); await h.holdUntil(0.45); await h.fill(budField(p, 'Ad'), 'Marketinq 2026'); await h.holdUntil(0.75); await h.moveTo(budField(p, 'Şöbə', 'select')); await h.holdUntil(0.95); } },
     { az: 'Dövr illik, rüblük və ya aylıq ola bilər. Rüblük seçəndə sistem rüb nömrəsini soruşur və tarix aralığını özü hesablayır. Sonra məbləğ və səbəb: səbəb tarixçəyə düşür, ona görə «plan niyə belədir» sualı həmişə cavablı qalır.',
-      do: async (p, l, h) => { await p.locator('form select').nth(1).selectOption('QUARTER').catch(() => {}); await h.holdUntil(0.4); await h.fill(p.locator('form input[type=number]').last(), '12000'); await h.holdUntil(0.72); await h.moveTo(p.locator('form button.btn').first()); await h.holdUntil(0.95); } },
+      do: async (p, l, h) => { await budField(p, 'Dövr', 'select').selectOption('QUARTER').catch(() => {}); await h.holdUntil(0.4); await h.fill(budField(p, 'Məbləğ'), '12000'); await h.holdUntil(0.72); await h.moveTo(p.locator('form button.btn').first()); await h.holdUntil(0.95); } },
     { az: 'Eyni şöbə, kateqoriya və dövrü əhatə edən iki büdcə yaratmaq mümkün deyil: baza özü imtina edir və ekran bunu insan dili ilə deyir. Səbəb sadədir — onda hər xərci hansı planın tutduğu bilinməz olardı.',
-      do: async (p, l, h) => { await h.moveTo(p.locator('form input').nth(0)); await h.holdUntil(0.45); await h.moveTo(p.locator('form button.btn').first()); await h.holdUntil(0.95); } },
+      do: async (p, l, h) => { await h.moveTo(budField(p, 'Ad')); await h.holdUntil(0.45); await h.moveTo(p.locator('form button.btn').first()); await h.holdUntil(0.95); } },
     { az: 'Büdcə hədləri parametrlərdə qurulur: xəbərdarlıq faizi və blok faizi. Xəbərdarlıq şöbənin sahibinə bildiriş göndərir. Blok həddi aşılanda sorğunun təsdiqi dayandırılır — amma blok həddi standart olaraq boşdur, yəni heç nə dayandırılmır, yalnız xəbərdarlıq gedir.',
       do: async (p, l, h) => { const link = p.locator('.main a[href="/buyer/settings"]').first(); if (await link.count()) { await h.hover(link, 1500); } else { await h.moveTo('h1'); } await h.holdUntil(0.95); } },
     { az: 'İki ixrac var və onlar fərqli işlər üçündür. CSV — insan üçün tam mənzərə: plan, öhdəlik, faktiki və qalıq. «1C üçün» isə mühasibat sistemi üçün: hər aya bir sətir, yalnız planlaşdırılan məbləğ, çünki faktlar mühasibatda onsuz da var. Yanında isə CSV-dən toplu idxal.',
