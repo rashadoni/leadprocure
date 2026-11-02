@@ -201,14 +201,22 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
                 The control is still named for a screen reader, by the title. */}
             {pending.kind === 'ask' && (
               <div className="filter-field" style={{ marginTop: 12 }}>
-                {pending.opts.label && <label htmlFor="dialog-input">{pending.opts.label}</label>}
+                {/* `htmlFor` only where there IS one control to point at: the explained
+                    choice below is a group of radios, and a label tied to an element that
+                    does not exist is worse than none. The group is named by the title. */}
+                {pending.opts.label && (pending.opts.options?.some((o) => o.hint)
+                  ? <span className="dialog-label">{pending.opts.label}</span>
+                  : <label htmlFor="dialog-input">{pending.opts.label}</label>)}
                 {pending.opts.options?.some((o) => o.hint) ? (
                   <div className="pick-list" role="radiogroup" data-testid="dialog-input"
                     aria-labelledby={pending.opts.label ? undefined : 'dialog-title'}>
-                    {pending.opts.options.map((o, i) => (
+                    {pending.opts.options.map((o) => (
                       <label key={o.value} className={`pick${value === o.value ? ' on' : ''}`}>
                         <input type="radio" name="dialog-pick" value={o.value} checked={value === o.value}
-                          ref={(el) => { if (i === 0) field.current = el; }}
+                          /* Focus lands on the SELECTED option, not the first: an arrow key
+                             pressed straight after opening would otherwise move the choice
+                             off whatever the policy had preselected. */
+                          ref={(el) => { if (o.value === value) field.current = el; }}
                           onChange={() => setValue(o.value)} />
                         <span>
                           <b>{o.label}</b>

@@ -158,7 +158,13 @@ export default function Requests() {
       hint: `${r.request_no} · ${r.title} · ${fmtMoney(r.estimated_total_minor, r.currency)}`,
       label: t('supplier_org'),
       confirmLabel: t('confirm'),
-      options: list.map((x: any) => ({ value: x.supplier_org_id, label: x.legal_name })),
+      // An empty first entry, and `required`, because `ask` preselects options[0] and this
+      // dialog places a REAL order: the row it replaced held a disabled «pick a supplier»
+      // option for exactly that reason, and without it an Enter straight after opening
+      // buys from whoever happens to sort first.
+      required: true,
+      options: [{ value: '', label: `${t('supplier_org')}…` },
+        ...list.map((x: any) => ({ value: x.supplier_org_id, label: x.legal_name }))],
     });
     if (!supplierOrgId) return;
     try {
@@ -374,7 +380,7 @@ export default function Requests() {
             reload: () => impactFailed.forEach((id) => loadImpact(id)) }]}
           empty={!rows.length} />
         <table>
-          <thead><tr><th className="nowrap">#</th><th className="grow">{t('title')}</th><th>{t('category')}</th><th>{t('department')}</th><th className="nowrap">{t('date')}</th><th>{t('requester')}</th><th className="num">{t('total')}<Cur of={cur} /></th><th>{t('status')}</th><th>{t('method')}</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th className="nowrap">#</th><th className="grow">{t('title')}</th><th>{t('category')}</th><th>{t('department')}</th><th className="nowrap">{t('date')}</th><th>{t('requester')}</th><th className="num">{t('total')}<Cur of={cur} /></th><th>{t('status')}</th><th>{t('method')}</th><th className="acts">{t('actions')}</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <Fragment key={r.id}>
@@ -420,7 +426,8 @@ export default function Requests() {
                     )}
                     {/* Cancelling an approved request is the one destructive thing here and
                         the one nobody does by default: it belongs behind the named button,
-                        not beside Announce where a mis-click lands on it. */}
+                        not beside Announce where a mis-click lands on it.
+                        */}
                     <RowMenu>
                       {r.status === 'APPROVED' && isAdmin && (
                         <button className="btn small ghost danger" data-tip={t('tip_cancel_request')} onClick={() => cancelRequest(r.id)}>

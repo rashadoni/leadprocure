@@ -64,6 +64,7 @@ export default function Budgets() {
   // so the page opened on a form instead of on the plans. Same shape as Requests: a named
   // button, and the card appears when it is asked for.
   const [formOpen, setFormOpen] = useState(false);
+  const formCard = useRef<HTMLDivElement>(null);
   const [err, setErr] = useState('');
 
   const [deps, setDeps] = useState<any[]>([]);
@@ -150,6 +151,10 @@ export default function Budgets() {
     const month = Number(b.periodStart.slice(5, 7));
     setEditId(b.id);
     setFormOpen(true);
+    // The form is above the table and the button that opens it is now inside a row's menu,
+    // which can be at the bottom of a long list: without this the only visible effect of
+    // pressing «Revise» is that the table jumps down a little.
+    requestAnimationFrame(() => formCard.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     setForm({
       name: b.name,
       category: b.category === '*' ? '' : b.category,
@@ -297,7 +302,7 @@ export default function Budgets() {
         </button>
       )}
       {canManagePlans && formOpen && (
-        <div className="card">
+        <div className="card" ref={formCard}>
           {/* This row and the filter row below carry the same three controls — period, year,
               department — and looked identical, so there was no telling which one created a
               plan and which one narrowed the list. Both say what they are now. */}
@@ -406,11 +411,14 @@ export default function Budgets() {
                       {fmtMoney(d.forecastMinor, d.currency)}
                       {d.forecastOverMinor > 0 && <span> · +{fmtMoney(d.forecastOverMinor, d.currency)}</span>}
                     </td>
-                    <td>
+                    {/* The figure under the bar is in the bubble, as it is in the plans
+                         table below — one page should not show one quantity two ways. The
+                         pace line stays visible: it answers a different question. */}
+                    <td data-tip={`${d.utilizationPct}%${over ? ` · ${t('budget_over')}` : ''}`}>
                       <div className="budget-bar">
                         <div className={`budget-fill ${over ? 'over' : ''}`} style={{ width: `${Math.min(100, d.utilizationPct)}%` }} />
                       </div>
-                      <span className="hint">{d.utilizationPct}%{over ? ` · ${t('budget_over')}` : ''}</span>
+
                       {/* pace: spent versus what the plan says should be spent by now. A bare
                           utilization figure never says whether 80% is early or late. */}
                       <div className={d.paceDeltaPct > 0 ? 'error' : 'hint'} style={{ fontSize: 11 }}
@@ -481,7 +489,7 @@ export default function Budgets() {
             <th className="grow">{t('name')}</th><th>{t('status')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('period')}</th>
             <th className="num">{t('amount')}<Cur of={cur} /></th><th className="num">{t('committed')}<Cur of={cur} /></th>
             <th className="num">{t('actual')}<Cur of={cur} /></th><th className="num">{t('remaining')}<Cur of={cur} /></th>
-            <th style={{ width: 180 }}>{t('utilization')}</th>{canManagePlans && <th>{t('actions')}</th>}
+            <th style={{ width: 180 }}>{t('utilization')}</th>{canManagePlans && <th className="acts">{t('actions')}</th>}
           </tr></thead>
           <tbody>
             {rows.map((b) => {

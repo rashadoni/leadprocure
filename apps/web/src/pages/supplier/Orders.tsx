@@ -8,6 +8,7 @@ import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
 import { statusLabel } from '../../components/humanize';
 import { Actions } from '../../components/Actions';
+import { RowMenu } from '../../components/RowMenu';
 import { ListState, useLoad } from '../../components/ListState';
 
 const PAGE_SIZE = 20;
@@ -121,7 +122,7 @@ export default function Orders() {
       <div className="card">
         <ListState of={orderList} empty={!orders.length} />
         <table>
-          <thead><tr><th>#</th><th>{t('buyer_org')}</th><th className="num">{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th><th>{t('logistics')}</th></tr></thead>
+          <thead><tr><th>#</th><th>{t('buyer_org')}</th><th className="num">{t('total')}</th><th>{t('status')}</th><th className="acts">{t('actions')}</th><th>{t('logistics')}</th></tr></thead>
           <tbody>
             {orders.map((p) => {
               const next = PO_SUPPLIER_TRANSITIONS[p.status];
@@ -135,12 +136,16 @@ export default function Orders() {
                   <td>
                     <Actions>
                     {next && <button className="btn small" onClick={() => advance(p.id, next)}>→ {t(`po_act_${next}`)}</button>}
-                    {['DELIVERED', 'ACCEPTED'].includes(p.status) && (
-                      <button className="btn small ghost" onClick={() => submitInvoice(p.id)}>🧾 {t('invoice')}</button>
-                    )}
-                    {['ISSUED', 'CONFIRMED'].includes(p.status) && (
-                      <button className="btn small ghost" onClick={() => loadAmends(p.id)}>✎ {t('amendments')}</button>
-                    )}
+                    {/* Moving the order on is what this row is for; issuing the invoice and
+                        reading the buyer's change orders are the two things that follow. */}
+                    <RowMenu>
+                      {['DELIVERED', 'ACCEPTED'].includes(p.status) && (
+                        <button className="btn small ghost" onClick={() => submitInvoice(p.id)}>🧾 {t('invoice')}</button>
+                      )}
+                      {['ISSUED', 'CONFIRMED'].includes(p.status) && (
+                        <button className="btn small ghost" onClick={() => loadAmends(p.id)}>✎ {t('amendments')}</button>
+                      )}
+                    </RowMenu>
                     </Actions>
                     {(amends[p.id] ?? []).filter((a) => a.status === 'PROPOSED').map((a) => (
                       <div key={a.id} className="card" style={{ marginTop: 8, padding: 10 }}>

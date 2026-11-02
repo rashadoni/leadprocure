@@ -58,7 +58,7 @@ td { padding: 8px 7px; border-bottom: 1px solid var(--border); vertical-align: m
    table layout hands width to whoever asks loudest, and a long category ("CONSTRUCTION")
    or an author's name would take it while the title was squeezed to 90px and broke over
    four lines. One `grow` per table takes the free width instead; everything else then sits
-   at its own content width. 180px is a floor so it does not lose to a very wide neighbour. */
+   at its own content width. The floor keeps it from losing to a very wide neighbour. */
 th.grow, td.grow { width: 100%; min-width: 120px; white-space: normal; }
 /* The table's one currency, said in the heading. On its own line, because put beside the
    word it widened four columns by 45px each — more than the figures it was saving. */
@@ -191,6 +191,10 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 .modal { width: 100%; max-width: 440px; margin: auto; background: var(--panel); border: 1px solid var(--border);
   border-radius: 14px; padding: 20px; box-shadow: var(--shadow-lg); }
 .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+
+/* A radio group has no single control for a <label> to point at, so its name is a
+   plain span — styled like every other field label in the dialog. */
+.dialog-label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
 
 /* A choice that is a decision, not a value: each option carries what it means, so the
    explanation is read where the choice is made. This replaced a legend paragraph above a
@@ -471,6 +475,11 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
   .qna-row { flex-wrap: wrap; }
   .fu-step { grid-template-columns: 26px minmax(0, 1fr); row-gap: 6px; }
   .fu-step .fu-delay, .fu-step .fu-del { grid-column: 2; }
+    /* Below the breakpoint a row is drawn as a CARD, and there is no row left for the
+     buttons to be a row of — so here they wrap again. The `nowrap` above is about the
+     wide layout only; left global it squeezed the five cells that still hold several
+     buttons (a purchase order can offer six) past their own text. */
+  .actions { flex-wrap: wrap; justify-content: flex-start; }
   .actions .btn, .actions select, .actions input { min-width: 0; }
   .pager { flex-wrap: wrap; justify-content: flex-start; }
   /* Two connect cards side by side needs 280px each; one per line needs nothing. */
@@ -510,3 +519,7 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 /* The invitation to read a long explanation: a word, underlined like a link, that opens
    the hint bubble on hover and on keyboard focus. */
 .explain { border-bottom: 1px dashed currentColor; }
+
+/* The action column's heading sits over right-aligned buttons, so it is right-aligned too;
+   a left heading over a right-hand stack read as two different columns. */
+th.acts, td.acts { text-align: right; }

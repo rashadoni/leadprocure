@@ -31,7 +31,8 @@ export function RowMenu({ children, label }: { children?: ReactNode; label?: str
 
   return (
     <span className="menu" ref={box}>
-      <button type="button" className="btn small ghost" aria-haspopup="menu" aria-expanded={open}
+      <button type="button" className="btn small ghost" data-tip={t('row_more_tip')}
+        aria-haspopup="true" aria-expanded={open}
         onClick={(e) => {
           // Measured against the viewport at the moment of opening: the last rows of a long
           // table sit at the bottom of the window, and a menu drawn downwards there is
@@ -81,7 +82,11 @@ function Pop({ children, onClose, boxRef, up }:
   }, []);
 
   return (
-    <span className={`menu-pop${up ? ' menu-up' : ''}`} ref={pop} role="menu"
+    // No `role="menu"`: that role promises arrow-key navigation between `menuitem`s and
+    // focus moving into the list, and these are the page's own buttons. A promise the
+    // keyboard does not keep is worse for a screen reader than no promise — the trigger's
+    // `aria-expanded` already says what happened.
+    <span className={`menu-pop${up ? ' menu-up' : ''}`} ref={pop}
       // Any item click closes the menu. Items are the page's own buttons with their own
       // handlers; this rides the bubble rather than wrapping every child.
       onClick={() => onClose()}>
