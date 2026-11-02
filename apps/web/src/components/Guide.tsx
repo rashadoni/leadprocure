@@ -117,7 +117,17 @@ export default function Guide() {
               words say which one. */}
           {posterOk && (
             <span className="help-thumb" aria-hidden="true">
-              <img src={posterUrl} alt="" onError={() => setPosterOk(false)} />
+              {/* The posters live in Git LFS. A checkout or a build that did not materialise
+                  them hands the browser a 132-byte pointer labelled image/png: decoding
+                  fails, this handler runs, and the bar silently goes back to the wordy line
+                  nobody recognised as a video — with nothing anywhere saying why. The CI and
+                  release workflows do pass `lfs: true`, but workflows are written by hand, so
+                  say it out loud to whoever is building or recording. Not to the user: a
+                  missing picture is not their problem to read about. */}
+              <img src={posterUrl} alt="" onError={() => {
+                if (import.meta.env.DEV) console.warn(`guide poster missing: ${posterUrl} — git lfs pull?`);
+                setPosterOk(false);
+              }} />
             </span>
           )}
           <span>🎥 {t('guide')}{title ? `: ${title}` : ''}</span>
