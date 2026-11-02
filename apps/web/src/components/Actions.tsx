@@ -1,5 +1,5 @@
 import { isValidElement, ReactNode } from 'react';
-import { RowMenu } from './RowMenu';
+import { menuItems, RowMenu } from './RowMenu';
 
 // The action cell of a table row. Buttons used to be written straight into the <td>
 // separated by a literal {' '}, so they wrapped wherever they happened to land: five
@@ -27,7 +27,11 @@ export function Actions({ children, danger }: { children?: ReactNode; danger?: R
   // then stopped. One rule here rather than a condition repeated at six call sites.
   const has = (n: ReactNode): boolean => {
     if (Array.isArray(n)) return n.some(has);
-    if (isValidElement(n) && n.type === RowMenu) return has((n.props as { children?: ReactNode }).children);
+    // Asked through `menuItems`, so a menu holding nothing but a separator counts as empty
+    // here too — the same answer the menu itself gives when it decides not to render.
+    if (isValidElement(n) && n.type === RowMenu) {
+      return menuItems((n.props as { children?: ReactNode }).children).length > 0;
+    }
     return n != null && n !== false && n !== true && n !== '' && n !== 0;
   };
   // An empty action cell reads as a hole in the table; every other column says "—".

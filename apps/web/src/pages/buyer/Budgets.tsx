@@ -414,9 +414,17 @@ export default function Budgets() {
                     {/* The figure under the bar is in the bubble, as it is in the plans
                          table below — one page should not show one quantity two ways. The
                          pace line stays visible: it answers a different question. */}
-                    <td data-tip={`${d.utilizationPct}%${over ? ` · ${t('budget_over')}` : ''}`}>
-                      <div className="budget-bar">
-                        <div className={`budget-fill ${over ? 'over' : ''}`} style={{ width: `${Math.min(100, d.utilizationPct)}%` }} />
+                    <td>
+                      {/* The tip belongs to the BAR, not to the cell. On the cell it also
+                          covered the pace line below, which carries a tip of its own, and
+                          hovering that line opened both bubbles at once: the short «0.4%»
+                          landed on top of the long sentence and ate its middle. A nested
+                          `data-tip` always draws two. The wrapper exists because
+                          `.budget-bar` is `overflow: hidden` and would clip its own bubble. */}
+                      <div data-tip={`${d.utilizationPct}%${over ? ` · ${t('budget_over')}` : ''}`}>
+                        <div className="budget-bar">
+                          <div className={`budget-fill ${over ? 'over' : ''}`} style={{ width: `${Math.min(100, d.utilizationPct)}%` }} />
+                        </div>
                       </div>
 
                       {/* pace: spent versus what the plan says should be spent by now. A bare

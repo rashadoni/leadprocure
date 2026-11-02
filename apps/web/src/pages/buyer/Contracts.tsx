@@ -191,6 +191,10 @@ export default function Contracts() {
                         {t(`po_act_${next}`)}
                       </button>
                     ))}
+                    {/* `receive` must not read the same as `po_act_ACCEPTED`: on a DELIVERED
+                        order the two sit side by side, and in Azerbaijani both said
+                        «Qəbul et» — one accepting the ORDER, one booking in the GOODS.
+                        ru and en always differed (Принять/Приёмка, Accept/Receive). */}
                     {canReceive && ['SHIPPED', 'DELIVERED'].includes(p.status) && (
                       <button className="btn small" data-tip={t('tip_receive')} onClick={() => receiveAll(p.id)}>📥 {t('receive')}</button>
                     )}

@@ -12,7 +12,7 @@ type Call = (path: string, body: any, token?: string, method?: string, status?: 
 // Selecting localized controls verifies both authenticated sides use the chosen language.
 const paymentCopy = {
   az: { open: 'Zərfləri aç', score: 'Qiymətləndir', award: 'Qalib seç', analyze: 'Təhlil et',
-    contract: 'Müqavilə yarat', po: 'Sifariş yarat', issue: 'Sifarişi ver', receive: 'Qəbul et',
+    contract: 'Müqavilə yarat', po: 'Sifariş yarat', issue: 'Sifarişi ver', receive: 'Mal qəbulu',
     supplierSteps: ['Təsdiqlə', 'Qablaşdırıldı', 'Göndər', 'Çatdırıldı'], invoice: 'Qaimə', approve: 'Təsdiqlə', pay: 'Ödə',
     match: 'Üçtərəfli uyğunlaşdırma', price: 'Qaimə qiyməti', reason: 'Yeganə RFP təklifi dərc olunmuş tələblərə cavab verir' },
   ru: { open: 'Вскрыть ставки', score: 'Оценить', award: 'Выбрать победителя', analyze: 'Проанализировать',
