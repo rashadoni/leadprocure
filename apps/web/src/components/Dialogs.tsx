@@ -49,7 +49,14 @@ export type AskOpts = BaseOpts & {
   /** Whole numbers only — a score is an integer and the API validates it as one. */
   integer?: boolean;
   /** Renders a list instead of a free field — a choice nobody can mistype. */
-  options?: { value: string; label: string }[];
+  /**
+   * A choice nobody can mistype. Give an option a `hint` and the list is drawn as rows
+   * with the explanation under each label instead of a `<select>`: where the options are
+   * a decision rather than a value — which tender procedure to announce under — the
+   * explanation has to be readable AT the moment of choosing, not in a legend somewhere
+   * above the table.
+   */
+  options?: { value: string; label: string; hint?: string }[];
 };
 
 export type ConfirmOpts = BaseOpts;
@@ -195,7 +202,22 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
             {pending.kind === 'ask' && (
               <div className="filter-field" style={{ marginTop: 12 }}>
                 {pending.opts.label && <label htmlFor="dialog-input">{pending.opts.label}</label>}
-                {pending.opts.options ? (
+                {pending.opts.options?.some((o) => o.hint) ? (
+                  <div className="pick-list" role="radiogroup" data-testid="dialog-input"
+                    aria-labelledby={pending.opts.label ? undefined : 'dialog-title'}>
+                    {pending.opts.options.map((o, i) => (
+                      <label key={o.value} className={`pick${value === o.value ? ' on' : ''}`}>
+                        <input type="radio" name="dialog-pick" value={o.value} checked={value === o.value}
+                          ref={(el) => { if (i === 0) field.current = el; }}
+                          onChange={() => setValue(o.value)} />
+                        <span>
+                          <b>{o.label}</b>
+                          {o.hint && <span className="hint">{o.hint}</span>}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                ) : pending.opts.options ? (
                   <select id="dialog-input" data-testid="dialog-input"
                     aria-labelledby={pending.opts.label ? undefined : 'dialog-title'}
                     ref={(el) => { field.current = el; }}

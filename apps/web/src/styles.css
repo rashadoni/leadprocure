@@ -33,20 +33,36 @@ a { color: var(--accent); text-decoration: none; }
 .side a:hover { background: rgba(255, 255, 255, .08); color: #fff; }
 .side .spacer { flex: 1; }
 .who { font-size: 12px; color: rgba(255, 255, 255, .55); padding: 10px 12px; border-top: 1px solid rgba(255, 255, 255, .12); margin-top: 6px; }
-.main { padding: 28px 32px; max-width: 1160px; }
+.main { padding: 28px 24px; max-width: 1160px; min-width: 0; }
 
 h1 { font-size: 21px; font-weight: 700; letter-spacing: -.01em; margin-bottom: 18px; }
 h3 { font-size: 15px; font-weight: 650; margin: 18px 0 8px; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
-table { width: 100%; border-collapse: collapse; }
-th { text-align: left; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: bottom; }
-td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+/* 13px, not the page's 14: a table is dense data, and at 1280 — the width the owner
+   actually works at — eleven columns of 14px text could not fit between the rail and the
+   right edge, so the whole page scrolled sideways. The suite measures 1440, 1024, 768 and
+   375, which is why that went unseen: 1280 is the one width it never looked at. */
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 8px 7px; border-bottom: 1px solid var(--border); vertical-align: bottom; }
+/* 9px, not 10: eleven columns of a budget row spend 44px of the card on padding alone,
+   and that was the difference between the row's buttons sitting inside the card and
+   hanging off its right edge. */
+td { padding: 8px 7px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 
 /* Columns that must never wrap. A reference number broke as "REQ- / 2026- / 0012" and a
    date as "2026- / 08-12", each tripling the height of its row for no gain: these are
    atomic strings, and a table of them cannot be read across once they stack. The classes
    are opt-in so a title or a description still wraps, which is right for prose. */
 .nowrap, td.nowrap, th.nowrap { white-space: nowrap; }
+/* The prose column — a request's title, a budget's name, a supplier's legal name. Auto
+   table layout hands width to whoever asks loudest, and a long category ("CONSTRUCTION")
+   or an author's name would take it while the title was squeezed to 90px and broke over
+   four lines. One `grow` per table takes the free width instead; everything else then sits
+   at its own content width. 180px is a floor so it does not lose to a very wide neighbour. */
+th.grow, td.grow { width: 100%; min-width: 120px; white-space: normal; }
+/* The table's one currency, said in the heading. On its own line, because put beside the
+   word it widened four columns by 45px each — more than the figures it was saving. */
+.th-cur { display: block; font-size: 10px; font-weight: 500; opacity: .75; letter-spacing: 0; }
 /* Money lines up on the right or it cannot be compared by eye: 360.00 against 24,800.00
    against 100,000.00 told the reader nothing while they were all flush left. Tabular
    figures keep the digits in columns too. */
@@ -59,7 +75,7 @@ tr:hover td { background: rgba(4, 120, 87, .05); }
 .btn:active { transform: translateY(0); box-shadow: 0 1px 2px rgba(4, 120, 87, .25); }
 .btn.ghost { background: #fff; border: 1px solid var(--border); color: var(--text); box-shadow: none; }
 .btn.ghost:hover { background: var(--panel2); border-color: var(--accent); box-shadow: 0 2px 6px rgba(16, 24, 40, .08); }
-.btn.small { padding: 4px 10px; font-size: 12px; }
+.btn.small { padding: 4px 8px; font-size: 12px; }
 .btn:disabled { opacity: 0.45; cursor: default; box-shadow: none; }
 input, select, textarea { background: #fff; border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 10px; font: inherit; width: 100%; transition: border-color .12s, box-shadow .12s; }
 /* One height for every text-like control. A <select> renders a couple of pixels taller than
@@ -176,6 +192,17 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
   border-radius: 14px; padding: 20px; box-shadow: var(--shadow-lg); }
 .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
 
+/* A choice that is a decision, not a value: each option carries what it means, so the
+   explanation is read where the choice is made. This replaced a legend paragraph above a
+   table that explained a dropdown twelve rows below it. */
+.pick-list { display: flex; flex-direction: column; gap: 7px; }
+.pick { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 10px; transition: border-color .12s, background .12s; }
+.pick:hover { border-color: var(--accent); }
+.pick.on { border-color: var(--accent); background: rgba(4, 120, 87, .05); }
+.pick input { width: auto; margin-top: 3px; flex: none; }
+.pick > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
 /* Toasts, in place of alert(). A success fades on its own; a failure waits to be read and
    closed by hand, because an error nobody saw is the one that mattered. */
 .toasts { position: fixed; right: 16px; bottom: 16px; z-index: 130; display: flex;
@@ -204,16 +231,39 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
    document type). It is here so those stop borrowing a status name to get a colour. */
 .badge.is-info { background: rgba(4, 120, 87, .12); color: var(--accent); }
 
-/* Action cell: one line, even gaps, a floor on button width so the column lines up down
-   the table instead of staggering with every label length. Destructive actions sit last,
-   behind a hairline, so "Cancel" stops being the first thing the eye lands on. */
-.actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.actions .btn { min-width: 92px; justify-content: center; }
+/* Action cell: ONE line. This said so before and did the opposite — `flex-wrap: wrap` with
+   a 92px floor under every button meant that in a column 150px wide each button took a
+   line of its own. Six actions on a budget drew a 235px row; measured on the stand, six
+   budgets came to 1330px of table. The floor is gone (it aligned columns by making rows
+   tall, which is the wrong trade) and wrapping with it: a row that cannot fit its actions
+   puts them in a RowMenu, it does not grow downwards.
+   Right-aligned, because the cell is last and a ragged left edge under a fixed right one
+   reads as damage. Destructive actions sit behind a hairline so "Delete" is not first. */
+.actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: nowrap; }
+.actions .btn { justify-content: center; white-space: nowrap; }
 /* Inputs are width:100% globally, which inside a flex row means "take the whole cell". */
 .actions select, .actions input { width: auto; min-width: 124px; padding: 4px 8px; font-size: 12px; }
-/* Six buttons in one cell: the width floor stops helping and starts forcing a wrap. */
-.actions-dense .btn { min-width: 0; }
 .actions-sep { width: 1px; align-self: stretch; min-height: 20px; background: var(--border); margin: 0 2px; }
+
+/* ── The rest of a row's actions (components/RowMenu.tsx) ──
+   The popup is positioned against the trigger, not the table, so it is not clipped by a
+   cell; nothing on the page sets `overflow: hidden` around a table, which is what makes
+   this work without a portal. Items are the page's own `.btn`s, restyled here into rows so
+   a page moves an action in or out of the menu by moving one line of JSX. */
+.menu { position: relative; display: inline-flex; }
+.menu-pop { position: absolute; right: 0; top: calc(100% + 5px); z-index: 60; min-width: 196px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: var(--shadow-lg); padding: 5px; text-align: left; }
+.menu-pop.menu-up { top: auto; bottom: calc(100% + 5px); }
+.menu-pop .btn, .menu-pop .btn.ghost {
+  display: block; width: 100%; min-width: 0; text-align: left; background: none; border: 0;
+  box-shadow: none; border-radius: 7px; padding: 8px 10px; font-weight: 500; color: var(--text); }
+.menu-pop .btn:hover, .menu-pop .btn.ghost:hover {
+  background: var(--panel2); transform: none; box-shadow: none; filter: none; border: 0; }
+.menu-pop .btn.danger { color: var(--bad); }
+.menu-pop .btn.danger:hover { background: rgba(220, 38, 38, .07); }
+.menu-pop .btn:disabled:hover { background: none; }
+.menu-sep { display: block; height: 1px; background: var(--border); margin: 4px 2px; }
 /* Pushed to the end AND toned down: it should be reachable, not inviting. */
 .btn.danger { color: var(--bad); border-color: rgba(220, 38, 38, .35); }
 .btn.danger:hover { background: rgba(220, 38, 38, .07); border-color: var(--bad); }
@@ -456,3 +506,7 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
      narrow screen with a mouse still answers the pointer. */
   .btn:hover, .btn:active { transform: none; filter: none; }
 }
+
+/* The invitation to read a long explanation: a word, underlined like a link, that opens
+   the hint bubble on hover and on keyboard focus. */
+.explain { border-bottom: 1px dashed currentColor; }

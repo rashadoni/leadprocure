@@ -67,7 +67,25 @@ const uiLocale = () => {
 // hidden until opening" above exactly these cells.
 export const fmtMoney = (minor: number | string | null, currency = 'AZN'): string => {
   if (minor == null) return '···';
-  return `${(Number(minor) / 100).toLocaleString(uiLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+  return `${fmtAmount(minor)} ${currency}`;
+};
+
+// The same figure without its currency code, for a table that prints the code ONCE, in the
+// column heading. A budgets table repeated " AZN" twenty-four times across four columns and
+// spent 140px of a 1096px card doing it — enough that the row's own buttons hung off the
+// edge of the card. The code is not dropped, it is said once; `tableCurrency` below decides
+// whether that is honest for a given set of rows.
+export const fmtAmount = (minor: number | string | null): string => {
+  if (minor == null) return '···';
+  return (Number(minor) / 100).toLocaleString(uiLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+// One currency for the whole table, or null when the rows disagree. Null means every cell
+// has to carry its own code — a column headed "AZN" over a row in USD would be a lie, and
+// mixed minor units are exactly what the budget engine refuses to add up.
+export const tableCurrency = (rows: { currency?: string | null }[]): string | null => {
+  const seen = new Set(rows.map((r) => r.currency || 'AZN'));
+  return seen.size === 1 ? [...seen][0] : null;
 };
 
 // Axis ticks on the spend chart. Three full amounts stacked up the side of a 170px plot are

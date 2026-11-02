@@ -23,12 +23,19 @@ async function assertRenders(page: Page, path: string, headingHint: RegExp): Pro
 }
 
 // ── narrow screens ────────────────────────────────────────────────────────────────────
-// The four widths the layout has to be right at: a desktop, a tablet on its side, a tablet
-// held upright, a phone. 1440 is the wide layout, unchanged by this work; the other three
-// are below the 1100px breakpoint, where the rail is a drawer and a row is drawn as a card.
+// The widths the layout has to be right at: two desktops, a tablet on its side, a tablet
+// held upright, a phone. 1440 and 1280 are the wide layout; the other three are below the
+// 1100px breakpoint, where the rail is a drawer and a row is drawn as a card.
 // Widest FIRST so that 375 — the width that matters and the one that fails first — is
 // measured last, on the most settled page there is.
-const WIDTHS = [1440, 1024, 768, 375];
+//
+// 1280 was added on 2026-11-02 and is not a round number for its own sake: it is the width
+// of the owner's own window, and it was the one width this list skipped. Requests scrolled
+// sideways by 112px there and budgets by 107 — the rail plus eleven columns plus the page's
+// own padding came to more than 1280 — while 1440 fit and 1024 had already folded into
+// cards. A gap between the widest card layout and the narrowest table layout is exactly
+// where a table overflows, so the list has to hold a width inside it.
+const WIDTHS = [1440, 1280, 1024, 768, 375];
 
 // Pages whose list cannot be empty on the seeded stack, so the measurement below is made
 // WITH rows in it — and these four are the widest tables in the product (requests has ten
