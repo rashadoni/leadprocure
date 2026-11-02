@@ -33,6 +33,9 @@ test('finance sees and completes its assigned approval step without procurement 
   await expect(row.locator('.badge')).toHaveClass(/APPROVED/);
   await expect(row.getByRole('button')).toHaveCount(0);
   await page.goto('/buyer/budgets');
+  // Форма плана больше не стоит раскрытой над таблицей — её открывают кнопкой, как
+  // форму заявки. Финансисту кнопка видна: план он завести может, в отличие от заявки.
+  await page.getByTestId('bud-new').click();
   const planForm = page.locator('form');
   await expect(planForm).toBeVisible();
   await planForm.locator('input').first().fill(`Finance plan ${tag}`);
