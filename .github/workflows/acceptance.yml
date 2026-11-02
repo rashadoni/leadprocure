@@ -13,7 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          lfs: true
+          # Not `lfs: true`: that pulls the guide recordings — 164 MB of .webm this job never
+          # looks at. No spec mentions a video; the help bar is checked for being visible,
+          # one line tall, and gone where a section has no guide, and all three read the
+          # same with the files or with their pointers. The posters DO matter (the bar
+          # draws one), so they are pulled by name just below. See docs/guides-recording.md.
+          lfs: false
+      - name: Guide posters only (the videos are not under test)
+        run: git lfs pull --include="apps/web/public/guides/*.png"
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.4
@@ -72,7 +79,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          lfs: true
+          # Not `lfs: true`: that pulls the guide recordings — 164 MB of .webm this job never
+          # looks at. No spec mentions a video; the help bar is checked for being visible,
+          # one line tall, and gone where a section has no guide, and all three read the
+          # same with the files or with their pointers. The posters DO matter (the bar
+          # draws one), so they are pulled by name just below. See docs/guides-recording.md.
+          lfs: false
+      - name: Guide posters only (the videos are not under test)
+        run: git lfs pull --include="apps/web/public/guides/*.png"
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.4
