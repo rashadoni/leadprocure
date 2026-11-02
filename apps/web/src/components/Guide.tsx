@@ -76,9 +76,12 @@ export default function Guide() {
   const guide = resolveGuide(pathname);
   const [open, setOpen] = useState(false);
   const [isHidden, setHidden] = useGuidesHidden();
+  // A key whose poster is missing must not leave a broken-image glyph sitting in the
+  // bar: the line then looks like the fault, when the only thing absent is a picture.
+  const [posterOk, setPosterOk] = useState(true);
 
   // a new section starts collapsed, whatever the previous one was doing
-  useEffect(() => { setOpen(false); }, [pathname]);
+  useEffect(() => { setOpen(false); setPosterOk(true); }, [pathname]);
 
   // Esc closes the expanded player, like any modal on the page.
   useEffect(() => {
@@ -106,8 +109,18 @@ export default function Guide() {
         {/* `tip-below`: this bar is the FIRST element on the page, and a bubble drawn above
             it is clipped by the top of the window with nowhere to scroll — including the
             one line that says how to bring the guides back. */}
-        <button className="btn small ghost tip-below" onClick={() => setOpen(true)} data-tip={t('guide_sub')}>
-          🎥 {t('guide')}{title ? `: ${title}` : ''}
+        <button className="btn small ghost tip-below help-open" onClick={() => setOpen(true)} data-tip={t('guide_sub')}>
+          {/* The picture is back, but INSIDE the line instead of above it. A 72px frame
+              leaves the heading on screen, where the old 190px card pushed it under the
+              fold; it stays one button, so opening the guide is still one tab stop; and
+              the words stay, because the frame says «this is a video» while only the
+              words say which one. */}
+          {posterOk && (
+            <span className="help-thumb" aria-hidden="true">
+              <img src={posterUrl} alt="" onError={() => setPosterOk(false)} />
+            </span>
+          )}
+          <span>🎥 {t('guide')}{title ? `: ${title}` : ''}</span>
         </button>
         <button className="btn small ghost tip-below" data-tip={t('guide_hide_all_tip')}
           onClick={() => setHidden(true)}>
