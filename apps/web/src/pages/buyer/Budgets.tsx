@@ -1,7 +1,10 @@
 import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
-import { api, fmtDate, fmtMoney } from '../../api/client';
+import { Explain } from '../../components/Explain';
+import { api, fmtAmount, fmtDate, fmtMoney, tableCurrency } from '../../api/client';
+import { Cur } from '../../components/Cur';
 import { statusGroup } from '../../components/Badge';
 import { Actions } from '../../components/Actions';
+import { MenuSep, RowMenu } from '../../components/RowMenu';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
@@ -57,6 +60,11 @@ export default function Budgets() {
   const [rows, setRows] = useState<Budget[]>([]);
   const [form, setForm] = useState({ ...empty });
   const [editId, setEditId] = useState<string | null>(null);
+  // The plan form used to stand open above the table, eight fields wide, on every visit —
+  // so the page opened on a form instead of on the plans. Same shape as Requests: a named
+  // button, and the card appears when it is asked for.
+  const [formOpen, setFormOpen] = useState(false);
+  const formCard = useRef<HTMLDivElement>(null);
   const [err, setErr] = useState('');
 
   const [deps, setDeps] = useState<any[]>([]);
@@ -134,6 +142,7 @@ export default function Budgets() {
       else await api.post('/budgets', body);
       setForm({ ...empty });
       setEditId(null);
+      setFormOpen(false);
       load();
     } catch (e: any) { setErr(e.response?.data?.message?.toString() ?? t('error_generic')); }
   };
@@ -141,6 +150,11 @@ export default function Budgets() {
   const edit = (b: Budget) => {
     const month = Number(b.periodStart.slice(5, 7));
     setEditId(b.id);
+    setFormOpen(true);
+    // The form is above the table and the button that opens it is now inside a row's menu,
+    // which can be at the bottom of a long list: without this the only visible effect of
+    // pressing «Revise» is that the table jumps down a little.
+    requestAnimationFrame(() => formCard.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     setForm({
       name: b.name,
       category: b.category === '*' ? '' : b.category,
@@ -269,6 +283,11 @@ export default function Budgets() {
   const paidBasis = `paid_basis_${depSummary[0]?.paidBasis}`;
   // `tip` explains the figure on hover — short, because it sits on every row and the bubble
   // is 240px wide; `note` is the visible line under the table that names the other page.
+  // Budgets are AZN-only by constraint, so the code is said once in each heading instead
+  // of on all twenty-four figures — which is what used to push the row's own buttons off
+  // the right edge of the card. A foreign row (there should be none) brings it back.
+  const cur = tableCurrency(rows);
+  const money = (v: number | string | null, c?: string) => (cur ? fmtAmount(v) : fmtMoney(v, c));
   const paidBasisTip = `paid_basis_tip_${depSummary[0]?.paidBasis}`;
   const paidBasisNote = `paid_basis_note_${depSummary[0]?.paidBasis}`;
 
@@ -276,12 +295,24 @@ export default function Budgets() {
     <>
       <h1>{t('budgets')}</h1>
       <ListState of={{ loading: false, failed: refFailed, reload: loadRefs }} />
-      {canManagePlans && (
-        <div className="card">
+      {canManagePlans && !formOpen && (
+        <button className="btn tip-below" data-testid="bud-new" data-tip={t('bud_new_plan')}
+          onClick={() => { setErr(''); setFormOpen(true); }} style={{ marginBottom: 12 }}>
+          + {t('bud_new_plan')}
+        </button>
+      )}
+      {canManagePlans && formOpen && (
+        <div className="card" ref={formCard}>
           {/* This row and the filter row below carry the same three controls — period, year,
               department — and looked identical, so there was no telling which one created a
               plan and which one narrowed the list. Both say what they are now. */}
-          <h3 style={{ marginTop: 0 }}>{editId ? t('bud_revise') : t('bud_new_plan')}</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <h3 style={{ margin: 0 }}>{editId ? t('bud_revise') : t('bud_new_plan')}</h3>
+            <button type="button" className="btn small ghost"
+              onClick={() => { setErr(''); setEditId(null); setForm({ ...empty }); setFormOpen(false); }}>
+              ✕ {t('form_hide')}
+            </button>
+          </div>
           <form onSubmit={submit} className="row" style={{ alignItems: 'flex-end' }}>
             <div><label>{t('name')}</label>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
@@ -380,11 +411,14 @@ export default function Budgets() {
                       {fmtMoney(d.forecastMinor, d.currency)}
                       {d.forecastOverMinor > 0 && <span> · +{fmtMoney(d.forecastOverMinor, d.currency)}</span>}
                     </td>
-                    <td>
+                    {/* The figure under the bar is in the bubble, as it is in the plans
+                         table below — one page should not show one quantity two ways. The
+                         pace line stays visible: it answers a different question. */}
+                    <td data-tip={`${d.utilizationPct}%${over ? ` · ${t('budget_over')}` : ''}`}>
                       <div className="budget-bar">
                         <div className={`budget-fill ${over ? 'over' : ''}`} style={{ width: `${Math.min(100, d.utilizationPct)}%` }} />
                       </div>
-                      <span className="hint">{d.utilizationPct}%{over ? ` · ${t('budget_over')}` : ''}</span>
+
                       {/* pace: spent versus what the plan says should be spent by now. A bare
                           utilization figure never says whether 80% is early or late. */}
                       <div className={d.paceDeltaPct > 0 ? 'error' : 'hint'} style={{ fontSize: 11 }}
@@ -403,7 +437,7 @@ export default function Budgets() {
           {/* Two screens report settled invoices and deliberately report different numbers.
               A finance reader comparing them must find the reason on the page, not file it
               as a defect. */}
-          <div className="hint" style={{ marginTop: 10 }}>{t(paidBasisNote)}</div>
+          <div className="hint" style={{ marginTop: 10 }}><Explain text={t(paidBasisNote)} /></div>
         </div>
       )}
 
@@ -452,9 +486,10 @@ export default function Budgets() {
         </div>}
         {!reportLoading && !reportError && <table data-testid="budget-list">
           <thead><tr>
-            <th>{t('name')}</th><th>{t('status')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('period')}</th>
-            <th className="num">{t('amount')}</th><th className="num">{t('committed')}</th><th className="num">{t('actual')}</th><th className="num">{t('remaining')}</th>
-            <th style={{ width: 180 }}>{t('utilization')}</th>{canManagePlans && <th>{t('actions')}</th>}
+            <th className="grow">{t('name')}</th><th>{t('status')}</th><th>{t('category')}</th><th>{t('department')}</th><th>{t('period')}</th>
+            <th className="num">{t('amount')}<Cur of={cur} /></th><th className="num">{t('committed')}<Cur of={cur} /></th>
+            <th className="num">{t('actual')}<Cur of={cur} /></th><th className="num">{t('remaining')}<Cur of={cur} /></th>
+            <th style={{ width: 180 }}>{t('utilization')}</th>{canManagePlans && <th className="acts">{t('actions')}</th>}
           </tr></thead>
           <tbody>
             {rows.map((b) => {
@@ -462,61 +497,69 @@ export default function Budgets() {
               return (
                 <Fragment key={b.id}>
                 <tr>
-                  <td>{b.name}</td>
+                  <td className="grow">{b.name}</td>
                   <td><span className={`badge ${statusGroup(b.status)} ${b.status}`} data-tip={t(`bud_st_${b.status}`)}>{t(`bud_status_${b.status}`)}</span></td>
                   <td>{b.category === '*' ? '—' : b.category}</td>
                   <td data-tip={b.departmentName || undefined}>{b.departmentCode ?? t('bud_org_wide')}</td>
                   <td data-tip={`${b.periodStart} → ${b.periodEnd}`}>{b.periodLabel}</td>
-                  <td className="num">{fmtMoney(b.amountMinor, b.currency)}</td>
+                  <td className="num">{money(b.amountMinor, b.currency)}</td>
                   <td className="num" data-tip={t('drill_hint')}>
-                    <button className="linklike" onClick={() => toggleDocs(b.id, 'committed')}>{fmtMoney(b.committedMinor, b.currency)}</button>
+                    <button className="linklike" onClick={() => toggleDocs(b.id, 'committed')}>{money(b.committedMinor, b.currency)}</button>
                   </td>
                   <td className="num" data-tip={t('drill_hint')}>
-                    <button className="linklike" onClick={() => toggleDocs(b.id, 'actual')}>{fmtMoney(b.actualMinor, b.currency)}</button>
+                    <button className="linklike" onClick={() => toggleDocs(b.id, 'actual')}>{money(b.actualMinor, b.currency)}</button>
                   </td>
-                  <td className={`num ${over ? 'error' : ''}`}>{fmtMoney(b.remainingMinor, b.currency)}</td>
-                  <td>
-                    <div className="budget-bar">
+                  <td className={`num ${over ? 'error' : ''}`}>{money(b.remainingMinor, b.currency)}</td>
+                  {/* The bar and the figure under it made the cell two lines tall in every
+                       row. The bar carries the reading; the exact percent is one hover away. */}
+                  <td className="nowrap" data-tip={`${b.utilizationPct}%${over ? ` · ${t('budget_over')}` : ''}`}>
+                    <div className="budget-bar" style={{ marginBottom: 0 }}>
                       <div className={`budget-fill ${over ? 'over' : ''}`} style={{ width: `${Math.min(100, b.utilizationPct)}%` }} />
                     </div>
-                    <span className="hint">{b.utilizationPct}%{over ? ` · ${t('budget_over')}` : ''}</span>
                   </td>
                   {canManagePlans && (
                     <td>
-                      {/* Six wordless emoji in a 2×3 block, which rearranged itself whenever a
-                          labelled button joined them. Every one of them says what it does now,
-                          and deleting the plan sits apart at the end. */}
-                      <Actions
-                        dense
-                        danger={b.status === 'DRAFT' && (
-                          <button className="btn small ghost danger" data-tip={t('tip_delete')} onClick={() => remove(b.id)}>🗑 {t('delete')}</button>
-                        )}
-                      >
+                      {/* One visible action — the one this budget's state is waiting for —
+                          and the rest behind a named button. Six labelled buttons in the
+                          cell made a 235px row: they lined up in a column, not a line.
+                          History, phasing and rollover are available in every state, so
+                          they are the menu's tail and sit in the same place every time. */}
+                      <Actions>
                         {b.status === 'DRAFT' && (
-                          <>
-                            <button className="btn small" data-tip={t('bud_submit_tip')} onClick={() => act(b.id, 'submit')}>{t('submit')}</button>
-                            <button className="btn small ghost" data-tip={t('tip_edit')} onClick={() => edit(b)}>✎ {t('edit')}</button>
-                          </>
+                          <button className="btn small" data-tip={t('bud_submit_tip')} onClick={() => act(b.id, 'submit')}>{t('submit')}</button>
                         )}
                         {b.status === 'PENDING' && (
-                          <>
-                            <button className="btn small" data-tip={t('bud_approve_tip')} onClick={() => act(b.id, 'approve')}>{t('approve')}</button>
-                            <button className="btn small ghost" data-tip={t('bud_reject_tip')} onClick={() => withReason(b.id, 'reject', 'bud_reject_prompt')}>{t('reject')}</button>
-                            <button className="btn small ghost" data-tip={t('bud_recall_tip')} onClick={() => act(b.id, 'recall')}>↩ {t('bud_recall')}</button>
-                          </>
+                          <button className="btn small" data-tip={t('bud_approve_tip')} onClick={() => act(b.id, 'approve')}>{t('approve')}</button>
                         )}
                         {b.status === 'APPROVED' && (
-                          <>
-                            <button className="btn small ghost" data-tip={t('bud_revise_tip')} onClick={() => edit(b)}>✎ {t('bud_revise')}</button>
-                            <button className="btn small ghost" data-tip={t('bud_close_tip')} onClick={() => act(b.id, 'close')}>🔒 {t('bud_close')}</button>
-                          </>
+                          <button className="btn small ghost" data-tip={t('bud_revise_tip')} onClick={() => edit(b)}>✎ {t('bud_revise')}</button>
                         )}
                         {b.status === 'CLOSED' && (
                           <button className="btn small ghost" data-tip={t('bud_reopen_tip')} onClick={() => withReason(b.id, 'reopen', 'bud_reopen_prompt')}>🔓 {t('bud_reopen')}</button>
                         )}
-                        <button className="btn small ghost" data-tip={t('bud_history')} onClick={() => toggleHistory(b.id)}>🕘 {t('bud_history_label')}</button>
-                        <button className="btn small ghost" data-tip={t('bud_phasing_tip')} onClick={() => togglePhasing(b.id)}>📅 {t('bud_phasing')}</button>
-                        <button className="btn small ghost" data-tip={t('bud_rollover')} onClick={() => rollover(b.id)}>↪ {t('bud_rollover_label')}</button>
+                        <RowMenu>
+                          {b.status === 'DRAFT' && (
+                            <button className="btn small ghost" data-tip={t('tip_edit')} onClick={() => edit(b)}>✎ {t('edit')}</button>
+                          )}
+                          {b.status === 'PENDING' && (
+                            <>
+                              <button className="btn small ghost" data-tip={t('bud_reject_tip')} onClick={() => withReason(b.id, 'reject', 'bud_reject_prompt')}>{t('reject')}</button>
+                              <button className="btn small ghost" data-tip={t('bud_recall_tip')} onClick={() => act(b.id, 'recall')}>↩ {t('bud_recall')}</button>
+                            </>
+                          )}
+                          {b.status === 'APPROVED' && (
+                            <button className="btn small ghost" data-tip={t('bud_close_tip')} onClick={() => act(b.id, 'close')}>🔒 {t('bud_close')}</button>
+                          )}
+                          <button className="btn small ghost" data-tip={t('bud_history')} onClick={() => toggleHistory(b.id)}>🕘 {t('bud_history_label')}</button>
+                          <button className="btn small ghost" data-tip={t('bud_phasing_tip')} onClick={() => togglePhasing(b.id)}>📅 {t('bud_phasing')}</button>
+                          <button className="btn small ghost" data-tip={t('bud_rollover')} onClick={() => rollover(b.id)}>↪ {t('bud_rollover_label')}</button>
+                          {b.status === 'DRAFT' && (
+                            <>
+                              <MenuSep />
+                              <button className="btn small ghost danger" data-tip={t('tip_delete')} onClick={() => remove(b.id)}>🗑 {t('delete')}</button>
+                            </>
+                          )}
+                        </RowMenu>
                       </Actions>
                     </td>
                   )}

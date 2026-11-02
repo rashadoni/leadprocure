@@ -64,7 +64,7 @@ export default function Suppliers() {
         <div className="hint">{t('registry_hint')}</div>
         <ListState of={registry} empty={!registry.data.length} />
         <table>
-          <thead><tr><th>{t('company')}</th><th>VÖEN</th><th>{t('status')}</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th className="grow">{t('company')}</th><th>VÖEN</th><th>{t('status')}</th><th className="acts">{t('actions')}</th></tr></thead>
           <tbody>
             {registry.data.map((r) => (
               <tr key={r.id}>
@@ -74,11 +74,18 @@ export default function Suppliers() {
                 <td>
                   {/* Blocking a supplier cuts them out of every future tender — last, and set
                       apart from approving, which used to sit right next to it. */}
+                  {/* No menu here: this table has four columns, so the cell has the room —
+                      measured at 1280 it was already one line before any of this work. */}
                   <Actions
                     danger={canManage && r.status !== 'BLOCKED' && (
                       <button className="btn small ghost danger" data-tip={t('tip_supplier_block')} onClick={() => setStatus(r.id, 'BLOCKED')}>{t('block')}</button>
                     )}
                   >
+                  {scores[r.supplier_org_id] && (
+                    <span className="hint" style={{ marginRight: 6 }}>
+                      {scores[r.supplier_org_id].map((a: any) => `${a.metric}: ${a.avg_score}`).join(' · ')}
+                    </span>
+                  )}
                   {canManage && <>
                     {r.status !== 'APPROVED' && <button className="btn small" data-tip={t('tip_supplier_approve')} onClick={() => setStatus(r.id, 'APPROVED')}>{t('approve')}</button>}
                     {/* was a bare 🛡 */}
@@ -90,11 +97,6 @@ export default function Suppliers() {
                     onClick={() => (canManage ? rate(r.supplier_org_id) : loadScore(r.supplier_org_id))}>
                     ★ {t('scorecard')}
                   </button>
-                  {scores[r.supplier_org_id] && (
-                    <span className="hint" style={{ marginLeft: 6 }}>
-                      {scores[r.supplier_org_id].map((a: any) => `${a.metric}: ${a.avg_score}`).join(' · ')}
-                    </span>
-                  )}
                   </Actions>
                 </td>
               </tr>
@@ -107,14 +109,16 @@ export default function Suppliers() {
         <div className="hint">{t('directory_hint')}</div>
         <ListState of={directory} empty={!directory.data.length} />
         <table>
-          <thead><tr><th>{t('company')}</th><th>VÖEN</th><th>{t('category')}</th><th></th></tr></thead>
+          <thead><tr><th className="grow">{t('company')}</th><th>VÖEN</th><th>{t('category')}</th><th className="acts">{t('actions')}</th></tr></thead>
           <tbody>
             {directory.data.map((s) => (
               <tr key={s.id}>
                 <td>{s.legal_name}</td>
                 <td>{s.voen ?? '—'}</td>
                 <td>{(s.categories ?? []).join(', ')}</td>
-                <td>{canManage && !inRegistry.has(s.id) && <button className="btn small" data-tip={t('tip_supplier_invite')} onClick={() => invite(s.id)}>{t('invite')}</button>}</td>
+                <td className="acts"><Actions>
+                  {canManage && !inRegistry.has(s.id) && <button className="btn small" data-tip={t('tip_supplier_invite')} onClick={() => invite(s.id)}>{t('invite')}</button>}
+                </Actions></td>
               </tr>
             ))}
           </tbody>

@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Explain } from '../../components/Explain';
 import { useParams } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
 import { api, fmtDateTime, fmtMoney, getToken } from '../../api/client';
@@ -593,7 +594,7 @@ export default function EventDetail() {
           </div>
           {/* A whole card for one button, and nothing on it said what pressing the button
               does — or that what comes back is advice and the choice stays the buyer's. */}
-          <p className="hint" style={{ marginTop: 6 }}>{t('ai_reco_hint')}</p>
+          <p className="hint" style={{ marginTop: 6 }}><Explain text={t('ai_reco_hint')} /></p>
           {ai && (
             <>
               <div style={{ margin: '10px 0', color: 'var(--accent)' }}>{ai.rationale}</div>

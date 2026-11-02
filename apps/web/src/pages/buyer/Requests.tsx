@@ -1,6 +1,7 @@
 import { FormEvent, Fragment, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, fmtDate, fmtMoney } from '../../api/client';
+import { api, fmtAmount, fmtDate, fmtMoney, tableCurrency } from '../../api/client';
+import { Cur } from '../../components/Cur';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import { useDialogs } from '../../components/Dialogs';
@@ -8,6 +9,7 @@ import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
 import { isDenied, ListState, useLoad } from '../../components/ListState';
 import { Actions } from '../../components/Actions';
+import { RowMenu } from '../../components/RowMenu';
 
 const PAGE_SIZE = 20;
 
@@ -34,8 +36,6 @@ export default function Requests() {
   const [err, setErr] = useState('');
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
-  const [directFor, setDirectFor] = useState<string | null>(null);
-  const [approvedSuppliers, setApprovedSuppliers] = useState<any[]>([]);
   const [hasPolicies, setHasPolicies] = useState(false);
   const [cats, setCats] = useState<string[]>([]);
   // Departments (cost centres) — which budget this spend lands on. Only active ones can
@@ -90,6 +90,9 @@ export default function Requests() {
   // A failed page change must not leave the PREVIOUS page's rows sitting under the new
   // page number: on failure the alert stands alone.
   const rows: any[] = requests.failed ? [] : (requests.data.items ?? []);
+  // One currency for the whole page means the code belongs in the heading, not on every
+  // figure; mixed rows bring it back onto each one.
+  const cur = tableCurrency(rows);
   const total: number = requests.data.total ?? 0;
   const load = () => requests.reload();
 
@@ -103,12 +106,33 @@ export default function Requests() {
   // produced an invitation-only tender. For a product sold against UNCITRAL and exporting
   // OCDS (where visibility === 'PUBLIC' is what makes procurementMethod "open") that is the
   // central procedure, so it was reachable on the server and missing from the product.
-  const [procedure, setProcedure] = useState<Record<string, string>>({});
   const defaultProcedure = (r: any) =>
     (r.method_resolved === 'OPEN_TENDER' ? 'OPEN'
       : ['RFQ', 'RFP', 'RFI'].includes(r.method_resolved) ? r.method_resolved : 'RFQ');
-  const announce = (r: any) => {
-    const pick = procedure[r.id] ?? defaultProcedure(r);
+  // The procedure is chosen in a dialog, not by a dropdown parked in the row. The dropdown
+  // cost the cell 124px — enough to push the two buttons beside it onto their own lines —
+  // and its six entries were unreadable without the grey legend paragraph that used to sit
+  // above the table. In the dialog each procedure says what it is, next to the name of the
+  // request it will be announced under, and the resolved one is preselected, so the common
+  // case is still one click and one Enter.
+  const announce = async (r: any) => {
+    const pick = await ask({
+      title: t('announce_pick'),
+      hint: `${r.request_no} · ${r.title} · ${fmtMoney(r.estimated_total_minor, r.currency)}`,
+      confirmLabel: t('announce'),
+      defaultValue: defaultProcedure(r),
+      options: [
+        { value: 'RFQ', label: `🔒 RFQ`, hint: `${t('announce_rfq_what')}${defaultProcedure(r) === 'RFQ' ? ` ${t('announce_policy_pick')}` : ''}` },
+        { value: 'OPEN', label: `🌐 ${t('open_tender')}`, hint: `${t('announce_open_what')}${defaultProcedure(r) === 'OPEN' ? ` ${t('announce_policy_pick')}` : ''}` },
+        { value: 'RFP', label: `📄 RFP`, hint: `${t('announce_rfp_what')}${defaultProcedure(r) === 'RFP' ? ` ${t('announce_policy_pick')}` : ''}` },
+        { value: 'RFI', label: `❓ RFI`, hint: `${t('announce_rfi_what')}${defaultProcedure(r) === 'RFI' ? ` ${t('announce_policy_pick')}` : ''}` },
+        // Допуск — часть выбора процедуры, а не настройка поверх неё, поэтому оба
+        // аукциона стоят в этом же списке.
+        { value: 'AUCTION', label: `⚡ ${t('auction_invited')}`, hint: t('announce_auction_what') },
+        { value: 'AUCTION_OPEN', label: `⚡ ${t('auction_open')}`, hint: t('announce_auction_open_what') },
+      ],
+    });
+    if (!pick) return;
     if (pick === 'AUCTION' || pick === 'AUCTION_OPEN') {
       return makeAuction(r, pick === 'AUCTION_OPEN' ? 'PUBLIC' : 'INVITED');
     }
@@ -119,17 +143,32 @@ export default function Requests() {
   };
 
   // The chosen supplier used to be read back out of the DOM by element id at click time.
-  const [directSupplier, setDirectSupplier] = useState('');
-  const openDirect = async (id: string) => {
-    const r = await api.get('/suppliers');
-    setApprovedSuppliers(r.data.filter((x: any) => x.status === 'APPROVED'));
-    setDirectSupplier('');
-    setDirectFor(id);
-  };
-  const placeDirect = async (requestId: string, supplierOrgId: string) => {
+  // Picking the supplier opened a second dropdown inside the row, next to a Confirm button
+  // — two more controls in the cell that was already overflowing, and they appeared only
+  // for the row being worked on, so the table jumped. Same dialog as the procedure choice.
+  const placeDirect = async (r: any) => {
+    let list: any[];
     try {
-      await api.post(`/orders/direct/from-request/${requestId}`, { supplierOrgId });
-      setDirectFor(null);
+      const res = await api.get('/suppliers');
+      list = res.data.filter((x: any) => x.status === 'APPROVED');
+    } catch (e: any) { return notifyError(e); }
+    if (!list.length) return notify(t('no_approved_suppliers'), 'error');
+    const supplierOrgId = await ask({
+      title: t('direct_order'),
+      hint: `${r.request_no} · ${r.title} · ${fmtMoney(r.estimated_total_minor, r.currency)}`,
+      label: t('supplier_org'),
+      confirmLabel: t('confirm'),
+      // An empty first entry, and `required`, because `ask` preselects options[0] and this
+      // dialog places a REAL order: the row it replaced held a disabled «pick a supplier»
+      // option for exactly that reason, and without it an Enter straight after opening
+      // buys from whoever happens to sort first.
+      required: true,
+      options: [{ value: '', label: `${t('supplier_org')}…` },
+        ...list.map((x: any) => ({ value: x.supplier_org_id, label: x.legal_name }))],
+    });
+    if (!supplierOrgId) return;
+    try {
+      await api.post(`/orders/direct/from-request/${r.id}`, { supplierOrgId });
       nav('/buyer/contracts');
     } catch (e: any) { notifyError(e); }
   };
@@ -328,29 +367,31 @@ export default function Requests() {
             {deps.map((d) => <option key={d.id} value={d.id}>{d.code}</option>)}
           </select>
         </div>
-        <div className="hint" style={{ marginBottom: 10 }}>
-          {t('legend_procedures')}
-          {['BUYER_ADMIN', 'BUYER_APPROVER'].includes(session?.org.role ?? '') && (
-            <> · <a href="/buyer/settings">⚖️ {t('method_policy')}</a></>
-          )}
-        </div>
+        {/* Процедуры больше не объясняются абзацем над таблицей: объяснение стоит в окне
+            «Elan et», у каждой процедуры своё. Здесь остаётся только ссылка на правило,
+            которое их выбирает. */}
+        {['BUYER_ADMIN', 'BUYER_APPROVER'].includes(session?.org.role ?? '') && (
+          <div className="hint" style={{ marginBottom: 10 }}>
+            <a href="/buyer/settings">⚖️ {t('method_policy')}</a>
+          </div>
+        )}
         <ListState of={[requests,
           { loading: false, failed: impactFailed.length > 0,
             reload: () => impactFailed.forEach((id) => loadImpact(id)) }]}
           empty={!rows.length} />
         <table>
-          <thead><tr><th>#</th><th>{t('title')}</th><th>{t('category')}</th><th>{t('department')}</th><th className="nowrap">{t('date')}</th><th>{t('requester')}</th><th className="num">{t('total')}</th><th>{t('status')}</th><th>{t('method')}</th><th>{t('actions')}</th></tr></thead>
+          <thead><tr><th className="nowrap">#</th><th className="grow">{t('title')}</th><th>{t('category')}</th><th>{t('department')}</th><th className="nowrap">{t('date')}</th><th>{t('requester')}</th><th className="num">{t('total')}<Cur of={cur} /></th><th>{t('status')}</th><th>{t('method')}</th><th className="acts">{t('actions')}</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <Fragment key={r.id}>
               <tr>
                 <td className="nowrap">{r.request_no}</td>
-                <td>{r.title}</td>
+                <td className="grow">{r.title}</td>
                 <td>{r.category && r.category !== '*' ? r.category : '—'}</td>
                 <td>{r.department_code ?? '—'}</td>
                 <td className="hint nowrap">{fmtDate(r.created_at)}</td>
                 <td className="hint">{r.created_by_name ?? '—'}</td>
-                <td className="num">{fmtMoney(r.estimated_total_minor, r.currency)}</td>
+                <td className="num">{cur ? fmtAmount(r.estimated_total_minor) : fmtMoney(r.estimated_total_minor, r.currency)}</td>
                 <td>
                   <Badge status={r.status} />
                   {r.status === 'SUBMITTED' && r.steps_total > 0 && (
@@ -365,13 +406,7 @@ export default function Requests() {
                       written reason, so it is the one destructive action here and sits at the
                       end. Rejecting is not destructive — it is one half of a binary decision —
                       so it stays beside Approve where an approver expects it. */}
-                  <Actions
-                    danger={r.status === 'APPROVED' && isAdmin && (
-                      <button className="btn small ghost danger" data-tip={t('tip_cancel_request')} onClick={() => cancelRequest(r.id)}>
-                        {t('cancel')}
-                      </button>
-                    )}
-                  >
+                  <Actions>
                     {r.status === 'DRAFT' && !isFinance && <button className="btn small" data-tip={t('tip_submit')} onClick={() => act(r.id, 'submit')}>{t('submit')}</button>}
                     {r.status === 'SUBMITTED' && (canApprove || (isFinance && r.current_role === 'BUYER_FINANCE')) && (
                       <>
@@ -381,43 +416,25 @@ export default function Requests() {
                         <button className="btn small ghost" data-tip={t('tip_reject')} onClick={() => act(r.id, 'reject')}>{t('reject')}</button>
                       </>
                     )}
-                    {/* One decision, one control. These four are mutually exclusive ways of
-                        running the same purchase, and as four equal buttons they read as
-                        four commands — which is why they needed a legend underneath to be
-                        understood at all. The method policy already resolved the right one,
-                        so it is preselected and the common case stays a single click. */}
+                    {/* One decision, one control: the procedure is picked inside the dialog
+                        this button opens, where each one is explained. */}
                     {r.status === 'APPROVED' && r.method_resolved !== 'DIRECT' && canApprove && (
-                      <>
-                        <select aria-label={t('method_pick')} value={procedure[r.id] ?? defaultProcedure(r)}
-                          onChange={(e) => setProcedure((m) => ({ ...m, [r.id]: e.target.value }))}>
-                          <option value="RFQ">🔒 RFQ</option>
-                          <option value="OPEN">🌐 {t('open_tender')}</option>
-                          <option value="RFP">📄 RFP</option>
-                          <option value="RFI">❓ RFI</option>
-                          {/* Два варианта аукциона стоят в ЭТОМ списке, а не вторым
-                              списком рядом: допуск — часть выбора процедуры, а не
-                              настройка поверх неё. */}
-                          <option value="AUCTION">⚡ {t('auction_invited')}</option>
-                          <option value="AUCTION_OPEN">⚡ {t('auction_open')}</option>
-                        </select>
-                        <button className="btn small" data-tip={t('tip_announce')} onClick={() => announce(r)}>{t('announce')}</button>
-                      </>
+                      <button className="btn small" data-tip={t('tip_announce')} onClick={() => announce(r)}>{t('announce')}</button>
                     )}
                     {r.status === 'APPROVED' && r.method_resolved === 'DIRECT' && canApprove && (
-                      directFor === r.id ? (
-                        <>
-                          <select aria-label={t('supplier_org')} value={directSupplier} onChange={(e) => setDirectSupplier(e.target.value)}>
-                            <option value="" disabled>{t('supplier_org')}…</option>
-                            {approvedSuppliers.map((s) => <option key={s.supplier_org_id} value={s.supplier_org_id}>{s.legal_name}</option>)}
-                          </select>
-                          <button className="btn small" disabled={!directSupplier}
-                            data-tip={directSupplier ? t('tip_place_direct') : t('pick_supplier_first')}
-                            onClick={() => placeDirect(r.id, directSupplier)}>{t('confirm')}</button>
-                        </>
-                      ) : (
-                        <button className="btn small" data-tip={t('tip_direct')} onClick={() => openDirect(r.id)}>📦 {t('direct_order')}</button>
-                      )
+                      <button className="btn small" data-tip={t('tip_direct')} onClick={() => placeDirect(r)}>📦 {t('direct_order')}</button>
                     )}
+                    {/* Cancelling an approved request is the one destructive thing here and
+                        the one nobody does by default: it belongs behind the named button,
+                        not beside Announce where a mis-click lands on it.
+                        */}
+                    <RowMenu>
+                      {r.status === 'APPROVED' && isAdmin && (
+                        <button className="btn small ghost danger" data-tip={t('tip_cancel_request')} onClick={() => cancelRequest(r.id)}>
+                          {t('cancel')}
+                        </button>
+                      )}
+                    </RowMenu>
                   </Actions>
                 </td>
               </tr>

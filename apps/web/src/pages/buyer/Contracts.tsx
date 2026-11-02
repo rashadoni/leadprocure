@@ -8,6 +8,7 @@ import { PO_BUYER_NEXT } from '@leadprocure/shared';
 import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
 import { Actions } from '../../components/Actions';
+import { MenuSep, RowMenu } from '../../components/RowMenu';
 import { ListState, useLoad } from '../../components/ListState';
 
 const PAGE_SIZE = 20;
@@ -119,7 +120,7 @@ export default function Contracts() {
       <div className="card">
         <ListState of={contractList} empty={!contracts.length} />
         <table>
-          <thead><tr><th>#</th><th>{t('title')}</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('validity')}</th><th className="num">{t('total')}</th><th className="num" data-tip={t('drawn_tip')}>{t('drawn')}</th><th>{t('status')}</th><th className="num">{t('orders_n')}</th>{contractActions && <th>{t('actions')}</th>}</tr></thead>
+          <thead><tr><th>#</th><th>{t('title')}</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('validity')}</th><th className="num">{t('total')}</th><th className="num" data-tip={t('drawn_tip')}>{t('drawn')}</th><th>{t('status')}</th><th className="num">{t('orders_n')}</th>{contractActions && <th className="acts">{t('actions')}</th>}</tr></thead>
           <tbody>
             {contracts.map((c) => {
               const over = Number(c.drawn_minor) > Number(c.total_minor);
@@ -164,7 +165,7 @@ export default function Contracts() {
         <h3>{t('orders')}</h3>
         <ListState of={orderList} empty={!orders.length} />
         <table>
-          <thead><tr><th>#</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th>{orderActions && <th>{t('actions')}</th>}</tr></thead>
+          <thead><tr><th>#</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th>{orderActions && <th className="acts">{t('actions')}</th>}</tr></thead>
           <tbody>
             {orders.map((p) => (
               <tr key={p.id}>
@@ -178,14 +179,12 @@ export default function Contracts() {
                   {/* Stopping an order is the destructive end of the same status list, so it
                       is split out rather than sitting first because the enum happened to
                       list it first. */}
-                  <Actions
-                    danger={isBuyerSide && (PO_BUYER_NEXT[p.status] ?? []).filter((n) => STOP_PO.has(n)).map((next) => (
-                      <button key={next} className="btn small ghost danger"
-                        onClick={() => act(() => api.post(`/orders/${p.id}/status`, { status: next }))}>
-                        {t(`po_act_${next}`)}
-                      </button>
-                    ))}
-                  >
+                  <Actions>
+                    {/* The widest action cell in the product: a buyer's order can offer two
+                        forward steps, a receipt, an amendment and two ways to stop it. The
+                        step that moves the order on stays in the row — that is the one the
+                        reader came for — and everything else, stops included, is in the
+                        menu. */}
                     {isBuyerSide && (PO_BUYER_NEXT[p.status] ?? []).filter((n) => !STOP_PO.has(n)).map((next) => (
                       <button key={next} className="btn small"
                         onClick={() => act(() => api.post(`/orders/${p.id}/status`, { status: next }))}>
@@ -195,9 +194,18 @@ export default function Contracts() {
                     {canReceive && ['SHIPPED', 'DELIVERED'].includes(p.status) && (
                       <button className="btn small" data-tip={t('tip_receive')} onClick={() => receiveAll(p.id)}>📥 {t('receive')}</button>
                     )}
-                    {canManage && ['ISSUED', 'CONFIRMED'].includes(p.status) && (
-                      <button className="btn small ghost" data-tip={t('tip_amend')} onClick={() => openAmend(p.id)}>✎ {t('amend')}</button>
-                    )}
+                    <RowMenu>
+                      {canManage && ['ISSUED', 'CONFIRMED'].includes(p.status) && (
+                        <button className="btn small ghost" data-tip={t('tip_amend')} onClick={() => openAmend(p.id)}>✎ {t('amend')}</button>
+                      )}
+                      {isBuyerSide && (PO_BUYER_NEXT[p.status] ?? []).filter((n) => STOP_PO.has(n)).length > 0 && <MenuSep />}
+                      {isBuyerSide && (PO_BUYER_NEXT[p.status] ?? []).filter((n) => STOP_PO.has(n)).map((next) => (
+                        <button key={next} className="btn small ghost danger"
+                          onClick={() => act(() => api.post(`/orders/${p.id}/status`, { status: next }))}>
+                          {t(`po_act_${next}`)}
+                        </button>
+                      ))}
+                    </RowMenu>
                   </Actions>
                 </td>
                 )}

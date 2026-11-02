@@ -49,7 +49,14 @@ export type AskOpts = BaseOpts & {
   /** Whole numbers only — a score is an integer and the API validates it as one. */
   integer?: boolean;
   /** Renders a list instead of a free field — a choice nobody can mistype. */
-  options?: { value: string; label: string }[];
+  /**
+   * A choice nobody can mistype. Give an option a `hint` and the list is drawn as rows
+   * with the explanation under each label instead of a `<select>`: where the options are
+   * a decision rather than a value — which tender procedure to announce under — the
+   * explanation has to be readable AT the moment of choosing, not in a legend somewhere
+   * above the table.
+   */
+  options?: { value: string; label: string; hint?: string }[];
 };
 
 export type ConfirmOpts = BaseOpts;
@@ -194,8 +201,31 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
                 The control is still named for a screen reader, by the title. */}
             {pending.kind === 'ask' && (
               <div className="filter-field" style={{ marginTop: 12 }}>
-                {pending.opts.label && <label htmlFor="dialog-input">{pending.opts.label}</label>}
-                {pending.opts.options ? (
+                {/* `htmlFor` only where there IS one control to point at: the explained
+                    choice below is a group of radios, and a label tied to an element that
+                    does not exist is worse than none. The group is named by the title. */}
+                {pending.opts.label && (pending.opts.options?.some((o) => o.hint)
+                  ? <span className="dialog-label">{pending.opts.label}</span>
+                  : <label htmlFor="dialog-input">{pending.opts.label}</label>)}
+                {pending.opts.options?.some((o) => o.hint) ? (
+                  <div className="pick-list" role="radiogroup" data-testid="dialog-input"
+                    aria-labelledby={pending.opts.label ? undefined : 'dialog-title'}>
+                    {pending.opts.options.map((o) => (
+                      <label key={o.value} className={`pick${value === o.value ? ' on' : ''}`}>
+                        <input type="radio" name="dialog-pick" value={o.value} checked={value === o.value}
+                          /* Focus lands on the SELECTED option, not the first: an arrow key
+                             pressed straight after opening would otherwise move the choice
+                             off whatever the policy had preselected. */
+                          ref={(el) => { if (o.value === value) field.current = el; }}
+                          onChange={() => setValue(o.value)} />
+                        <span>
+                          <b>{o.label}</b>
+                          {o.hint && <span className="hint">{o.hint}</span>}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                ) : pending.opts.options ? (
                   <select id="dialog-input" data-testid="dialog-input"
                     aria-labelledby={pending.opts.label ? undefined : 'dialog-title'}
                     ref={(el) => { field.current = el; }}

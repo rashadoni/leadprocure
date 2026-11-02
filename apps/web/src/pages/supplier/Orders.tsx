@@ -121,7 +121,7 @@ export default function Orders() {
       <div className="card">
         <ListState of={orderList} empty={!orders.length} />
         <table>
-          <thead><tr><th>#</th><th>{t('buyer_org')}</th><th className="num">{t('total')}</th><th>{t('status')}</th><th>{t('actions')}</th><th>{t('logistics')}</th></tr></thead>
+          <thead><tr><th>#</th><th>{t('buyer_org')}</th><th className="num">{t('total')}</th><th>{t('status')}</th><th className="acts">{t('actions')}</th><th>{t('logistics')}</th></tr></thead>
           <tbody>
             {orders.map((p) => {
               const next = PO_SUPPLIER_TRANSITIONS[p.status];
@@ -134,6 +134,10 @@ export default function Orders() {
                   <td><Badge status={p.status} /></td>
                   <td>
                     <Actions>
+                    {/* No menu here: the two secondary actions belong to states that
+                        cannot both be true — an invoice follows DELIVERED/ACCEPTED, change
+                        orders exist while ISSUED/CONFIRMED — so the cell never holds more
+                        than the forward step and one of them. */}
                     {next && <button className="btn small" onClick={() => advance(p.id, next)}>→ {t(`po_act_${next}`)}</button>}
                     {['DELIVERED', 'ACCEPTED'].includes(p.status) && (
                       <button className="btn small ghost" onClick={() => submitInvoice(p.id)}>🧾 {t('invoice')}</button>

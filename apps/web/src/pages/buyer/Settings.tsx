@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { Explain } from '../../components/Explain';
 import { api, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
@@ -361,7 +362,7 @@ export default function Settings() {
       {policyDraft && (
         <div className="card">
           <h3 id="set-thresholds">{t('bud_thresholds')}</h3>
-          <div className="hint" style={{ marginBottom: 12 }}>{t('bud_thresholds_hint')}</div>
+          <div className="hint" style={{ marginBottom: 12 }}><Explain text={t('bud_thresholds_hint')} /></div>
           <div className="row" style={{ alignItems: 'flex-end', maxWidth: 880 }}>
             <div><label htmlFor="bud-warn">{t('bud_warn_label')}</label>
               <input id="bud-warn" type="number" min={1} max={1000} disabled={!canManageBudgetPolicy} value={policyDraft.warnPct}

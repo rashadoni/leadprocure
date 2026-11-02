@@ -23,12 +23,19 @@ async function assertRenders(page: Page, path: string, headingHint: RegExp): Pro
 }
 
 // ── narrow screens ────────────────────────────────────────────────────────────────────
-// The four widths the layout has to be right at: a desktop, a tablet on its side, a tablet
-// held upright, a phone. 1440 is the wide layout, unchanged by this work; the other three
-// are below the 1100px breakpoint, where the rail is a drawer and a row is drawn as a card.
+// The widths the layout has to be right at: two desktops, a tablet on its side, a tablet
+// held upright, a phone. 1440 and 1280 are the wide layout; the other three are below the
+// 1100px breakpoint, where the rail is a drawer and a row is drawn as a card.
 // Widest FIRST so that 375 — the width that matters and the one that fails first — is
 // measured last, on the most settled page there is.
-const WIDTHS = [1440, 1024, 768, 375];
+//
+// 1280 was added on 2026-11-02 and is not a round number for its own sake: it is the width
+// of the owner's own window, and it was the one width this list skipped. Requests scrolled
+// sideways by 112px there and budgets by 107 — the rail plus eleven columns plus the page's
+// own padding came to more than 1280 — while 1440 fit and 1024 had already folded into
+// cards. A gap between the widest card layout and the narrowest table layout is exactly
+// where a table overflows, so the list has to hold a width inside it.
+const WIDTHS = [1440, 1280, 1024, 768, 375];
 
 // Pages whose list cannot be empty on the seeded stack, so the measurement below is made
 // WITH rows in it — and these four are the widest tables in the product (requests has ten
@@ -107,7 +114,27 @@ async function assertFitsEveryWidth(page: Page, path: string): Promise<void> {
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
     await assertNoSidewaysScroll(page, `${path} at ${width}px`);
+    if (width >= 1100) await assertActionsStayOnOneLine(page, `${path} at ${width}px`);
   }
+}
+
+// A row's actions are a ROW. `Actions` promised exactly that in its own comment — "one row,
+// one flex line" — while the stylesheet beside it said `flex-wrap: wrap` with a 92px floor
+// under every button: in a 150px column each button took a line of its own, six actions on
+// a budget drew a 235px row, and the budgets page came to 2535px of mostly buttons. It
+// survived a review, and a UI/UX audit, because both read the markup; nobody measured the
+// result. So this measures the result.
+//
+// Only above the breakpoint: below it a row is drawn as a card, where buttons SHOULD wrap
+// — there is no row left for them to be a row of. One line of small buttons is 26px; 34
+// leaves room for a border and a rounding and is far below the 52 a second line costs.
+async function assertActionsStayOnOneLine(page: Page, where: string): Promise<void> {
+  const tall = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>('.actions'))
+    .map((cell) => ({ h: Math.round(cell.getBoundingClientRect().height),
+      what: Array.from(cell.querySelectorAll('button, select')).map((b) => (b.textContent || '').trim()).join(' / ') }))
+    .filter((x) => x.h > 34)
+    .map((x) => `${x.h}px (${x.what})`));
+  expect.soft(tall, `${where}: action cells wrapped onto more than one line — ${tall.join('; ')}`).toEqual([]);
 }
 
 // ONE login per panel, not one per test. /auth/login is throttled to 10/min as a
