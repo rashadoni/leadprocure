@@ -33,23 +33,6 @@ export function Explain({ text, children }: { text?: string; children?: ReactNod
   );
 }
 
-// A tooltip is a hint, not a page. These few dictionary entries run to 230–560 characters
-// and were written to be read in the open; the bubble gets their first sentence and the
-// reader gets the rest from the `Explain` beside it.
-//
-// 200, not 120: the bubble is 360px wide, where 200 characters is four lines. Cutting at
-// 120 was throwing away the second half of seven ordinary hints that had nowhere else to
-// be said — «only AZN», «cancelled awards do not count», the CSV column list — which is
-// not shortening, it is deleting. Only text that IS repeated in an Explain is cut now.
-//
-// Cut at a sentence end, never at a character count: a bubble that stops mid-word reads
-// as a bug, and shortening a translation by hand would mean writing three new ones that
-// nobody reviewed.
-export function hintOf(text: string, max = 200): string {
-  if (text.length <= max) return text;
-  const cut = text.slice(0, max);
-  const stop = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('; '), cut.lastIndexOf(' — '));
-  if (stop > 40) return text.slice(0, stop + 1);
-  const space = cut.lastIndexOf(' ');
-  return (space > 40 ? cut.slice(0, space) : cut) + '…';
-}
+// Re-exported so call sites keep one import, and kept in a plain .ts file so a test can
+// load it without pulling JSX and React in behind it.
+export { hintOf } from './hint';
