@@ -125,6 +125,15 @@ const CURSOR_JS = () => {
   window.__moveCur = (x, y) => { c.style.left = x + 'px'; c.style.top = y + 'px'; };
 };
 const injectCursor = (page) => page.evaluate(CURSOR_JS).catch(() => {});
+// Which scene is on screen right now, and how many cursor targets were never found.
+// A missed target used to be SILENT: moveToLoc returned false, no scene checks the return
+// value, and the result on screen is a motionless cursor that looks exactly like a pause
+// the narration meant to leave. So "no misses" was a hope. SCENE is set by the run loop
+// before each scene; MISSES is printed at the end, and makes the claim checkable.
+let SCENE = '?';
+let MISSES = 0;
+const describe = (loc) => String(loc).replace(/^Locator@/, '').slice(0, 90);
+
 async function moveToLoc(page, loc, hold = 650) {
   await injectCursor(page); // re-inject after any navigation wiped the overlay
   // Bounded for the same reason as boundingBox below — and this one is sneakier, because
@@ -138,7 +147,11 @@ async function moveToLoc(page, loc, hold = 650) {
   // seconds and let the scene go on: the narration still plays, nothing is lost but the
   // pointer move.
   const box = await loc.boundingBox({ timeout: 2000 }).catch(() => null);
-  if (!box) return false;
+  if (!box) {
+    MISSES++;
+    console.log(`  ✗ ${SCENE}: цель не найдена — ${describe(loc)}`);
+    return false;
+  }
   const x = Math.round(box.x + Math.min(box.width / 2, 70));
   const y = Math.round(box.y + box.height / 2);
   await page.evaluate(([x, y]) => window.__moveCur && window.__moveCur(x, y), [x, y]);
@@ -287,17 +300,41 @@ async function geminiTts(text, lang, out) {
       );
       // 429 = per-minute rate/quota cap on the TTS preview model. The window rolls every
       // ~60s, so wait it out (short backoff throws away the whole run) rather than fail.
+      // A key that is REFUSED is not a key that is busy. 401/403 means revoked, mistyped
+      // or not entitled to this model, and retrying it ten times with backoff spends ~90s
+      // and then kills a run that the OTHER keys could have finished. A stale third key in
+      // `.env` did exactly that. Burn it like an exhausted one and carry on; only if every
+      // key is gone is there nothing left to try.
+      if (res.status === 401 || res.status === 403) {
+        const why = (await res.text().catch(() => '')).slice(0, 120).replace(/\s+/g, ' ');
+        gExhausted.add(gKeyIdx);
+        const next = GEMINI_KEYS.findIndex((_, i) => !gExhausted.has(i));
+        if (next === -1) throw new Error(`Gemini: no usable key left (last one answered ${res.status}: ${why})`);
+        console.log(`  · Gemini key #${gKeyIdx + 1} REFUSED (${res.status}) — dropping it, switching to key #${next + 1}`);
+        gKeyIdx = next; continue;
+      }
       if (res.status === 429) {
         const bodyText = await res.text().catch(() => '');
-        if (/PerDay/i.test(bodyText)) {
+        // Say WHICH quota, from Google's own answer. "Daily cap" used to be a guess off a
+        // /PerDay/ match on the whole body, and a per-MINUTE 429 whose body merely mentions
+        // a per-day limit reads identically — so a run that only needed to wait a minute
+        // burned every key instead. The quotaId is the fact; print it either way.
+        let ids = [];
+        try {
+          for (const d of (JSON.parse(bodyText).error?.details ?? []))
+            for (const v of (d.violations ?? [])) if (v.quotaId) ids.push(v.quotaId);
+        } catch { /* non-JSON body: fall back to the regex below */ }
+        const perDay = ids.length ? ids.some((q) => /PerDay/i.test(q)) : /PerDay/i.test(bodyText);
+        const named = ids.length ? ids.join(', ') : '(quota not named in the answer)';
+        if (perDay) {
           gExhausted.add(gKeyIdx);
           const next = GEMINI_KEYS.findIndex((_, i) => !gExhausted.has(i));
-          if (next === -1) throw new Error('Gemini: all keys hit their DAILY quota');
-          console.log(`  · Gemini key #${gKeyIdx + 1} daily cap — switching to key #${next + 1}`);
+          if (next === -1) throw new Error(`Gemini: all keys hit their DAILY quota [${named}]`);
+          console.log(`  · Gemini key #${gKeyIdx + 1} daily cap [${named}] — switching to key #${next + 1}`);
           gKeyIdx = next; continue;
         }
         const wait = Math.min(62000, 18000 * attempt);
-        console.log(`  · Gemini 429 (rate limit) — waiting ${Math.round(wait / 1000)}s, retry ${attempt}/10`);
+        console.log(`  · Gemini 429 [${named}] — waiting ${Math.round(wait / 1000)}s, retry ${attempt}/10`);
         await P(wait);
         continue;
       }
@@ -984,6 +1021,7 @@ async function login(ctx, email) {
         for (const scene of sec.scenes) {
           const startMs = Date.now() - t0;        // audio starts at the scene boundary
           offsets.push(startMs);
+          SCENE = `${key}/${lang} сцена ${offsets.length}`;
           await P(LEAD);                          // let the voice begin before the cursor moves
           h.setSceneBudget(scene.sec * 1000);     // anchor holdUntil() to THIS narration
           try { await scene.do?.(page, lang, h); }
@@ -1027,5 +1065,10 @@ async function login(ctx, email) {
       console.log(`🎬 ${key}.${lang}.webm (${dur(join(OUT, `${key}.${lang}.webm`)).toFixed(1)}s)`);
     }
   }
-  console.log('\nDone. Rebuild the web container to ship.');
+  if (MISSES) {
+    console.log(`\n⚠ промахов курсора: ${MISSES} — эти сцены играли по неподвижному экрану, смотрите ✗ выше`);
+  } else {
+    console.log('\nпромахов курсора: 0');
+  }
+  console.log('Done. Rebuild the web container to ship.');
 })().catch((e) => { console.error('FAILED:', e); process.exit(1); });
