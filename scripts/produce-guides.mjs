@@ -107,7 +107,7 @@ async function slowScroll(page, steps = 5, dy = 130, pause = 500) {
 // the scene held its narration over a motionless screen, and freezedetect caught it.
 const scrollTo = async (page, sel) => {
   const el = typeof sel === 'string' ? page.locator(sel).first() : sel.first?.() ?? sel;
-  if (await el.count()) { await el.scrollIntoViewIfNeeded(); await P(700); }
+  if (await el.count()) { await el.scrollIntoViewIfNeeded({ timeout: 1500 }).catch(() => {}); await P(700); }
 };
 const type = async (page, sel, text, delay = 85) => { const el = page.locator(sel).first(); await el.click(); await el.pressSequentially(text, { delay }); };
 
@@ -127,8 +127,17 @@ const CURSOR_JS = () => {
 const injectCursor = (page) => page.evaluate(CURSOR_JS).catch(() => {});
 async function moveToLoc(page, loc, hold = 650) {
   await injectCursor(page); // re-inject after any navigation wiped the overlay
-  await loc.scrollIntoViewIfNeeded().catch(() => {});
-  const box = await loc.boundingBox();
+  // Bounded for the same reason as boundingBox below — and this one is sneakier, because
+  // the .catch() hides the failure while the twenty seconds are spent anyway.
+  await loc.scrollIntoViewIfNeeded({ timeout: 1500 }).catch(() => {});
+  // boundingBox() has NO timeout of its own, so it inherits the context default (20s). An
+  // element that is in the DOM but not rendered — a button a row's state does not show, a
+  // panel that did not open — then costs the scene twenty seconds of a motionless screen,
+  // and `⏱ действия дольше озвучки` is the only trace. Three sections lost 25–35s to this
+  // on the first real run. A cursor that cannot reach its target should give up in two
+  // seconds and let the scene go on: the narration still plays, nothing is lost but the
+  // pointer move.
+  const box = await loc.boundingBox({ timeout: 2000 }).catch(() => null);
   if (!box) return false;
   const x = Math.round(box.x + Math.min(box.width / 2, 70));
   const y = Math.round(box.y + box.height / 2);
@@ -572,7 +581,12 @@ const SECTIONS = {
     { az: 'Təqvim payının bir şərti var: o, xərcin il boyu bərabər getdiyini güman edir. Həqiqətdə isə belə olmur — istilik qışa düşür, texnika alışı ilin sonuna. Ona görə planı aylara bölmək olar: sətirdəki təqvim düyməsini açırıq.',
       do: async (p, l, h) => { await h.scrollTo('[data-testid=budget-list]'); await h.holdUntil(0.4); const ph = p.locator('[data-testid=budget-list] button:has-text("Aylar üzrə bölgü")').first(); if (await ph.count()) { await h.click(ph, 1600); } else { await h.moveTo('[data-testid=budget-list]'); } await h.holdUntil(0.95); } },
     { az: 'Hər ay üçün payı faizlə yazırsınız, altında dərhal məbləğ görünür. Cəmi mütləq yüz faiz olmalıdır — sistem yarımçıq bölgünü yadda saxlamır, çünki cəmi yüz olmayan plan plan deyil. Bölgünü silmək isə bərabər bölgüyə qaytarır.',
-      do: async (p, l, h) => { const c = p.locator('tr:has-text("Aylar üzrə bölgü")').first(); if (await c.count()) { await h.moveTo(c.locator('input').nth(0)); await h.holdUntil(0.35); await h.moveTo(c.locator('input').nth(6)); await h.holdUntil(0.65); await h.moveTo(c.locator('.hint').last()); } await h.holdUntil(0.95); } },
+      // `tr:has-text(...)` matched the budget's OWN row first — the button is labelled
+      // «📅 Aylar üzrə bölgü», so the text is on both rows and .first() took the wrong one,
+      // whose inputs do not exist: boundingBox then waited out its full 20s and the scene
+      // ran 25s past its narration. The opened panel is the row whose <b> IS that heading.
+      // Guard on the input, not on the row, so a miss costs nothing instead of 20 seconds.
+      do: async (p, l, h) => { const c = p.locator('tr:has(b:text-is("Aylar üzrə bölgü"))').first(); const inp = c.locator('input'); if (await inp.count()) { await h.moveTo(inp.nth(0)); await h.holdUntil(0.35); await h.moveTo(inp.nth(6)); await h.holdUntil(0.65); await h.moveTo(c.locator('.hint').last()); } else { await h.moveTo('[data-testid=budget-list]'); } await h.holdUntil(0.95); } },
     { az: 'Bölgü veriləndən sonra tempin mənası dəyişir. İndi «planla nə qədər olmalı idi» sualına təqvim yox, sizin öz mövsümiliyiniz cavab verir — və payıza yığılmış büdcə yazda daha artıq xərclənmiş kimi görünmür. Yekun cədvəlində hansı sətrin bölgü ilə oxunduğu da bilinir.',
       do: async (p, l, h) => { await h.scrollTo('[data-testid=budget-rollup]'); await h.holdUntil(0.45); await h.hover(p.locator('[data-testid=budget-rollup] tbody tr').first().locator('td').nth(7), 1600); await h.holdUntil(0.95); } },
     { az: 'İndi ən vacib imkan: hər rəqəmin arxasına baxmaq olar. Öhdəlik və faktiki məbləğlər klikləniləndir — sistem göstərir, məhz hansı sənədlərdən ibarətdir. Maliyyəçinin istənilən cəm haqqında ilk sualı budur: nədən yığılıb.',
