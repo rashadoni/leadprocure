@@ -114,7 +114,27 @@ async function assertFitsEveryWidth(page: Page, path: string): Promise<void> {
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
     await assertNoSidewaysScroll(page, `${path} at ${width}px`);
+    if (width >= 1100) await assertActionsStayOnOneLine(page, `${path} at ${width}px`);
   }
+}
+
+// A row's actions are a ROW. `Actions` promised exactly that in its own comment — "one row,
+// one flex line" — while the stylesheet beside it said `flex-wrap: wrap` with a 92px floor
+// under every button: in a 150px column each button took a line of its own, six actions on
+// a budget drew a 235px row, and the budgets page came to 2535px of mostly buttons. It
+// survived a review, and a UI/UX audit, because both read the markup; nobody measured the
+// result. So this measures the result.
+//
+// Only above the breakpoint: below it a row is drawn as a card, where buttons SHOULD wrap
+// — there is no row left for them to be a row of. One line of small buttons is 26px; 34
+// leaves room for a border and a rounding and is far below the 52 a second line costs.
+async function assertActionsStayOnOneLine(page: Page, where: string): Promise<void> {
+  const tall = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>('.actions'))
+    .map((cell) => ({ h: Math.round(cell.getBoundingClientRect().height),
+      what: Array.from(cell.querySelectorAll('button, select')).map((b) => (b.textContent || '').trim()).join(' / ') }))
+    .filter((x) => x.h > 34)
+    .map((x) => `${x.h}px (${x.what})`));
+  expect.soft(tall, `${where}: action cells wrapped onto more than one line — ${tall.join('; ')}`).toEqual([]);
 }
 
 // ONE login per panel, not one per test. /auth/login is throttled to 10/min as a
