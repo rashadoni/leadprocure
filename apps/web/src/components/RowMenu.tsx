@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Children, isValidElement, ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 
 // The rest of a row's actions, behind one named button.
@@ -23,11 +23,10 @@ export function RowMenu({ children, label }: { children?: ReactNode; label?: str
   const [up, setUp] = useState(false);
   const box = useRef<HTMLSpanElement>(null);
 
-  // An empty slot must not draw a trigger that opens nothing. `{cond && <button/>}` yields
-  // `false`, and an array of those is still truthy — the same trap `Actions` documents.
-  const has = (n: ReactNode): boolean =>
-    Array.isArray(n) ? n.some(has) : n != null && n !== false && n !== true && n !== '' && n !== 0;
-  if (!has(children)) return null;
+  // An empty slot must not draw a trigger that opens nothing, and a menu that is all
+  // separator is empty. `menuItems` answers both.
+  const items = menuItems(children);
+  if (!items.length) return null;
 
   return (
     <span className="menu" ref={box}>
@@ -44,7 +43,7 @@ export function RowMenu({ children, label }: { children?: ReactNode; label?: str
         {label ?? t('row_more')} {open ? '▴' : '▾'}
       </button>
       {open && (
-        <Pop onClose={() => setOpen(false)} boxRef={box} up={up}>{children}</Pop>
+        <Pop onClose={() => setOpen(false)} boxRef={box} up={up}>{items}</Pop>
       )}
     </span>
   );
@@ -98,4 +97,30 @@ function Pop({ children, onClose, boxRef, up }:
 // A divider before the destructive tail of a menu, mirroring `actions-sep` in the row.
 export function MenuSep() {
   return <span className="menu-sep" aria-hidden="true" />;
+}
+
+// The menu's real contents: what a page wrote, minus the separators that ended up with
+// nothing on one side of them.
+//
+// A separator marks a boundary BETWEEN items, so one with nothing above it is not a
+// boundary — it is a hairline floating at the top of the popup with a gap under it, which
+// is exactly how a DRAFT purchase order's menu opened: the amendment above the divider
+// exists only for ISSUED and CONFIRMED orders, while the divider is drawn whenever the
+// order has a way to be stopped. A page writes `<MenuSep/>` without being able to see
+// whether the conditional items around it rendered, so the strays are dropped here — one
+// rule, rather than a condition repeated at every call site that has a destructive tail.
+// Same reason `Actions` asks what is INSIDE a slot instead of whether the slot is there.
+//
+// `Children.toArray` has already thrown away the `false`s that `{cond && <button/>}` leaves
+// behind, and flattened the arrays that a `.map()` produces — which is what makes
+// "the previous item" a question that can be asked at all.
+export function menuItems(children: ReactNode): ReactNode[] {
+  const isSep = (n: ReactNode) => isValidElement(n) && n.type === MenuSep;
+  const out: ReactNode[] = [];
+  for (const child of Children.toArray(children)) {
+    if (isSep(child) && (out.length === 0 || isSep(out[out.length - 1]))) continue;
+    out.push(child);
+  }
+  while (out.length && isSep(out[out.length - 1])) out.pop();
+  return out;
 }

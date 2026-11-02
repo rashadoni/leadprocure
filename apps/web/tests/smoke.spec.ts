@@ -111,11 +111,26 @@ async function assertFitsEveryWidth(page: Page, path: string): Promise<void> {
     expect.soft(await page.locator('tbody tr').count(),
       `${path} is measured for its rows and had none`).toBeGreaterThan(0);
   }
+  await assertOneTooltipPerElement(page, path);
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
     await assertNoSidewaysScroll(page, `${path} at ${width}px`);
     if (width >= 1100) await assertActionsStayOnOneLine(page, `${path} at ${width}px`);
   }
+}
+
+// `data-tip` is drawn by `[data-tip]:hover::after`, and hovering a child hovers its parents
+// too — so an element with a tip inside another element with a tip opens BOTH bubbles,
+// stacked on the same spot. On the budget rollup the cell's «0.4%» landed on top of the
+// pace line's sentence and ate its middle; the recording of that screen shows it. The rule
+// is structural, not visual, so it is asserted structurally: no element carrying a tip may
+// sit inside another one. There were zero such pairs once the rollup was fixed, which is
+// what makes this worth asserting rather than tolerating.
+async function assertOneTooltipPerElement(page: Page, where: string): Promise<void> {
+  const nested = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>('[data-tip]'))
+    .filter((el) => el.parentElement?.closest('[data-tip]'))
+    .map((el) => `"${el.getAttribute('data-tip')}" inside "${el.parentElement!.closest('[data-tip]')!.getAttribute('data-tip')}"`));
+  expect.soft(nested, `${where}: tooltips nest, so hovering the inner one draws both — ${nested.join('; ')}`).toEqual([]);
 }
 
 // A row's actions are a ROW. `Actions` promised exactly that in its own comment — "one row,
