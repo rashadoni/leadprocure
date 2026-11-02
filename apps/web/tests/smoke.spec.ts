@@ -341,6 +341,16 @@ test.describe('buyer panel', () => {
     await expect(bar).toBeVisible();
     const box = await bar.boundingBox();
     expect(box!.height).toBeLessThan(60);
+    // The poster is now the ONLY guide file the acceptance run downloads: the workflow pulls
+    // `*.png` by name and leaves the 164 MB of video behind, because nothing here looks at a
+    // video. So the poster is the one that has to be asked for. A Git LFS pointer served as
+    // image/png decodes to nothing — `naturalWidth` stays 0, the widget's onError strips the
+    // frame, and the bar quietly goes back to the wordy line nobody recognised as a video.
+    // That is the failure `lfs: true` used to cover for without anyone checking.
+    // Polled, not read once: the bar is visible while the image is still decoding.
+    const poster = bar.locator('.help-thumb img');
+    await expect(poster).toBeVisible();
+    await expect.poll(() => poster.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
     // The menu follows the page down instead of scrolling away from a long list. Measured,
     // not read off the declaration: `position: sticky` keeps reporting itself as sticky
     // after any ancestor grows an `overflow` that silently disables it.
