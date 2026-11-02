@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { api, fmtDate, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
+import { hintOf } from '../../components/Explain';
 import { useDialogs } from '../../components/Dialogs';
 import { Badge, statusGroup } from '../../components/Badge';
 import { taskLabel } from '../../components/humanize';
@@ -81,7 +82,7 @@ export default function SupplierDashboard() {
 
       <div data-testid="sup-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
         {cards.map((c) => (
-          <div className="card" key={c.label} style={{ marginBottom: 0 }} data-tip={c.tip}>
+          <div className="card" key={c.label} style={{ marginBottom: 0 }} data-tip={hintOf(c.tip)}>
             <div style={{ color: 'var(--muted)', fontSize: 12 }}>{c.label}</div>
             <div style={{ fontSize: 22, fontWeight: 800, marginTop: 6 }}>{c.value}</div>
           </div>
