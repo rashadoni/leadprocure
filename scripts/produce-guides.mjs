@@ -292,6 +292,12 @@ async function geminiTts(text, lang, out) {
     },
   };
   let lastErr;
+  // The last per-minute refusal, kept for the throw at the bottom. Every OTHER way out of
+  // this loop either returns or throws something, but the rate-limit path only `continue`s
+  // — so ten minute-limit refusals in a row fell out of the loop with `lastErr` still
+  // undefined and `throw lastErr` threw UNDEFINED. Seven minutes of waiting, then
+  // `FAILED: undefined` and nothing to act on.
+  let last429 = '';
   for (let attempt = 1; attempt <= 10; attempt++) {
     try {
       const res = await fetch(
@@ -333,6 +339,7 @@ async function geminiTts(text, lang, out) {
           console.log(`  · Gemini key #${gKeyIdx + 1} daily cap [${named}] — switching to key #${next + 1}`);
           gKeyIdx = next; continue;
         }
+        last429 = named;
         const wait = Math.min(62000, 18000 * attempt);
         console.log(`  · Gemini 429 [${named}] — waiting ${Math.round(wait / 1000)}s, retry ${attempt}/10`);
         await P(wait);
@@ -361,7 +368,8 @@ async function geminiTts(text, lang, out) {
       if (attempt < 10) await P(2000 * attempt);
     }
   }
-  throw lastErr;
+  throw lastErr ?? new Error(
+    `Gemini TTS: 10 попыток подряд упёрлись в лимит частоты [${last429 || 'квота не названа'}] — озвучка не получена`);
 }
 
 // Per-language content typed live into forms during a scene — so the az video types
