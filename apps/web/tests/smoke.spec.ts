@@ -133,13 +133,14 @@ async function assertFitsEveryWidth(page: Page, path: string): Promise<void> {
 // it was. Documentation belongs on the page (components/Explain.tsx) or in the first
 // sentence (`hintOf`), never in a bubble that covers the table it describes.
 //
-// 120 characters is roughly three lines at this width — long enough for any real hint,
-// short enough that the bubble never becomes a page of its own.
+// 200 characters is four lines in the 360px bubble — long enough for any real hint, short
+// enough that it never becomes a page of its own. Anything longer is documentation and
+// belongs in an `Explain`, where it is said in the open and nothing is deleted to fit.
 async function assertTooltipsAreHints(page: Page, where: string): Promise<void> {
   const essays = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>('[data-tip]'))
     .filter((el) => el.getBoundingClientRect().width > 0)
     .map((el) => el.getAttribute('data-tip') || '')
-    .filter((tip) => tip.length > 120)
+    .filter((tip) => tip.length > 200)
     .map((tip) => `${tip.length} chars: "${tip.slice(0, 50)}…"`));
   expect.soft(essays, `${where}: tooltips hold paragraphs — ${essays.join('; ')}`).toEqual([]);
 }

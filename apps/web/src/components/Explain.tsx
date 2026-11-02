@@ -33,12 +33,19 @@ export function Explain({ text, children }: { text?: string; children?: ReactNod
   );
 }
 
-// A tooltip is a hint of a few words; these dictionary entries are two to four sentences,
-// written to be read in the open. The bubble gets the first sentence and the reader gets
-// the rest from the `Explain` beside it. Cut at a sentence end, never at a character
-// count: a bubble that stops mid-word reads as a bug, and shortening a translation by
-// hand would mean writing three new ones nobody reviewed.
-export function hintOf(text: string, max = 120): string {
+// A tooltip is a hint, not a page. These few dictionary entries run to 230–560 characters
+// and were written to be read in the open; the bubble gets their first sentence and the
+// reader gets the rest from the `Explain` beside it.
+//
+// 200, not 120: the bubble is 360px wide, where 200 characters is four lines. Cutting at
+// 120 was throwing away the second half of seven ordinary hints that had nowhere else to
+// be said — «only AZN», «cancelled awards do not count», the CSV column list — which is
+// not shortening, it is deleting. Only text that IS repeated in an Explain is cut now.
+//
+// Cut at a sentence end, never at a character count: a bubble that stops mid-word reads
+// as a bug, and shortening a translation by hand would mean writing three new ones that
+// nobody reviewed.
+export function hintOf(text: string, max = 200): string {
   if (text.length <= max) return text;
   const cut = text.slice(0, max);
   const stop = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('; '), cut.lastIndexOf(' — '));
