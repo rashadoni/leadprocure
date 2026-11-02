@@ -20,6 +20,35 @@
 из исходников одна заняла двадцать минут). Запуск на Contabo остаётся решением
 владельца под конкретную задачу, а не правилом по умолчанию.
 
+**Как не собирать образы, если они уже есть.** `infra/docker-compose.demo.yml` нарочно
+собирает оба образа из исходников: образ хранилища — из закреплённого upstream
+(`infra/storage`, цепочка поставки), API — из чекаута. Для одноразового стенда на машине,
+где нужные артефакты уже лежат, это ~25 минут и ничего не даёт. Подменяется **локальным,
+не коммитимым** override-файлом рядом (`docker compose … -f infra/docker-compose.demo.yml
+-f <override>.yml`):
+
+```yaml
+services:
+  leadprocure-demo-minio:
+    image: minio/minio:latest        # прод крутит тот же образ
+    build: !reset null
+    pull_policy: missing
+  leadprocure-demo-createbuckets:
+    image: minio/mc:latest
+    pull_policy: missing
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["<те же три шага, что infra/storage/bootstrap-bucket.sh: дождаться адреса, mc mb --ignore-existing, mc anonymous set none>"]
+  leadprocure-demo-api:
+    image: leadprocure-api:<sha текущего main>   # docker images | grep leadprocure-api
+    build: !reset null
+    pull_policy: never
+```
+
+В коммит это не идёт: в репозитории сборка из исходников — осознанное решение, а подмена
+на `:latest` годится только для выбрасываемого стенда на доверенной машине. **Проверяйте,
+что sha образа соответствует коду, который снимаете** — иначе снимете прошлую версию
+интерфейса и не заметите.
+
 ## Один раз на машине
 
 ```bash
