@@ -608,11 +608,18 @@ test.describe('supplier panel', () => {
     await links.nth(focused === 0 ? 1 : 0).click();
     const byMouse = await page.evaluate(() => {
       const el = document.activeElement as HTMLElement;
-      return { tag: el.tagName, width: parseFloat(getComputedStyle(el).outlineWidth) || 0 };
+      const s = getComputedStyle(el);
+      return { tag: el.tagName, width: parseFloat(s.outlineWidth) || 0, style: s.outlineStyle, color: s.outlineColor };
     });
-    // The tag too: a 0 could otherwise have come from <body>, which never has a ring.
+    // The tag too: the reading could otherwise have come from <body>.
     expect(byMouse.tag).toBe('A');
-    expect(byMouse.width).toBe(0);
+    // «Not OUR ring», not «no ring at all»: CI measured a 3px outline on the clicked link,
+    // which is Chromium's own `auto` ring (its width computes to 3px) and its behaviour on
+    // main as much as here — the recordings have always lived with it. What this guards is
+    // the thing this rule introduced: the mint 2px line is keyboard-only, which is exactly
+    // what writing `:focus` instead of `:focus-visible` would break.
+    expect(byMouse.style).not.toBe('solid');
+    expect(byMouse.color).not.toBe('rgb(167, 243, 208)');
   });
 
   test('role guard: supplier cannot open buyer pages', async () => {
