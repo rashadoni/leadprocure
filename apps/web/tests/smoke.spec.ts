@@ -573,6 +573,13 @@ test.describe('supplier panel', () => {
     // measured landing on BODY in CI. The loop is safe here only because what it stops on
     // is then checked — tag AND «inside .side» — so it cannot quietly measure something
     // else and call that a pass.
+    // Give the PAGE focus before tabbing, by clicking its heading — inert, and it leaves
+    // focus on the body rather than on anything we are about to measure. Without it the
+    // key presses can land nowhere at all: this describe shares one page across its tests
+    // in serial mode, and after a test that only routed and reloaded there is nothing
+    // holding focus, so all eight presses returned BODY — which is how this test failed on
+    // someone else's PR (run 42282456679) after passing on its own.
+    await page.locator('h1').first().click();
     let byKeyboard = { tag: '', inRail: false, width: 0, style: '', color: '' };
     for (let i = 0; i < 8; i++) {
       await page.keyboard.press('Tab');
