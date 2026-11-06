@@ -573,24 +573,54 @@ test.describe('supplier panel', () => {
     // measured landing on BODY in CI. The loop is safe here only because what it stops on
     // is then checked — tag AND «inside .side» — so it cannot quietly measure something
     // else and call that a pass.
-    let byKeyboard = { tag: '', inRail: false, width: 0, style: '', color: '' };
-    for (let i = 0; i < 8; i++) {
-      await page.keyboard.press('Tab');
-      byKeyboard = await page.evaluate(() => {
-        const el = document.activeElement as HTMLElement;
-        const s = getComputedStyle(el);
-        return {
-          tag: el.tagName, inRail: !!el.closest('.side'),
-          width: parseFloat(s.outlineWidth) || 0, style: s.outlineStyle, color: s.outlineColor,
-        };
-      });
-      if (byKeyboard.tag === 'A' && byKeyboard.inRail) break;
-    }
-    expect(byKeyboard.tag).toBe('A');
+    // Clicking the heading is what gives the PAGE focus: without it the key presses land
+    // nowhere at all — this describe shares one page across its tests in serial mode, and
+    // after a test that only routed and reloaded there is nothing holding focus, so all
+    // eight presses returned BODY (run 42282456679, on someone else's PR).
+    //
+    // It also fixes WHERE tabbing starts, which is the whole structure of this test: a click
+    // on an unfocusable element sets the sequential focus starting point, so Tab goes forward
+    // into the content and Shift+Tab backward into the rail, which precedes `.main` in the
+    // DOM. Measuring forward first and then backward is how both colours get measured — and
+    // they must both be measured, because one rule sets the ring and a second overrides its
+    // colour on the dark fill, so a test that only ever saw one of them would let the other
+    // be deleted in silence. Plain Tab from the top of the page was the earlier shape of
+    // this, and it chose the element for us: it worked until the click moved the starting
+    // point, then reported `inRail: false` and looked like a broken rule.
+    const ring = async () => page.evaluate(() => {
+      const el = document.activeElement as HTMLElement;
+      const s = getComputedStyle(el);
+      return {
+        tag: el.tagName, inRail: !!el.closest('.side'),
+        width: parseFloat(s.outlineWidth) || 0, style: s.outlineStyle, color: s.outlineColor,
+      };
+    });
+    const walk = async (key: 'Tab' | 'Shift+Tab', wanted: boolean) => {
+      let r = await ring();
+      for (let i = 0; i < 10; i++) {
+        await page.keyboard.press(key);
+        r = await ring();
+        if (/^(A|BUTTON)$/.test(r.tag) && r.inRail === wanted) break;
+      }
+      return r;
+    };
+
+    await page.locator('h1').first().click();
+    // Forward: into the content, where the ring is the accent green on a white card.
+    const onCard = await walk('Tab', false);
+    expect(onCard.tag).toMatch(/^(A|BUTTON)$/);
+    expect(onCard.inRail).toBe(false);
+    expect(onCard.style).toBe('solid');
+    expect(onCard.width).toBe(2);
+    expect(onCard.color).toBe('rgb(4, 120, 87)');
+
+    await page.locator('h1').first().click();
+    // Backward: into the rail, where the accent is invisible and the colour must be mint.
+    const byKeyboard = await walk('Shift+Tab', true);
+    expect(byKeyboard.tag).toMatch(/^(A|BUTTON)$/);
     expect(byKeyboard.inRail).toBe(true);
     expect(byKeyboard.style).toBe('solid');
     expect(byKeyboard.width).toBe(2);
-    // Mint, not the accent green: on the rail's own fill the accent is what nobody can see.
     expect(byKeyboard.color).toBe('rgb(167, 243, 208)');
     // The other half, and the reason the rule is :focus-visible rather than :focus — the
     // guide recordings are driven by mouse, and a ring answering a click would sit in all
@@ -608,18 +638,30 @@ test.describe('supplier panel', () => {
     await links.nth(focused === 0 ? 1 : 0).click();
     const byMouse = await page.evaluate(() => {
       const el = document.activeElement as HTMLElement;
-      const s = getComputedStyle(el);
-      return { tag: el.tagName, width: parseFloat(s.outlineWidth) || 0, style: s.outlineStyle, color: s.outlineColor };
+      return { tag: el.tagName, style: getComputedStyle(el).outlineStyle };
     });
     // The tag too: the reading could otherwise have come from <body>.
     expect(byMouse.tag).toBe('A');
-    // «Not OUR ring», not «no ring at all»: CI measured a 3px outline on the clicked link,
-    // which is Chromium's own `auto` ring (its width computes to 3px) and its behaviour on
-    // main as much as here — the recordings have always lived with it. What this guards is
-    // the thing this rule introduced: the mint 2px line is keyboard-only, which is exactly
-    // what writing `:focus` instead of `:focus-visible` would break.
-    expect(byMouse.style).not.toBe('solid');
-    expect(byMouse.color).not.toBe('rgb(167, 243, 208)');
+    // A click paints NOTHING, and the measured state says so exactly: `outline-style: none`
+    // with `outline-width: 3px`. The 3px is not a ring — width is a separate property from
+    // style, nothing here sets it, so it sits at its CSS initial `medium`, which Chromium
+    // computes as 3px; with the style `none` there is nothing to draw. Hence the first
+    // version of this check, `width === 0`, could not pass in any case: 2px while the
+    // keyboard ring was still on that element (the state is sticky, so clicking the element
+    // Tab stopped on keeps it), 3px otherwise.
+    //
+    // So assert the style, which is the property that decides whether anything is drawn.
+    // `solid` is what our rule produces, and a rule written `:focus` instead of
+    // `:focus-visible` would make this line red — which is the whole point of it.
+    //
+    // `toBe('none')` on purpose, and deliberately stricter than the rule it guards: the rule
+    // only promises that OUR ring stays away, this says nothing at all is drawn. Red here
+    // therefore means the world moved — a UA ring arrived, or an outline came from elsewhere
+    // — and that is worth reading, not relaxing back to `not.toBe('solid')`. The loose form
+    // is how the colour check that stood here passed for ever: with `outline-style: none` the
+    // colour is `currentColor`, measured `rgb(0, 0, 238)`, so «not mint» held whatever the
+    // rule did. Guard the property that decides, not one that merely cannot disagree.
+    expect(byMouse.style).toBe('none');
   });
 
   test('role guard: supplier cannot open buyer pages', async () => {
