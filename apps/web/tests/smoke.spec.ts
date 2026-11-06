@@ -562,35 +562,44 @@ test.describe('supplier panel', () => {
   // Chrome's blue ring, unreadable on the dark-green rail. Measured on the element the
   // browser actually focuses, because a declaration in the stylesheet proves nothing about
   // which element matched it.
+  //
+  // The assertions name OUR ring, not merely «a ring»: Chromium draws its own
+  // `auto 1px rgb(16,16,16)` on a tabbed link, so `width > 0 && style !== 'none'` passed
+  // on main too — a check that could not fail. `solid 2px` mint is only ours.
   test('keyboard focus draws a ring, a mouse click does not', async () => {
     await page.goto('/supplier/market');
-    // Walk to the first link or button rather than assuming which element Tab lands on
-    // first: that depends on the layout, and a test that breaks when a control is added
-    // above it would be reporting the wrong thing.
-    let byKeyboard = { tag: '', width: 0, style: '' };
-    for (let i = 0; i < 8; i++) {
-      await page.keyboard.press('Tab');
-      byKeyboard = await page.evaluate(() => {
-        const el = document.activeElement as HTMLElement;
-        const s = getComputedStyle(el);
-        return { tag: el.tagName, width: parseFloat(s.outlineWidth) || 0, style: s.outlineStyle };
-      });
-      if (/^(A|BUTTON)$/.test(byKeyboard.tag)) break;
-    }
-    expect(byKeyboard.tag).toMatch(/^(A|BUTTON)$/);
-    expect(byKeyboard.width).toBeGreaterThan(0);
-    expect(byKeyboard.style).not.toBe('none');
+    // One Tab, not a loop: at 1280 `.topbar` and `.side-close` are display:none, so the
+    // first stop is the first rail link. If that ever stops being true this fails loudly,
+    // which is right — a loop that hunts for something focusable would instead quietly
+    // measure a different element than the one the reader meets first.
+    await page.keyboard.press('Tab');
+    const byKeyboard = await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement;
+      const s = getComputedStyle(el);
+      return { tag: el.tagName, width: parseFloat(s.outlineWidth) || 0, style: s.outlineStyle, color: s.outlineColor };
+    });
+    expect(byKeyboard.tag).toBe('A');
+    expect(byKeyboard.style).toBe('solid');
+    expect(byKeyboard.width).toBe(2);
+    // Mint, not the accent green: on the rail's own fill the accent is what nobody can see.
+    expect(byKeyboard.color).toBe('rgb(167, 243, 208)');
     // The other half, and the reason the rule is :focus-visible rather than :focus — the
     // guide recordings are driven by mouse, and a ring answering a click would sit in all
-    // eighteen of them. A CLICK only: Chrome re-arms the heuristic on the next key press,
+    // eighteen of them. A CLICK only: Chromium re-arms the heuristic on the next key press,
     // so a click followed by Escape does paint the ring (see styles.css).
-    const link = page.locator('.side a').first();
-    await link.click();
+    //
+    // A DIFFERENT link than the one above, because the state is sticky: clicking the very
+    // element that already carries the keyboard ring does not take it away, so measuring
+    // there would read 2px and say nothing about the mouse.
+    const other = page.locator('.side a').nth(1);
+    await other.click();
     const byMouse = await page.evaluate(() => {
       const el = document.activeElement as HTMLElement;
-      return parseFloat(getComputedStyle(el).outlineWidth) || 0;
+      return { tag: el.tagName, width: parseFloat(getComputedStyle(el).outlineWidth) || 0 };
     });
-    expect(byMouse).toBe(0);
+    // The tag too: a 0 could otherwise have come from <body>, which never has a ring.
+    expect(byMouse.tag).toBe('A');
+    expect(byMouse.width).toBe(0);
   });
 
   test('role guard: supplier cannot open buyer pages', async () => {

@@ -113,8 +113,13 @@ a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-v
   outline: 2px solid var(--accent); outline-offset: 2px; }
 /* The ring belongs outside the button's own shadow, or it reads as part of the fill. */
 .btn:focus-visible { outline-offset: 3px; }
-/* Light mint — the same tone as the brand mark; the accent green is invisible here. */
-.side a:focus-visible, .side button:focus-visible, .side-link:focus-visible { outline-color: #a7f3d0; }
+/* Light mint — the same tone as the brand mark; the accent green is invisible here. It has
+   to cover `.topbar` as well as the rail, and not because they merely look alike: the bar
+   is painted with the same `var(--side-bg)`, so the accent ring on `.menu-btn` measures
+   2.22:1 against it where WCAG 1.4.11 asks 3:1 — and below 1100px that button is the FIRST
+   tab stop on every page, which is the one place the ring has to be readable. */
+.side a:focus-visible, .side button:focus-visible, .side-link:focus-visible,
+.topbar a:focus-visible, .topbar button:focus-visible { outline-color: #a7f3d0; }
 /* The text controls already answer focus with their border and ring (rule above); a second
    mark around them would say nothing new. */
 input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 0; }
