@@ -16,6 +16,7 @@ import Analytics from './pages/buyer/Analytics';
 import Verification from './pages/Verification';
 import Invoices from './pages/Invoices';
 import Contracts from './pages/buyer/Contracts';
+import OrderDetail from './pages/OrderDetail';
 import Orders from './pages/supplier/Orders';
 import SupplierDashboard from './pages/supplier/Dashboard';
 import Requests from './pages/buyer/Requests';
@@ -70,6 +71,11 @@ const router = createBrowserRouter([
       { path: '/supplier/invoices', element: <Protected roles={SUPPLIER}><Invoices /></Protected> },
       { path: '/buyer/contracts', element: <Protected roles={BUYER}><Contracts /></Protected> },
       { path: '/supplier/orders', element: <Protected roles={SUPPLIER}><Orders /></Protected> },
+      // The PO number leads here from every table that prints it. Both sides, one page:
+      // `/buyer/orders/:id` has no list above it on purpose — the buyer's orders live
+      // inside Contracts, and a second list would be a second place to keep right.
+      { path: '/buyer/orders/:id', element: <Protected roles={BUYER}><OrderDetail /></Protected> },
+      { path: '/supplier/orders/:id', element: <Protected roles={SUPPLIER}><OrderDetail /></Protected> },
       { path: '/supplier/contracts', element: <Protected roles={SUPPLIER}><Contracts /></Protected> },
       { path: '/buyer/requests', element: <Protected roles={FINANCE_READ}><Requests /></Protected> },
       { path: '/buyer/events', element: <Protected roles={BUYER}><Events /></Protected> },

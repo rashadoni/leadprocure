@@ -208,4 +208,48 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
 
   await verifyRfiRfp({ browser, buyerPage: page, call, buyerToken: buyer.accessToken, approverToken: approver.accessToken, foreignSupplierToken: s1.accessToken, tag });
 
+  // ── the order's own page ───────────────────────────────────────────────────────────────
+  // The PO number is printed in four tables and, until this page existed, led nowhere: two
+  // things were visible in no screen at all — what was ordered, and how the order reached
+  // its status. The walk is the reader's: number in a table → page → lines → history.
+  //
+  // It lives HERE, at the end of this scenario, for a reason worth keeping: the check needs
+  // a buyer session AND a real order with lines, a history and goods received against it —
+  // and `auctionPo` above is exactly that, already made. A spec file of its own needed two
+  // more logins, and `/auth/login` is throttled to 10/min on purpose: the suite already
+  // sits at that ceiling (analytics.spec.ts carries the same note), so the standalone
+  // version failed in CI as a login timeout — which reads like a broken app, not a tripped
+  // limiter. Nothing here is language-dependent: this page has been through three UI
+  // languages by now, so the assertions are the PO number, the data, and the status class.
+  await page.goto('/buyer/contracts');
+  const poLink = page.getByRole('link', { name: auctionPo.po_no, exact: true });
+  await expect(poLink).toBeVisible({ timeout: 20_000 });
+  await poLink.click();
+  await expect(page).toHaveURL(new RegExp(`/buyer/orders/${auctionPo.id}$`), { timeout: 20_000 });
+  // The number the reader clicked is the heading of the page they land on; anything else
+  // means the href was built from the wrong row.
+  await expect(page.locator('h1')).toContainText(auctionPo.po_no);
+  const orderLines = page.getByTestId('order-lines');
+  await expect(orderLines.locator('tbody tr')).toHaveCount(1);
+  // Ordered against received, which is the comparison this page exists for: ten ordered and
+  // ten receipted above, so a reader looking for «did it arrive» finds 10 and 10 — and the
+  // amber «behind» mark is NOT on it.
+  const cells = orderLines.locator('tbody tr').first().locator('td.num');
+  await expect(cells.nth(0)).toHaveText('10');
+  await expect(cells.nth(1)).toHaveText('10');
+  await expect(orderLines.locator('.warn-num')).toHaveCount(0);
+  // How it got here: by the status CLASS, never the words — every label is localized.
+  await expect(page.getByTestId('order-history').locator('.badge.DELIVERED')).toBeVisible();
+  await expect(page.getByTestId('order-history').locator('.badge.ISSUED')).toBeVisible();
+  // The widest table in the product, measured where it is widest and where it is tightest.
+  // `assertFitsEveryWidth` in smoke.spec.ts cannot reach this page: the seeded stand has no
+  // order to open, which is why the measurement lives beside the scenario that makes one.
+  for (const width of [1440, 1280, 1024, 768, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    const over = await page.evaluate(() =>
+      Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth));
+    expect(over, `the order card scrolls sideways by ${over}px at ${width}px`).toBeLessThanOrEqual(1);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+
 });

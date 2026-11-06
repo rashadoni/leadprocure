@@ -121,7 +121,8 @@ export async function verifyRefreshFailureDuringDetail({ page, call, buyerToken,
       await expect.poll(() => held).toBe(1);
       await expect(loading).toBeVisible();
       // Open the card while the refresh is still in flight: the real detail read lands first.
-      await row.getByRole('link').click();
+      // by name: the row's other link is the PO number, which now has a page of its own
+      await row.getByRole('link', { name: invoice.invoice_no, exact: true }).click();
       await expect(heading.locator('.badge.APPROVED')).toBeVisible();
       await expect(loading).toBeVisible(); // the refresh is still running, and still ours
       release(); await Promise.all(handlers);

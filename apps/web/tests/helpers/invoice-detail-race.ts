@@ -48,11 +48,15 @@ async function holdDetail({ page, id, status, run }: {
   }
 }
 
-async function verifyInvoiceDetailAcrossMutation({ page, row, heading, id, from, to, mutate }: {
-  page: Page; row: Locator; heading: Locator; id: string; from: string; to: string; mutate: () => Promise<any>;
+// The invoice row carries TWO links since the order number got a page of its own: the
+// invoice number, which opens this card, and the PO number, which leaves for the order.
+// So the link is taken BY NAME — an unnamed link role is now a strict-mode violation, and
+// `.first()` would be the column order standing in for an identity.
+async function verifyInvoiceDetailAcrossMutation({ page, row, heading, invoiceNo, id, from, to, mutate }: {
+  page: Page; row: Locator; heading: Locator; invoiceNo: string; id: string; from: string; to: string; mutate: () => Promise<any>;
 }) {
   await test.step(`late ${from} invoice detail cannot undo confirmed ${to}`, async () => {
-    const link = row.getByRole('link');
+    const link = row.getByRole('link', { name: invoiceNo, exact: true });
     await link.click(); await expect(heading).toHaveCount(0);
     await holdDetail({ page, id, status: from, run: async (held, release) => {
       await link.click(); await expect.poll(held).toBe(1);
@@ -65,10 +69,10 @@ async function verifyInvoiceDetailAcrossMutation({ page, row, heading, id, from,
   });
 }
 
-async function verifyInvoiceDetailCloseAndRetry({ page, row, heading, id, error }: {
-  page: Page; row: Locator; heading: Locator; id: string; error: string;
+async function verifyInvoiceDetailCloseAndRetry({ page, row, heading, invoiceNo, id, error }: {
+  page: Page; row: Locator; heading: Locator; invoiceNo: string; id: string; error: string;
 }) {
-  const link = row.getByRole('link');
+  const link = row.getByRole('link', { name: invoiceNo, exact: true });
   await test.step('closing a pending invoice detail prevents its late response reopening the card', async () => {
     await link.click(); await expect(heading).toHaveCount(0);
     await holdDetail({ page, id, status: 'PAID', run: async (held, release, requests) => {
@@ -120,7 +124,7 @@ export async function verifyInvoiceDetailConcurrency({ page, supplierPage, call,
     await page.goto('/buyer/invoices');
     const row=page.locator('tr').filter({has:page.getByRole('link',{name:invoice.invoice_no,exact:true})})
       .filter({has:page.getByRole('cell',{name:po.po_no,exact:true})});
-    await row.getByRole('link').click();
+    await row.getByRole('link',{name:invoice.invoice_no,exact:true}).click();
     const heading=page.getByRole('heading',{level:3}).filter({hasText:invoice.invoice_no});
     await expect(heading.locator('.badge.MATCHED')).toBeVisible();
     const mutate=async(action:string,label:string)=>{
@@ -129,16 +133,16 @@ export async function verifyInvoiceDetailConcurrency({ page, supplierPage, call,
       expect(response.status(),await response.text()).toBe(201);
     };
     await page.locator('.lang').getByRole('button',{name:'AZ',exact:true}).click();
-    await verifyInvoiceDetailAcrossMutation({page,row,heading,id:invoice.id,from:'MATCHED',to:'APPROVED',mutate:()=>mutate('approve','Təsdiqlə')});
+    await verifyInvoiceDetailAcrossMutation({page,row,heading,invoiceNo:invoice.invoice_no,id:invoice.id,from:'MATCHED',to:'APPROVED',mutate:()=>mutate('approve','Təsdiqlə')});
     await page.locator('.lang').getByRole('button',{name:'RU',exact:true}).click();
-    await verifyInvoiceDetailAcrossMutation({page,row,heading,id:invoice.id,from:'APPROVED',to:'PAID',mutate:()=>mutate('pay','💳 Оплатить')});
+    await verifyInvoiceDetailAcrossMutation({page,row,heading,invoiceNo:invoice.invoice_no,id:invoice.id,from:'APPROVED',to:'PAID',mutate:()=>mutate('pay','💳 Оплатить')});
     for (const [lang,error] of [
       ['AZ','Qaimənin təfərrüatlarını yükləmək mümkün olmadı. Yenidən yoxlayın.'],
       ['RU','Не удалось загрузить сведения счёта. Повторите попытку.'],
       ['EN','Could not load invoice details. Please try again.'],
     ]) {
       await page.locator('.lang').getByRole('button',{name:lang,exact:true}).click();
-      await verifyInvoiceDetailCloseAndRetry({page,row,heading,id:invoice.id,error});
+      await verifyInvoiceDetailCloseAndRetry({page,row,heading,invoiceNo:invoice.invoice_no,id:invoice.id,error});
     }
     const settled=await call(`/invoices/${invoice.id}`,undefined,buyerToken,'get',200);
     expect(settled.status).toBe('PAID');
@@ -205,7 +209,7 @@ async function verifyNewerServerDetail({ page, call, buyerToken, invoice, poNo }
     await page.route(`**${detailPath}`, detailBarrier);
     await page.route(isList, listBarrier);
     try {
-      await row.getByRole('link').click(); await expect.poll(() => detailRequests).toBe(1);
+      await row.getByRole('link', { name: invoice.invoice_no, exact: true }).click(); await expect.poll(() => detailRequests).toBe(1);
       const approved = page.waitForResponse(r => r.url().endsWith(`${detailPath}/approve`) && r.request().method() === 'POST');
       const [response] = await Promise.all([approved, row.getByRole('button', { name: controlName('Approve') }).click()]);
       expect(response.status(), await response.text()).toBe(201);
