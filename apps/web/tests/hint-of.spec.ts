@@ -44,10 +44,17 @@ test('a shortened tooltip ends on a sentence, in every language', () => {
   // above without a word, while `bud_st_*` and `vis_*_tip` are rendered as `data-tip` and
   // so are exactly what this test exists to measure. Counting against a dumber pattern is
   // no good either: `key: '` occurs inside comments and inside the strings themselves. So
-  // one name is pinned per class the old pattern could not match, which is what a blind
-  // spot looks like from the outside — coverage lost silently, not a parse that stopped.
+  // one name is pinned per character class the key name needs, which is what a blind spot
+  // looks like from the outside — coverage lost silently, not a parse that stopped.
+  //
+  // Both axes, because the first version of this guard pinned four uppercase names and
+  // would itself have stayed green had the pattern lost `0-9`: nine keys carry a digit
+  // (`bud_1c`, `bud_1c_tip`, `win_12m`, `integ_1c`, `chain_p0`…`chain_p3`,
+  // `chain_p0_desc`), and dropping them is the same half-blindness along another axis.
+  // `chain_p0_desc` stands for them — not because it is long (69 characters, well under
+  // the threshold `hintOf` acts on) but because it carries the digit.
   const keys = strings.map(([key]) => key);
-  for (const k of ['st_APPROVED', 'delivery_SENT', 'vis_PUBLIC_tip', 'bud_st_CLOSED'])
+  for (const k of ['st_APPROVED', 'delivery_SENT', 'vis_PUBLIC_tip', 'bud_st_CLOSED', 'chain_p0_desc'])
     expect(keys, `the pattern no longer sees ${k} — it is skipping a class of keys`).toContain(k);
 
   const broken = strings
