@@ -219,8 +219,10 @@ export default function OrderDetail() {
             </div>
           ))}
           {/* Deciding stays where it was — on the supplier's own list, next to the order it
-              changes; this card exists so the buyer's side can see a proposal is pending. */}
-          <p className="hint">{t('amendments_decide_elsewhere')}</p>
+              changes; this card exists so the buyer's side can see a proposal is pending.
+              The buyer is told where the answer will come from; the supplier is not sent
+              back to the page they just came from. */}
+          {isBuyerSide && <p className="hint">{t('amendments_decide_elsewhere')}</p>}
         </div>
       )}
 

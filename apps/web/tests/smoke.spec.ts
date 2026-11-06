@@ -441,6 +441,14 @@ test.describe('buyer panel', () => {
     const tender = page.locator('a[href^="/buyer/events/"]').first();
     if (await tender.count()) await assertFitsEveryWidth(page, (await tender.getAttribute('href'))!);
 
+    // The order's own page, taken from the list the same way and for the same reason: its
+    // lines table is EIGHT columns — the widest in the product — and it was the one screen
+    // this sweep never visited. The seed issues orders, so an empty list here would be news.
+    await page.goto('/buyer/contracts');
+    await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+    const order = page.locator('a[href^="/buyer/orders/"]').first();
+    if (await order.count()) await assertFitsEveryWidth(page, (await order.getAttribute('href'))!);
+
     // Below the breakpoint the page has the whole window and the way into the menu is a
     // button that says the word: an icon on its own is not read.
     await page.setViewportSize({ width: 375, height: 820 });

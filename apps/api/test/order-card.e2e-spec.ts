@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { randomUUID } from 'crypto';
+import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
 import { addApprover } from './helpers';
 
@@ -15,12 +16,14 @@ import { addApprover } from './helpers';
 // above the DB would notice.
 describe('order card (API e2e)', () => {
   let app: INestApplication;
+  let db: Client;
   const tag = randomUUID().slice(0, 8);
   const http = () => request(app.getHttpServer());
   const bearer = (t: string) => ['Authorization', `Bearer ${t}`] as [string, string];
   let buyer: string, approver: string, supplier: string, supplierOrg: string;
   let foreignBuyer: string, foreignSupplier: string;
   let poId: string, requestNo: string, deptCode: string;
+  let contractPoId: string, contractNo: string, eventId: string;
 
   beforeAll(async () => {
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -28,6 +31,10 @@ describe('order card (API e2e)', () => {
     app.use(cookieParser());
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
+    // Owner connection: closing a tender by its own deadline is a clock problem, not an
+    // API one, and every spec that needs a real opening does it this way.
+    db = new Client({ connectionString: process.env.DATABASE_OWNER_URL ?? process.env.DATABASE_URL });
+    await db.connect();
 
     const reg = async (path: string, name: string, email: string) => {
       const r = await http().post(path).send({ legalName: name, email, password: 'password123', fullName: name }).expect(201);
@@ -44,7 +51,10 @@ describe('order card (API e2e)', () => {
     const relId = reg2.body.find((r: any) => r.supplier_org_id === supplierOrg).id;
     await http().post(`/suppliers/relationships/${relId}/status`).set(...bearer(buyer)).send({ status: 'APPROVED' }).expect(201);
     await http().put('/requests/method-policies').set(...bearer(buyer))
-      .send({ policies: [{ category: '*', minAmountMinor: 0, maxAmountMinor: null, method: 'DIRECT' }] }).expect(200);
+      .send({ policies: [
+        { category: '*', minAmountMinor: 0, maxAmountMinor: 500_000, method: 'DIRECT' },
+        { category: '*', minAmountMinor: 500_000, maxAmountMinor: null, method: 'RFQ' },
+      ] }).expect(200);
 
     // A department, so the card has one to hide from the supplier.
     deptCode = `CARD-${tag}`;
@@ -65,7 +75,7 @@ describe('order card (API e2e)', () => {
     await http().post(`/orders/${poId}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
   });
 
-  afterAll(async () => { await app.close(); });
+  afterAll(async () => { await db.end(); await app.close(); });
 
   // The two things the product could not show anywhere before this page existed.
   it('carries what was ordered and how the order got to its status', async () => {
@@ -104,6 +114,64 @@ describe('order card (API e2e)', () => {
     // appear anywhere in what the supplier is served.
     expect(JSON.stringify(r.body)).not.toContain(requestNo);
     expect(JSON.stringify(r.body)).not.toContain(deptCode);
+  });
+
+  // Without this the whole `LEFT JOIN contracts` could be deleted and every test above
+  // would stay green: the direct order asserts only that there is NO contract. On the demo
+  // stand this is the rare path too — one order in nine comes from a contract — so it is
+  // exactly the one a reader meets least and a test must cover most.
+  describe('an order drawn from a contract', () => {
+    beforeAll(async () => {
+      const req = await http().post('/requests').set(...bearer(buyer))
+        .send({ title: `Card tender ${tag}`, items: [{ name: 'Server rack', qty: 1, estUnitPriceMinor: 600_000 }] })
+        .expect(201);
+      await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
+      await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approver)).expect(201);
+      const ev = await http().post(`/events/from-request/${req.body.id}`).set(...bearer(buyer))
+        .send({ closeAt: new Date(Date.now() + 3600_000).toISOString(), visibility: 'INVITED' }).expect(201);
+      eventId = ev.body.id;
+      await http().post(`/events/${eventId}/invite`).set(...bearer(buyer)).send({ supplierOrgId: supplierOrg }).expect(201);
+      await http().post(`/events/${eventId}/publish`).set(...bearer(buyer)).expect(201);
+      const open = await http().get(`/events/${eventId}`).set(...bearer(buyer)).expect(200);
+      await http().post(`/events/${eventId}/bid`).set(...bearer(supplier))
+        .send({ items: [{ eventItemId: open.body.items[0].id, unitPriceMinor: 600_000 }] }).expect(201);
+      await db.query(`UPDATE sourcing_events SET close_at = now() - interval '1 second' WHERE id = $1`, [eventId]);
+      await db.query(`SELECT * FROM close_due_events()`);
+      await http().post(`/events/${eventId}/open`).set(...bearer(buyer)).expect(201);
+      const opened = (await http().get(`/events/${eventId}`).set(...bearer(buyer)).expect(200)).body;
+      // Both criteria, because both are what the event locked at creation: the default is
+      // price 70 / delivery 30 (`normalizeCriteria`), and scoring half of them is a
+      // different test's subject.
+      await http().post(`/events/${eventId}/evaluate`).set(...bearer(buyer))
+        .send({ scores: [
+          { bidId: opened.bids[0].id, key: 'price', score: 90 },
+          { bidId: opened.bids[0].id, key: 'delivery', score: 80 },
+        ] }).expect(201);
+      await http().post(`/events/${eventId}/award`).set(...bearer(buyer))
+        .send({ lotId: opened.lots[0].id, bidId: opened.bids[0].id, justification: 'the only bid received' }).expect(201);
+      const awarded = (await http().get(`/events/${eventId}`).set(...bearer(buyer)).expect(200)).body;
+      const contract = (await http().post(`/contracts/from-award/${awarded.awards[0].id}`).set(...bearer(buyer)).expect(201)).body;
+      contractNo = contract.contract_no;
+      await http().post(`/contracts/${contract.id}/activate`).set(...bearer(buyer)).expect(201);
+      contractPoId = (await http().post(`/contracts/${contract.id}/orders`).set(...bearer(buyer)).expect(201)).body.id;
+    });
+
+    it('names the contract and links to the tender, for the buyer', async () => {
+      const r = await http().get(`/orders/${contractPoId}`).set(...bearer(buyer)).expect(200);
+      expect(r.body.contract_no).toBe(contractNo);
+      expect(r.body.contract_title).toBeTruthy();
+      expect(r.body.event_id).toBe(eventId);
+    });
+
+    // The contract's own policy is mutual — both parties signed it — so these three are the
+    // columns the supplier is MEANT to see, and that is as much a claim as the hidden ones.
+    it('shows the supplier the same contract and tender, and still not the request', async () => {
+      const r = await http().get(`/orders/${contractPoId}`).set(...bearer(supplier)).expect(200);
+      expect(r.body.contract_no).toBe(contractNo);
+      expect(r.body.event_id).toBe(eventId);
+      expect(r.body.request_no).toBeNull();
+      expect(r.body.department_code).toBeNull();
+    });
   });
 
   it('does not exist for an organisation that is not a party to it', async () => {
