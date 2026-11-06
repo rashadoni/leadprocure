@@ -441,7 +441,6 @@ test.describe('buyer panel', () => {
     const tender = page.locator('a[href^="/buyer/events/"]').first();
     if (await tender.count()) await assertFitsEveryWidth(page, (await tender.getAttribute('href'))!);
 
-
     // Below the breakpoint the page has the whole window and the way into the menu is a
     // button that says the word: an icon on its own is not read.
     await page.setViewportSize({ width: 375, height: 820 });
@@ -496,7 +495,6 @@ test.describe('buyer panel', () => {
     expect(await cell.evaluate((td) => getComputedStyle(td).display)).toBe('table-cell');
     await page.setViewportSize({ width: 1280, height: 900 });
   });
-
 });
 
 test.describe('supplier panel', () => {
