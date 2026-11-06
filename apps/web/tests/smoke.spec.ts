@@ -573,31 +573,54 @@ test.describe('supplier panel', () => {
     // measured landing on BODY in CI. The loop is safe here only because what it stops on
     // is then checked — tag AND «inside .side» — so it cannot quietly measure something
     // else and call that a pass.
-    // Give the PAGE focus before tabbing, by clicking its heading — inert, and it leaves
-    // focus on the body rather than on anything we are about to measure. Without it the
-    // key presses can land nowhere at all: this describe shares one page across its tests
-    // in serial mode, and after a test that only routed and reloaded there is nothing
-    // holding focus, so all eight presses returned BODY — which is how this test failed on
-    // someone else's PR (run 42282456679) after passing on its own.
+    // Clicking the heading is what gives the PAGE focus: without it the key presses land
+    // nowhere at all — this describe shares one page across its tests in serial mode, and
+    // after a test that only routed and reloaded there is nothing holding focus, so all
+    // eight presses returned BODY (run 42282456679, on someone else's PR).
+    //
+    // It also fixes WHERE tabbing starts, which is the whole structure of this test: a click
+    // on an unfocusable element sets the sequential focus starting point, so Tab goes forward
+    // into the content and Shift+Tab backward into the rail, which precedes `.main` in the
+    // DOM. Measuring forward first and then backward is how both colours get measured — and
+    // they must both be measured, because one rule sets the ring and a second overrides its
+    // colour on the dark fill, so a test that only ever saw one of them would let the other
+    // be deleted in silence. Plain Tab from the top of the page was the earlier shape of
+    // this, and it chose the element for us: it worked until the click moved the starting
+    // point, then reported `inRail: false` and looked like a broken rule.
+    const ring = async () => page.evaluate(() => {
+      const el = document.activeElement as HTMLElement;
+      const s = getComputedStyle(el);
+      return {
+        tag: el.tagName, inRail: !!el.closest('.side'),
+        width: parseFloat(s.outlineWidth) || 0, style: s.outlineStyle, color: s.outlineColor,
+      };
+    });
+    const walk = async (key: 'Tab' | 'Shift+Tab', wanted: boolean) => {
+      let r = await ring();
+      for (let i = 0; i < 10; i++) {
+        await page.keyboard.press(key);
+        r = await ring();
+        if (/^(A|BUTTON)$/.test(r.tag) && r.inRail === wanted) break;
+      }
+      return r;
+    };
+
     await page.locator('h1').first().click();
-    let byKeyboard = { tag: '', inRail: false, width: 0, style: '', color: '' };
-    for (let i = 0; i < 8; i++) {
-      await page.keyboard.press('Tab');
-      byKeyboard = await page.evaluate(() => {
-        const el = document.activeElement as HTMLElement;
-        const s = getComputedStyle(el);
-        return {
-          tag: el.tagName, inRail: !!el.closest('.side'),
-          width: parseFloat(s.outlineWidth) || 0, style: s.outlineStyle, color: s.outlineColor,
-        };
-      });
-      if (byKeyboard.tag === 'A' && byKeyboard.inRail) break;
-    }
-    expect(byKeyboard.tag).toBe('A');
+    // Forward: into the content, where the ring is the accent green on a white card.
+    const onCard = await walk('Tab', false);
+    expect(onCard.tag).toMatch(/^(A|BUTTON)$/);
+    expect(onCard.inRail).toBe(false);
+    expect(onCard.style).toBe('solid');
+    expect(onCard.width).toBe(2);
+    expect(onCard.color).toBe('rgb(4, 120, 87)');
+
+    await page.locator('h1').first().click();
+    // Backward: into the rail, where the accent is invisible and the colour must be mint.
+    const byKeyboard = await walk('Shift+Tab', true);
+    expect(byKeyboard.tag).toMatch(/^(A|BUTTON)$/);
     expect(byKeyboard.inRail).toBe(true);
     expect(byKeyboard.style).toBe('solid');
     expect(byKeyboard.width).toBe(2);
-    // Mint, not the accent green: on the rail's own fill the accent is what nobody can see.
     expect(byKeyboard.color).toBe('rgb(167, 243, 208)');
     // The other half, and the reason the rule is :focus-visible rather than :focus — the
     // guide recordings are driven by mouse, and a ring answering a click would sit in all
