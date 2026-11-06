@@ -608,8 +608,7 @@ test.describe('supplier panel', () => {
     await links.nth(focused === 0 ? 1 : 0).click();
     const byMouse = await page.evaluate(() => {
       const el = document.activeElement as HTMLElement;
-      const s = getComputedStyle(el);
-      return { tag: el.tagName, width: parseFloat(s.outlineWidth) || 0, style: s.outlineStyle, color: s.outlineColor };
+      return { tag: el.tagName, style: getComputedStyle(el).outlineStyle };
     });
     // The tag too: the reading could otherwise have come from <body>.
     expect(byMouse.tag).toBe('A');
@@ -624,6 +623,14 @@ test.describe('supplier panel', () => {
     // So assert the style, which is the property that decides whether anything is drawn.
     // `solid` is what our rule produces, and a rule written `:focus` instead of
     // `:focus-visible` would make this line red — which is the whole point of it.
+    //
+    // `toBe('none')` on purpose, and deliberately stricter than the rule it guards: the rule
+    // only promises that OUR ring stays away, this says nothing at all is drawn. Red here
+    // therefore means the world moved — a UA ring arrived, or an outline came from elsewhere
+    // — and that is worth reading, not relaxing back to `not.toBe('solid')`. The loose form
+    // is how the colour check that stood here passed for ever: with `outline-style: none` the
+    // colour is `currentColor`, measured `rgb(0, 0, 238)`, so «not mint» held whatever the
+    // rule did. Guard the property that decides, not one that merely cannot disagree.
     expect(byMouse.style).toBe('none');
   });
 
