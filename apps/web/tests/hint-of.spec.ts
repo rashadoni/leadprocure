@@ -39,16 +39,63 @@ test('a shortened tooltip ends on a sentence, in every language', () => {
     .toBeGreaterThan(1500);
 
   // A floor only notices a pattern that DIED. The one that shipped here had gone partially
-  // blind instead: it excluded uppercase from the key name, so it read 1622 of the
-  // dictionary's 1966 strings and skipped every status key — and 1622 cleared the floor
-  // above without a word, while `bud_st_*` and `vis_*_tip` are rendered as `data-tip` and
-  // so are exactly what this test exists to measure. Counting against a dumber pattern is
-  // no good either: `key: '` occurs inside comments and inside the strings themselves. So
-  // one name is pinned per class the old pattern could not match, which is what a blind
-  // spot looks like from the outside — coverage lost silently, not a parse that stopped.
+  // blind instead: it excluded uppercase from the key name, so it skipped every status key
+  // — 1636 of the 1966 strings the dictionary held at 09d7570, and those 1636 cleared the
+  // floor above without a word, while `bud_st_*` and `vis_*_tip` are rendered as `data-tip`
+  // and so are exactly what this test exists to measure. Counting against a dumber pattern
+  // is no good either: `key: '` occurs inside comments and inside the strings themselves.
+  // So one name is pinned per class the pattern has to span, which is what a blind spot
+  // looks like from the outside — coverage lost silently, not a parse that stopped.
+  //
+  // Read those two counts as a ratio and nothing else: the dictionary grows (1999 strings
+  // by #105), and they are raw match counts, which is the only way to compare them. The
+  // first telling of this gave «1622 of 1966» — a de-duplicated count of the blind pattern
+  // against a raw count of the fixed one, two numbers that do not belong in one sentence.
+  //
+  // THREE classes, not one, and each name below is load-bearing for a different reason.
+  // The first guard pinned four uppercase names and would itself have stayed green had the
+  // pattern lost `0-9`: nine keys carry a digit (`bud_1c`, `bud_1c_tip`, `win_12m`,
+  // `integ_1c`, `chain_p0`…`chain_p3`, `chain_p0_desc`), and `chain_p0_desc` stands for
+  // them — not because it is long (69 characters at its longest, in Azerbaijani, well under
+  // the threshold `hintOf` acts on) but because it carries the digit.
+  //
+  // `delivery_SENT` is NOT a third uppercase name beside `st_APPROVED` and `bud_st_CLOSED`,
+  // and must not be dropped as a duplicate of them: its value is the only one of the five
+  // written in DOUBLE quotes, so it is the whole guard on the pattern's `"…"` branch. Lose
+  // that branch and 47 strings go unmeasured — among them both of the two over-threshold
+  // strings, including `paid_basis_tip_budget_obligation` at 564 characters, the longest
+  // tooltip in the product. The English block uses double quotes wherever a string holds an
+  // apostrophe, which is why the branch exists at all (see the header).
   const keys = strings.map(([key]) => key);
-  for (const k of ['st_APPROVED', 'delivery_SENT', 'vis_PUBLIC_tip', 'bud_st_CLOSED'])
+  for (const k of ['st_APPROVED', 'delivery_SENT', 'vis_PUBLIC_tip', 'bud_st_CLOSED', 'chain_p0_desc'])
     expect(keys, `the pattern no longer sees ${k} — it is skipping a class of keys`).toContain(k);
+
+  // The fourth fork, `(?:[^'\\]|\\.)*`, is the one a pinned NAME could not guard and a
+  // count cannot see: drop the escape handling and the number of matches does not move at
+  // all — 1999 either way — because the pattern still matches, it merely stops at the
+  // escaped quote and hands back a truncated value. Measured, one string pays today:
+  // `tip_logistics_open` would arrive as `Open this order\` instead of
+  // `Open this order\'s delivery`. Harmless at 27 characters, silent at 300 — so what is
+  // checked here is the symptom rather than a name: a truncated value ends on the backslash
+  // that truncated it.
+  //
+  // Trailing backslashes are counted rather than looked for, because an EVEN run of them is
+  // legitimate — `\\.` consumes a backslash and whatever follows, so a value genuinely
+  // ending in an escaped backslash captures with its pair intact. Only an ODD run is left
+  // over from a capture that stopped mid-escape. The dictionary holds no `\\` at all today,
+  // so this is the difference between a check that says what it means and one that would
+  // one day cry «truncated» over a value that is whole — and a check that cries wolf is a
+  // check someone deletes.
+  //
+  // Its reach is narrower than it looks, and worth saying rather than discovering: the
+  // dictionary holds exactly one `\'` and no `\"`. So the single-quote branch has a
+  // specimen and is really guarded, while the escape handling inside `"…"` has none —
+  // break only that half and nothing here notices until such a string exists. That is a
+  // gap held shut by the dictionary's contents, not by this test.
+  const cut = strings
+    .filter(([, text]) => ((text.match(/\\*$/)?.[0].length ?? 0) % 2) === 1)
+    .map(([key]) => key);
+  expect(cut, 'a value was cut at an escaped quote — the escape branch is gone').toEqual([]);
 
   const broken = strings
     .map(([key, text]) => [key, text, hintOf(text)] as const)
