@@ -70,6 +70,17 @@ test('a shortened tooltip ends on a sentence, in every language', () => {
   for (const k of ['st_APPROVED', 'delivery_SENT', 'vis_PUBLIC_tip', 'bud_st_CLOSED', 'chain_p0_desc'])
     expect(keys, `the pattern no longer sees ${k} — it is skipping a class of keys`).toContain(k);
 
+  // The fourth fork, `(?:[^'\\]|\\.)*`, is the one a pinned NAME could not guard and a
+  // count cannot see: drop the escape handling and the number of matches does not move at
+  // all — 1999 either way — because the pattern still matches, it merely stops at the
+  // escaped quote and hands back a truncated value. Measured, one string pays today:
+  // `tip_logistics_open` would arrive as `Open this order\` instead of
+  // `Open this order\'s delivery`. Harmless at 27 characters, silent at 300 — so what is
+  // checked here is the symptom rather than a name, and it holds for whatever acquires an
+  // escaped quote next.
+  const cut = strings.filter(([, text]) => text.endsWith('\\')).map(([key]) => key);
+  expect(cut, 'a value was cut at an escaped quote — the escape branch is gone').toEqual([]);
+
   const broken = strings
     .map(([key, text]) => [key, text, hintOf(text)] as const)
     .filter(([, text, short]) => short !== text)
