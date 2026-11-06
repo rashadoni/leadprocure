@@ -1535,7 +1535,13 @@ Leadprocure снаружи и только на чтение, через `TLS_CE
 1. **Адреса апстримов — через переменную и резолвер Docker.** Без этого nginx
    резолвит `api` один раз при старте, а выкладка пересоздаёт контейнер с новым
    адресом: вход отдавал бы 502 до перезапуска.
-2. **Цикл перезагрузки лежит в `/docker-entrypoint.d/`, а не в `command`.**
+2. **Служба стоит в профиле, а переменные — со значениями по умолчанию.** С
+   `${TLS_CERT_NAME:?…}` файл перестаёт РАЗБИРАТЬСЯ без этой переменной, то есть
+   падает любая команда compose — и `up -d --no-deps api web` на проде, и
+   fresh-install в CI: «required variable TLS_CERT_NAME is missing a value».
+   Поймал это гейт на первой версии правки, а не рассуждение. Профиль держит
+   службу вне обычного `up`, поэтому приёмка поднимает стек без неё, как и раньше.
+3. **Цикл перезагрузки лежит в `/docker-entrypoint.d/`, а не в `command`.**
    Штатный entrypoint образа выполняет свои шаги (в том числе `envsubst` по
    шаблонам) ТОЛЬКО если команда начинается с `nginx`. С подменённым `command`
    конфиг не отрисовывается вовсе: контейнер поднимается «здоровым» и не слушает
@@ -1554,11 +1560,13 @@ WEB_ORIGIN=https://75.119.156.234:10443
 S3_PUBLIC_URL=https://75.119.156.234:10444
 REFRESH_COOKIE_SECURE=true
 
-# 2. поднять только вход, ничего больше не трогая
+# 2. поднять только вход, ничего больше не трогая. --profile tls обязателен:
+#    служба стоит в профиле, иначе её поднимал бы и обычный up — в том числе
+#    fresh-install в CI, где сертификата нет
 RELEASE_SHA="$SHA" docker compose -p leadprocure-prod \
   --project-directory "$REL/infra" \
   -f "$REL/infra/docker-compose.prod.yml" -f "$REL/infra/docker-compose.release.yml" \
-  --env-file "$ENVP" up -d --no-build --no-deps tls
+  --env-file "$ENVP" --profile tls up -d --no-build --no-deps tls
 
 # 3. пересобрать web в Actions с https-адресом API — он вшивается ПРИ СБОРКЕ
 #    public_api_url = https://75.119.156.234:10443/api
