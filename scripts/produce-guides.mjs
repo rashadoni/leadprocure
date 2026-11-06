@@ -649,7 +649,13 @@ const SECTIONS = {
     { az: 'Öhdəlik — təsdiqlənmiş, amma hələ sifariş verilməmiş sorğulardır: pul ayrılıb, hələ xərclənməyib. Faktiki isə artıq verilmiş sifarişlərdir. Sistem eyni xərci iki dəfə saymır: sifariş veriləndə məbləğ öhdəlikdən faktikiyə keçir.',
       do: async (p, l, h) => { const r = p.locator('[data-testid=budget-rollup] tbody tr').nth(1); await h.moveTo(r.locator('td').nth(2)); await h.holdUntil(0.45); await h.moveTo(r.locator('td').nth(3)); await h.holdUntil(0.8); await h.moveTo(r.locator('td').nth(4)); await h.holdUntil(0.95); } },
     { az: 'Ödəniş sütunu yanında durur, amma faktiki məbləğə toplanmır — və bu, qəsdəndir. Qaimə artıq sayılmış sifarişi bağlayır, ona görə onu toplamaq eyni pulu iki dəfə saymaq olardı. Sütunun izahı bunu açıq yazır, çünki sual hər dəfə verilir.',
-      do: async (p, l, h) => { const r = p.locator('[data-testid=budget-rollup] tbody tr').first(); await h.hover(r.locator('td').nth(4), 1800); await h.holdUntil(0.7); await h.moveTo(r.locator('td').nth(5)); await h.holdUntil(0.95); } },
+      // The paid column's own bubble is GONE (#102) — it held 561 characters and opened as
+      // a slab over three rows of figures. The same text is under the table behind
+      // «Bu nə deməkdir?», so the scene opens it rather than hovering a cell that no
+      // longer has a tip; the narration says this is written openly, and now it is. Closed
+      // again at the end: an expanded panel pushes the budget list down for every scene
+      // after this one.
+      do: async (p, l, h) => { const r = p.locator('[data-testid=budget-rollup] tbody tr').first(); await h.moveTo(r.locator('td').nth(4)); await h.holdUntil(0.3); const ex = p.locator('[data-testid=budget-rollup] button.explain').first(); if (await ex.count()) { await h.click(ex, 1300); await h.holdUntil(0.88); await h.click(ex, 400); } else { await h.moveTo(r.locator('td').nth(5)); } await h.holdUntil(0.95); } },
     { az: 'Proqnoz sütunu ən çox soruşulan suala cavab verir: bu templə dövrün sonunda nə olacaq. Rəqəm qırmızıdırsa, plan aşılacaq. Yanında isə mənimsənilmə faizi və onun altında «planla indiyə qədər nə qədər olmalı idi» yazılır. Səksən faiz mayda və səksən faiz noyabrda tamam fərqli şeylərdir.',
       do: async (p, l, h) => { const rows = p.locator('[data-testid=budget-rollup] tbody tr'); await h.hover(rows.nth(0).locator('td').nth(6), 1500); await h.holdUntil(0.55); await h.moveTo(rows.nth(0).locator('td').nth(7)); await h.holdUntil(0.95); } },
     { az: 'Təqvim payının bir şərti var: o, xərcin il boyu bərabər getdiyini güman edir. Həqiqətdə isə belə olmur — istilik qışa düşür, texnika alışı ilin sonuna. Ona görə planı aylara bölmək olar. Sətirdə yalnız bir əməliyyat açıq durur — büdcənin öz vəziyyətinin gözlədiyi addım; qalanları «Daha çox» düyməsinin altındadır. Açırıq və «Aylar üzrə bölgü»nü seçirik.',
@@ -692,7 +698,12 @@ const SECTIONS = {
     { az: 'Analitika bölməsi. Burada pulun hara getdiyi görünür: aylar üzrə xərc, plan ilə müqayisə, büdcənin mənimsənilmə tempi, şöbələr, kateqoriyalar və təchizatçılar. Yuxarıdaki dörd yekundan başlayaq.',
       do: async (p, l, h) => { await p.waitForSelector('.chart-bar, .chart', { timeout: 15000 }).catch(() => {}); await h.moveTo(p.locator('.card').nth(0)); await h.holdUntil(0.45); await h.moveTo(p.locator('.card').nth(1)); await h.holdUntil(0.75); await h.moveTo(p.locator('.card').nth(2)); await h.holdUntil(0.95); } },
     { az: 'Hər yekunun altında bazası yazılıb: xərc və qənaət — ƏDV-siz, qaimələr isə ƏDV daxil. Ona görə ödənilmiş məbləğ bəzən xərcdən böyük görünə bilər. Bu, səhv deyil, sadəcə fərqli baza — və elə buna görə baza rəqəmin altında yazılır, izahda gizlənmir.',
-      do: async (p, l, h) => { await h.hover(p.locator('.card').nth(0), 1500); await h.holdUntil(0.5); await h.hover(p.locator('.card').nth(2), 1500); await h.holdUntil(0.95); } },
+      // The four figures' hints run to 229 characters and the bubble now keeps only the
+      // first sentence (#102); the whole text — all four bases at once — sits under the
+      // row behind «Bu nə deməkdir?». This scene is ABOUT the bases, so it opens that
+      // instead of holding a mouse still over a bubble, and closes it again so the scenes
+      // below stay framed as they were composed.
+      do: async (p, l, h) => { await h.hover(p.locator('.card').nth(0), 1400); await h.holdUntil(0.38); await h.hover(p.locator('.card').nth(2), 1400); await h.holdUntil(0.62); const ex = p.locator('button.explain').first(); if (await ex.count()) { await h.click(ex, 1200); await h.holdUntil(0.9); await h.click(ex, 400); } await h.holdUntil(0.95); } },
     { az: 'Dövr seçimi yuxarıdadır. Hazır düymələr ən çox soruşulan üç sualı örtür: son on iki ay, cari rüb və ilin əvvəlindən. Başqa aralıq lazımdırsa, iki ay sahəsini əl ilə doldurmaq olar — onların da öz adı var, yalnız yer tutan mətn deyil.',
       do: async (p, l, h) => { await h.moveTo(p.locator('button:has-text("12 ay")').first()); await h.holdUntil(0.4); await h.click(p.locator('button:has-text("12 ay")').first(), 900); await h.holdUntil(0.7); await h.moveTo('#an-from'); await h.holdUntil(0.95); } },
     { az: 'Seçilmiş dövr bütün panellərə tətbiq olunur — təkcə qrafikə yox, həm də kateqoriyalara, şöbələrə və təchizatçılara. Valyuta da seçilir, çünki müxtəlif valyutadaki məbləğləri toplamaq olmaz.',
