@@ -25,7 +25,10 @@ const CANDIDATES = ['src/i18n.tsx', 'apps/web/src/i18n.tsx'];
 const found = CANDIDATES.map((c) => join(process.cwd(), c)).find(existsSync);
 if (!found) throw new Error(`i18n.tsx not found from ${process.cwd()}`);
 const SRC = readFileSync(found, 'utf8');
-const ENTRY = /\b([a-z0-9_]+):\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")/g;
+// Uppercase belongs in the key name: every status key is spelled `st_APPROVED`,
+// `delivery_SENT`, `vis_PUBLIC_tip`, `bud_st_CLOSED`. A pattern of `[a-z0-9_]+` cannot match
+// one at all — see the guard below for what that cost.
+const ENTRY = /\b([A-Za-z0-9_]+):\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")/g;
 
 test('a shortened tooltip ends on a sentence, in every language', () => {
   const strings = [...SRC.matchAll(ENTRY)].map((m) => [m[1], m[2] ?? m[3]] as const);
@@ -34,6 +37,18 @@ test('a shortened tooltip ends on a sentence, in every language', () => {
   // fails loudly if the parse ever stops working, instead of going quietly green.
   expect(strings.length, 'the dictionary parse found almost nothing — the pattern is stale')
     .toBeGreaterThan(1500);
+
+  // A floor only notices a pattern that DIED. The one that shipped here had gone partially
+  // blind instead: it excluded uppercase from the key name, so it read 1622 of the
+  // dictionary's 1966 strings and skipped every status key — and 1622 cleared the floor
+  // above without a word, while `bud_st_*` and `vis_*_tip` are rendered as `data-tip` and
+  // so are exactly what this test exists to measure. Counting against a dumber pattern is
+  // no good either: `key: '` occurs inside comments and inside the strings themselves. So
+  // one name is pinned per class the old pattern could not match, which is what a blind
+  // spot looks like from the outside — coverage lost silently, not a parse that stopped.
+  const keys = strings.map(([key]) => key);
+  for (const k of ['st_APPROVED', 'delivery_SENT', 'vis_PUBLIC_tip', 'bud_st_CLOSED'])
+    expect(keys, `the pattern no longer sees ${k} — it is skipping a class of keys`).toContain(k);
 
   const broken = strings
     .map(([key, text]) => [key, text, hintOf(text)] as const)
