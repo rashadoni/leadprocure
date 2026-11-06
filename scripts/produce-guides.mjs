@@ -527,7 +527,10 @@ const SECTIONS = {
   // Tenders: the list, then a real tender's card. The chip is the point of the first
   // half — PR #74 taught it to tell a closed tender from an open one — and the sealed
   // amounts are the point of the second.
-  'buyer-events': { role: 'buyer', path: '/buyer/events', scenes: [
+  // Same auction, filmed from the buyer's side. Nothing here narrates that it is open,
+  // but the list prints its status in words: filmed while it was closed, the set would
+  // show one auction as open in one guide and closed in another.
+  'buyer-events': { role: 'buyer', path: '/buyer/events', requires: { eventOpen: 'Auksion: ofis kağızı' }, scenes: [
     { az: 'Tenderlər bölməsi. Təsdiqlənmiş sorğudan başlayan hər satınalma proseduru buradadır. Sütunlar: başlıq, metod, status, son tarix və gələn təkliflərin sayı — sayı, məbləğləri yox.',
       do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.4); await h.moveTo('table'); await h.holdUntil(0.7); await h.moveTo(p.locator('thead th').nth(4)); await h.holdUntil(0.95); } },
     { az: 'Metod sütunu nişanla göstərilir və hər nişanın öz izahı var. Qıfıl — qapalı tender: təchizatçılar möhürlü qiymət verir və məbləğlər açılışa qədər heç kimə görünmür, iştirak isə dəvət üzrədir.',
@@ -956,7 +959,9 @@ const SECTIONS = {
   // /supplier/events/:id as a sealed tender, so that route plays sup-market. Kept in sync
   // here so the file exists the day the widget learns to pick a guide by the event's own
   // format; until then nothing in the product loads it.
-  'sup-auction': { role: 'sup', path: '/supplier/market', scenes: [
+  // Needs the auction still accepting bids: the «Mövqelər» card with the price field
+  // exists only while it is open, and scene 6 narrates filling it in.
+  'sup-auction': { role: 'sup', path: '/supplier/market', requires: { eventOpen: 'Auksion: ofis kağızı' }, scenes: [
     { az: 'Ayrıca prosedur növü — revers auksion. Siyahıda onu şimşək nişanı ilə tanıyırsınız. Adi tenderdən fərqi budur: burada qiymətlər gizli deyil və real vaxtda aşağı düşür. Ofis kağızı üzrə auksionu açırıq.',
       do: async (p, l, h) => { await h.moveTo('table'); await h.holdUntil(0.35); const chip = p.locator('tbody tr:has-text("Auksion: ofis kağızı") .chip').first(); if (await chip.count()) await h.hover(chip, 1200); await h.holdUntil(0.6); await h.click('tbody tr:has-text("Auksion: ofis kağızı") a', 1800); await p.waitForSelector('h1', { timeout: 15000 }); await h.holdUntil(0.95); } },
     { az: 'Yuxarıdaki panel auksionun bütün vəziyyətidir. Başlanğıc qiymət — sifarişçinin elan etdiyi tavan. Ondan yuxarı təklif ümumiyyətlə qəbul olunmur.',
@@ -990,6 +995,51 @@ const SECTIONS = {
 
 };
 
+// What the stand must actually HOLD for a section to film what it narrates.
+//
+// The cursor-miss counter only sees scenes that aim at something. A scene that merely
+// looks at a panel films an empty page without a single miss, so the counter cannot be
+// the only guard. This is not hypothetical: `Auksion: ofis kağızı` closed by itself four
+// days after the stand was filled (demo-fill sets close_at relative to fill time, so a
+// fresh stand is fine and only a long-lived one rots), the «Mövqelər» card went with it,
+// and the bid scene played over a dead screen.
+//
+// Asked of the database before any browser opens, and asked THROUGH assertDemoTarget so
+// this cannot become a second route to a non-disposable stack. A run that cannot ask is
+// refused rather than quietly filmed: a check that passes when it fails to run is the
+// one thing worse than no check.
+async function assertStandHolds(keys) {
+  const wanted = [...new Set(keys.flatMap((k) => SECTIONS[k]?.requires?.eventOpen ?? []))];
+  if (!wanted.length) return;
+  let pg, dbName;
+  try {
+    ({ pg, dbName } = assertDemoTarget(process.env, API_URL));
+  } catch (e) {
+    throw new Error(`Нечем проверить состояние стенда (${e.message}). Эти разделы требуют живого события, `
+      + `поэтому прогон остановлен: передайте DEMO_ISOLATED=1, DEMO_PG_CONTAINER, DEMO_API_CONTAINER и DEMO_API.`);
+  }
+  const problems = [];
+  for (const title of wanted) {
+    // -U matches POSTGRES_USER in infra/docker-compose.demo.yml. The query goes in over
+    // STDIN, not -c: psql interpolates :'title' only in a script it lexes itself, and with
+    // -c the string is handed to the server verbatim — which fails on the colon. Feeding it
+    // in keeps the title quoted by psql instead of by us.
+    const row = execFileSync('docker', ['exec', '-i', pg, 'psql', '-U', 'leadprocure_owner', '-d', dbName, '-At',
+      '-v', `title=${title}`, '-f', '-'],
+      { encoding: 'utf8', input: "SELECT status, close_at > now(), to_char(close_at,'YYYY-MM-DD HH24:MI')"
+        + " FROM sourcing_events WHERE title = :'title';" }).trim();
+    if (!row) { problems.push(`«${title}»: события нет на стенде`); continue; }
+    const [status, live, closes] = row.split('|');
+    if (status !== 'OPEN' || live !== 't') problems.push(`«${title}»: статус ${status}, срок ${closes} — приём закрыт`);
+    else console.log(`  стенд: «${title}» принимает ставки до ${closes}`);
+  }
+  if (problems.length) {
+    throw new Error(`Стенд не в том состоянии, которое снимают эти разделы:\n  ${problems.join('\n  ')}\n`
+      + `Пересейте стенд (RESEED=1) или продлите срок события — снимать закрытое событие нельзя, `
+      + `сцена отыграет по пустому экрану и промаха не будет.`);
+  }
+}
+
 async function login(ctx, email) {
   const page = await ctx.newPage();
   await page.goto(`${BASE}/login`);
@@ -1002,6 +1052,7 @@ async function login(ctx, email) {
 
 (async () => {
   const keys = ONLY.length ? ONLY : Object.keys(SECTIONS);
+  await assertStandHolds(keys);
   const tmp = mkdtempSync(join(tmpdir(), 'guides-'));
   console.log(`langs ${LANGS.join(',')} · stand ${BASE} · ${keys.length} sections`);
 
