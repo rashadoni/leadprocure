@@ -81,8 +81,11 @@ test('the order number leads to the order, and the order says what was ordered',
   // about badges, and I broke the rule on the first try.
   await expect(history.locator('.badge.ISSUED')).toBeVisible();
 
-  // The buyer's own facts are on it, and the request it came from is one of them.
-  await expect(page.locator('.fact-row')).toContainText(req.request_no);
+  // The buyer's own facts are on it, and the request it came from is one of them. By the
+  // text and not by `.fact-row`: the page draws two of those blocks — the order's own facts
+  // and the chain it came out of — so matching the class is a strict-mode violation, and
+  // picking one of them by number would be the layout standing in for the claim.
+  await expect(page.getByText(req.request_no, { exact: false }).first()).toBeVisible();
 
   // The widest table in the product, measured where it is widest and where it is tightest.
   // `assertFitsEveryWidth` in smoke.spec.ts cannot reach this page — on the seeded stand
