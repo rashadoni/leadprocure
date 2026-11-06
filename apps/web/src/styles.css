@@ -343,6 +343,10 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
 .tabs button { flex: 1; }
 .error { color: var(--bad); font-size: 13px; margin-top: 10px; }
+/* A figure that is BEHIND what it should be, not wrong: a line ordered 10 and received 4
+   is the ordinary middle of a delivery. In `.error` red it would cry on every open order,
+   and a reader who sees red everywhere stops reading it. */
+.warn-num { color: var(--warn); font-weight: 500; }
 .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
 .lang { display: flex; gap: 6px; }
 .lang button { background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .2); color: rgba(255, 255, 255, .6); border-radius: 6px; padding: 2px 8px; cursor: pointer; font-size: 11px; }

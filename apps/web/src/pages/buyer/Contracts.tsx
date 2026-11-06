@@ -11,6 +11,7 @@ import { Badge } from '../../components/Badge';
 import { Actions } from '../../components/Actions';
 import { MenuSep, RowMenu } from '../../components/RowMenu';
 import { ListState, useLoad } from '../../components/ListState';
+import { orderHref } from '../OrderDetail';
 
 const PAGE_SIZE = 20;
 
@@ -170,7 +171,7 @@ export default function Contracts() {
           <tbody>
             {orders.map((p) => (
               <tr key={p.id}>
-                <td className="nowrap">{p.po_no}</td>
+                <td className="nowrap"><Link to={orderHref(isBuyerSide, p.id)}>{p.po_no}</Link></td>
                 <td>{isBuyerSide ? p.supplier_name : p.buyer_name}</td>
                 <td className="hint nowrap">{fmtDate(p.created_at)}</td>
                 <td className="num">{fmtMoney(p.total_minor, p.currency)}</td>

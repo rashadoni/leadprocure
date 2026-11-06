@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, fmtDate, fmtMoney } from '../api/client';
 import { useAuth } from '../auth/auth';
+import { Link } from 'react-router-dom';
 import { useI18n } from '../i18n';
 import { useDialogs } from '../components/Dialogs';
 import { Badge } from '../components/Badge';
 import { Actions } from '../components/Actions';
 import { isDenied } from '../components/ListState';
+import { orderHref } from './OrderDetail';
 
 export default function Invoices() {
   const { t } = useI18n();
@@ -134,7 +136,7 @@ export default function Invoices() {
             {rows.map((i) => (
               <tr key={i.id}>
                 <td><a href="#" onClick={(e) => { e.preventDefault(); expand(i.id); }}>{i.invoice_no}</a></td>
-                <td className="nowrap">{i.po_no}</td>
+                <td className="nowrap"><Link to={orderHref(isBuyer, i.po_id)}>{i.po_no}</Link></td>
                 <td>{isBuyer ? i.supplier_name : i.buyer_name}</td>
                 <td className="hint nowrap">{fmtDate(i.issued_at ?? i.created_at)}</td>
                 {/* The column was removed while nothing in the product ever filled it: the

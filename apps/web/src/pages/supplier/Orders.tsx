@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { useDialogs } from '../../components/Dialogs';
@@ -9,6 +9,7 @@ import { Badge } from '../../components/Badge';
 import { statusLabel } from '../../components/humanize';
 import { Actions } from '../../components/Actions';
 import { ListState, useLoad } from '../../components/ListState';
+import { orderHref } from '../OrderDetail';
 
 const PAGE_SIZE = 20;
 
@@ -128,7 +129,7 @@ export default function Orders() {
               const s = ship[p.id];
               return (
                 <tr key={p.id}>
-                  <td className="nowrap">{p.po_no}</td>
+                  <td className="nowrap"><Link to={orderHref(false, p.id)}>{p.po_no}</Link></td>
                   <td>{p.buyer_name}</td>
                   <td className="num">{fmtMoney(p.total_minor, p.currency)}</td>
                   <td><Badge status={p.status} /></td>

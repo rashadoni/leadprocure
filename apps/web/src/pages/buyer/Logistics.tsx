@@ -1,8 +1,10 @@
 import { api, fmtDate } from '../../api/client';
 import { useAuth } from '../../auth/auth';
+import { Link } from 'react-router-dom';
 import { useI18n } from '../../i18n';
 import { Badge } from '../../components/Badge';
 import { ListState, useLoad } from '../../components/ListState';
+import { orderHref } from '../OrderDetail';
 
 // Shipment tracking board — the buyer watches deliveries in flight (read-only;
 // the supplier drives the timeline from "Заказы в работе").
@@ -26,7 +28,7 @@ export default function Logistics() {
           <tbody>
             {rows.map((s) => (
               <tr key={s.id}>
-                <td className="nowrap">{s.po_no}</td>
+                <td className="nowrap"><Link to={orderHref(isBuyer, s.po_id)}>{s.po_no}</Link></td>
                 <td>{isBuyer ? s.supplier_name : s.buyer_name}</td>
                 <td>{s.carrier ?? '—'}</td>
                 <td>{s.tracking_no ?? '—'}</td>

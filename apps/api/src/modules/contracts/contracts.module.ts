@@ -272,13 +272,25 @@ export class ContractsService {
     return pageFrom(rows, paging);
   }
 
+  // The order's own card needs the chain it came out of, not just the order: a reader who
+  // opens PO-2026-0007 asks which contract it is against and which request started it.
+  // LEFT JOIN, and that is the access rule rather than a convenience — `procurement_requests`
+  // and `departments` are buyer-private under RLS, so for the supplier these columns come
+  // back NULL on their own. Nothing here decides who may see what; the policies do, and a
+  // supplier's card simply has no request line on it.
   async getOrder(id: string) {
     const m = this.rc.manager;
     const rows = await m.query(
-      `SELECT p.*, ob.legal_name AS buyer_name, os.legal_name AS supplier_name
+      `SELECT p.*, ob.legal_name AS buyer_name, os.legal_name AS supplier_name,
+              c.contract_no, c.title AS contract_title, c.event_id,
+              r.request_no, r.title AS request_title,
+              d.code AS department_code, d.name AS department_name
        FROM purchase_orders p
        JOIN organizations ob ON ob.id = p.buyer_org_id
        JOIN organizations os ON os.id = p.supplier_org_id
+       LEFT JOIN contracts c ON c.id = p.contract_id
+       LEFT JOIN procurement_requests r ON r.id = p.request_id
+       LEFT JOIN departments d ON d.id = p.department_id
        WHERE p.id = $1`,
       [id],
     );
