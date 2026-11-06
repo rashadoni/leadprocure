@@ -75,7 +75,11 @@ test('the order number leads to the order, and the order says what was ordered',
   // And how it got here, which lived only in the database until this page.
   const history = page.getByTestId('order-history');
   await expect(history.locator('tbody tr')).not.toHaveCount(0);
-  await expect(history).toContainText('Issued');
+  // By the status CLASS, not by its words: every status label is localized (EN «Order
+  // issued to supplier», RU «Заказ выпущен поставщику»), and asserting the text is how a
+  // check stops matching the day someone edits the dictionary. AGENTS.md says exactly this
+  // about badges, and I broke the rule on the first try.
+  await expect(history.locator('.badge.ISSUED')).toBeVisible();
 
   // The buyer's own facts are on it, and the request it came from is one of them.
   await expect(page.locator('.fact-row')).toContainText(req.request_no);
