@@ -76,9 +76,25 @@ test('a shortened tooltip ends on a sentence, in every language', () => {
   // escaped quote and hands back a truncated value. Measured, one string pays today:
   // `tip_logistics_open` would arrive as `Open this order\` instead of
   // `Open this order\'s delivery`. Harmless at 27 characters, silent at 300 — so what is
-  // checked here is the symptom rather than a name, and it holds for whatever acquires an
-  // escaped quote next.
-  const cut = strings.filter(([, text]) => text.endsWith('\\')).map(([key]) => key);
+  // checked here is the symptom rather than a name: a truncated value ends on the backslash
+  // that truncated it.
+  //
+  // Trailing backslashes are counted rather than looked for, because an EVEN run of them is
+  // legitimate — `\\.` consumes a backslash and whatever follows, so a value genuinely
+  // ending in an escaped backslash captures with its pair intact. Only an ODD run is left
+  // over from a capture that stopped mid-escape. The dictionary holds no `\\` at all today,
+  // so this is the difference between a check that says what it means and one that would
+  // one day cry «truncated» over a value that is whole — and a check that cries wolf is a
+  // check someone deletes.
+  //
+  // Its reach is narrower than it looks, and worth saying rather than discovering: the
+  // dictionary holds exactly one `\'` and no `\"`. So the single-quote branch has a
+  // specimen and is really guarded, while the escape handling inside `"…"` has none —
+  // break only that half and nothing here notices until such a string exists. That is a
+  // gap held shut by the dictionary's contents, not by this test.
+  const cut = strings
+    .filter(([, text]) => ((text.match(/\\*$/)?.[0].length ?? 0) % 2) === 1)
+    .map(([key]) => key);
   expect(cut, 'a value was cut at an escaped quote — the escape branch is gone').toEqual([]);
 
   const broken = strings
