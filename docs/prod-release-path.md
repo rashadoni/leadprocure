@@ -1434,6 +1434,78 @@ done
 
 ---
 
+## Выкладка `627a452` (6 ноября 2026, вечер) — выполнена
+
+Первая выкладка, которая довезла до людей весь вечерний заход: правки интерфейса из
+#102 и #104 и три пересняты́х раздела видео-подсказок из #108. Прод переехал с
+`420a5ade29ff6d42bcdab6fa31c9b0b8a9cb61d3` на
+`627a4522b852e40bf623f463b64d39693dff6e5d`.
+
+**Миграций нет** (ноль файлов в `apps/api/src/common/db/migrations` между этими
+коммитами), api на старте написал `No migrations are pending`. 27 файлов, из них
+шесть — записи и постеры, остальное интерфейс, тесты и документы.
+
+| Условие шага 3 | Чем подтверждено |
+|---|---|
+| Проверки на выкладываемом коммите | `acceptance` и `fresh-install` — SUCCESS на `627a452`, прогон 42289705519, событие `push` на `main` |
+| Лицензия доезжает | dry-run шага 6: `LICENSE_PUBLIC_KEY_B64` непустой (150 символов), `source: /home/rashad/projects/Leadprocure/infra/license` над `target: /run/leadprocure-license`, `read_only: true`, `create_host_path: false` |
+| Копия базы | `pg_dump -Fc` 6 ноября 20:36 UTC: `/home/rashad/backups/leadprocure/leadprocure-prod-20261106T203622Z.dump`, 742 852 байта, sha256 `6521221eccb06af027ec…`, права `600` |
+| Восстановление проверено | дамп развёрнут в одноразовый `postgres:16`: `pg_restore` код 0, счёт строк в 12 таблицах совпал с продом (audit_events 3241, bids 7, bid_sealed_payloads 5, purchase_orders 9, procurement_requests 17, budgets 6, departments 4, invoices 4, organizations 3, organization_users 6, sourcing_events 7, awards 1), у всех 5 запечатанных ставок на месте `ciphertext` и `wrapped_key`, все 3241 записи журнала с хешем. **Прогон понадобился второй:** в первом два последних запроса упали на ещё не готовом контейнере, доказательством считается второй, чистый целиком |
+| Preflight | `duplicate_invoice_lines`, `duplicate_evaluation_scores`, `duplicate_memberships` и три проверки пространств имён — нули. `installed_licenses = 0` (ожидаемо, лицензия файлом), `legacy_invoice_lines_requiring_tax_review = 5` — те же исторические строки |
+| Пакет | прогон 42289767069, артефакт `leadprocure-release-627a452…`, 277 974 771 байт; `manifest.cjs verify` и `verify-loaded` — PASS |
+| Образы | `leadprocure-api:627a452…` `sha256:8778e5b971d0…`, `leadprocure-web:627a452…` `sha256:657ec912ffff…`, обе amd64, метки `revision` совпадают с SHA |
+| Точка отката | `leadprocure-api:420a5ade…` `sha256:2b1b1b913334…` и `leadprocure-web:420a5ade…` `sha256:122b4a079b65…` — проверены ДО загрузки новых |
+
+### Проверено после подмены, на живой машине
+
+- `docker ps`: api и web на образах `627a452…`; `postgres`, `minio`, `clamav`,
+  `ai-orchestrator` — `Up 2 weeks`, те же образы. `--no-deps` сработал, хранилище не
+  подменено.
+- Метки `revision` на обоих работающих контейнерах — `627a4522b852…`.
+- `/health`: `status: ok`, `edition: enterprise`, `licenseSource: file`,
+  `licenseStatus: valid`. Ноль строк с `error`/`exception` в логе api.
+- Web `/login` → 200, неаутентифицированный `/auth/me` → 401.
+- **Записи сверены побайтово, а не по размеру:** sha256 того, что отдаёт nginx,
+  против `oid` указателя LFS в `origin/main` — совпали все пять проверенных
+  (`buyer-analytics.az.webm`, `buyer-budgets.az.webm`, `buyer-settings.az.webm`,
+  плюс нетронутая `buyer-dashboard.az.webm` и постер `buyer-analytics.az.png`).
+  Нетронутая в списке нарочно: она показывает, что подмена образа не испортила
+  остальные семнадцать.
+
+  ```bash
+  for f in buyer-analytics.az.webm buyer-budgets.az.webm buyer-settings.az.webm; do
+    oid=$(git show "origin/main:apps/web/public/guides/$f" | sed -n 's/^oid sha256://p')
+    got=$(curl -s "http://75.119.156.234:8180/guides/$f" | sha256sum | cut -d' ' -f1)
+    [ "$oid" = "$got" ] && echo "$f: совпал" || echo "$f: РАСХОЖДЕНИЕ"
+  done
+  ```
+- В образе 18 записей, 159,9 МБ, файлов меньше килобайта — ноль, то есть ни одного
+  указателя LFS вместо записи.
+- Утечка демо-пароля: в отданном браузеру бандле (`/assets/index-M4bSDmc4.js`) ноль
+  вхождений пароля сида, `acme.test`, `supply-one.test` и `VITE_DEMO_HINT` — и то же
+  на загруженном образе ДО подмены.
+
+### Не выполнено и остаётся владельцу
+
+Проверки `infra/DEPLOY.md:104`, требующие входа под настоящей учётной записью: вход и
+обновление сессии, изоляция организаций и ролей, согласование заявки, невидимость сумм
+до вскрытия, документ с антивирусом, presigned-загрузка на `:9002`. Тестовые данные на
+проде не заводятся. HTTPS по-прежнему нет, cookie и CORS через TLS — NOT RUN.
+
+### Про auto mode, чтобы следующая сессия не теряла час
+
+Подмена контейнеров (`docker compose … up -d … api web`) режется как «Production
+Deploy», **если слова владельца про выкладку нет в том же ходе**. Замерено трижды:
+1 ноября отказ дважды подряд, 2 ноября на `c21ed7f` и `420a5ad` прошло (слово
+«Выкладывай» стояло в том же сообщении), 6 ноября на `09d7570` снова отказ дважды —
+слово в том ходе было про мерж. На этой выкладке слово было про выкладку, и подмена
+прошла с первого раза. Всё остальное — `pg_dump`, read-only psql, `image load`,
+`docker run` по загруженному образу, разворот копии, `config` — проходит само.
+
+Отдельно: `gh pr merge` чужого PR режется как «Merge Without Review», пока разбор
+лежит в переписке, а не в самом PR. Это не формальность: #105 так и слился, не увидев
+точного разбора, и найденная в нём дырка всплыла только перепиской сессий.
+
 ## Что остаётся незакрытым
 
 - **Закрытый ключ эмитента лежит на этом хосте в двух одинаковых копиях** —
