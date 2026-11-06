@@ -568,17 +568,26 @@ test.describe('supplier panel', () => {
   // on main too — a check that could not fail. `solid 2px` mint is only ours.
   test('keyboard focus draws a ring, a mouse click does not', async () => {
     await page.goto('/supplier/market');
-    // One Tab, not a loop: at 1280 `.topbar` and `.side-close` are display:none, so the
-    // first stop is the first rail link. If that ever stops being true this fails loudly,
-    // which is right — a loop that hunts for something focusable would instead quietly
-    // measure a different element than the one the reader meets first.
-    await page.keyboard.press('Tab');
-    const byKeyboard = await page.evaluate(() => {
-      const el = document.activeElement as HTMLElement;
-      const s = getComputedStyle(el);
-      return { tag: el.tagName, width: parseFloat(s.outlineWidth) || 0, style: s.outlineStyle, color: s.outlineColor };
-    });
+    // Tab until focus is on a rail link, and say so in the assertions. One press is not
+    // enough: straight after a goto the focus sits on the document, and the first Tab was
+    // measured landing on BODY in CI. The loop is safe here only because what it stops on
+    // is then checked — tag AND «inside .side» — so it cannot quietly measure something
+    // else and call that a pass.
+    let byKeyboard = { tag: '', inRail: false, width: 0, style: '', color: '' };
+    for (let i = 0; i < 8; i++) {
+      await page.keyboard.press('Tab');
+      byKeyboard = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement;
+        const s = getComputedStyle(el);
+        return {
+          tag: el.tagName, inRail: !!el.closest('.side'),
+          width: parseFloat(s.outlineWidth) || 0, style: s.outlineStyle, color: s.outlineColor,
+        };
+      });
+      if (byKeyboard.tag === 'A' && byKeyboard.inRail) break;
+    }
     expect(byKeyboard.tag).toBe('A');
+    expect(byKeyboard.inRail).toBe(true);
     expect(byKeyboard.style).toBe('solid');
     expect(byKeyboard.width).toBe(2);
     // Mint, not the accent green: on the rail's own fill the accent is what nobody can see.
@@ -588,11 +597,15 @@ test.describe('supplier panel', () => {
     // eighteen of them. A CLICK only: Chromium re-arms the heuristic on the next key press,
     // so a click followed by Escape does paint the ring (see styles.css).
     //
-    // A DIFFERENT link than the one above, because the state is sticky: clicking the very
-    // element that already carries the keyboard ring does not take it away, so measuring
-    // there would read 2px and say nothing about the mouse.
-    const other = page.locator('.side a').nth(1);
-    await other.click();
+    // Deliberately a link OTHER than the one Tab stopped on, found by index rather than
+    // assumed: the state is sticky, and clicking the very element that already carries the
+    // keyboard ring does not take it away — measuring there would read 2px and say nothing
+    // about the mouse.
+    const links = page.locator('.side a');
+    expect(await links.count()).toBeGreaterThan(1);
+    const focused = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('.side a')).indexOf(document.activeElement as HTMLAnchorElement));
+    await links.nth(focused === 0 ? 1 : 0).click();
     const byMouse = await page.evaluate(() => {
       const el = document.activeElement as HTMLElement;
       return { tag: el.tagName, width: parseFloat(getComputedStyle(el).outlineWidth) || 0 };
