@@ -96,6 +96,15 @@ input:focus, select:focus, textarea:focus { outline: 0; border-color: var(--acce
    guide recordings are driven by mouse (scripts/produce-guides.mjs), and a ring that
    answered a click would appear in all eighteen of them.
 
+   That is about the CLICK, and it is not the whole story: Chrome's heuristic re-arms on the
+   next KEY PRESS, so an element focused by mouse starts matching `:focus-visible` the moment
+   any key is pressed on it — Escape included. The recorder had four scenes that clicked a
+   row menu open and pressed Escape to close it, with focus still on the trigger; they now
+   blur before the key (`closeRowMenu` in scripts/produce-guides.mjs, which the menu's own
+   document-level keydown listener never needed focus for). Found by the recording session,
+   not by this rule. So: a scene that presses a key after clicking must drop focus first, or
+   plan for the ring.
+
    `outline`, not the inputs' `box-shadow` ring: an outline follows the element's own
    border-radius, is drawn outside the box so it never shifts the layout by a pixel, and
    survives `overflow: hidden` on a parent. Two colours because no single one reads on both

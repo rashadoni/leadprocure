@@ -582,7 +582,8 @@ test.describe('supplier panel', () => {
     expect(byKeyboard.style).not.toBe('none');
     // The other half, and the reason the rule is :focus-visible rather than :focus — the
     // guide recordings are driven by mouse, and a ring answering a click would sit in all
-    // eighteen of them.
+    // eighteen of them. A CLICK only: Chrome re-arms the heuristic on the next key press,
+    // so a click followed by Escape does paint the ring (see styles.css).
     const link = page.locator('.side a').first();
     await link.click();
     const byMouse = await page.evaluate(() => {
