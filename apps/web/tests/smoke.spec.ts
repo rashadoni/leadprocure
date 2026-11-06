@@ -613,13 +613,18 @@ test.describe('supplier panel', () => {
     });
     // The tag too: the reading could otherwise have come from <body>.
     expect(byMouse.tag).toBe('A');
-    // «Not OUR ring», not «no ring at all»: CI measured a 3px outline on the clicked link,
-    // which is Chromium's own `auto` ring (its width computes to 3px) and its behaviour on
-    // main as much as here — the recordings have always lived with it. What this guards is
-    // the thing this rule introduced: the mint 2px line is keyboard-only, which is exactly
-    // what writing `:focus` instead of `:focus-visible` would break.
-    expect(byMouse.style).not.toBe('solid');
-    expect(byMouse.color).not.toBe('rgb(167, 243, 208)');
+    // A click paints NOTHING, and the measured state says so exactly: `outline-style: none`
+    // with `outline-width: 3px`. The 3px is not a ring — width is a separate property from
+    // style, nothing here sets it, so it sits at its CSS initial `medium`, which Chromium
+    // computes as 3px; with the style `none` there is nothing to draw. Hence the first
+    // version of this check, `width === 0`, could not pass in any case: 2px while the
+    // keyboard ring was still on that element (the state is sticky, so clicking the element
+    // Tab stopped on keeps it), 3px otherwise.
+    //
+    // So assert the style, which is the property that decides whether anything is drawn.
+    // `solid` is what our rule produces, and a rule written `:focus` instead of
+    // `:focus-visible` would make this line red — which is the whole point of it.
+    expect(byMouse.style).toBe('none');
   });
 
   test('role guard: supplier cannot open buyer pages', async () => {

@@ -96,6 +96,11 @@ input:focus, select:focus, textarea:focus { outline: 0; border-color: var(--acce
    guide recordings are driven by mouse (scripts/produce-guides.mjs), and a ring that
    answered a click would appear in all eighteen of them.
 
+   Measured, after the click, on the clicked link: `outline-style: none`, `outline-width: 3px`
+   — nothing is drawn, and the 3px is merely the initial `medium`, since width is a separate
+   property from style. Worth writing down because a check that reads the width alone cannot
+   tell a ring from no ring at all.
+
    That is about the CLICK, and it is not the whole story: Chrome's heuristic re-arms on the
    next KEY PRESS, so an element focused by mouse starts matching `:focus-visible` the moment
    any key is pressed on it — Escape included. The recorder had four scenes that clicked a
