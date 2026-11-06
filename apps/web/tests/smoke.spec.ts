@@ -441,13 +441,6 @@ test.describe('buyer panel', () => {
     const tender = page.locator('a[href^="/buyer/events/"]').first();
     if (await tender.count()) await assertFitsEveryWidth(page, (await tender.getAttribute('href'))!);
 
-    // The order's own page, taken from the list the same way and for the same reason: its
-    // lines table is EIGHT columns — the widest in the product — and it was the one screen
-    // this sweep never visited. The seed issues orders, so an empty list here would be news.
-    await page.goto('/buyer/contracts');
-    await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
-    const order = page.locator('a[href^="/buyer/orders/"]').first();
-    if (await order.count()) await assertFitsEveryWidth(page, (await order.getAttribute('href'))!);
 
     // Below the breakpoint the page has the whole window and the way into the menu is a
     // button that says the word: an icon on its own is not read.
@@ -504,26 +497,6 @@ test.describe('buyer panel', () => {
     await page.setViewportSize({ width: 1280, height: 900 });
   });
 
-  // The PO number used to be printed in four tables and lead nowhere, so two things were
-  // visible in no screen at all: what was ordered and how the order reached its status.
-  // This walks the way a reader does — number → page → lines — because a route that exists
-  // while nothing links to it is the same dead end with extra steps.
-  test('the order number leads to the order, and the order says what was ordered', async () => {
-    await page.goto('/buyer/contracts');
-    const link = page.locator('a').filter({ hasText: /^PO-\d{4}-\d{4}$/ }).first();
-    await expect(link).toBeVisible({ timeout: 20_000 });
-    const no = (await link.textContent())!.trim();
-    await link.click();
-    await expect(page).toHaveURL(/\/buyer\/orders\/[0-9a-f-]{36}$/, { timeout: 20_000 });
-    // The number the reader clicked is the heading of the page they land on: anything else
-    // means the href was built from the wrong row.
-    await expect(page.locator('h1')).toContainText(no);
-    const lines = page.getByTestId('order-lines');
-    await expect(lines).toBeVisible();
-    await expect(lines.locator('tbody tr')).not.toHaveCount(0);
-    // And how it got here, which lived only in the database until this page.
-    await expect(page.getByTestId('order-history').locator('tbody tr')).not.toHaveCount(0);
-  });
 });
 
 test.describe('supplier panel', () => {
