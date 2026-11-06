@@ -85,6 +85,30 @@ input, select, textarea { background: #fff; border: 1px solid var(--border); col
    acceptance artefact. Checkboxes, radios, file pickers and textareas keep their own size. */
 input:not([type=checkbox]):not([type=radio]):not([type=file]), select { height: 38px; }
 input:focus, select:focus, textarea:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(4, 120, 87, .14); }
+
+/* Keyboard focus, on everything that can be activated — not just the text controls above.
+   A button, a row action, a tab and a sidebar link all kept Chrome's own blue ring, which
+   is a dark smudge on the dark-green rail and off-palette everywhere else; a reader working
+   by keyboard could not tell what was about to be pressed.
+
+   `:focus-visible`, never `:focus`: the browser paints it for keyboard and assistive
+   navigation and withholds it after a mouse click, which matters beyond taste here — the
+   guide recordings are driven by mouse (scripts/produce-guides.mjs), and a ring that
+   answered a click would appear in all eighteen of them.
+
+   `outline`, not the inputs' `box-shadow` ring: an outline follows the element's own
+   border-radius, is drawn outside the box so it never shifts the layout by a pixel, and
+   survives `overflow: hidden` on a parent. Two colours because no single one reads on both
+   a white card and the dark-green rail. */
+a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The ring belongs outside the button's own shadow, or it reads as part of the fill. */
+.btn:focus-visible { outline-offset: 3px; }
+/* Light mint — the same tone as the brand mark; the accent green is invisible here. */
+.side a:focus-visible, .side button:focus-visible, .side-link:focus-visible { outline-color: #a7f3d0; }
+/* The text controls already answer focus with their border and ring (rule above); a second
+   mark around them would say nothing new. */
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 0; }
 label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; margin: 10px 0 4px; }
 .row { display: flex; gap: 10px; align-items: end; }
 .row > * { flex: 1; }

@@ -527,7 +527,10 @@ test.describe('supplier panel', () => {
     await page.goto('/supplier/market');
     const alert = page.getByRole('alert').filter({ hasText: 'Could not load the data.' });
     await expect(alert).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText('Nothing here yet')).toHaveCount(0);
+    // By test id, not by the sentence: every list now says its own empty line (empty_market
+    // here), so matching the generic «Nothing here yet» would find nothing whatever the page
+    // did — vacuously green. The id holds for all three languages too.
+    await expect(page.getByTestId('list-empty')).toHaveCount(0);
     fail = false;
     const retried = page.waitForResponse((r) => r.url().includes('/events?') && r.ok());
     await alert.getByRole('button', { name: 'Retry' }).click();
@@ -538,6 +541,55 @@ test.describe('supplier panel', () => {
     // carries role="status" rather than role="alert" precisely to stay out of such checks.
     await expect(page.getByRole('status')).toHaveCount(0);
     await page.unroute('**/events?**');
+  });
+
+  // An empty list is an answer, and «Nothing here yet» was not one: on a new tenant it is
+  // the first screen, and it left the reader guessing whether the section was broken,
+  // forbidden or simply not started. Each list now names what fills it.
+  test('an empty market says what fills it, not merely that it is empty', async () => {
+    await page.route('**/events?**', (route) => route.fulfill({
+      status: 200, contentType: 'application/json', body: '{"items":[],"total":0}',
+    }));
+    await page.goto('/supplier/market');
+    const empty = page.getByTestId('list-empty');
+    await expect(empty).toBeVisible({ timeout: 20_000 });
+    // The sentence, not just the box: a generic line would satisfy the id alone.
+    await expect(empty).toContainText('open announcements');
+    await page.unroute('**/events?**');
+  });
+
+  // Only the text inputs answered focus; a button, a row action and a sidebar link kept
+  // Chrome's blue ring, unreadable on the dark-green rail. Measured on the element the
+  // browser actually focuses, because a declaration in the stylesheet proves nothing about
+  // which element matched it.
+  test('keyboard focus draws a ring, a mouse click does not', async () => {
+    await page.goto('/supplier/market');
+    // Walk to the first link or button rather than assuming which element Tab lands on
+    // first: that depends on the layout, and a test that breaks when a control is added
+    // above it would be reporting the wrong thing.
+    let byKeyboard = { tag: '', width: 0, style: '' };
+    for (let i = 0; i < 8; i++) {
+      await page.keyboard.press('Tab');
+      byKeyboard = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement;
+        const s = getComputedStyle(el);
+        return { tag: el.tagName, width: parseFloat(s.outlineWidth) || 0, style: s.outlineStyle };
+      });
+      if (/^(A|BUTTON)$/.test(byKeyboard.tag)) break;
+    }
+    expect(byKeyboard.tag).toMatch(/^(A|BUTTON)$/);
+    expect(byKeyboard.width).toBeGreaterThan(0);
+    expect(byKeyboard.style).not.toBe('none');
+    // The other half, and the reason the rule is :focus-visible rather than :focus — the
+    // guide recordings are driven by mouse, and a ring answering a click would sit in all
+    // eighteen of them.
+    const link = page.locator('.side a').first();
+    await link.click();
+    const byMouse = await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement;
+      return parseFloat(getComputedStyle(el).outlineWidth) || 0;
+    });
+    expect(byMouse).toBe(0);
   });
 
   test('role guard: supplier cannot open buyer pages', async () => {

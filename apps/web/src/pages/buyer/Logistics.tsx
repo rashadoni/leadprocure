@@ -40,7 +40,7 @@ export default function Logistics() {
             ))}
           </tbody>
         </table>
-        <ListState of={board} empty={!rows.length} />
+        <ListState of={board} empty={!rows.length} emptyKey="empty_logistics" />
       </div>
     </>
   );

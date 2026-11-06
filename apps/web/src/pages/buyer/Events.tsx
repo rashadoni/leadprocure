@@ -24,7 +24,7 @@ export default function Events() {
     <>
       <h1>{t('events')}</h1>
       <div className="card">
-        <ListState of={events} empty={!rows.length} />
+        <ListState of={events} empty={!rows.length} emptyKey="empty_events" />
         <table>
           <thead><tr><th>{t('title')}</th><th>{t('method')}</th><th>{t('status')}</th><th>{t('deadline')}</th><th>{t('bids_received')}</th></tr></thead>
           <tbody>

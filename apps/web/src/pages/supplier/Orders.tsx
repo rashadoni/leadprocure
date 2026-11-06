@@ -119,7 +119,7 @@ export default function Orders() {
     <>
       <h1>{t('my_orders')}</h1>
       <div className="card">
-        <ListState of={orderList} empty={!orders.length} />
+        <ListState of={orderList} empty={!orders.length} emptyKey="empty_sup_orders" />
         <table>
           <thead><tr><th>#</th><th>{t('buyer_org')}</th><th className="num">{t('total')}</th><th>{t('status')}</th><th className="acts">{t('actions')}</th><th>{t('logistics')}</th></tr></thead>
           <tbody>
