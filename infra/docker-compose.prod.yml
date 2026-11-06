@@ -124,6 +124,38 @@ services:
         bind:
           create_host_path: false
 
+  # Единственный вход, который видит браузер, и единственное место, где есть TLS.
+  # Веб и API за ним стоят на ОДНОМ origin (/api/), поэтому CORS перестаёт
+  # участвовать, а refresh-куки становится однодоменной и получает Secure.
+  # Хранилище — на своём порту: подпись presigned-ссылки покрывает путь, и
+  # префикс её бы сломал. Подробности и причины — в nginx/leadprocure-tls.conf.
+  #
+  # Сертификат приходит снаружи, только на чтение: на хосте уже работает ACME
+  # соседнего продукта, и сертификат выдан на САМ IP, так что домен не нужен.
+  # Продлевает его чужой таймер, а nginx читает сертификат один раз при старте —
+  # поэтому раз в шесть часов контейнер сам перезагружает конфиг.
+  tls:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    environment:
+      # имя каталога внутри certs/live — у сертификата на IP это сам адрес
+      TLS_CERT_NAME: ${TLS_CERT_NAME:?set in .env.prod}
+    ports:
+      - "${TLS_WEB_PORT:-10443}:443"
+      - "${TLS_S3_PORT:-10444}:444"
+    volumes:
+      # шаблон, а не готовый конфиг: envsubst штатного образа подставит TLS_CERT_NAME
+      - ./nginx/leadprocure-tls.conf:/etc/nginx/templates/leadprocure-tls.conf.template:ro
+      # цикл перезагрузки — шагом entrypoint'а, а НЕ подменой command: штатный
+      # entrypoint отрисовывает шаблоны только когда команда начинается с «nginx»
+      - ./nginx/reload-loop.sh:/docker-entrypoint.d/50-reload-loop.sh:ro
+      - type: bind
+        source: ${TLS_CERT_DIR:?set in .env.prod}
+        target: /certs
+        read_only: true
+        bind:
+          create_host_path: false
+
   web:
     build:
       context: ..
