@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, fmtDate, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
+import { hintOf } from '../../components/Explain';
 import { useDialogs } from '../../components/Dialogs';
 import { PO_BUYER_NEXT } from '@leadprocure/shared';
 import Pager from '../../components/Pager';
@@ -120,7 +121,7 @@ export default function Contracts() {
       <div className="card">
         <ListState of={contractList} empty={!contracts.length} />
         <table>
-          <thead><tr><th>#</th><th>{t('title')}</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('validity')}</th><th className="num">{t('total')}</th><th className="num" data-tip={t('drawn_tip')}>{t('drawn')}</th><th>{t('status')}</th><th className="num">{t('orders_n')}</th>{contractActions && <th className="acts">{t('actions')}</th>}</tr></thead>
+          <thead><tr><th>#</th><th>{t('title')}</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('validity')}</th><th className="num">{t('total')}</th><th className="num" data-tip={hintOf(t('drawn_tip'))}>{t('drawn')}</th><th>{t('status')}</th><th className="num">{t('orders_n')}</th>{contractActions && <th className="acts">{t('actions')}</th>}</tr></thead>
           <tbody>
             {contracts.map((c) => {
               const over = Number(c.drawn_minor) > Number(c.total_minor);

@@ -227,7 +227,7 @@ export default function Settings() {
               {c.code}{c.name ? ` · ${c.name}` : ''}
               {isAdmin && (
                 <button className="btn small ghost" style={{ marginLeft: 6, padding: '0 6px' }}
-                  onClick={() => run(() => api.delete(`/categories/${c.id}`))}>✕</button>
+                  onClick={() => run(() => api.delete(`/categories/${c.id}`))}>{t('delete')}</button>
               )}
             </span>
           ))}
@@ -329,7 +329,7 @@ export default function Settings() {
                         <option value="OPEN_TENDER">{MP_ICO.OPEN_TENDER} {mLabel('OPEN_TENDER')}</option>
                       </select>
                     </td>
-                    <td><button className="btn small ghost" onClick={() => setMpDraft(mpDraft.filter((_, j) => j !== i))}>✕</button></td>
+                    <td><button className="btn small ghost" onClick={() => setMpDraft(mpDraft.filter((_, j) => j !== i))}>{t('delete')}</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -474,7 +474,7 @@ export default function Settings() {
                         <option value="OPEN_TENDER">{MP_ICO.OPEN_TENDER} {mLabel('OPEN_TENDER')}</option>
                       </select>
                     </td>
-                    <td><button className="btn small ghost" onClick={() => setMpDraft(mpDraft.filter((_, j) => j !== i))}>✕</button></td>
+                    <td><button className="btn small ghost" onClick={() => setMpDraft(mpDraft.filter((_, j) => j !== i))}>{t('delete')}</button></td>
                   </tr>
                 ))}
               </tbody>

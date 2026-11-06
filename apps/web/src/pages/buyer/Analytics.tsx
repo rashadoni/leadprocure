@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, fmtMoney, fmtNumShort } from '../../api/client';
 import type { PaidBasis } from '@leadprocure/shared';
 import { useI18n } from '../../i18n';
+import { Explain, hintOf } from '../../components/Explain';
 import { isDenied, ListState } from '../../components/ListState';
 
 // Every split carries the same window a year earlier beside it. A row that exists only in
@@ -235,12 +236,28 @@ export default function Analytics() {
           { label: t('inv_outstanding'), value: money(d.invoices.outstandingMinor),
             note: `${t('invoices')}: ${d.invoices.outstandingCount} · ${t('gross_label')}`, tip: t('inv_outstanding_hint') },
         ].map((c) => (
-          <div className="card" key={c.label} style={{ marginBottom: 0 }} data-tip={c.tip}>
+          /* `hintOf`: these four texts run to 230 characters, and a 240px bubble turns that
+             into a ten-line slab over the charts below. The bubble keeps the first
+             sentence; the whole text is under the row, in the open, where it can be read
+             without holding the mouse still. */
+          <div className="card" key={c.label} style={{ marginBottom: 0 }} data-tip={hintOf(c.tip)}>
             <div style={{ color: 'var(--muted)', fontSize: 12 }}>{c.label}</div>
             <div style={{ fontSize: 20, fontWeight: 800, marginTop: 6 }}>{c.value}</div>
             <div className="hint" style={{ fontSize: 11, marginTop: 4 }}>{c.note}</div>
           </div>
         ))}
+      </div>
+      <div className="hint" style={{ marginBottom: 10 }}>
+        <Explain>
+          {[
+            { label: t('spend'), text: t('spend_hint') },
+            { label: t('savings'), text: t('savings_hint') },
+            { label: t(paidBasis), text: t(paidBasisTip) },
+            { label: t('inv_outstanding'), text: t('inv_outstanding_hint') },
+          ].map((c) => (
+            <span className="explain-item" key={c.label}><b>{c.label}.</b> {c.text}</span>
+          ))}
+        </Explain>
       </div>
       {/* Said out loud, not only in a tooltip: finance opens both pages and must not have to
           guess why the two «paid» figures differ. */}
@@ -330,14 +347,14 @@ export default function Analytics() {
               <th>{t('department')}</th>
               {/* `amount`, the word /buyer/budgets uses for this very column, not `plan`:
                   «План» and «По плану» in one head row are two different things under one word. */}
-              <th className="num" data-tip={t('an_plan_tip')}>{t('amount')}</th>
-              <th className="num" data-tip={t('utilization_tip')}>{t('utilization')}</th>
+              <th className="num" data-tip={hintOf(t('an_plan_tip'))}>{t('amount')}</th>
+              <th className="num" data-tip={hintOf(t('utilization_tip'))}>{t('utilization')}</th>
               {/* NOT "period elapsed": the figure is plannedMinor/amountMinor, so under a
                   monthly phasing it is the share of the PLAN due by today, which in a
                   heating budget is nothing like the share of the calendar that has gone.
                   Same wording and same two tips as /buyer/budgets. */}
               <th>{t('bud_pace')}</th>
-              <th data-tip={t('pace_tip')}>{t('pace')}</th>
+              <th data-tip={hintOf(t('pace_tip'))}>{t('pace')}</th>
             </tr></thead>
             <tbody>
               {pace.map((p) => {
@@ -351,7 +368,7 @@ export default function Analytics() {
                     <td className="hint" data-tip={p.phased ? t('bud_pace_phased_tip') : t('bud_pace_tip')}>
                       {p.elapsedPct}%{p.phased ? ' 📅' : ''}
                     </td>
-                    <td className={ahead ? 'error' : ''} data-tip={t('pace_tip')}>
+                    <td className={ahead ? 'error' : ''} data-tip={hintOf(t('pace_tip'))}>
                       {p.paceDeltaPct > 0 ? '+' : ''}{p.paceDeltaPct}%
                       {ahead ? ` · ${t('pace_ahead')}` : ''}
                     </td>

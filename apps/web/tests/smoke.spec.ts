@@ -112,6 +112,7 @@ async function assertFitsEveryWidth(page: Page, path: string): Promise<void> {
       `${path} is measured for its rows and had none`).toBeGreaterThan(0);
   }
   await assertOneTooltipPerElement(page, path);
+  await assertTooltipsAreHints(page, path);
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
     await assertNoSidewaysScroll(page, `${path} at ${width}px`);
@@ -126,6 +127,24 @@ async function assertFitsEveryWidth(page: Page, path: string): Promise<void> {
 // is structural, not visual, so it is asserted structurally: no element carrying a tip may
 // sit inside another one. There were zero such pairs once the rollup was fixed, which is
 // what makes this worth asserting rather than tolerating.
+// A tooltip is a hint of a few words. It is drawn in a 240px column, so 561 characters —
+// which is what the budgets rollup carried — become a 273px black slab that opens on hover
+// and lands on top of three rows of figures. The owner filmed exactly that and asked what
+// it was. Documentation belongs on the page (components/Explain.tsx) or in the first
+// sentence (`hintOf`), never in a bubble that covers the table it describes.
+//
+// 200 characters is four lines in the 360px bubble — long enough for any real hint, short
+// enough that it never becomes a page of its own. Anything longer is documentation and
+// belongs in an `Explain`, where it is said in the open and nothing is deleted to fit.
+async function assertTooltipsAreHints(page: Page, where: string): Promise<void> {
+  const essays = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>('[data-tip]'))
+    .filter((el) => el.getBoundingClientRect().width > 0)
+    .map((el) => el.getAttribute('data-tip') || '')
+    .filter((tip) => tip.length > 200)
+    .map((tip) => `${tip.length} chars: "${tip.slice(0, 50)}…"`));
+  expect.soft(essays, `${where}: tooltips hold paragraphs — ${essays.join('; ')}`).toEqual([]);
+}
+
 async function assertOneTooltipPerElement(page: Page, where: string): Promise<void> {
   const nested = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>('[data-tip]'))
     .filter((el) => el.parentElement?.closest('[data-tip]'))
