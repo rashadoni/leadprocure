@@ -76,7 +76,7 @@ export function NotificationList({ notes, onRead, onReadAll }: {
           <button className="btn small ghost" onClick={onReadAll}>✓ {t('mark_all_read')}</button>
         )}
       </div>
-      <ListState of={notes} empty={!notes.data.length} />
+      <ListState of={notes} empty={!notes.data.length} emptyKey="empty_notes" />
       <table>
         {groups.map((g, gi) => (
           // One tbody per group: the heading row belongs to its messages, so a browser

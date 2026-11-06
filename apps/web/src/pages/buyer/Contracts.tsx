@@ -119,7 +119,7 @@ export default function Contracts() {
         </div>
       )}
       <div className="card">
-        <ListState of={contractList} empty={!contracts.length} />
+        <ListState of={contractList} empty={!contracts.length} emptyKey={isBuyerSide ? 'empty_contracts' : 'empty_contracts_sup'} />
         <table>
           <thead><tr><th>#</th><th>{t('title')}</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('validity')}</th><th className="num">{t('total')}</th><th className="num" data-tip={hintOf(t('drawn_tip'))}>{t('drawn')}</th><th>{t('status')}</th><th className="num">{t('orders_n')}</th>{contractActions && <th className="acts">{t('actions')}</th>}</tr></thead>
           <tbody>
@@ -164,7 +164,7 @@ export default function Contracts() {
           page's: one screen, two page headings. It belongs inside its card. */}
       <div className="card">
         <h3>{t('orders')}</h3>
-        <ListState of={orderList} empty={!orders.length} />
+        <ListState of={orderList} empty={!orders.length} emptyKey={isBuyerSide ? 'empty_orders' : 'empty_orders_sup'} />
         <table>
           <thead><tr><th>#</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th>{orderActions && <th className="acts">{t('actions')}</th>}</tr></thead>
           <tbody>

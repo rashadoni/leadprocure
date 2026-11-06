@@ -26,7 +26,7 @@ export default function Market() {
     <>
       <h1>{t('market')}</h1>
       <div className="card">
-        <ListState of={market} empty={!rows.length} />
+        <ListState of={market} empty={!rows.length} emptyKey="empty_market" />
         <table>
           {/* The buyer's own tender list has carried this column since PR #71, and the
               market — the one screen where the procedure decides whether to bid at all —

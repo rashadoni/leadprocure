@@ -62,7 +62,7 @@ export default function Suppliers() {
       <div className="card">
         <h3>{t('registry')}</h3>
         <div className="hint">{t('registry_hint')}</div>
-        <ListState of={registry} empty={!registry.data.length} />
+        <ListState of={registry} empty={!registry.data.length} emptyKey="empty_registry" />
         <table>
           <thead><tr><th className="grow">{t('company')}</th><th>VÖEN</th><th>{t('status')}</th><th className="acts">{t('actions')}</th></tr></thead>
           <tbody>
@@ -107,7 +107,7 @@ export default function Suppliers() {
       <div className="card">
         <h3>{t('directory')}</h3>
         <div className="hint">{t('directory_hint')}</div>
-        <ListState of={directory} empty={!directory.data.length} />
+        <ListState of={directory} empty={!directory.data.length} emptyKey="empty_directory" />
         <table>
           <thead><tr><th className="grow">{t('company')}</th><th>VÖEN</th><th>{t('category')}</th><th className="acts">{t('actions')}</th></tr></thead>
           <tbody>

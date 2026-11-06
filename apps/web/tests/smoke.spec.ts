@@ -527,7 +527,10 @@ test.describe('supplier panel', () => {
     await page.goto('/supplier/market');
     const alert = page.getByRole('alert').filter({ hasText: 'Could not load the data.' });
     await expect(alert).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText('Nothing here yet')).toHaveCount(0);
+    // By test id, not by the sentence: every list now says its own empty line (empty_market
+    // here), so matching the generic «Nothing here yet» would find nothing whatever the page
+    // did — vacuously green. The id holds for all three languages too.
+    await expect(page.getByTestId('list-empty')).toHaveCount(0);
     fail = false;
     const retried = page.waitForResponse((r) => r.url().includes('/events?') && r.ok());
     await alert.getByRole('button', { name: 'Retry' }).click();
@@ -538,6 +541,85 @@ test.describe('supplier panel', () => {
     // carries role="status" rather than role="alert" precisely to stay out of such checks.
     await expect(page.getByRole('status')).toHaveCount(0);
     await page.unroute('**/events?**');
+  });
+
+  // An empty list is an answer, and «Nothing here yet» was not one: on a new tenant it is
+  // the first screen, and it left the reader guessing whether the section was broken,
+  // forbidden or simply not started. Each list now names what fills it.
+  test('an empty market says what fills it, not merely that it is empty', async () => {
+    await page.route('**/events?**', (route) => route.fulfill({
+      status: 200, contentType: 'application/json', body: '{"items":[],"total":0}',
+    }));
+    await page.goto('/supplier/market');
+    const empty = page.getByTestId('list-empty');
+    await expect(empty).toBeVisible({ timeout: 20_000 });
+    // The sentence, not just the box: a generic line would satisfy the id alone.
+    await expect(empty).toContainText('open announcements');
+    await page.unroute('**/events?**');
+  });
+
+  // Only the text inputs answered focus; a button, a row action and a sidebar link kept
+  // Chrome's blue ring, unreadable on the dark-green rail. Measured on the element the
+  // browser actually focuses, because a declaration in the stylesheet proves nothing about
+  // which element matched it.
+  //
+  // The assertions name OUR ring, not merely «a ring»: Chromium draws its own
+  // `auto 1px rgb(16,16,16)` on a tabbed link, so `width > 0 && style !== 'none'` passed
+  // on main too — a check that could not fail. `solid 2px` mint is only ours.
+  test('keyboard focus draws a ring, a mouse click does not', async () => {
+    await page.goto('/supplier/market');
+    // Tab until focus is on a rail link, and say so in the assertions. One press is not
+    // enough: straight after a goto the focus sits on the document, and the first Tab was
+    // measured landing on BODY in CI. The loop is safe here only because what it stops on
+    // is then checked — tag AND «inside .side» — so it cannot quietly measure something
+    // else and call that a pass.
+    let byKeyboard = { tag: '', inRail: false, width: 0, style: '', color: '' };
+    for (let i = 0; i < 8; i++) {
+      await page.keyboard.press('Tab');
+      byKeyboard = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement;
+        const s = getComputedStyle(el);
+        return {
+          tag: el.tagName, inRail: !!el.closest('.side'),
+          width: parseFloat(s.outlineWidth) || 0, style: s.outlineStyle, color: s.outlineColor,
+        };
+      });
+      if (byKeyboard.tag === 'A' && byKeyboard.inRail) break;
+    }
+    expect(byKeyboard.tag).toBe('A');
+    expect(byKeyboard.inRail).toBe(true);
+    expect(byKeyboard.style).toBe('solid');
+    expect(byKeyboard.width).toBe(2);
+    // Mint, not the accent green: on the rail's own fill the accent is what nobody can see.
+    expect(byKeyboard.color).toBe('rgb(167, 243, 208)');
+    // The other half, and the reason the rule is :focus-visible rather than :focus — the
+    // guide recordings are driven by mouse, and a ring answering a click would sit in all
+    // eighteen of them. A CLICK only: Chromium re-arms the heuristic on the next key press,
+    // so a click followed by Escape does paint the ring (see styles.css).
+    //
+    // Deliberately a link OTHER than the one Tab stopped on, found by index rather than
+    // assumed: the state is sticky, and clicking the very element that already carries the
+    // keyboard ring does not take it away — measuring there would read 2px and say nothing
+    // about the mouse.
+    const links = page.locator('.side a');
+    expect(await links.count()).toBeGreaterThan(1);
+    const focused = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('.side a')).indexOf(document.activeElement as HTMLAnchorElement));
+    await links.nth(focused === 0 ? 1 : 0).click();
+    const byMouse = await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement;
+      const s = getComputedStyle(el);
+      return { tag: el.tagName, width: parseFloat(s.outlineWidth) || 0, style: s.outlineStyle, color: s.outlineColor };
+    });
+    // The tag too: the reading could otherwise have come from <body>.
+    expect(byMouse.tag).toBe('A');
+    // «Not OUR ring», not «no ring at all»: CI measured a 3px outline on the clicked link,
+    // which is Chromium's own `auto` ring (its width computes to 3px) and its behaviour on
+    // main as much as here — the recordings have always lived with it. What this guards is
+    // the thing this rule introduced: the mint 2px line is keyboard-only, which is exactly
+    // what writing `:focus` instead of `:focus-visible` would break.
+    expect(byMouse.style).not.toBe('solid');
+    expect(byMouse.color).not.toBe('rgb(167, 243, 208)');
   });
 
   test('role guard: supplier cannot open buyer pages', async () => {

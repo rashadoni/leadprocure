@@ -62,7 +62,7 @@ type AnyLoader = { loading: boolean; failed: boolean; reload: () => unknown };
 // The one line a list owes its reader: loading, or a failure with a Retry that really
 // retries, or that it is genuinely empty. Pages that load several lists share one line;
 // Retry then re-runs exactly the loads that failed.
-export function ListState({ of, empty }: { of: AnyLoader | AnyLoader[]; empty?: boolean }) {
+export function ListState({ of, empty, emptyKey }: { of: AnyLoader | AnyLoader[]; empty?: boolean; emptyKey?: string }) {
   const { t } = useI18n();
   const all = Array.isArray(of) ? of : [of];
   const broken = all.filter((l) => l.failed);
@@ -85,6 +85,14 @@ export function ListState({ of, empty }: { of: AnyLoader | AnyLoader[]; empty?: 
     );
   }
   if (all.some((l) => l.loading)) return <div role="status" className="hint state-empty">{t('list_loading')}</div>;
-  if (empty) return <div className="hint state-empty">{t('list_empty')}</div>;
+  // `emptyKey` is the page's own line: what fills this list, and what the reader does to
+  // fill it. The generic fallback stays for lists where nothing useful can be said, so a
+  // caller that passes nothing is not punished with a bare key on screen (t() returns the
+  // key itself when it is missing from the dictionary — which is how a typo here reaches
+  // the user as «empty_whatever»).
+  // data-testid, not the wording: the suite used to spot a wrongly-empty list by its text
+  // («Nothing here yet»), and now that each list says its own sentence that match would
+  // silently stop finding anything — a check that passes because it can no longer fail.
+  if (empty) return <div className="hint state-empty" data-testid="list-empty">{t(emptyKey ?? 'list_empty')}</div>;
   return null;
 }
