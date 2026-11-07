@@ -969,7 +969,8 @@ describe('budgets & commitment control (API e2e)', () => {
       expect(ph.months.every((m: any) => /^\d{4}-\d{2}$/.test(m.month))).toBe(true);
 
       // The split the editor opens on must be SAVEABLE. `Math.round(10000 / n)` was not:
-      // twelve months gave 833×12 = 9996, three gave 3333×3 = 9999, and the editor then
+      // twelve months gave 833×12 = 9996 and three gave 3333×3 = 9999 — two of the three
+      // lengths this product can make at all — and the editor then
       // painted its own total red and disabled Save over a state the reader never made —
       // before phasing anything they had to hand-correct a hundredth of a percent the
       // product had put there. The remainder belongs to the last month, which is what the
