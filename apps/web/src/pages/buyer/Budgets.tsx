@@ -3,6 +3,7 @@ import { Explain, hintOf } from '../../components/Explain';
 import { api, fmtAmount, fmtDate, fmtMoney, tableCurrency } from '../../api/client';
 import { Cur } from '../../components/Cur';
 import { statusGroup } from '../../components/Badge';
+import { rollupTotals } from '../../components/humanize';
 import { Actions } from '../../components/Actions';
 import { MenuSep, RowMenu } from '../../components/RowMenu';
 import { Link } from 'react-router-dom';
@@ -447,6 +448,31 @@ export default function Budgets() {
                 );
               })}
             </tbody>
+            {/* The organisation's own line, and the one finance came for. Without it the
+                first row read as the total — «Вся организация» standing above IT and OPS
+                with a smaller plan than either, because it is the org-wide BUDGET (the one
+                that catches what no department budget matches), not a sum of the rows.
+                Only top-level rows are added: a parent department's figures already include
+                its units (the ⤵ beside its name), and its units are listed under it, so
+                adding every row would count that money twice. */}
+            {depSummary.length > 1 && (() => {
+              const sums = rollupTotals(depSummary);
+              const cur = depSummary[0]?.currency;
+              return (
+                <tfoot data-testid="rollup-total">
+                  <tr>
+                    <td><b>{t('bud_total')}</b></td>
+                    <td className="num"><b>{fmtMoney(sums.plan, cur)}</b></td>
+                    <td className="num">{fmtMoney(sums.committed, cur)}</td>
+                    <td className="num">{fmtMoney(sums.actual, cur)}</td>
+                    <td className="hint num">{fmtMoney(sums.paid, cur)}</td>
+                    <td className="num">{fmtMoney(sums.remaining, cur)}</td>
+                    <td className="num hint">{fmtMoney(sums.forecast, cur)}</td>
+                    <td className="num">{sums.utilizationPct == null ? '—' : `${sums.utilizationPct}%`}</td>
+                  </tr>
+                </tfoot>
+              );
+            })()}
           </table>
           {/* Two screens report settled invoices and deliberately report different numbers.
               A finance reader comparing them must find the reason on the page, not file it

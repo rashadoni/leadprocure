@@ -17,14 +17,12 @@ import { Type } from 'class-transformer';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
-import { NotifyService } from '../../common/notify/notify.module';
 
 @Injectable()
 export class CatalogsService {
   constructor(
     private readonly rc: RequestContextService,
     private readonly audit: AuditService,
-    private readonly notify: NotifyService,
   ) {}
 
   async create(dto: { supplierOrgId: string; title: string; currency?: string }, auth: AccessTokenPayload) {
@@ -194,7 +192,8 @@ export class CatalogsService {
       );
     }
     await this.audit.record('CATALOG_ORDER_CREATED', 'purchase_order', po.id, { catalog_id: catalogId, po_no: poNo, total_minor: total });
-    await this.notify.notifyOrg(cat.supplier_org_id, 'CATALOG_ORDER_CREATED', { po_no: poNo, po_id: po.id });
+    // The call-off starts as a DRAFT the supplier cannot read (migration 0045), so the
+    // notification waits for the buyer to issue it — `setOrderStatus` sends it then.
     return { id: po.id, po_no: poNo, total_minor: total, status: 'DRAFT' };
   }
 

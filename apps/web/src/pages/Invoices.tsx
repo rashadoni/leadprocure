@@ -176,18 +176,42 @@ export default function Invoices() {
           <h3>{inv.invoice_no} · {fmtMoney(inv.gross_minor, inv.currency)} <Badge status={inv.status} /></h3>
           <div className="hint">{t('inv_net')} {fmtMoney(inv.net_minor, inv.currency)} + {t('inv_vat')} {fmtMoney(inv.vat_minor, inv.currency)}</div>
           <h3 style={{ marginTop: 10 }}>{t('inv_match')} {inv.match?.ok ? '✅' : '⚠️'}</h3>
+          {/* Five columns of bare numbers, every one of them right-aligned under a heading
+              that was right-aligned too — except the quantities, whose headings pulled right
+              while their values sat left, so «6» stood under the order price and nothing
+              under «Invoice quantity». And the line said ⚠️ without ever saying why, though
+              the snapshot carries the answer: which check failed, and how much of the
+              delivery is still billable. The reader of this table decides whether to pay. */}
           <table>
-            <thead><tr><th className="num">{t('inv_price')}</th><th className="num">{t('inv_po_price')}</th><th className="num">{t('inv_qty')}</th><th>{t('inv_received')}</th><th>{t('inv_ok')}</th></tr></thead>
+            <thead><tr><th className="grow">{t('title')}</th><th className="num">{t('inv_price')}</th><th className="num">{t('inv_po_price')}</th><th className="num">{t('inv_qty')}</th><th className="num">{t('inv_received')}</th><th>{t('inv_ok')}</th></tr></thead>
             <tbody>
-              {(inv.match?.lines ?? []).map((l: any, idx: number) => (
+              {(inv.match?.lines ?? []).map((l: any, idx: number) => {
+                const ok = l.price_ok && l.qty_ok;
+                return (
                 <tr key={idx}>
+                  {/* invoices submitted before the name was snapshotted keep their dash */}
+                  <td className="grow">{l.name ?? '—'}</td>
                   <td className="num">{fmtMoney(l.invoice_price, inv.currency)}</td>
                   <td className="num">{fmtMoney(l.po_price, inv.currency)}</td>
-                  <td>{l.invoice_qty}</td>
-                  <td>{l.received}</td>
-                  <td>{l.price_ok && l.qty_ok ? '✅' : '⚠️'}</td>
+                  <td className="num">{l.invoice_qty}</td>
+                  <td className="num">{l.received}</td>
+                  <td>
+                    {ok ? '✅' : '⚠️'}
+                    {!ok && (
+                      <div className="hint" data-testid="match-why">
+                        {[
+                          !l.price_ok && t('inv_why_price'),
+                          // `??`, never `||`: nought is the commonest answer here — the
+                          // delivery was received and already billed, so nothing is left —
+                          // and `||` would print a dash where the whole point is the zero.
+                          !l.qty_ok && `${t('inv_why_qty')} · ${t('inv_billable')}: ${l.billable ?? '—'}`,
+                        ].filter(Boolean).join(' · ')}
+                      </div>
+                    )}
+                  </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

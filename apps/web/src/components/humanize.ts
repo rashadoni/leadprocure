@@ -28,3 +28,39 @@ export const notifText = (t: (k: string) => string, n: { type: string; payload?:
     .replace(/\(\s*\)|«\s*»/g, '') // drop empty brackets when a payload field is missing
     .trim();
 };
+
+// The organisation's line under the department rollup. Only top-level rows are added: a
+// parent department's figures already include its units (the ⤵ beside its name) and its
+// units are listed under it, so adding every row would count that money twice. The browser
+// stand has no nested departments at all, which is exactly why this lives here and is
+// asked directly — the one case that matters is the one no screen in CI can show.
+export interface RollupRow {
+  depth?: number;
+  amountMinor?: number | string;
+  committedMinor?: number | string;
+  actualMinor?: number | string;
+  paidMinor?: number | string;
+  remainingMinor?: number | string;
+  forecastMinor?: number | string;
+}
+export function rollupTotals(rows: RollupRow[]): {
+  plan: number; committed: number; actual: number; paid: number;
+  remaining: number; forecast: number; utilizationPct: number | null;
+} {
+  const top = rows.filter((r) => (r.depth ?? 0) === 0);
+  const sum = (pick: (r: RollupRow) => number | string | undefined) =>
+    top.reduce((n, r) => n + (Number(pick(r)) || 0), 0);
+  const plan = sum((r) => r.amountMinor);
+  const committed = sum((r) => r.committedMinor);
+  const actual = sum((r) => r.actualMinor);
+  return {
+    plan,
+    committed,
+    actual,
+    paid: sum((r) => r.paidMinor),
+    remaining: sum((r) => r.remainingMinor),
+    forecast: sum((r) => r.forecastMinor),
+    // Paid is never added in: it settles orders already counted as actual.
+    utilizationPct: plan > 0 ? Math.round(((committed + actual) / plan) * 100) : null,
+  };
+}

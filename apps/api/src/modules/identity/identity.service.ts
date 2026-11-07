@@ -189,7 +189,7 @@ export class IdentityService {
     const m = this.rc.manager;
     const hash = this.hashToken(refreshToken);
     const sessions = await m.query(
-      `SELECT s.id, s.revoked, s.revoked_at, s.expires_at, u.token_version, u.status
+      `SELECT s.id, s.family_id, s.revoked, s.revoked_at, s.expires_at, u.token_version, u.status
        FROM sessions s JOIN organization_users u ON u.id = s.user_id
        WHERE s.user_id = $1 AND s.org_id = $2 AND s.refresh_hash = $3`,
       [payload.sub, payload.org_id, hash],
@@ -201,12 +201,21 @@ export class IdentityService {
       s.revoked_at != null &&
       Date.now() - new Date(s.revoked_at).getTime() <= this.cfg.refreshReuseLeewayMs;
     if (s.revoked && !benignReplay) {
-      // Stale reuse of a rotated token = theft signal. Hard revoke the WHOLE family
-      // (revoked_at NULL) so nothing — not even recently-rotated tokens — stays
-      // benign-replayable after a breach. This MUST run on a separate autocommit
-      // connection: the request transaction rolls back when we throw below, which would
-      // otherwise undo the revoke and make the breach response a no-op.
-      await this.ds.query(`UPDATE sessions SET revoked = true, revoked_at = NULL WHERE user_id = $1`, [payload.sub]);
+      // Stale reuse of a rotated token = theft signal. Hard revoke the family — the chain
+      // this token belongs to — with `revoked_at NULL`, so nothing in it, not even a
+      // just-rotated token, stays benign-replayable after a breach.
+      //
+      // The family and NOT every session the person has. Two holders of one chain is what
+      // reuse proves, and the chain is what cannot be trusted again; a browser on another
+      // machine shares nothing with it but a user id. Until migration 0046 there was no
+      // family in the schema, so this said `WHERE user_id` and signed the person out
+      // everywhere — including for a race they could cause themselves by clicking before a
+      // bootstrap's refresh came back (see the migration for the measurement).
+      //
+      // This MUST run on a separate autocommit connection: the request transaction rolls
+      // back when we throw below, which would otherwise undo the revoke and make the
+      // breach response a no-op.
+      await this.ds.query(`UPDATE sessions SET revoked = true, revoked_at = NULL WHERE family_id = $1`, [s.family_id]);
       throw new UnauthorizedException('Refresh token reuse detected');
     }
     if (s.token_version !== payload.token_version || s.status !== 'ACTIVE' || new Date(s.expires_at).getTime() <= Date.now()) {
@@ -236,9 +245,11 @@ export class IdentityService {
       token_version: payload.token_version,
     });
     const expires = new Date(Date.now() + this.cfg.jwtRefreshTtl * 1000);
+    // The rotation stays in the chain it came from: that is what makes the breach response
+    // able to name this device and only this device.
     await m.query(
-      `INSERT INTO sessions(id, user_id, org_id, refresh_hash, expires_at) VALUES ($1,$2,$3,$4,$5)`,
-      [randomUUID(), payload.sub, membership[0].org_id, this.hashToken(newRefresh), expires],
+      `INSERT INTO sessions(id, user_id, org_id, refresh_hash, expires_at, family_id) VALUES ($1,$2,$3,$4,$5,$6)`,
+      [randomUUID(), payload.sub, membership[0].org_id, this.hashToken(newRefresh), expires, s.family_id],
     );
     return { accessToken: access, refreshToken: newRefresh };
   }
@@ -293,9 +304,12 @@ export class IdentityService {
       token_version: user.token_version,
     });
     const expires = new Date(Date.now() + this.cfg.jwtRefreshTtl * 1000);
+    // A sign-in starts a chain of its own, named after itself: every rotation that follows
+    // inherits it, and a breach in one browser cannot reach another.
+    const sessionId = randomUUID();
     await this.rc.manager.query(
-      `INSERT INTO sessions(id, user_id, org_id, refresh_hash, expires_at) VALUES ($1,$2,$3,$4,$5)`,
-      [randomUUID(), user.id, membership.org_id, this.hashToken(refreshToken), expires],
+      `INSERT INTO sessions(id, user_id, org_id, refresh_hash, expires_at, family_id) VALUES ($1,$2,$3,$4,$5,$1)`,
+      [sessionId, user.id, membership.org_id, this.hashToken(refreshToken), expires],
     );
     return {
       accessToken,

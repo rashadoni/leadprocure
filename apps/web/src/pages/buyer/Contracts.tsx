@@ -189,8 +189,12 @@ export default function Contracts() {
                         step that moves the order on stays in the row — that is the one the
                         reader came for — and everything else, stops included, is in the
                         menu. */}
+                    {/* The step out of DRAFT is the only one that changes who can SEE the
+                        order: until it is issued the supplier has nothing — not the order,
+                        not its lines (migration 0045) — so the button says what it does. */}
                     {isBuyerSide && (PO_BUYER_NEXT[p.status] ?? []).filter((n) => !STOP_PO.has(n)).map((next) => (
                       <button key={next} className="btn small"
+                        data-tip={next === 'ISSUED' ? t('tip_po_issue') : undefined}
                         onClick={() => act(() => api.post(`/orders/${p.id}/status`, { status: next }))}>
                         {t(`po_act_${next}`)}
                       </button>
