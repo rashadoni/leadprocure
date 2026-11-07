@@ -1488,7 +1488,7 @@ done
 | Условие шага 3 | Чем подтверждено |
 |---|---|
 | Проверки на выкладываемом коммите | `acceptance` и `fresh-install` — SUCCESS на `627a452`, прогон 42289705519, событие `push` на `main` |
-| Лицензия доезжает | dry-run шага 6: `LICENSE_PUBLIC_KEY_B64` непустой (150 символов), `source: /home/rashad/projects/Leadprocure/infra/license` над `target: /run/leadprocure-license`, `read_only: true`, `create_host_path: false` |
+| Лицензия доезжает | dry-run шага 6: `LICENSE_PUBLIC_KEY_B64` непустой (152 символа), `source: /home/rashad/projects/Leadprocure/infra/license` над `target: /run/leadprocure-license`, `read_only: true`, `create_host_path: false` |
 | Копия базы | `pg_dump -Fc` 6 ноября 20:36 UTC: `/home/rashad/backups/leadprocure/leadprocure-prod-20261106T203622Z.dump`, 742 852 байта, sha256 `6521221eccb06af027ec…`, права `600` |
 | Восстановление проверено | дамп развёрнут в одноразовый `postgres:16`: `pg_restore` код 0, счёт строк в 12 таблицах совпал с продом (audit_events 3241, bids 7, bid_sealed_payloads 5, purchase_orders 9, procurement_requests 17, budgets 6, departments 4, invoices 4, organizations 3, organization_users 6, sourcing_events 7, awards 1), у всех 5 запечатанных ставок на месте `ciphertext` и `wrapped_key`, все 3241 записи журнала с хешем. **Прогон понадобился второй:** в первом два последних запроса упали на ещё не готовом контейнере, доказательством считается второй, чистый целиком |
 | Preflight | `duplicate_invoice_lines`, `duplicate_evaluation_scores`, `duplicate_memberships` и три проверки пространств имён — нули. `installed_licenses = 0` (ожидаемо, лицензия файлом), `legacy_invoice_lines_requiring_tax_review = 5` — те же исторические строки |
@@ -1910,7 +1910,7 @@ api написал `No migrations are pending`. Изменён только `app
 |---|---|
 | Проверки на коммите | `acceptance` и `fresh-install` — SUCCESS на `9e76006`, прогон 42314468740, событие `push` на `main` |
 | Адрес API | взят из живого `.env.prod` (`PUBLIC_API_URL=https://75.119.156.234:10443/api`) и передан и в сборку, и в `manifest.cjs verify` — см. раздел про шаг 2 |
-| Лицензия доезжает | dry-run шага 6: ключ 150 символов, `source: /home/rashad/projects/Leadprocure/infra/license` над `target: /run/leadprocure-license`, `read_only: true`, `create_host_path: false` |
+| Лицензия доезжает | dry-run шага 6: ключ 152 символа, `source: /home/rashad/projects/Leadprocure/infra/license` над `target: /run/leadprocure-license`, `read_only: true`, `create_host_path: false` |
 | Копия базы | `pg_dump -Fc` 6 ноября 23:51 UTC: `/home/rashad/backups/leadprocure/leadprocure-prod-20261106T235101Z.dump`, 742 852 байта, sha256 `3e334b6007a4188754f76b25…`, права `600` |
 | Восстановление проверено | дамп развёрнут в одноразовый `postgres:16`: `pg_restore` код 0, 12 таблиц совпали с продом, у всех 5 запечатанных ставок на месте `ciphertext` и `wrapped_key`, все 3241 записи журнала с хешем |
 | Preflight | три блокирующие проверки — нули; `legacy_invoice_lines_requiring_tax_review = 5` (те же исторические строки) |
