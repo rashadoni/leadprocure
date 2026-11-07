@@ -30,7 +30,13 @@ export function refusalText(t: (k: string) => string, e: unknown): string {
           const value = data?.[field];
           return value == null ? '' : String(value);
         })
+        // A field the server did not send leaves an empty pair of brackets AND the space
+        // in front of it: «Минимальная партия — 5 , а в заказе меньше» — a comma pushed off
+        // its word reads as a typo in the product's own voice. Brackets go, then the gap
+        // they left, then the space before whatever punctuation followed.
         .replace(/\(\s*\)|«\s*»/g, '')
+        .replace(/\s{2,}/g, ' ')
+        .replace(/\s+([,.;:!?])/g, '$1')
         .trim();
     }
   }
