@@ -1033,18 +1033,29 @@ async function assertStandHolds(keys) {
       '-v', `title=${title}`, '-f', '-'],
       { encoding: 'utf8', input: "SELECT status, close_at > now(), to_char(close_at,'YYYY-MM-DD HH24:MI')"
         + " FROM sourcing_events WHERE title = :'title';" }).trim();
-    // EVERY row, not the first one. The query cannot promise a single match and `-At`
+    // EVERY row, not the first one: the query cannot promise a single match and `-At`
     // separates rows by a newline, so reading the output as one record made
-    // «OPEN|t|…\nCLOSED|f|…» pass as open — the guard would wave through the very state it
-    // exists to catch, and which of the two the recording films is Postgres's choice, not
-    // ours. A stand filled twice really does hold two events of one name: demo-fill clears
-    // the old story only under DEMO_RESET.
+    // «OPEN|t|…\nCLOSED|f|…» pass as open — the guard waving through the very state it
+    // exists to catch. A stand filled twice really does hold two events of one name:
+    // demo-fill clears the old story only under DEMO_RESET.
+    //
+    // ANY duplicate is refused, including two open ones. The scenes reach their event by
+    // title and click `.first()`, so with two matches the recording films whichever row
+    // Postgres happened to return — a different event between one run and the next, with
+    // its own lots, bids and best price, while the narration describes figures as if there
+    // were one. Both being open only hides that: the scene plays, and the footage is still
+    // not the event anybody chose. A stand holding two events of one name is broken, and
+    // this says so instead of filming it.
     const rows = found.split('\n').filter(Boolean).map((r) => r.split('|'));
     if (!rows.length) { problems.push(`«${title}»: события нет на стенде`); continue; }
-    const many = rows.length > 1 ? ` (событий с этим названием: ${rows.length})` : '';
-    const closed = rows.filter(([status, live]) => status !== 'OPEN' || live !== 't');
-    if (closed.length) for (const [status, , closes] of closed) problems.push(`«${title}»: статус ${status}, срок ${closes} — приём закрыт${many}`);
-    else console.log(`  стенд: «${title}» принимает ставки до ${rows[0][2]}${many}`);
+    if (rows.length > 1) {
+      problems.push(`«${title}»: событий с этим названием ${rows.length} (${rows.map(([st]) => st).join(', ')}) — `
+        + `стенд залит дважды без DEMO_RESET; какое из них попадёт в кадр, решает Postgres, а не сценарий`);
+      continue;
+    }
+    const [status, live, closes] = rows[0];
+    if (status !== 'OPEN' || live !== 't') problems.push(`«${title}»: статус ${status}, срок ${closes} — приём закрыт`);
+    else console.log(`  стенд: «${title}» принимает ставки до ${closes}`);
   }
   if (problems.length) {
     throw new Error(`Стенд не в том состоянии, которое снимают эти разделы:\n  ${problems.join('\n  ')}\n`
