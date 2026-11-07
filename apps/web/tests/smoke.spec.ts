@@ -664,7 +664,7 @@ test.describe('supplier panel', () => {
     expect(byKeyboard.color).toBe('rgb(167, 243, 208)');
     // The other half, and the reason the rule is :focus-visible rather than :focus — the
     // guide recordings are driven by mouse, and a ring answering a click would sit in all
-    // eighteen of them. A CLICK only: Chromium re-arms the heuristic on the next key press,
+    // every one of them. A CLICK only: Chromium re-arms the heuristic on the next key press,
     // so a click followed by Escape does paint the ring (see styles.css).
     //
     // Deliberately a link OTHER than the one Tab stopped on, found by index rather than
@@ -720,7 +720,7 @@ test.describe('supplier panel', () => {
   // and the URL assertion reds whatever the guard reads internally.
   //
   // The door is drawn inside the PLAYER, not on the row — one button for the lesson being
-  // watched, not eighteen on the list — so each half has to open its lesson first. Rows
+  // watched, not one per row on the list — so each half has to open its lesson first. Rows
   // carry `data-lesson`, so neither half is picked by position or by translated text.
   test('the course offers a supplier only the doors a supplier may open', async () => {
     await page.goto('/learn');

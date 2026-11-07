@@ -1076,17 +1076,57 @@ const SEC_TOLERANCE = 2;
 // Parsed rather than imported: this is a .mjs script and guides.ts is TypeScript inside the
 // web app's build. The shape it looks for is one lesson object per line, which is how the
 // COURSE tracks are written.
+//
+// A lesson is found by what MAKES it a lesson — its own `key` and its `titleKey` — and only
+// then is `sec` read out of that same line. The first version instead matched one pattern
+// for the whole object with `sec` as its last field, and that is a different, worse thing:
+// swap two fields of one lesson and the line stops matching entirely, so that lesson simply
+// disappears from the map. Nineteen of twenty still parse, the floor below is still clear,
+// and the comparison then reports the lost key as «not in the course yet» — an informational
+// line, on a successful run, from a guard that looks like it is working. Measured on this
+// branch before the fix: reordering one lesson's fields dropped `sup-auction` and the run
+// stayed green. A guard that greens on its own blindness is the thing this file exists to
+// prevent, so a line that IS a lesson and carries no readable `sec` is now a refusal by name.
 function courseSeconds() {
   const file = join(ROOT, 'apps/web/src/guides.ts');
   const src = readFileSync(file, 'utf8');
+  // How many lessons there HAVE to be, counted from a different angle than the loop below
+  // reads them. Everything in the loop hangs on `key` and `titleKey` sharing a line, so it
+  // cannot notice a lesson that was split across two — the line carries no pair, nothing
+  // matches, and the lesson is skipped without ever reaching `noSec`. Measured: moving
+  // `titleKey` to a second line loses `sup-auction` silently, and the informational branch
+  // then calls it a recording the course does not list. A quoted `key:` appears in this file
+  // ONLY in lessons (the interfaces write `key: string`, the GUIDES rows write `'/route':
+  // g('…')`), so counting those is an independent answer to «how many», and the two answers
+  // disagreeing is the signal. If some future structure borrows the same spelling this will
+  // cry wolf — which is the right way round: a false alarm names the file and gets fixed,
+  // a silent miss is what this whole function exists to stop.
+  const declaredLessons = (src.match(/\bkey:\s*'/g) ?? []).length;
   const map = new Map();
-  for (const m of src.matchAll(/\{\s*key:\s*'([a-z0-9-]+)'[^}]*?\bsec:\s*(\d+(?:\.\d+)?)\s*,?\s*\}/g)) {
-    map.set(m[1], Number(m[2]));
+  const noSec = [];
+  for (const line of src.split('\n')) {
+    // `\bkey:` cannot match inside `titleKey:` (no word boundary there, and the case
+    // differs), and the quote keeps the `key: string` of the interface declaration out.
+    const key = line.match(/\bkey:\s*'([a-z0-9-]+)'/);
+    if (!key || !/\btitleKey:/.test(line)) continue; // a COURSE lesson, not a GUIDES row
+    const sec = line.match(/\bsec:\s*(\d+(?:\.\d+)?)/);
+    if (sec) map.set(key[1], Number(sec[1]));
+    else noSec.push(key[1]);
   }
-  // A parse that finds nothing would make every comparison below pass without comparing
-  // anything — the one failure worse than no check at all. guides.ts holds a lesson per
-  // recording (twenty of them) and will not plausibly hold fewer than ten, so an empty or
-  // near-empty map means the pattern has gone stale and must be fixed, not ignored.
+  if (noSec.length) {
+    throw new Error(`В ${file} у урока нет читаемого sec: ${noSec.join(', ')}. `
+      + `Либо поле потеряно, либо разбор устарел — в обоих случаях длительность этой записи `
+      + `сверять не с чем, а молча пропустить её значит объявить сторож работающим зря.`);
+  }
+  if (map.size + noSec.length !== declaredLessons) {
+    throw new Error(`В ${file} уроков ${declaredLessons}, а разобрано ${map.size + noSec.length}. `
+      + `Скорее всего урок записан не одной строкой — тогда он пропадает из разбора молча, `
+      + `и его длительность никто не сверит. Либо верните урок в одну строку, либо научите `
+      + `courseSeconds() его форме.`);
+  }
+  // And a floor under the whole thing: if the COURSE is ever rewritten in a shape where a
+  // lesson is not one line, nothing above matches, nothing is reported missing, and every
+  // comparison below would pass without comparing anything.
   if (map.size < 10) {
     throw new Error(`Не удалось прочитать длительности уроков из ${file}: найдено ${map.size}. `
       + `Разбор устарел — сверка длительностей превратилась бы в молчаливое «всё хорошо».`);

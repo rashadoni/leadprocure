@@ -162,7 +162,7 @@ const dict: Record<Lang, Record<string, string>> = {
     send: 'Göndər', proposal_text: 'Texniki təklif', response_text: 'Cavab (mətn)',
     guide: 'Video dərslik',
     guide_collapse: 'Kiçilt',
-    // ── Təlim bölməsi (/learn): on səkkiz lövhə, pulun yolu ilə bir sıraya düzülmüş.
+    // ── Təlim bölməsi (/learn): eyni lövhələr, pulun yolu ilə bir sıraya düzülmüş.
     learn: 'Təlim',
     learn_lead: 'Dərslər pulun sistemdə hərəkət etdiyi sıra ilə gedir — kim xərcləyə bilər, kimdən alırıq, nə qədər planlaşdırılıb, sonra sifariş, tender, müqavilə, təslim, hesab.',
     learn_lang_note: 'Səs azərbaycanca, interfeys isə sizin dilinizdə.',
@@ -543,7 +543,7 @@ const dict: Record<Lang, Record<string, string>> = {
     send: 'Отправить', proposal_text: 'Техническое предложение', response_text: 'Ответ (текст)',
     guide: 'Видео-инструкция',
     guide_collapse: 'Свернуть',
-    // ── Раздел «Обучение» (/learn): те же восемнадцать роликов, собранные в один порядок.
+    // ── Раздел «Обучение» (/learn): те же ролики, собранные в один порядок.
     learn: 'Обучение',
     learn_lead: 'Уроки идут в том порядке, в каком в системе двигаются деньги — кто имеет право тратить, у кого покупаем, сколько запланировано, дальше заявка, тендер, контракт, приёмка, счёт.',
     learn_lead_tip: 'Это не порядок меню: рабочий стол показывает то, что требует внимания, и понятен только после остального, поэтому он последний.',
@@ -922,7 +922,7 @@ const dict: Record<Lang, Record<string, string>> = {
     send: 'Send', proposal_text: 'Technical proposal', response_text: 'Response (text)',
     guide: 'Video guide',
     guide_collapse: 'Minimize',
-    // ── The course at /learn: the same eighteen recordings, put in one order.
+    // ── The course at /learn: the same recordings, put in one order.
     learn: 'Learning',
     learn_lead: 'The lessons follow the money rather than the menu — who may spend, whom we buy from, what is planned, then the request, the tender, the contract, delivery, the invoice.',
     learn_lang_note: 'The recordings are narrated in Azerbaijani; the interface stays in your language.',

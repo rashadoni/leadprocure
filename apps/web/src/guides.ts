@@ -82,7 +82,7 @@ export const SECTION_TITLE_KEY: Record<string, string> = {
 
 // ── The course behind /learn ────────────────────────────────────────────────────────────
 //
-// The same eighteen recordings, put in ONE order. The map above answers «what plays on
+// Every one of those recordings, put in ONE order. The map above answers «what plays on
 // this page»; this answers «in what order does a newcomer watch everything», and they are
 // different questions — the order here follows the money, not the menu: who may spend,
 // whom we buy from, how much is planned, the request, the tender, the contract, delivery,

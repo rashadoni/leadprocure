@@ -94,7 +94,7 @@ input:focus, select:focus, textarea:focus { outline: 0; border-color: var(--acce
    `:focus-visible`, never `:focus`: the browser paints it for keyboard and assistive
    navigation and withholds it after a mouse click, which matters beyond taste here — the
    guide recordings are driven by mouse (scripts/produce-guides.mjs), and a ring that
-   answered a click would appear in all eighteen of them.
+   answered a click would appear in every one of them.
 
    Measured, after the click, on the clicked link: `outline-style: none`, `outline-width: 3px`
    — nothing is drawn, and the 3px is merely the initial `medium`, since width is a separate
@@ -489,7 +489,7 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 
 /* ── Обучение (/learn) ──────────────────────────────────────────────────────────────────
    Two tracks side by side, each a plain bordered list rather than a grid of cards: the
-   rows are one line each and eighteen tiles would read as a wall. Nothing here scrolls
+   rows are one line each and a tile per lesson would read as a wall. Nothing here scrolls
    inside itself — the page scrolls, and the two columns end wherever their lists end. */
 .learn-head { padding-bottom: 14px; }
 .learn-head-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
