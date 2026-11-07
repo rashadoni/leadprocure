@@ -349,6 +349,10 @@ const dict: Record<Lang, Record<string, string>> = {
     integrations: 'İnteqrasiyalar', integ_1c: '1C üçün qaimələri ixrac et (CSV)', integ_standards: 'Standart ixraclar: OCDS (tenderlər/qaliblər) — tender kartında; UBL/Peppol (e-qaimə) — qaimədə.',
     from: 'Başlanğıc', to: 'Son', not_found: 'Səhifə tapılmadı', back_home: 'Əsas səhifəyə qayıt',
     tip_activate: 'Müqaviləni aktivləşdir — sifariş vermək olar', tip_create_po: 'Müqavilə üzrə sifariş (PO) yarat',
+    // Auksionda qiymət gizli deyil — mexanizm elə canlı qiymətdir; gizli qalan odur ki,
+    // qiymət kimindir. «Möhürlü» sözləri bu şəkilə yad idi.
+    auction_amounts_note: 'Qiymət canlı gedir — ən yaxşısı yuxarıdadır; kimin olduğu açılışda bilinir.',
+    auction_in_play: 'Təklif verir',
     tip_catalog_from: 'Müqavilədən kataloq yarat', tip_receive: 'Gələn malı qəbul et', tip_amend: 'Sifarişə dəyişiklik təklif et (say/qiymət)',
     tip_inv_approve: 'Qaiməni ödənişə təsdiqlə', tip_inv_reject: 'Qaiməni rədd et', tip_pay: 'Qaiməni ödənilmiş kimi işarələ',
     tip_supplier_approve: 'Təchizatçını təsdiqlə — birbaşa sifariş və kataloqlar açılır', tip_supplier_block: 'Blokla — təchizatçı sifariş ala bilməyəcək',
@@ -728,6 +732,10 @@ const dict: Record<Lang, Record<string, string>> = {
     integrations: 'Интеграции', integ_1c: 'Экспорт счетов для 1С (CSV)', integ_standards: 'Стандартные выгрузки: OCDS (тендеры/награждения) — на карточке тендера; UBL/Peppol (э-счёт) — на счёте.',
     from: 'От', to: 'До', not_found: 'Страница не найдена', back_home: 'Вернуться на главную',
     tip_activate: 'Активировать контракт — можно выпускать заказы', tip_create_po: 'Сформировать заказ (PO) по контракту',
+    // В аукционе цена не секрет — живая цена и есть механизм; секрет — чья она.
+    // Слова от запечатанного конверта этой картине были чужими.
+    auction_amounts_note: 'Цена идёт живым торгом — лучшая выше; чья она, станет видно при вскрытии.',
+    auction_in_play: 'Торгуется',
     tip_catalog_from: 'Создать каталог из контракта', tip_receive: 'Оприходовать полученный товар', tip_amend: 'Предложить изменение заказа (кол-во/цена)',
     tip_inv_approve: 'Одобрить счёт к оплате', tip_inv_reject: 'Отклонить счёт', tip_pay: 'Отметить счёт оплаченным',
     tip_supplier_approve: 'Одобрить поставщика — открываются прямые заказы и каталоги', tip_supplier_block: 'Заблокировать — поставщик не сможет получать заказы',
@@ -1107,6 +1115,10 @@ const dict: Record<Lang, Record<string, string>> = {
     integrations: 'Integrations', integ_1c: 'Export invoices for 1C (CSV)', integ_standards: 'Standard exports: OCDS (tenders/awards) on the tender page; UBL/Peppol (e-invoice) on the invoice.',
     from: 'From', to: 'To', not_found: 'Page not found', back_home: 'Back to home',
     tip_activate: 'Activate the contract — orders can be issued', tip_create_po: 'Create a purchase order from the contract',
+    // In an auction the price is not a secret — the running price IS the mechanism; whose
+    // price it is stays sealed. The sealed-envelope words never fitted this picture.
+    auction_amounts_note: 'The price is bid live — the best is above; whose it is shows at the opening.',
+    auction_in_play: 'Bidding',
     tip_catalog_from: 'Create a catalog from the contract', tip_receive: 'Record the goods received', tip_amend: 'Propose a change order (qty / price)',
     tip_inv_approve: 'Approve the invoice for payment', tip_inv_reject: 'Reject the invoice', tip_pay: 'Mark the invoice as paid',
     tip_supplier_approve: 'Approve the supplier — unlocks direct orders and catalogs', tip_supplier_block: 'Block — the supplier can no longer receive orders',
