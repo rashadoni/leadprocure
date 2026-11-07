@@ -460,7 +460,14 @@ describe('sealed RFQ end-to-end flow', () => {
     expect(po.body.items).toHaveLength(1);
     expect(Number(po.body.total_minor)).toBe(100_000);
 
-    // the supplier can see the PO (cross-org) and received a notification
+    // A draft is the buyer still writing: the supplier is not told and cannot look (0045).
+    const draftOrders = await http().get('/orders').set(...bearer(supplierToken)).expect(200);
+    expect(draftOrders.body.items.map((p: any) => p.id)).not.toContain(po.body.id);
+    const quiet = await http().get('/notifications').set(...bearer(supplierToken)).expect(200);
+    expect(quiet.body.some((n: any) => n.payload?.po_id === po.body.id)).toBe(false);
+
+    // Issuing is what sends it — and from here it is cross-org, as it always was.
+    await http().post(`/orders/${po.body.id}/status`).set(...bearer(buyerToken)).send({ status: 'ISSUED' }).expect(201);
     const supOrders = await http().get('/orders').set(...bearer(supplierToken)).expect(200);
     expect(supOrders.body.items.map((p: any) => p.id)).toContain(po.body.id);
     const notes = await http().get('/notifications').set(...bearer(supplierToken)).expect(200);

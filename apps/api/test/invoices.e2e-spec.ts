@@ -82,6 +82,9 @@ describe('invoices + 3-way match', () => {
       .send({ items: [{ poItemId, qty: 10, unitPriceMinor: 120_000 }] }).expect(201);
     expect(inv.body.status).toBe('DISPUTED');
     expect(inv.body.match.lines[0].price_ok).toBe(false);
+    // The buyer decides whether to pay this from the match table, and a table of bare
+    // numbers cannot say which line failed on an invoice with several of them.
+    expect(inv.body.match.lines[0].name).toBe('Widget');
   });
 
   it('buyer approves and pays a matched invoice', async () => {

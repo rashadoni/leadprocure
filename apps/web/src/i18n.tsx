@@ -325,6 +325,7 @@ const dict: Record<Lang, Record<string, string>> = {
     invoice_no_billable: 'Qaimə üçün qəbul edilmiş qalıq yoxdur.',
     invoice_list_loading: 'Qaimələr yüklənir…', invoice_list_error: 'Qaimələr siyahısını yükləmək mümkün olmadı.', invoice_list_retry: 'Yenidən yoxla',
     invoice_details_error: 'Qaimənin təfərrüatlarını yükləmək mümkün olmadı. Yenidən yoxlayın.',
+    inv_why_price: 'qiymət sifarişdəkindən yüksəkdir', inv_why_qty: 'miqdar qəbul edilmişdən çoxdur', inv_billable: 'qaimələnə bilər',
     inv_net: 'ƏDV-siz məbləğ', inv_vat: 'ƏDV', inv_match: 'Üçtərəfli uyğunlaşdırma', inv_price: 'Qaimə qiyməti', inv_po_price: 'Sifariş qiyməti', inv_qty: 'Qaimə miqdarı', inv_received: 'Qəbul edilmiş miqdar', inv_ok: 'Uyğundur',
     po_act_ISSUED: 'Sifarişi ver', po_act_CONFIRMED: 'Təsdiqlə', po_act_PACKED: 'Qablaşdırıldı',
     po_act_SHIPPED: 'Göndər', po_act_DELIVERED: 'Çatdırıldı', po_act_ACCEPTED: 'Qəbul et',
@@ -349,6 +350,7 @@ const dict: Record<Lang, Record<string, string>> = {
     integrations: 'İnteqrasiyalar', integ_1c: '1C üçün qaimələri ixrac et (CSV)', integ_standards: 'Standart ixraclar: OCDS (tenderlər/qaliblər) — tender kartında; UBL/Peppol (e-qaimə) — qaimədə.',
     from: 'Başlanğıc', to: 'Son', not_found: 'Səhifə tapılmadı', back_home: 'Əsas səhifəyə qayıt',
     tip_activate: 'Müqaviləni aktivləşdir — sifariş vermək olar', tip_create_po: 'Müqavilə üzrə sifariş (PO) yarat',
+    tip_po_issue: 'Qaralama sifarişi yalnız siz görürsünüz — «ver» onu təchizatçıya göndərir.',
     // Auksionda qiymət gizli deyil — mexanizm elə canlı qiymətdir; gizli qalan odur ki,
     // qiymət kimindir. «Möhürlü» sözləri bu şəkilə yad idi.
     auction_amounts_note: 'Qiymət canlı gedir — ən yaxşısı yuxarıdadır; kimin olduğu açılışda bilinir.',
@@ -708,6 +710,7 @@ const dict: Record<Lang, Record<string, string>> = {
     invoice_no_billable: 'Нет принятого остатка для выставления счёта.',
     invoice_list_loading: 'Загрузка счетов…', invoice_list_error: 'Не удалось загрузить список счетов.', invoice_list_retry: 'Повторить',
     invoice_details_error: 'Не удалось загрузить сведения счёта. Повторите попытку.',
+    inv_why_price: 'цена выше, чем в заказе', inv_why_qty: 'количество больше принятого', inv_billable: 'можно выставить',
     inv_net: 'Без НДС', inv_vat: 'НДС', inv_match: 'Трёхсторонняя сверка', inv_price: 'Цена в счёте', inv_po_price: 'Цена в заказе', inv_qty: 'Количество в счёте', inv_received: 'Принятое количество', inv_ok: 'Совпадает',
     po_act_ISSUED: 'Выпустить', po_act_CONFIRMED: 'Подтвердить', po_act_PACKED: 'Упаковано',
     po_act_SHIPPED: 'Отгрузить', po_act_DELIVERED: 'Доставлено', po_act_ACCEPTED: 'Принять',
@@ -732,6 +735,7 @@ const dict: Record<Lang, Record<string, string>> = {
     integrations: 'Интеграции', integ_1c: 'Экспорт счетов для 1С (CSV)', integ_standards: 'Стандартные выгрузки: OCDS (тендеры/награждения) — на карточке тендера; UBL/Peppol (э-счёт) — на счёте.',
     from: 'От', to: 'До', not_found: 'Страница не найдена', back_home: 'Вернуться на главную',
     tip_activate: 'Активировать контракт — можно выпускать заказы', tip_create_po: 'Сформировать заказ (PO) по контракту',
+    tip_po_issue: 'Пока заказ в черновике, поставщик его не видит — «выпустить» и значит отправить.',
     // В аукционе цена не секрет — живая цена и есть механизм; секрет — чья она.
     // Слова от запечатанного конверта этой картине были чужими.
     auction_amounts_note: 'Цена идёт живым торгом — лучшая выше; чья она, станет видно при вскрытии.',
@@ -1091,6 +1095,7 @@ const dict: Record<Lang, Record<string, string>> = {
     invoice_no_billable: 'No received quantity remains to invoice.',
     invoice_list_loading: 'Loading invoices…', invoice_list_error: 'Could not load invoices.', invoice_list_retry: 'Retry',
     invoice_details_error: 'Could not load invoice details. Please try again.',
+    inv_why_price: 'price is above the order', inv_why_qty: 'quantity exceeds what was received', inv_billable: 'still billable',
     inv_net: 'Net amount', inv_vat: 'VAT', inv_match: 'Three-way match', inv_price: 'Invoice price', inv_po_price: 'Order price', inv_qty: 'Invoice quantity', inv_received: 'Received quantity', inv_ok: 'Matched',
     po_act_ISSUED: 'Issue', po_act_CONFIRMED: 'Confirm', po_act_PACKED: 'Packed',
     po_act_SHIPPED: 'Ship', po_act_DELIVERED: 'Delivered', po_act_ACCEPTED: 'Accept',
@@ -1115,6 +1120,7 @@ const dict: Record<Lang, Record<string, string>> = {
     integrations: 'Integrations', integ_1c: 'Export invoices for 1C (CSV)', integ_standards: 'Standard exports: OCDS (tenders/awards) on the tender page; UBL/Peppol (e-invoice) on the invoice.',
     from: 'From', to: 'To', not_found: 'Page not found', back_home: 'Back to home',
     tip_activate: 'Activate the contract — orders can be issued', tip_create_po: 'Create a purchase order from the contract',
+    tip_po_issue: 'A draft order is yours alone — issuing is what sends it to the supplier.',
     // In an auction the price is not a secret — the running price IS the mechanism; whose
     // price it is stays sealed. The sealed-envelope words never fitted this picture.
     auction_amounts_note: 'The price is bid live — the best is above; whose it is shows at the opening.',

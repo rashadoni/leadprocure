@@ -81,7 +81,9 @@ export class ContractsService {
       );
     }
     await this.audit.record('PO_CREATED', 'purchase_order', po.id, { request_id: requestId, direct: true, total_minor: total });
-    await this.notify.notifyOrg(supplierOrgId, 'DIRECT_ORDER_CREATED', { po_no: poNo, po_id: po.id });
+    // No word to the supplier yet: the order is a DRAFT and they cannot open it (migration
+    // 0045). They are told when it is issued — see `setOrderStatus`, which is also the
+    // moment the row becomes theirs to read.
     return this.getOrder(po.id);
   }
 
@@ -510,6 +512,13 @@ export class ContractsService {
 
   async setOrderStatus(id: string, status: PoStatus, note: string | undefined, auth: AccessTokenPayload) {
     await lockOrder(this.rc.manager, id);
+    // Read it under the policies first. `po_apply_status` runs as the owner, so without
+    // this an order the caller cannot SEE still answers them — «Illegal transition DRAFT →
+    // CONFIRMED» names both its existence and its state. Since 0045 a supplier cannot see a
+    // draft, and a door that refuses differently is a door that answers. `createReceipt`
+    // above has always done exactly this.
+    const seen = await this.rc.manager.query(`SELECT 1 FROM purchase_orders WHERE id = $1`, [id]);
+    if (!seen.length) throw new NotFoundException('Order not found');
     try {
       const rows = await this.rc.manager.query(`SELECT * FROM po_apply_status($1, $2, $3)`, [
         id, status, note ?? null,
@@ -520,6 +529,17 @@ export class ContractsService {
       // Notify the OTHER party of the transition.
       const po = rows[0];
       const counterparty = auth.org_id === po.buyer_org_id ? po.supplier_org_id : po.buyer_org_id;
+      // Issuing is the moment the order arrives: before it the supplier could not see the
+      // row at all, so «new order» is said here rather than at creation. Which kind it is,
+      // the order itself says — a direct purchase is the only path that leaves
+      // `contract_id` empty, and a catalogue call-off is the only one with a contract and
+      // no request behind it (both tender paths carry `request_id` into the event). An
+      // order drawn against a contract gets the status line alone, as it always has.
+      if (status === 'ISSUED') {
+        const kind = po.contract_id == null ? 'DIRECT_ORDER_CREATED'
+          : po.request_id == null ? 'CATALOG_ORDER_CREATED' : null;
+        if (kind) await this.notify.notifyOrg(po.supplier_org_id, kind, { po_no: po.po_no, po_id: id });
+      }
       await this.notify.notifyOrg(counterparty, 'PO_STATUS_CHANGED', { po_no: po.po_no, po_id: id, status });
       return po;
     } catch (e: any) {

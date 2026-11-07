@@ -52,7 +52,7 @@ export class InvoicesService {
     for (const it of dto.items) {
       if (!Number.isInteger(it.unitPriceMinor) || it.unitPriceMinor < 0) throw new BadRequestException('unitPriceMinor must be a non-negative integer');
       if (!(Number(it.qty) > 0)) throw new BadRequestException('qty must be positive');
-      const poItem = (await m.query(`SELECT unit_price_minor, qty, vat_rate_bp FROM purchase_order_items WHERE id=$1 AND po_id=$2`, [it.poItemId, poId]))[0];
+      const poItem = (await m.query(`SELECT name, unit_price_minor, qty, vat_rate_bp FROM purchase_order_items WHERE id=$1 AND po_id=$2`, [it.poItemId, poId]))[0];
       if (!poItem) throw new BadRequestException(`Item ${it.poItemId} is not on this order`);
       const received = Number(
         (await m.query(`SELECT COALESCE(SUM(qty_received),0) AS r FROM goods_receipt_items WHERE po_item_id=$1`, [it.poItemId]))[0].r,
@@ -72,7 +72,10 @@ export class InvoicesService {
       const qtyOk = Number(it.qty) <= billable; // received, minus what was already invoiced
       if (!priceOk || !qtyOk) allOk = false;
       matchLines.push({
-        po_item_id: it.poItemId, price_ok: priceOk, qty_ok: qtyOk,
+        // The snapshot is what the match table is drawn from, and five columns of bare
+        // numbers do not say which line failed. The name is taken here, at submission,
+        // because the match is a record of what was checked and not a live join.
+        po_item_id: it.poItemId, name: poItem.name, price_ok: priceOk, qty_ok: qtyOk,
         invoice_price: it.unitPriceMinor, po_price: Number(poItem.unit_price_minor),
         invoice_qty: Number(it.qty), received, already_invoiced: invoiced, billable,
       });
