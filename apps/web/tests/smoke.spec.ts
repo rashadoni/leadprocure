@@ -343,7 +343,12 @@ test.describe('buyer panel', () => {
       expect(await idle(), `${path} scrolls sideways with every hint shut — a different fault`)
         .toBeLessThanOrEqual(1);
 
+      // Enumerated after the page has one, not on the way past: `[role=status]` with count
+      // 0 is also true before React draws anything at all, and a page counted then has no
+      // hints to hover — which is how this reported «no hint could be hovered» on the very
+      // page the measurement was made on.
       const tips = page.locator('[data-tip]');
+      await tips.first().waitFor({ state: 'visible', timeout: 20_000 });
       const over: string[] = [];
       let visible = 0;
       for (let i = 0; i < await tips.count(); i++) {
