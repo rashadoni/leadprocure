@@ -261,7 +261,8 @@ test.describe('buyer panel', () => {
       for (const width of [1440, 1280, 1024]) {
         await page.setViewportSize({ width, height: 900 });
         await page.goto(path);
-        await settle(page);
+        // `settle()` живёт в #133 и сюда ещё не приехал — ждём явно, тем же способом
+        await page.waitForLoadState('networkidle').catch(() => {});
         await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
         // покой: до первого наведения и после того, как всё долетело
         const base = await over();
