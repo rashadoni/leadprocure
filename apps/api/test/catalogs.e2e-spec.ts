@@ -59,9 +59,11 @@ describe('catalogs + instant re-order', () => {
       .send({ items: [{ catalogItemId: itemId, qty: 10 }] }).expect(201);
     existingOrderId = po.body.id;
     expect(Number(po.body.total_minor)).toBe(500_000); // 10 × 50k
-    // the PO reached the supplier
+    // …as a DRAFT, which is the buyer's alone: a call-off is an order like any other and
+    // reaches the supplier when it is issued, not when it is written (migration 0045).
+    // This line used to say «the PO reached the supplier» and assert the opposite.
     const supOrders = await http().get('/orders').set(...bearer(supplier)).expect(200);
-    expect(supOrders.body.items.map((p: any) => p.id)).toContain(po.body.id);
+    expect(supOrders.body.items.map((p: any) => p.id)).not.toContain(po.body.id);
   });
 
   it('supplier can read the catalog; a different buyer cannot', async () => {
@@ -78,6 +80,9 @@ describe('catalogs + instant re-order', () => {
 
   it('LP-A11 blocks new orders from an existing catalog while accepted obligations complete', async () => {
     await http().post(`/orders/${existingOrderId}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
+    // and now it has reached them — the other half of the assertion above
+    const issued = await http().get('/orders').set(...bearer(supplier)).expect(200);
+    expect(issued.body.items.map((p: any) => p.id)).toContain(existingOrderId);
     await http().post(`/orders/${existingOrderId}/status`).set(...bearer(supplier)).send({ status: 'CONFIRMED' }).expect(201);
     await http().post(`/suppliers/${supplierOrg}/invite`).set(...bearer(buyer)).expect(201);
     const relationships = (await http().get('/suppliers').set(...bearer(buyer)).expect(200)).body;
