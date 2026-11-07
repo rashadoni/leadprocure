@@ -16,6 +16,9 @@ describe('auth flow (API e2e)', () => {
   const email = `e2e-${randomUUID().slice(0, 8)}@acme.test`;
   let accessToken: string;
   let refreshCookie: string;
+  // The same person signed in somewhere else. Taken from the login below rather than from a
+  // login of its own: `/auth/login` is throttled to 10/min and this suite is near it.
+  let otherDevice: string;
   const sentMail: Mail[] = [];
 
   beforeAll(async () => {
@@ -77,6 +80,7 @@ describe('auth flow (API e2e)', () => {
       .post('/auth/login')
       .send({ email, password: 'password123' })
       .expect(201);
+    otherDevice = (login.get('Set-Cookie') ?? []).find((c: string) => c.startsWith('lp_refresh='))!.split(';')[0];
     const res = await request(app.getHttpServer())
       .get('/auth/me')
       .set('Authorization', `Bearer ${login.body.accessToken}`)
@@ -108,7 +112,7 @@ describe('auth flow (API e2e)', () => {
     expect(unknown).toBeGreaterThan(knownWrong * 0.3);
   });
 
-  it('rotates the cookie, tolerates a benign replay within leeway, but nukes the family on stale reuse', async () => {
+  it('rotates the cookie, tolerates a benign replay, and on stale reuse kills that chain and only it', async () => {
     const res = await request(app.getHttpServer())
       .post('/auth/refresh')
       .set('Cookie', refreshCookie)
@@ -126,8 +130,7 @@ describe('auth flow (API e2e)', () => {
     const replay = await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', oldCookie).expect(201);
     expect(replay.body.accessToken).toBeDefined();
 
-    // Theft: age the revoked tokens past the leeway, then reuse one → breach response
-    // that hard-revokes EVERY session for the user (including the still-live newCookie).
+    // Theft: age the revoked tokens past the leeway, then reuse one → breach response.
     const ds = app.get(DataSource);
     await ds.query(
       `UPDATE sessions SET revoked_at = now() - interval '1 hour'
@@ -136,7 +139,15 @@ describe('auth flow (API e2e)', () => {
       [email],
     );
     await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', oldCookie).expect(401);
+    // The whole chain dies, the just-issued token included: reuse proves two holders of it
+    // and there is no telling which is the thief.
     await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', newCookie).expect(401);
+
+    // …and the person's OTHER browser is untouched. It shares nothing with that chain but
+    // a user id, and until migration 0046 that was enough to sign it out too — which a
+    // person could trigger on their own by clicking before a bootstrap's refresh returned.
+    const survives = await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', otherDevice).expect(201);
+    expect(survives.body.accessToken).toBeDefined();
 
     // Re-establish a clean session for the remaining tests.
     const relogin = await request(app.getHttpServer()).post('/auth/login').send({ email, password: 'password123' }).expect(201);
