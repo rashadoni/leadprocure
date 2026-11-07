@@ -244,6 +244,49 @@ test.describe('buyer panel', () => {
     await expect(page.locator('text=AZN').first()).toBeVisible({ timeout: 10_000 });
   });
 
+  // Hovering a hint must not move the page. The bubble is centred on its host, so on an
+  // element near the right edge half of it lands past the window — and a box past the edge
+  // is part of the width the page can scroll. Measured at 1280 before the fix: +82px on the
+  // block button here, +71px on the last KPI tile, +57px on the row menus of Бюджеты.
+  //
+  // `assertNoSidewaysScroll` could never see this: it HIDES every bubble before measuring,
+  // which is right for its own question and blind to this one. So this test opens them.
+  // Both pages carried an offender; both are checked with their own baseline, and the count
+  // of bubbles that actually opened is asserted — an empty list of offenders proves nothing
+  // if nothing ever opened.
+  test('no hint pushes the page sideways', async () => {
+    for (const path of ['/buyer/suppliers', '/buyer/dashboard']) {
+      await page.goto(path);
+      await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+      const idle = () => page.evaluate(() =>
+        document.scrollingElement!.scrollWidth - document.scrollingElement!.clientWidth);
+      const base = await idle();
+      expect(base, `${path} scrolls sideways with every hint shut — a different fault`).toBeLessThanOrEqual(1);
+
+      const tips = page.locator('[data-tip]');
+      const over: string[] = [];
+      let opened = 0;
+      for (let i = 0; i < await tips.count(); i++) {
+        const tip = tips.nth(i);
+        if (!(await tip.isVisible())) continue;
+        if (!await tip.hover({ timeout: 2000 }).then(() => true, () => false)) continue;
+        const seen = await tip.evaluate((node) => ({
+          width: parseFloat(getComputedStyle(node as Element, '::after').width) || 0,
+          scroll: document.scrollingElement!.scrollWidth - document.scrollingElement!.clientWidth,
+          text: (node.getAttribute('data-tip') ?? '').slice(0, 30),
+        }));
+        if (seen.width > 20) opened++;
+        if (seen.scroll - base > 1) over.push(`+${seen.scroll - base}px on «${seen.text}…»`);
+        await page.mouse.move(2, 2);
+        // the bubble fades out before the next one is measured, or its width would be
+        // counted against its neighbour
+        await page.waitForTimeout(160);
+      }
+      expect(opened, `${path}: not one bubble opened — nothing was measured`).toBeGreaterThan(0);
+      expect(over, `${path}: a hint pushed the page sideways`).toEqual([]);
+    }
+  });
+
   // A load that fails must SAY so. The KPI used to leave "…" on screen for ever — the page
   // never came back and never explained itself — because the only rejection handler was none.
   test('a failed dashboard load reports itself, and Retry really retries', async () => {
