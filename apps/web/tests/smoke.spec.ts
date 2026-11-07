@@ -336,6 +336,10 @@ test.describe('buyer panel', () => {
       await expect(origin, `${path} does not say where its things come from`).toBeVisible();
       expect((await origin.innerText()).trim().length,
         `${path}: the line is there and empty — a caption that says nothing`).toBeGreaterThan(20);
+      // Waited for, not read on the way past: `[role=status]` having count 0 is also true
+      // before React draws the loader, so a list still in flight counts as empty.
+      await page.locator('tbody tr, [data-testid=list-empty], .state-empty').first()
+        .waitFor({ timeout: 20_000 }).catch(() => undefined);
       if (await page.locator('tbody tr').count()) withRows.push(path);
     }
     // Which of these four carry rows depends on the seed and on what the suite made before
