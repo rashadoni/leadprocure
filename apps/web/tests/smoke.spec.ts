@@ -710,6 +710,32 @@ test.describe('supplier panel', () => {
     await page.waitForURL((url) => !url.pathname.startsWith('/buyer'), { timeout: 10_000 });
   });
 
+  // The course's own door, asked as BEHAVIOUR rather than as a declaration.
+  //
+  // learn-course.spec.ts already compares each lesson's `roles` with the array the router
+  // guards that path with — but that compares two declarations, and would stay green if
+  // `Protected` ever stopped deciding by `org.role`. The test above pins `Protected`
+  // itself; this pins the button. The second half is what makes it a result: if a lesson
+  // offered a door the route shuts, `Protected` would send this click to the home page,
+  // and the URL assertion reds whatever the guard reads internally.
+  //
+  // The door is drawn inside the PLAYER, not on the row — one button for the lesson being
+  // watched, not eighteen on the list — so each half has to open its lesson first. Rows
+  // carry `data-lesson`, so neither half is picked by position or by translated text.
+  test('the course offers a supplier only the doors a supplier may open', async () => {
+    await page.goto('/learn');
+    await page.locator('[data-lesson="buyer-budgets"]').getByTestId('learn-play').click();
+    await expect(page.getByTestId('learn-video')).toHaveAttribute('src', '/guides/buyer-budgets.az.webm');
+    await expect(page.getByTestId('learn-goto'),
+      'a supplier is offered the buyer budgets page, which the router will refuse').toHaveCount(0);
+    await page.keyboard.press('Escape');
+
+    await page.locator('[data-lesson="sup-verification"]').getByTestId('learn-play').click();
+    await page.getByTestId('learn-goto').click();
+    await expect(page, 'the door the course offered did not open — Protected refused it')
+      .toHaveURL(/\/supplier\/verification$/);
+  });
+
   // Two page headings on one screen, and a column of buttons a supplier can never press.
   // Both tables on this page belong to the buyer's side of the contract; the supplier only
   // reads them, so the actions column is not drawn at all rather than taking its width on
