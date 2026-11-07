@@ -486,6 +486,38 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
    ════════════════════════════════════════════════════════════════════════════════════ */
 .topbar, .menu-back, .side-close { display: none; }
 
+
+/* ── Обучение (/learn) ──────────────────────────────────────────────────────────────────
+   Two tracks side by side, each a plain bordered list rather than a grid of cards: the
+   rows are one line each and eighteen tiles would read as a wall. Nothing here scrolls
+   inside itself — the page scrolls, and the two columns end wherever their lists end. */
+.learn-head { padding-bottom: 14px; }
+.learn-head-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.learn-lead { max-width: 76ch; margin: 0; }
+.learn-count { flex: none; font-size: 13px; white-space: nowrap; }
+.learn-note { font-size: 12px; margin: 8px 0 0; }
+.learn-progress { height: 4px; border-radius: 2px; background: var(--border); margin-top: 12px; overflow: hidden; }
+.learn-progress > div { height: 4px; background: var(--accent); border-radius: 2px; transition: width .2s; }
+
+.learn-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px; align-items: start; }
+.learn-track { margin-bottom: 0; }
+.learn-track-title { margin: 0; }
+.learn-track-sub { font-size: 12px; margin-bottom: 6px; }
+.learn-list { list-style: none; margin: 0; padding: 0; }
+.learn-row { display: flex; align-items: center; gap: 10px; padding: 7px 0;
+  border-top: 1px solid var(--panel2); }
+/* The row to carry on with is marked by its own fill and by the word on its button —
+   never by colour alone, which a monochrome screen and a colour-blind reader both lose. */
+.learn-row.is-next { background: var(--panel2); margin: 0 -8px; padding: 7px 8px; border-radius: 8px; }
+.learn-num { flex: none; width: 18px; text-align: center; font-size: 12px; color: var(--muted); }
+.learn-num.is-done { color: var(--ok); font-weight: 700; }
+.learn-title { flex: 1; min-width: 0; font-size: 13px; }
+.learn-len { flex: none; font-size: 12px; font-variant-numeric: tabular-nums; }
+.learn-play { flex: none; }
+.learn-modal-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.learn-modal-title { margin-right: auto; color: #fff; font-size: 13px; font-weight: 600; }
+
 @media (max-width: 1100px) {
   /* The rail leaves the flow, so the grid and the gradient that painted its stripe go with
      it — otherwise a 232px band of dark green runs down a page that has no menu in it. */
@@ -507,6 +539,13 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
   .topbar-brand { font-weight: 800; font-size: 15px; letter-spacing: -.01em;
     background: linear-gradient(90deg, #34d399, #a7f3d0); -webkit-background-clip: text;
     background-clip: text; color: transparent; }
+  /* One column under the breakpoint: two lists of 13px rows with a duration and a button
+     on each cannot both fit a phone, and a row that wraps turns a one-line lesson into
+     three. */
+  .learn-grid { grid-template-columns: minmax(0, 1fr); }
+  .learn-head-top { flex-direction: column; gap: 8px; }
+  .learn-count { white-space: normal; }
+
   /* A word, not a hamburger on its own — an icon with no word beside it is not read. */
   .menu-btn { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-weight: 600;
     background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .28); color: #fff;

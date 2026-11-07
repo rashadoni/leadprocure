@@ -198,6 +198,45 @@ test.describe('buyer panel', () => {
     await assertRenders(page, '/buyer/suppliers', /Поставщики|Suppliers|Təchizatçı/);
     await assertRenders(page, '/buyer/verification', /Верификация|Verification|Yoxlama/);
     await assertRenders(page, '/buyer/settings', /Настройки|Settings|Parametr/);
+    await assertRenders(page, '/learn', /Обучение|Learning|Təlim/);
+  });
+
+  // The course on /learn is the one screen a person meets before they know the product, so
+  // the three things it promises are measured rather than reviewed: that it offers every
+  // recording there is, that the file behind a lesson is really served, and that it leads
+  // back into the section it just explained.
+  //
+  // The VIDEO's bytes are not asserted, deliberately: this job checks out the posters and
+  // leaves the 164 MB of .webm as LFS pointers (see acceptance.yml), so a `readyState`
+  // assertion here would fail for the recordings' absence and read as a broken player. The
+  // poster is a real file in CI, and it shares a name and a directory with its video — so a
+  // poster that answers with a real PNG is what proves the path, and the video is asserted
+  // to answer at all.
+  test('the course offers every lesson and leads into the section it explains', async () => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/learn');
+    const rows = page.getByTestId('learn-row');
+    await expect(rows).toHaveCount(18);
+    // A fresh context has watched nothing, so the count is the whole course and the first
+    // lesson is the one offered to carry on with.
+    await expect(page.getByTestId('learn-count')).toContainText('0 / 18');
+    await expect(rows.first()).toHaveClass(/is-next/);
+
+    await rows.first().getByTestId('learn-play').click();
+    const video = page.getByTestId('learn-video');
+    await expect(video).toHaveAttribute('src', '/guides/buyer-settings.az.webm');
+    const poster = await page.request.get('/guides/buyer-settings.az.png');
+    expect(poster.status(), 'the lesson poster is not served').toBe(200);
+    expect((await poster.body()).length,
+      'the poster is a 132-byte LFS pointer, not a picture — git lfs pull').toBeGreaterThan(1000);
+    expect((await page.request.get('/guides/buyer-settings.az.webm')).status(),
+      'the lesson recording is not served at all').toBe(200);
+
+    // The way back into the product. The lesson is about Settings, the viewer is a buyer
+    // admin, so the door is drawn and the route behind it opens.
+    await page.getByTestId('learn-goto').click();
+    await expect(page).toHaveURL(/\/buyer\/settings$/);
+    await expect(page.getByTestId('learn-video')).toHaveCount(0);
   });
 
   test('dashboard shows real KPI money', async () => {
@@ -420,13 +459,13 @@ test.describe('buyer panel', () => {
   // sideways at any width, because the way of getting out of that which was refused is a
   // table that scrolls inside itself.
   test('every buyer screen fits a phone, a tablet and a desktop, and the menu is reachable at each', async () => {
-    // Twelve cold loads, each waited out to its list, then measured at four widths. Well
+    // Thirteen cold loads, each waited out to its list, then measured at four widths. Well
     // inside this on a warm bundle, but the suite's own 90s default leaves no room on a
     // slow hosted runner, and a timeout here would read as an overflow.
     test.setTimeout(180_000);
     for (const path of ['/buyer/dashboard', '/buyer/requests', '/buyer/events', '/buyer/contracts',
       '/buyer/invoices', '/buyer/catalogs', '/buyer/budgets', '/buyer/analytics', '/buyer/logistics',
-      '/buyer/suppliers', '/buyer/verification', '/buyer/settings']) {
+      '/buyer/suppliers', '/buyer/verification', '/buyer/settings', '/learn']) {
       await assertFitsEveryWidth(page, path);
     }
     // A tender's own page is the widest thing a buyer opens, and the only one that needs an
@@ -514,6 +553,7 @@ test.describe('supplier panel', () => {
     await assertRenders(page, '/supplier/invoices', /Счета|Invoices|Qaimə/);
     await assertRenders(page, '/supplier/catalogs', /Каталоги|Catalogs|Kataloq/);
     await assertRenders(page, '/supplier/verification', /Верификация|Verification|Yoxlama/);
+    await assertRenders(page, '/learn', /Обучение|Learning|Təlim/);
   });
 
   // An empty market and a market that failed to load used to look identical — the supplier
@@ -670,6 +710,32 @@ test.describe('supplier panel', () => {
     await page.waitForURL((url) => !url.pathname.startsWith('/buyer'), { timeout: 10_000 });
   });
 
+  // The course's own door, asked as BEHAVIOUR rather than as a declaration.
+  //
+  // learn-course.spec.ts already compares each lesson's `roles` with the array the router
+  // guards that path with — but that compares two declarations, and would stay green if
+  // `Protected` ever stopped deciding by `org.role`. The test above pins `Protected`
+  // itself; this pins the button. The second half is what makes it a result: if a lesson
+  // offered a door the route shuts, `Protected` would send this click to the home page,
+  // and the URL assertion reds whatever the guard reads internally.
+  //
+  // The door is drawn inside the PLAYER, not on the row — one button for the lesson being
+  // watched, not eighteen on the list — so each half has to open its lesson first. Rows
+  // carry `data-lesson`, so neither half is picked by position or by translated text.
+  test('the course offers a supplier only the doors a supplier may open', async () => {
+    await page.goto('/learn');
+    await page.locator('[data-lesson="buyer-budgets"]').getByTestId('learn-play').click();
+    await expect(page.getByTestId('learn-video')).toHaveAttribute('src', '/guides/buyer-budgets.az.webm');
+    await expect(page.getByTestId('learn-goto'),
+      'a supplier is offered the buyer budgets page, which the router will refuse').toHaveCount(0);
+    await page.keyboard.press('Escape');
+
+    await page.locator('[data-lesson="sup-verification"]').getByTestId('learn-play').click();
+    await page.getByTestId('learn-goto').click();
+    await expect(page, 'the door the course offered did not open — Protected refused it')
+      .toHaveURL(/\/supplier\/verification$/);
+  });
+
   // Two page headings on one screen, and a column of buttons a supplier can never press.
   // Both tables on this page belong to the buyer's side of the contract; the supplier only
   // reads them, so the actions column is not drawn at all rather than taking its width on
@@ -710,6 +776,16 @@ test.describe('supplier panel', () => {
     test.setTimeout(180_000);
     // The card layout itself is proved on the buyer's side, on a table that cannot be empty;
     // it is one shared mechanism, so what is asked here is the widths and the menu.
+    // `/learn` is NOT in this list, and that is a decision rather than an omission: it is
+    // one component with one layout for both roles — the only role-dependent thing on it is
+    // the door inside the player, which no width touches — and the buyer's walk above
+    // measures it at all five widths. Measured here as well it bought nothing and cost this
+    // chain a cold load: the supplier describe shares ONE page across its tests, every
+    // `goto` is a cold load (the access token lives in memory), and /learn is the only page
+    // in the product that waits for no list, so the next load starts while its own
+    // `/auth/refresh` is still in flight. The run on 0576a38 ended with this test looking at
+    // the LOGIN page — the session was gone before the menu was asked for — while the
+    // buyer's thirteen-page walk with /learn in it passed in that same run, twice.
     for (const path of ['/supplier/dashboard', '/supplier/market', '/supplier/orders',
       '/supplier/contracts', '/supplier/invoices', '/supplier/catalogs', '/supplier/verification']) {
       await assertFitsEveryWidth(page, path);
@@ -723,6 +799,11 @@ test.describe('supplier panel', () => {
     await page.setViewportSize({ width: 375, height: 820 });
     await page.goto('/supplier/orders');
     const rail = page.locator('.side');
+    // The session first, and before the two checks below rather than after: on the login
+    // page `.side` does not exist, so «the rail is hidden» passes vacuously and the failure
+    // surfaces as a missing ☰ — which reads as a broken narrow layout. It is not one.
+    await expect(page.getByRole('button', { name: /^☰/ }),
+      'the supplier session is gone — this is not a layout failure').toBeVisible({ timeout: 20_000 });
     await expect(rail).toBeHidden();
     const menu = page.getByRole('button', { name: /^☰/ });
     await expect(menu).toContainText('Menu');
