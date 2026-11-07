@@ -154,6 +154,11 @@ describe('order card (API e2e)', () => {
       contractNo = contract.contract_no;
       await http().post(`/contracts/${contract.id}/activate`).set(...bearer(buyer)).expect(201);
       contractPoId = (await http().post(`/contracts/${contract.id}/orders`).set(...bearer(buyer)).expect(201)).body.id;
+      // An order against a contract is born a DRAFT like any other, and a draft is the
+      // buyer's alone (migration 0045) — the supplier's half of this block reads it, so the
+      // buyer issues it first. Without this the two tests below answer 404, which is how
+      // the suite caught the omission in the change that introduced the rule.
+      await http().post(`/orders/${contractPoId}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
     });
 
     it('names the contract and links to the tender, for the buyer', async () => {
