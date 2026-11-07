@@ -975,7 +975,10 @@ describe('budgets & commitment control (API e2e)', () => {
       // product had put there. The remainder belongs to the last month, which is what the
       // save path's own tests below already assume (`i === 11 ? 833 + 4 : 833`).
       const totalBp = ph.months.reduce((n: number, m: any) => n + m.shareBp, 0);
-      expect(totalBp, 'the even split does not add up to 100% — the editor opens in error').toBe(10000);
+      // (no message argument: this suite is jest, where `expect` takes one — the two-argument
+      // form is vitest's, and it is what the web package next door uses. The reason lives in
+      // the comment above instead.)
+      expect(totalBp).toBe(10000);
       expect(ph.months[11].shareBp).toBe(837); // 833×11 + 837 = 10000
       // and the money follows the shares: the parts have to add back to the plan
       const totalMinor = ph.months.reduce((n: number, m: any) => n + m.amountMinor, 0);
