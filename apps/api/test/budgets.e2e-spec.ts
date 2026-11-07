@@ -1044,7 +1044,13 @@ describe('budgets & commitment control (API e2e)', () => {
     it('clearing the phasing returns the budget to an even split', async () => {
       const cleared = (await http().put(`/budgets/${phasedId}/phasing`).set(...bearer(buyerA)).send({ months: [] }).expect(200)).body;
       expect(cleared.phased).toBe(false);
-      expect(cleared.months[11].shareBp).toBe(833);
+      // The last month carries the rounding remainder, so it is 837 where the other eleven
+      // are 833 — this line asked for 833 and so was asserting the old defect: an even split
+      // that added to 99.96%. What matters after clearing is that the set is SAVEABLE again,
+      // which is the sum, not any one month.
+      expect(cleared.months[11].shareBp).toBe(837);
+      expect(cleared.months.slice(0, 11).every((m: any) => m.shareBp === 833)).toBe(true);
+      expect(cleared.months.reduce((n: number, m: any) => n + m.shareBp, 0)).toBe(10000);
     });
 
     it('a closed period cannot be re-phased', async () => {
