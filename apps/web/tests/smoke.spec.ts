@@ -329,6 +329,7 @@ test.describe('buyer panel', () => {
   // Asserted with rows present on purpose: an empty list would prove the old behaviour.
   test('every list says where its things come from, with rows on screen', async () => {
     const withRows: string[] = [];
+    const besideAnEmptyList: string[] = [];
     for (const path of ['/buyer/events', '/buyer/contracts', '/buyer/logistics', '/buyer/catalogs']) {
       await page.goto(path);
       await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
@@ -341,11 +342,17 @@ test.describe('buyer panel', () => {
       await page.locator('tbody tr, [data-testid=list-empty], .state-empty').first()
         .waitFor({ timeout: 20_000 }).catch(() => undefined);
       if (await page.locator('tbody tr').count()) withRows.push(path);
+      if (await page.locator('[data-testid=list-empty], .state-empty').count()) besideAnEmptyList.push(path);
     }
-    // Which of these four carry rows depends on the seed and on what the suite made before
-    // this point, so no single page is required to have them — but if NONE did, every
-    // assertion above just re-measured the empty state, which is where the line always was.
-    expect(withRows, 'not one section had rows — the old behaviour would pass this test')
+    // The old behaviour cannot pass the loop above: there was no caption element at all —
+    // the sentence lived inside the empty state and nowhere else. This last line pins the
+    // other half of that, and it is the half this stand can actually show: on a section
+    // with no rows the caption and the empty line are BOTH on screen, two elements, not one
+    // sentence wearing a new name. (The seed makes no tenders, contracts, shipments or
+    // catalogues for this organisation, so `withRows` is usually empty here; where a
+    // section does have rows the same caption is above them, by construction — it is drawn
+    // outside the list, not by it.)
+    expect(besideAnEmptyList, 'no section was empty — this check proves nothing on this stand')
       .not.toEqual([]);
   });
 
