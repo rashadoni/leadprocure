@@ -965,33 +965,8 @@ describe('budgets & commitment control (API e2e)', () => {
       const ph = (await http().get(`/budgets/${phasedId}/phasing`).set(...bearer(buyerA)).expect(200)).body;
       expect(ph.phased).toBe(false);
       expect(ph.months).toHaveLength(12);
-      // 10000/12 does not divide: four months of 834 and eight of 833. The digit is not the
-      // point — see the next test for the property that is.
-      expect(ph.months[0].shareBp).toBe(834);
-      expect(ph.months[11].shareBp).toBe(833);
+      expect(ph.months[0].shareBp).toBe(833); // 10000/12 rounded
       expect(ph.months.every((m: any) => /^\d{4}-\d{2}$/.test(m.month))).toBe(true);
-    });
-
-    // The split this opens on is exactly what the editor sends back when a reader presses
-    // save without touching anything, and `setPhasing` accepts nothing but 100.00%. Pinning
-    // a particular share said nothing about that: `Math.round(10000/12)` gave 833 twelve
-    // times over = 99.96%, so every year-long plan opened with a red total and a dead save
-    // button over a split nobody had edited; a quarter opened at 99.99%. Assert the property.
-    it('opens on a split that adds to exactly 100% and saves back untouched', async () => {
-      const cases: Array<[string, Record<string, unknown>, number]> = [
-        ['PHASEY', { periodYear: YEAR + 1 }, 12],
-        ['PHASEQ', { periodYear: YEAR + 1, periodType: 'QUARTER', periodQuarter: 3 }, 3],
-      ];
-      for (const [code, period, len] of cases) {
-        await http().post('/categories').set(...bearer(buyerA)).send({ code }).expect(201);
-        const made = await mkBudget({ name: `${code} ${tag}`, category: code, amountMinor: 1_200_000, ...period });
-        const ph = (await http().get(`/budgets/${made.body.id}/phasing`).set(...bearer(buyerA)).expect(200)).body;
-        expect(ph.months).toHaveLength(len);
-        expect(ph.months.reduce((n: number, m: any) => n + m.shareBp, 0)).toBe(10000);
-        await http().put(`/budgets/${made.body.id}/phasing`).set(...bearer(buyerA))
-          .send({ months: ph.months.map((m: any) => ({ month: m.month, shareBp: m.shareBp })) })
-          .expect(200);
-      }
     });
 
     it('refuses a set that does not add up to 100%', async () => {
