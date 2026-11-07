@@ -1042,14 +1042,21 @@ export class BudgetsService {
     );
     const months = monthsOfPeriod(b.periodStart, b.periodEnd);
     const saved = new Map<string, number>(rows.map((r: any) => [r.month, Number(r.share_bp)]));
-    const evenBp = months.length ? Math.round(10000 / months.length) : 0;
+    // The even split has to add up to exactly 100.00%, because that is what saving one
+    // demands — and the editor opens on THIS list. `Math.round(10000 / n)` does not: a
+    // twelve-month plan came back as 833 × 12 = 99.96% and a quarter as 3333 × 3 = 99.99%,
+    // so the commonest period opened red with its save button dead, over a split the reader
+    // had never touched. The spare basis points go one each to the earliest months: every
+    // part stays rounded to a hundredth of a percent, and the whole comes out exact.
+    const base = months.length ? Math.floor(10000 / months.length) : 0;
+    const spare = months.length ? 10000 - base * months.length : 0;
     return {
       budgetId,
       phased: rows.length > 0,
       amountMinor: b.amountMinor,
-      months: months.map((m) => {
+      months: months.map((m, i) => {
         const month = m.slice(0, 7);
-        const shareBp = saved.get(month) ?? evenBp;
+        const shareBp = saved.get(month) ?? base + (i < spare ? 1 : 0);
         return { month, shareBp, amountMinor: Math.round((b.amountMinor * shareBp) / 10000) };
       }),
     };
