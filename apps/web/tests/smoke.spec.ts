@@ -239,6 +239,48 @@ test.describe('buyer panel', () => {
     await expect(page.getByTestId('learn-video')).toHaveCount(0);
   });
 
+  // ВРЕМЕННЫЙ замер для аудита, не гейт: какие подсказки двигают страницу вбок, когда
+  // открываются. Живёт внутри блока закупщика намеренно — у него уже есть вход, а третий
+  // вход в наборе упирается в 10 запросов в минуту на /auth/login (первая попытка так и
+  // упала, на своём же `login`).
+  test('ЗАМЕР: какие подсказки двигают страницу вбок', async () => {
+    test.setTimeout(300_000);
+    const found: string[] = [];
+    for (const path of ['/buyer/budgets', '/buyer/requests', '/buyer/contracts', '/buyer/invoices']) {
+      for (const width of [1440, 1280, 1024]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(path);
+        await settle(page);
+        await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+        const tips = page.locator('[data-tip]');
+        const n = await tips.count();
+        for (let i = 0; i < n; i++) {
+          const el = tips.nth(i);
+          if (!(await el.isVisible())) continue;
+          await el.hover({ timeout: 2000 }).catch(() => {});
+          const m = await el.evaluate((node) => {
+            const root = document.scrollingElement!;
+            const over = root.scrollWidth - root.clientWidth;
+            if (over <= 1) return null;
+            const c = getComputedStyle(node as Element, '::after');
+            const cell = (node as Element).closest('td, th');
+            return { over, host: `${node.tagName.toLowerCase()}.${(node as HTMLElement).className || '—'}`,
+              cell: cell ? `${cell.tagName.toLowerCase()}.${cell.className || '—'}` : '—',
+              right: Math.round((node as Element).getBoundingClientRect().right),
+              bubble: Math.round(parseFloat(c.width)),
+              tip: ((node as Element).getAttribute('data-tip') || '').slice(0, 40) };
+          });
+          if (m) found.push(`OVERFLOW ${path} @${width}: +${m.over}px · host ${m.host} · cell ${m.cell} · right ${m.right} · bubble ${m.bubble} · "${m.tip}"`);
+          await page.mouse.move(2, 2);
+        }
+      }
+    }
+    console.log('=== TIP OVERFLOW REPORT ===');
+    for (const line of found) console.log(line);
+    console.log(`=== TIP OVERFLOW TOTAL: ${found.length} ===`);
+    await page.setViewportSize({ width: 1280, height: 900 });
+  });
+
   test('dashboard shows real KPI money', async () => {
     await page.goto('/buyer/dashboard');
     await expect(page.locator('text=AZN').first()).toBeVisible({ timeout: 10_000 });
