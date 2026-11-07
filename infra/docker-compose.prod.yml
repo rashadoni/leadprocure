@@ -152,11 +152,40 @@ services:
       - "${TLS_WEB_PORT:-10443}:443"
       - "${TLS_S3_PORT:-10444}:444"
     volumes:
-      # шаблон, а не готовый конфиг: envsubst штатного образа подставит TLS_CERT_NAME
-      - ./nginx/leadprocure-tls.conf:/etc/nginx/templates/leadprocure-tls.conf.template:ro
-      # цикл перезагрузки — шагом entrypoint'а, а НЕ подменой command: штатный
-      # entrypoint отрисовывает шаблоны только когда команда начинается с «nginx»
-      - ./nginx/reload-loop.sh:/docker-entrypoint.d/50-reload-loop.sh:ro
+      # Оба файла — ДЛИННОЙ формой с `create_host_path: false`, и источник берётся из
+      # TLS_CONF_DIR, а не из каталога проекта. Причина замерена, а не предположена.
+      #
+      # Короткая форма `./nginx/x.conf:/dest:ro` при отсутствующем источнике не падает:
+      # демон СОЗДАЁТ на его месте КАТАЛОГ и монтирует его. Внутри контейнера шаблон
+      # становится каталогом, nginx поднимается «здоровым» и слушает только свой
+      # дефолтный :80 — то есть прод остаётся без HTTPS и без входа, молча. Замерено.
+      # С `create_host_path: false` тот же случай даёт внятный отказ демона
+      # («bind source path does not exist») и не создаёт ничего — тоже замерено, и для
+      # каталога, и для файла.
+      #
+      # Почему не каталог проекта: `--project-directory` на выкладке указывает в воркитри
+      # выложенного SHA, и тогда живой конфиг прода лежит в каталоге, имя которого меняется
+      # с каждым релизом. Предыдущий `release-<sha>` выглядит мусором, а снести его —
+      # значит оставить прод без HTTPS при следующем рестарте. TLS_CONF_DIR — абсолютный
+      # путь вне всяких чекаутов и воркитри, как LICENSE_DIR.
+      #
+      # Файлы туда копируются шагом выкладки, из выложенного SHA; `reload-loop.sh` должен
+      # остаться ИСПОЛНЯЕМЫМ (копировать `cp -p`), иначе entrypoint пропустит его молча.
+      - type: bind
+        # шаблон, а не готовый конфиг: envsubst штатного образа подставит TLS_CERT_NAME
+        source: ${TLS_CONF_DIR:-./nginx}/leadprocure-tls.conf
+        target: /etc/nginx/templates/leadprocure-tls.conf.template
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        # цикл перезагрузки — шагом entrypoint'а, а НЕ подменой command: штатный
+        # entrypoint отрисовывает шаблоны только когда команда начинается с «nginx»
+        source: ${TLS_CONF_DIR:-./nginx}/reload-loop.sh
+        target: /docker-entrypoint.d/50-reload-loop.sh
+        read_only: true
+        bind:
+          create_host_path: false
       - type: bind
         # путь по умолчанию намеренно не существует: `create_host_path: false`
         # даст внятную ошибку при запуске, а не тихую пустую папку
