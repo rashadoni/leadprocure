@@ -35,10 +35,22 @@ function fit(host: HTMLElement): number {
   host.style.removeProperty('--tip-shift');
   // The width is the REAL one only while the bubble is open — at rest the cap is 0 — which
   // is why this runs a frame after the pointer arrives rather than at the event itself.
-  const width = parseFloat(getComputedStyle(host, '::after').width) || 0;
+  //
+  // And it is the CONTENT width: `* { box-sizing: border-box }` at the top of styles.css
+  // does not reach a pseudo-element, because `*` matches elements and `::after` is not one.
+  // So the bubble is content-box and `width` leaves out its 10px of padding on each side —
+  // the shift came out 10px short, of which the gutter hid eight and two were left over the
+  // edge. Two pixels on fifteen hints, identical every time, which is what gave it away.
+  // Asked of the computed style rather than assumed, so that adding `*::after` to that
+  // reset one day cannot turn this into a double count.
+  const box = getComputedStyle(host, '::after');
+  const pad = box.boxSizing === 'border-box'
+    ? 0
+    : (parseFloat(box.paddingLeft) || 0) + (parseFloat(box.paddingRight) || 0);
+  const width = (parseFloat(box.width) || 0) + pad;
   if (!width) return 0;
-  const box = host.getBoundingClientRect();
-  const centre = box.left + box.width / 2;
+  const hostBox = host.getBoundingClientRect();
+  const centre = hostBox.left + hostBox.width / 2;
   const roomRight = document.documentElement.clientWidth - GUTTER - (centre + width / 2);
   const roomLeft = centre - width / 2 - GUTTER;
   // Floor and ceil AWAY from zero on purpose: rounding the other way leaves the fraction
