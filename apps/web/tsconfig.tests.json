@@ -5,6 +5,11 @@
   // product failure rather than a typo. (It happened: a probe called `settle()` that lived on
   // another branch.) This config is the same compiler on the same strictness, pointed at the
   // tests as well; `pnpm --filter web typecheck` answers in about a second.
+  //
+  // `fresh-acceptance` is in here for the same reason: it is a second Playwright project,
+  // run by `scripts/acceptance/fresh-install.sh` against a freshly installed stand, and it
+  // was outside every config too — a directory nobody compiled, holding the check that the
+  // product comes up over HTTPS at all.
   "extends": "./tsconfig.json",
-  "include": ["src", "tests"]
+  "include": ["src", "tests", "fresh-acceptance"]
 }
