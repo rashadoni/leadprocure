@@ -16,8 +16,37 @@ async function login(page: Page, email: string): Promise<void> {
   await page.waitForURL(/\/(buyer|supplier)\//, { timeout: 15_000 });
 }
 
+// Every `goto` here is a COLD load: the access token lives in memory only, so each one
+// bootstraps through `/auth/refresh`, which ROTATES the refresh cookie. Navigating again
+// while that request is in flight aborts it — the browser then still holds the old cookie
+// and presents it next time. A replay inside `JWT_REFRESH_REUSE_LEEWAY_MS` is tolerated by
+// design; a stale one is treated as theft and the whole session family is revoked. That is
+// the product behaving exactly as intended, and it is why this suite kept losing the
+// supplier's session mid-walk and finishing on the login page: the supplier's pages are the
+// lightest in the product, so its loads come fast enough to cut their own bootstrap off.
+// Waiting for the network to settle after each navigation lets the rotation land before the
+// next one starts. It costs about half a second per page and removes a failure that reads
+// as a broken layout.
+//
+// THIS CURES THE RUN, NOT THE PRODUCT, and the difference is worth stating here rather than
+// leaving the next reader to assume otherwise. The same race is available to a person:
+// open a section, click a link before the bootstrap answers, come back a minute later — the
+// cookie the browser still holds is now older than the leeway (`JWT_REFRESH_REUSE_LEEWAY_MS`,
+// 15s by default in config.service.ts), so the product reads its own aborted request as
+// theft and runs `UPDATE sessions SET revoked = true, revoked_at = NULL WHERE user_id = $1`
+// (identity.service.ts) — every session that person has, on every device, hard-revoked.
+// Whether that is the right answer to a race the product itself lost is the owner's call,
+// not a test's: the options are not rotating twice inside the window, narrowing the response
+// to the one chain instead of the whole user, or widening the window (which only hides it).
+// Measured here, not argued: the suite lost the supplier's session this way three times
+// today, and it is the lightest pages — the ones that answer fastest — that lose it.
+async function settle(page: Page): Promise<void> {
+  await page.waitForLoadState('networkidle').catch(() => { /* a page that never idles is the test's problem, not this helper's */ });
+}
+
 async function assertRenders(page: Page, path: string, headingHint: RegExp): Promise<void> {
   await page.goto(path);
+  await settle(page);
   await expect(page.locator('h1').first()).toContainText(headingHint, { timeout: 20_000 });
   await expect(page.locator('text=Unexpected Application Error')).toHaveCount(0);
 }
@@ -96,6 +125,7 @@ async function assertNoSidewaysScroll(page: Page, where: string): Promise<void> 
 // loading pages it has already loaded.
 async function assertFitsEveryWidth(page: Page, path: string): Promise<void> {
   await page.goto(path);
+  await settle(page);
   await expect(page.locator('h1').first()).toBeVisible({ timeout: 20_000 });
   // Then wait for the LISTS to have answered, not just for the heading to be painted. The
   // access token lives in memory only, so every visit is a cold load — bundle,
@@ -239,6 +269,52 @@ test.describe('buyer panel', () => {
     await expect(page.getByTestId('learn-video')).toHaveCount(0);
   });
 
+  // A tooltip must not be VISIBLE and COLLAPSED at the same time, and it must not leave the
+  // page scrolling sideways behind it.
+  //
+  // The bubble is `max-width: 0` while idle so that it adds nothing to the page's own width.
+  // The cap was never animated and the opacity was, so when the pointer left, the width
+  // snapped to zero while the bubble went on fading for 140ms: a ~20px pill with its text
+  // clipped to a character or two per line — a black vertical ribbon, in every section,
+  // after every tooltip. The owner caught it on a screen recording; no test did, because
+  // every assertion here had been about the bubble while it is SHOWN.
+  //
+  // The first repair held the width through the fade and bought a worse defect — 85px of
+  // sideways scroll for the whole tail at 1440px, which is the thing `max-width: 0` exists
+  // to prevent, and the owner has refused sideways scroll outright. So the bubble now leaves
+  // in one frame, and both halves are asserted below: nothing visible-and-collapsed, and no
+  // overflow left behind.
+  test('a tooltip leaves without a ribbon and without sideways scroll', async () => {
+    await page.goto('/buyer/budgets');
+    await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+    const tip = page.locator('[data-tip]').first();
+    await tip.hover();
+    // The open state is asserted first for a reason: if the bubble never opened, every
+    // sample below would be «0 wide, 0 opaque» and the test would pass having measured
+    // nothing at all.
+    await expect.poll(async () => tip.evaluate((el) =>
+      Number(getComputedStyle(el, '::after').opacity))).toBeGreaterThan(0.9);
+    const open = await tip.evaluate((el) => parseFloat(getComputedStyle(el, '::after').width));
+    expect(open, 'the bubble never opened — the samples below would prove nothing').toBeGreaterThan(100);
+
+    await page.mouse.move(5, 5);
+    const ribbon: string[] = [];
+    const overflow: number[] = [];
+    for (let i = 0; i < 7; i++) {
+      const s = await tip.evaluate((el) => {
+        const c = getComputedStyle(el, '::after');
+        const root = document.scrollingElement!;
+        return { w: parseFloat(c.width), o: Number(c.opacity), over: root.scrollWidth - root.clientWidth };
+      });
+      if (s.o > 0.05 && s.w < 100) ribbon.push(`${Math.round(s.w)}px at opacity ${s.o.toFixed(2)}`);
+      overflow.push(s.over);
+      await page.waitForTimeout(18);
+    }
+    expect(ribbon, 'the bubble collapsed while still on screen').toEqual([]);
+    expect(Math.max(...overflow),
+      'the bubble is gone but the page still scrolls sideways after it').toBeLessThanOrEqual(1);
+  });
+
   test('dashboard shows real KPI money', async () => {
     await page.goto('/buyer/dashboard');
     await expect(page.locator('text=AZN').first()).toBeVisible({ timeout: 10_000 });
@@ -266,6 +342,7 @@ test.describe('buyer panel', () => {
       const tips = page.locator('[data-tip]');
       const over: string[] = [];
       let opened = 0;
+      let pulled = 0;
       for (let i = 0; i < await tips.count(); i++) {
         const tip = tips.nth(i);
         if (!(await tip.isVisible())) continue;
@@ -273,9 +350,13 @@ test.describe('buyer panel', () => {
         const seen = await tip.evaluate((node) => ({
           width: parseFloat(getComputedStyle(node as Element, '::after').width) || 0,
           scroll: document.scrollingElement!.scrollWidth - document.scrollingElement!.clientWidth,
+          // the clamp publishes itself here, so the test can tell «nothing stuck out»
+          // from «nothing was pulled back», which read the same before this line existed
+          shift: (node as HTMLElement).style.getPropertyValue('--tip-shift'),
           text: (node.getAttribute('data-tip') ?? '').slice(0, 30),
         }));
         if (seen.width > 20) opened++;
+        if (seen.shift) pulled++;
         if (seen.scroll - base > 1) over.push(`+${seen.scroll - base}px on «${seen.text}…»`);
         await page.mouse.move(2, 2);
         // the bubble fades out before the next one is measured, or its width would be
@@ -283,6 +364,10 @@ test.describe('buyer panel', () => {
         await page.waitForTimeout(160);
       }
       expect(opened, `${path}: not one bubble opened — nothing was measured`).toBeGreaterThan(0);
+      // Both pages carried an offender when this was measured (+82px here on the block
+      // button, +71px on the dashboard's last KPI tile). If none is pulled back any more,
+      // the clean result above is clean for some other reason and proves nothing.
+      expect(pulled, `${path}: no bubble needed pulling back — the check has stopped testing the fix`).toBeGreaterThan(0);
       expect(over, `${path}: a hint pushed the page sideways`).toEqual([]);
     }
   });

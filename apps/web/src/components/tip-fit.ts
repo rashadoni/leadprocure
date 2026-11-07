@@ -20,17 +20,23 @@ import { NARROW } from './narrow';
 // measures its popup and pulls it back when it would hang off the side (see RowMenu.tsx).
 // A pseudo-element has no rect to measure, but its width is readable, and the host's rect
 // gives the rest. The shift is published as `--tip-shift` and the stylesheet adds it to the
-// transform it already had. The arrow stays where it was, on the element: a shifted bubble
-// with its arrow still pointing at what it explains is how every tooltip of this kind
-// behaves, and moving the arrow instead would point it at nothing.
+// bubble's `left` — deliberately NOT to its transform, which is transitioned on the way in
+// (see the fade in styles.css): a shift applied there would be drawn as the bubble sliding
+// sideways into place every time it opens. `left` is in no transition, so it simply opens
+// where it fits. The arrow stays where it was, on the element: a shifted bubble with its
+// arrow still pointing at what it explains is how every tooltip of this kind behaves, and
+// moving the arrow instead would point it at nothing.
 const GUTTER = 8;
 
-function fit(host: HTMLElement): void {
+// Returns the shift it applied, so a test can prove the mechanism fired rather than read a
+// clean measurement that was clean anyway — a silent cure for a silent defect is two
+// silences, and the second one is the dangerous half.
+function fit(host: HTMLElement): number {
   host.style.removeProperty('--tip-shift');
   // The width is the REAL one only while the bubble is open — at rest the cap is 0 — which
   // is why this runs a frame after the pointer arrives rather than at the event itself.
   const width = parseFloat(getComputedStyle(host, '::after').width) || 0;
-  if (!width) return;
+  if (!width) return 0;
   const box = host.getBoundingClientRect();
   const centre = box.left + box.width / 2;
   const roomRight = document.documentElement.clientWidth - GUTTER - (centre + width / 2);
@@ -39,6 +45,7 @@ function fit(host: HTMLElement): void {
   // of a pixel that `scrollWidth` rounds back up, and the page scrolls by one.
   const shift = roomRight < 0 ? Math.floor(roomRight) : roomLeft < 0 ? Math.ceil(-roomLeft) : 0;
   if (shift) host.style.setProperty('--tip-shift', `${shift}px`);
+  return shift;
 }
 
 export function useTipFit(): void {

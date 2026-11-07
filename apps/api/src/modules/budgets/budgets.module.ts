@@ -1042,14 +1042,29 @@ export class BudgetsService {
     );
     const months = monthsOfPeriod(b.periodStart, b.periodEnd);
     const saved = new Map<string, number>(rows.map((r: any) => [r.month, Number(r.share_bp)]));
-    const evenBp = months.length ? Math.round(10000 / months.length) : 0;
+    // The even split has to add up to EXACTLY 100%, and `Math.round(10000 / n)` does not.
+    // This product makes three period lengths and no others — `resolveBudgetPeriod` takes the
+    // count from `periodType`, so 12, 3 or 1 — and TWO of the three were wrong: a year gave
+    // 833×12 = 9996 and a quarter 3333×3 = 9999; only a single month was right, trivially.
+    // (Rounding breaks at other lengths too — 6, 7, 9, 11 — but none of those can be created
+    // here, and a comment that implies otherwise sends the next reader looking for them.)
+    // The editor opens on those numbers, paints its total red and disables Save, over a state
+    // the reader never created: before they may phase anything they must hand-correct a
+    // hundredth of a percent the product itself put there.
+    //
+    // So the remainder goes to the LAST month, exactly as `export/1c` already absorbs its
+    // rounding there, and for the same reason: the parts must total the plan. The amounts
+    // follow — 2000.00 over three months reads 666.60 / 666.60 / 666.80 and adds back to
+    // 2000.00, where the even thirds added to 1999.80.
+    const evenBp = months.length ? Math.floor(10000 / months.length) : 0;
+    const lastBp = months.length ? 10000 - evenBp * (months.length - 1) : 0;
     return {
       budgetId,
       phased: rows.length > 0,
       amountMinor: b.amountMinor,
-      months: months.map((m) => {
+      months: months.map((m, i) => {
         const month = m.slice(0, 7);
-        const shareBp = saved.get(month) ?? evenBp;
+        const shareBp = saved.get(month) ?? (i === months.length - 1 ? lastBp : evenBp);
         return { month, shareBp, amountMinor: Math.round((b.amountMinor * shareBp) / 10000) };
       }),
     };

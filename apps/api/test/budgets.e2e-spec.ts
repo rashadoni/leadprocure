@@ -965,8 +965,25 @@ describe('budgets & commitment control (API e2e)', () => {
       const ph = (await http().get(`/budgets/${phasedId}/phasing`).set(...bearer(buyerA)).expect(200)).body;
       expect(ph.phased).toBe(false);
       expect(ph.months).toHaveLength(12);
-      expect(ph.months[0].shareBp).toBe(833); // 10000/12 rounded
+      expect(ph.months[0].shareBp).toBe(833); // floor(10000/12)
       expect(ph.months.every((m: any) => /^\d{4}-\d{2}$/.test(m.month))).toBe(true);
+
+      // The split the editor opens on must be SAVEABLE. `Math.round(10000 / n)` was not:
+      // twelve months gave 833×12 = 9996 and three gave 3333×3 = 9999 — two of the three
+      // lengths this product can make at all — and the editor then
+      // painted its own total red and disabled Save over a state the reader never made —
+      // before phasing anything they had to hand-correct a hundredth of a percent the
+      // product had put there. The remainder belongs to the last month, which is what the
+      // save path's own tests below already assume (`i === 11 ? 833 + 4 : 833`).
+      const totalBp = ph.months.reduce((n: number, m: any) => n + m.shareBp, 0);
+      // (no message argument: this suite is jest, where `expect` takes one — the two-argument
+      // form is vitest's, and it is what the web package next door uses. The reason lives in
+      // the comment above instead.)
+      expect(totalBp).toBe(10000);
+      expect(ph.months[11].shareBp).toBe(837); // 833×11 + 837 = 10000
+      // and the money follows the shares: the parts have to add back to the plan
+      const totalMinor = ph.months.reduce((n: number, m: any) => n + m.amountMinor, 0);
+      expect(totalMinor).toBe(1_200_000);
     });
 
     it('refuses a set that does not add up to 100%', async () => {
@@ -1028,7 +1045,13 @@ describe('budgets & commitment control (API e2e)', () => {
     it('clearing the phasing returns the budget to an even split', async () => {
       const cleared = (await http().put(`/budgets/${phasedId}/phasing`).set(...bearer(buyerA)).send({ months: [] }).expect(200)).body;
       expect(cleared.phased).toBe(false);
-      expect(cleared.months[11].shareBp).toBe(833);
+      // The last month carries the rounding remainder, so it is 837 where the other eleven
+      // are 833 — this line asked for 833 and so was asserting the old defect: an even split
+      // that added to 99.96%. What matters after clearing is that the set is SAVEABLE again,
+      // which is the sum, not any one month.
+      expect(cleared.months[11].shareBp).toBe(837);
+      expect(cleared.months.slice(0, 11).every((m: any) => m.shareBp === 833)).toBe(true);
+      expect(cleared.months.reduce((n: number, m: any) => n + m.shareBp, 0)).toBe(10000);
     });
 
     it('a closed period cannot be re-phased', async () => {
