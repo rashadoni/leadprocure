@@ -1119,6 +1119,12 @@ function courseSeconds() {
 // still a requirement that will not be enforced tomorrow, and it costs one line to fix now.
 const SECTION_FIELDS = new Set(['role', 'path', 'requires', 'scenes']);
 const REQUIRE_PREDICATES = new Set(['eventOpen']);
+// A scene is narration per language plus the camera move. `do` is the dangerous name here:
+// it is called as `scene.do?.(…)`, so a scene whose `do` is misspelled performs NO action,
+// raises nothing, counts no miss — and the run ends by printing «промахов курсора: 0» over a
+// motionless picture. Misspelt, it is simply an unknown field, which is why this list is the
+// whole fix.
+const SCENE_FIELDS = new Set(['az', 'ru', 'en', 'do']);
 
 function assertSectionShape() {
   const bad = [];
@@ -1129,15 +1135,30 @@ function assertSectionShape() {
     for (const predicate of Object.keys(section.requires ?? {})) {
       if (!REQUIRE_PREDICATES.has(predicate)) bad.push(`${key}.requires: неизвестное требование «${predicate}» — опечатка? Допустимы: ${[...REQUIRE_PREDICATES].join(', ')}`);
     }
+    (section.scenes ?? []).forEach((scene, i) => {
+      for (const field of Object.keys(scene)) {
+        if (!SCENE_FIELDS.has(field)) bad.push(`${key}, сцена ${i + 1}: неизвестное поле «${field}» — опечатка? Допустимы: ${[...SCENE_FIELDS].join(', ')}`);
+      }
+    });
   }
   if (bad.length) {
-    throw new Error(`Объявления разделов прочитаны не полностью — такое требование молча не проверялось бы:\n  `
+    throw new Error(`Объявления разделов прочитаны не полностью — такое объявление молча не работало бы:\n  `
       + `${bad.join('\n  ')}`);
   }
 }
 
+// The key an operator typed. `sup-catalogz` passes every check above — it is not a section at
+// all — so the stand guard requires nothing for it and the run dies much later on a bare
+// «Cannot read properties of undefined», naming neither the key nor the typo.
+function assertKeysExist(keys) {
+  const unknown = keys.filter((k) => !SECTIONS[k]);
+  if (unknown.length) {
+    throw new Error(`Таких разделов нет: ${unknown.map((k) => `«${k}»`).join(', ')}.\n`
+      + `  Есть: ${Object.keys(SECTIONS).join(', ')}`);
+  }
+}
+
 async function assertStandHolds(keys) {
-  assertSectionShape();
   const wanted = [...new Set(keys.flatMap((k) => SECTIONS[k]?.requires?.eventOpen ?? []))];
   if (!wanted.length) return;
   let pg, dbName;
@@ -1200,6 +1221,10 @@ async function login(ctx, email) {
 
 (async () => {
   const keys = ONLY.length ? ONLY : Object.keys(SECTIONS);
+  // Before the stand is asked anything: these judge the source and the arguments, not the
+  // data, and an early `return` added to assertStandHolds some day must not carry them off.
+  assertSectionShape();
+  assertKeysExist(keys);
   await assertStandHolds(keys);
   // Read before anything is recorded: a stale parse should stop the run at the start, not
   // after the footage and the narration have been paid for.
