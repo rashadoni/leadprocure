@@ -82,7 +82,11 @@ const dict: Record<Lang, Record<string, string>> = {
     qna_question: 'Sual', qna_answer_field: 'Cavab', qna_unpublished: 'dərc edilməyib',
     qna_mine: 'mənim sualım', qna_need_text: 'Əvvəlcə mətni yazın',
     dashboard: 'İdarə paneli', contracts: 'Müqavilələr', orders: 'Satınalma sifarişləri',
-    my_orders: 'İşdə olan sifarişlər', spend: 'Ümumi xərc', savings: 'Qənaət',
+    my_orders: 'İşdə olan sifarişlər', savings: 'Qənaət',
+    // Bir söz iki ekranda iki başqa rəqəmin üstündə dayanmamalıdır: idarə panelində bu
+    // qaliblərin cəmi (bütün vaxt üzrə), analitikada qəbul edilmiş sifarişlər (seçilmiş
+    // dövr üzrə). Hər ikisi doğru idi, adları isə eyni — «Ümumi xərc».
+    kpi_awarded: 'Tenderlər üzrə verilib', kpi_accepted: 'Qəbul edilmiş sifarişlər',
     prev: 'Əvvəlki', next: 'Sonrakı', page: 'Səhifə',
     budgets: 'Büdcələr', committed: 'Öhdəlik', remaining: 'Qalıq', year: 'İl', amount: 'Məbləğ',
     period: 'Dövr', period_year: 'İllik', period_quarter: 'Rüblük', period_month: 'Aylıq', period_all: 'Bütün dövrlər',
@@ -137,7 +141,7 @@ const dict: Record<Lang, Record<string, string>> = {
     actual_hint: 'Verilmiş sifarişlər (PO) — sorğunun proqnozunu əvəz edir',
     cancel: 'Ləğv et', tip_cancel_request: 'Sorğunu ləğv et və büdcə öhdəliyini azad et',
     cancel_reason_prompt: 'Ləğv səbəbi (audit üçün):',
-    bud_org_wide: 'Bütün təşkilat', bud_by_department: 'Şöbələr üzrə yekun', bud_unbudgeted: 'Büdcədən kənar xərc',
+    bud_org_wide: 'Bütün təşkilat', bud_total: 'Təşkilat üzrə yekun', bud_by_department: 'Şöbələr üzrə yekun', bud_unbudgeted: 'Büdcədən kənar xərc',
     bud_calloff: 'Kataloqdan sifariş (sorğusuz)',
     bud_unbudgeted_hint: 'Uyğun büdcə tapılmayan xərc: təsdiqlənmiş sorğular, kataloq sifarişləri və AZN olmayan sifarişlər (büdcələr yalnız AZN-dədir).',
     utilization: 'İstifadə', budget_over: 'Büdcə aşılıb', save: 'Yadda saxla', category: 'Kateqoriya',
@@ -465,7 +469,11 @@ const dict: Record<Lang, Record<string, string>> = {
     qna_question: 'Вопрос', qna_answer_field: 'Ответ', qna_unpublished: 'не опубликован',
     qna_mine: 'мой вопрос', qna_need_text: 'Сначала введите текст',
     dashboard: 'Рабочий стол', contracts: 'Контракты', orders: 'Заказы',
-    my_orders: 'Заказы в работе', spend: 'Объём закупок', savings: 'Экономия',
+    my_orders: 'Заказы в работе', savings: 'Экономия',
+    // Одно слово не должно стоять над двумя разными числами: на панели это сумма
+    // победивших предложений за всё время, в аналитике — принятые заказы за выбранный
+    // период. Оба числа честны, подпись у них была одна — «Объём закупок».
+    kpi_awarded: 'Присуждено по тендерам', kpi_accepted: 'Принятые заказы',
     prev: 'Назад', next: 'Вперёд', page: 'Стр.',
     budgets: 'Бюджеты', committed: 'Обязательства', remaining: 'Остаток', year: 'Год', amount: 'Сумма',
     period: 'Период', period_year: 'Годовой', period_quarter: 'Квартальный', period_month: 'Месячный', period_all: 'Все периоды',
@@ -520,7 +528,7 @@ const dict: Record<Lang, Record<string, string>> = {
     actual_hint: 'Размещённые заказы (PO) — заменяют оценку заявки',
     cancel: 'Отменить', tip_cancel_request: 'Отменить заявку и освободить бюджет',
     cancel_reason_prompt: 'Причина отмены (для аудита):',
-    bud_org_wide: 'Вся организация', bud_by_department: 'Сводка по отделам', bud_unbudgeted: 'Расходы вне бюджета',
+    bud_org_wide: 'Вся организация', bud_total: 'Итого по организации', bud_by_department: 'Сводка по отделам', bud_unbudgeted: 'Расходы вне бюджета',
     bud_calloff: 'Заказ из каталога (без заявки)',
     bud_unbudgeted_hint: 'Расход, под который не нашлось ни одного бюджета: одобренные заявки, заказы из каталога и заказы не в AZN (бюджеты ведутся только в AZN).',
     utilization: 'Использование', budget_over: 'Превышен', save: 'Сохранить', category: 'Категория',
@@ -846,7 +854,11 @@ const dict: Record<Lang, Record<string, string>> = {
     qna_question: 'Question', qna_answer_field: 'Answer', qna_unpublished: 'not published',
     qna_mine: 'my question', qna_need_text: 'Type the text first',
     dashboard: 'Dashboard', contracts: 'Contracts', orders: 'Orders',
-    my_orders: 'Orders in progress', spend: 'Total spend', savings: 'Savings',
+    my_orders: 'Orders in progress', savings: 'Savings',
+    // One word must not stand over two different numbers: on the dashboard it is the sum
+    // of winning bids over all time, in analytics the accepted orders of the chosen
+    // window. Both figures were honest; their label was the same — «Total spend».
+    kpi_awarded: 'Awarded in tenders', kpi_accepted: 'Accepted orders',
     prev: 'Prev', next: 'Next', page: 'Page',
     budgets: 'Budgets', committed: 'Committed', remaining: 'Remaining', year: 'Year', amount: 'Amount',
     period: 'Period', period_year: 'Annual', period_quarter: 'Quarterly', period_month: 'Monthly', period_all: 'All periods',
@@ -901,7 +913,7 @@ const dict: Record<Lang, Record<string, string>> = {
     actual_hint: 'Orders placed (POs) — these replace the request estimate',
     cancel: 'Cancel', tip_cancel_request: 'Cancel the request and release its budget commitment',
     cancel_reason_prompt: 'Reason for cancelling (for the audit trail):',
-    bud_org_wide: 'Whole organization', bud_by_department: 'Rollup by department', bud_unbudgeted: 'Spend outside every budget',
+    bud_org_wide: 'Whole organization', bud_total: 'Organisation total', bud_by_department: 'Rollup by department', bud_unbudgeted: 'Spend outside every budget',
     bud_calloff: 'Catalog call-off (no request)',
     bud_unbudgeted_hint: 'Spend that matched no budget at all: approved requests, catalog call-offs, and non-AZN orders (budgets are kept in AZN only).',
     utilization: 'Utilization', budget_over: 'Over budget', save: 'Save', category: 'Category',

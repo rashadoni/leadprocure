@@ -227,7 +227,7 @@ export default function Analytics() {
             under the figure says in words what was counted and on what basis. Each `tip` is
             written from the query in dashboard.module.ts, not from the label above it. */}
         {[
-          { label: t('spend'), value: money(d.monthly.reduce((s, m) => s + m.totalMinor, 0)),
+          { label: t('kpi_accepted'), value: money(d.monthly.reduce((s, m) => s + m.totalMinor, 0)),
             note: t('net_label'), tip: t('spend_hint') },
           { label: t('savings'), value: `${money(d.savings.savedMinor)} (${savingsPct}%)`,
             note: `${t('events')}: ${d.savings.events} · ${t('net_label')}`, tip: t('savings_hint') },
@@ -250,7 +250,7 @@ export default function Analytics() {
       <div className="hint" style={{ marginBottom: 10 }}>
         <Explain>
           {[
-            { label: t('spend'), text: t('spend_hint') },
+            { label: t('kpi_accepted'), text: t('spend_hint') },
             { label: t('savings'), text: t('savings_hint') },
             { label: t(paidBasis), text: t(paidBasisTip) },
             { label: t('inv_outstanding'), text: t('inv_outstanding_hint') },
