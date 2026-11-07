@@ -119,6 +119,7 @@ export default function Orders() {
   return (
     <>
       <h1>{t('my_orders')}</h1>
+      <div className="hint" data-testid="section-origin">{t('origin_orders_sup')}</div>
       <div className="card">
         <ListState of={orderList} empty={!orders.length} emptyKey="empty_sup_orders" />
         <table>

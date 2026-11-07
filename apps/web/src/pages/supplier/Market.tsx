@@ -25,6 +25,7 @@ export default function Market() {
   return (
     <>
       <h1>{t('market')}</h1>
+      <div className="hint" data-testid="section-origin">{t('origin_market')}</div>
       <div className="card">
         <ListState of={market} empty={!rows.length} emptyKey="empty_market" />
         <table>

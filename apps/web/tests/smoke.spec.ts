@@ -320,6 +320,31 @@ test.describe('buyer panel', () => {
     await expect(page.locator('text=AZN').first()).toBeVisible({ timeout: 10_000 });
   });
 
+  // Where the things in a section come from, said on a section that HAS things in it.
+  // The product knew the answer all along — «announce one from an approved request» and its
+  // kin — and printed it in the empty list alone, where only a reader who already knows it
+  // ever looks. The owner asked both questions out loud («where is a tender created, where
+  // are suppliers created») with a full list on screen.
+  //
+  // Asserted with rows present on purpose: an empty list would prove the old behaviour.
+  test('every list says where its things come from, with rows on screen', async () => {
+    const withRows: string[] = [];
+    for (const path of ['/buyer/events', '/buyer/contracts', '/buyer/logistics', '/buyer/catalogs']) {
+      await page.goto(path);
+      await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+      const origin = page.getByTestId('section-origin').first();
+      await expect(origin, `${path} does not say where its things come from`).toBeVisible();
+      expect((await origin.innerText()).trim().length,
+        `${path}: the line is there and empty — a caption that says nothing`).toBeGreaterThan(20);
+      if (await page.locator('tbody tr').count()) withRows.push(path);
+    }
+    // Which of these four carry rows depends on the seed and on what the suite made before
+    // this point, so no single page is required to have them — but if NONE did, every
+    // assertion above just re-measured the empty state, which is where the line always was.
+    expect(withRows, 'not one section had rows — the old behaviour would pass this test')
+      .not.toEqual([]);
+  });
+
   // A load that fails must SAY so. The KPI used to leave "…" on screen for ever — the page
   // never came back and never explained itself — because the only rejection handler was none.
   test('a failed dashboard load reports itself, and Retry really retries', async () => {
