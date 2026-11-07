@@ -1107,7 +1107,37 @@ function courseSeconds() {
 // this cannot become a second route to a non-disposable stack. A run that cannot ask is
 // refused rather than quietly filmed: a check that passes when it fails to run is the
 // one thing worse than no check.
+// The declarations above are read BY NAME, and a name read by hand is a name that can be
+// misspelled. `requires: { eventOpenn: … }` or `require: { eventOpen: … }` both leave the
+// guard's list short — and if every declaration is misspelled, empty, so it returns at once
+// and the run proceeds as if the stand had been checked. That is the very blindness the
+// guard exists to prevent, one level up: it would green on its own failure to read.
+//
+// So the shape is checked instead of trusted. A section carries exactly these fields and a
+// `requires` exactly these predicates; anything else stops the run and is named. Checked for
+// EVERY section, not only the ones being filmed: a typo in a section nobody films today is
+// still a requirement that will not be enforced tomorrow, and it costs one line to fix now.
+const SECTION_FIELDS = new Set(['role', 'path', 'requires', 'scenes']);
+const REQUIRE_PREDICATES = new Set(['eventOpen']);
+
+function assertSectionShape() {
+  const bad = [];
+  for (const [key, section] of Object.entries(SECTIONS)) {
+    for (const field of Object.keys(section)) {
+      if (!SECTION_FIELDS.has(field)) bad.push(`${key}: неизвестное поле «${field}» — опечатка? Допустимы: ${[...SECTION_FIELDS].join(', ')}`);
+    }
+    for (const predicate of Object.keys(section.requires ?? {})) {
+      if (!REQUIRE_PREDICATES.has(predicate)) bad.push(`${key}.requires: неизвестное требование «${predicate}» — опечатка? Допустимы: ${[...REQUIRE_PREDICATES].join(', ')}`);
+    }
+  }
+  if (bad.length) {
+    throw new Error(`Объявления разделов прочитаны не полностью — такое требование молча не проверялось бы:\n  `
+      + `${bad.join('\n  ')}`);
+  }
+}
+
 async function assertStandHolds(keys) {
+  assertSectionShape();
   const wanted = [...new Set(keys.flatMap((k) => SECTIONS[k]?.requires?.eventOpen ?? []))];
   if (!wanted.length) return;
   let pg, dbName;
