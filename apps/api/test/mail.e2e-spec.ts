@@ -74,6 +74,10 @@ describe('email notifications (API e2e)', () => {
       .send({ supplierOrgId: supplierOrg }).expect(201);
     poId = po.body.id;
     poItemId = po.body.items[0].id;
+    // A new order is announced when it is ISSUED, not when the draft is written: until then
+    // the supplier cannot open it at all (migration 0045), and an email about a document
+    // that answers 404 is worse than no email.
+    await http().post(`/orders/${poId}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
 
     const mail = await waitForMail((m) => m.to === `ms-${tag}@t.test` && m.subject.includes('Новый заказ'));
     expect(mail).toBeTruthy();
@@ -88,16 +92,25 @@ describe('email notifications (API e2e)', () => {
   });
 
   it('a failed action sends no email', async () => {
+    // An amendment on a DRAFT-status PO is rejected by the guards → no notify, no mail.
+    // It needs a draft of its own: the order above is issued as part of announcing it.
+    const req = await http().post('/requests').set(...bearer(buyer))
+      .send({ title: `Ml draft ${tag}`, items: [{ name: 'Clamp', qty: 1, estUnitPriceMinor: 100_00 }] }).expect(201);
+    await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approver)).expect(201);
+    const draft = await http().post(`/orders/direct/from-request/${req.body.id}`).set(...bearer(buyer))
+      .send({ supplierOrgId: supplierOrg }).expect(201);
+    await new Promise((r) => setTimeout(r, 300));
+
     const before = sent.length;
-    // amendment on a DRAFT-status PO is rejected by guards → no notify, no mail
-    await http().post(`/orders/${poId}/amendments`).set(...bearer(buyer))
-      .send({ reason: 'x', items: [{ poItemId, qty: 0 }] }).expect(400);
+    await http().post(`/orders/${draft.body.id}/amendments`).set(...bearer(buyer))
+      .send({ reason: 'x', items: [{ poItemId: draft.body.items[0].id, qty: 0 }] }).expect(400);
     await new Promise((r) => setTimeout(r, 300));
     expect(sent.length).toBe(before);
   });
 
   it('amendment email carries po_no but never amounts (whitelist)', async () => {
-    await http().post(`/orders/${poId}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
+    // already ISSUED — that is what announced it to the supplier two tests ago
     await http().post(`/orders/${poId}/amendments`).set(...bearer(buyer))
       .send({ reason: 'more units', items: [{ poItemId, qty: 9 }] }).expect(201);
     const mail = await waitForMail((m) => m.to === `ms-${tag}@t.test` && m.subject.includes('изменение заказа'));
