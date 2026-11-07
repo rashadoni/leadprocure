@@ -239,6 +239,41 @@ test.describe('buyer panel', () => {
     await expect(page.getByTestId('learn-video')).toHaveCount(0);
   });
 
+  // A tooltip must not be VISIBLE and COLLAPSED at the same time.
+  //
+  // The bubble is `max-width: 0` while idle so that it adds nothing to the page's own
+  // width, and the cap lifts on hover. The cap is not animated, the opacity is — so when
+  // the pointer left, the width snapped back to zero while the bubble went on fading for
+  // another 140ms. Padding cannot shrink, so what stayed on screen was a ~20px pill with
+  // its text clipped to a character or two per line: a black vertical ribbon over the page,
+  // on every section, after every tooltip. The owner caught it on a screen recording; no
+  // test did, because every assertion here had been about the bubble while it is shown.
+  //
+  // Sampling, like the measurement that found it. A slow machine samples fewer frames —
+  // that weakens the test, it does not red it falsely, which is the right way round.
+  test('a tooltip never stays visible after it has collapsed', async () => {
+    await page.goto('/buyer/budgets');
+    await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+    const tip = page.locator('[data-tip]').first();
+    await tip.hover();
+    await expect.poll(async () => tip.evaluate((el) =>
+      Number(getComputedStyle(el, '::after').opacity))).toBeGreaterThan(0.9);
+    const open = await tip.evaluate((el) => parseFloat(getComputedStyle(el, '::after').width));
+    expect(open, 'the bubble did not open — the measurement below would prove nothing').toBeGreaterThan(100);
+
+    await page.mouse.move(5, 5);
+    const caught: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const s = await tip.evaluate((el) => {
+        const c = getComputedStyle(el, '::after');
+        return { w: parseFloat(c.width), o: Number(c.opacity) };
+      });
+      if (s.o > 0.05 && s.w < 100) caught.push(`${Math.round(s.w)}px at opacity ${s.o.toFixed(2)}`);
+      await page.waitForTimeout(20);
+    }
+    expect(caught, 'the bubble collapsed while still on screen').toEqual([]);
+  });
+
   test('dashboard shows real KPI money', async () => {
     await page.goto('/buyer/dashboard');
     await expect(page.locator('text=AZN').first()).toBeVisible({ timeout: 10_000 });

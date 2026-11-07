@@ -190,7 +190,18 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
   transform: translateX(-50%) translateY(4px); background: #10231c; color: #fff; font-size: 12px;
   font-weight: 500; line-height: 1.35; letter-spacing: normal; text-align: left; padding: 7px 10px;
   border-radius: 8px; white-space: normal; width: max-content; box-shadow: var(--shadow-lg);
-  opacity: 0; pointer-events: none; transition: opacity .14s ease, transform .14s ease; z-index: 90;
+  opacity: 0; pointer-events: none; z-index: 90;
+  /* `max-width` is in the transition with a ZERO duration and a delay equal to the fade.
+     It is not an animation — the cap still changes in one step — but WHEN it changes now
+     differs between opening and closing. Closing is the case this exists for: without the
+     delay the cap went back to 0 the instant the pointer left, while the opacity took
+     another 140ms to follow, so for those 140ms the bubble was fully visible and nought
+     pixels wide. Padding cannot shrink, so what was left on screen was a ~20px pill with
+     the text clipped to a character or two per line — a black vertical ribbon hanging over
+     the page. It is in every section, because this rule is. Measured in Chromium: 20ms
+     after the pointer leaves, width 0 at opacity 0.87; at 60ms, width 0 at opacity 0.22.
+     The owner caught it on a screen recording before any test did. */
+  transition: opacity .14s ease, transform .14s ease, max-width 0s linear .14s;
   /* Nothing until it is shown. `opacity: 0` hides the bubble from the eye but NOT from the
      page: an absolutely positioned box is part of the width the page can scroll, so a 240px
      bubble centred on a chip near the right edge of the window put a horizontal scrollbar on
@@ -214,7 +225,7 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
    black land on the rows underneath. Wider costs nothing — the bubble is `max-width: 0`
    until it is hovered, so it never adds to the page's own width (that is what the note
    above is about), and nothing is cut to make it fit. */
-[data-tip]:hover::after { opacity: 1; max-width: 360px; transform: translateX(-50%) translateY(0); }
+[data-tip]:hover::after { opacity: 1; max-width: 360px; transform: translateX(-50%) translateY(0); transition: opacity .14s ease, transform .14s ease, max-width 0s; }
 [data-tip]:hover::before { opacity: 1; display: block; }
 /* A bubble drawn by ::after is not an element anyone can reach — it does land in its host's
    accessible NAME, which is why tests/helpers/rfx.ts has to match control labels by prefix —
@@ -222,7 +233,7 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
    tap gives plain focus and would otherwise reach nothing. This only fires where an element
    was deliberately made focusable (the spend chart's columns), and the ring below is keyboard
    only, so a mouse click does not leave one behind. */
-[data-tip]:focus::after { opacity: 1; max-width: 360px; transform: translateX(-50%) translateY(0); }
+[data-tip]:focus::after { opacity: 1; max-width: 360px; transform: translateX(-50%) translateY(0); transition: opacity .14s ease, transform .14s ease, max-width 0s; }
 [data-tip]:focus::before { opacity: 1; display: block; }
 /* For an element at the very top of the page — the section's help line — where a bubble
    drawn above would sit off the top of the window with nowhere to scroll to it. */
