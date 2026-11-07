@@ -154,6 +154,10 @@ export default function EventDetail() {
   const selectedAiLotId = aiLot || lot?.id;
   const aiLotAwarded = activeAwards.some((a: any) => a.lot_id === selectedAiLotId);
   const isReverse = ev.type === 'AUCTION' || ev.format === 'REVERSE';
+  // Words borrowed from the sealed envelope do not fit a running auction; see the bids
+  // card below. Only while the event has not reached its opening — from OPENING onwards an
+  // auction is evaluated exactly like a tender and its bids are opened envelopes.
+  const liveAuction = isReverse && !ev.amounts_visible;
   const isRfi = ev.type === 'RFI';
   const canAi = ['EVALUATION', 'AWARDED'].includes(ev.status) && !isRfi;
   // The actions column of the bids table is empty in every state but EVALUATION (and for a
@@ -502,7 +506,18 @@ export default function EventDetail() {
       )}
 
       <div className="card">
-        <h3>{t('bids')} {!ev.amounts_visible && <span className="sealed">🔒 {t('amounts_hidden')}</span>}</h3>
+        {/* An auction said three things at once that did not agree: «Лучшая цена 23 920»
+            in the open above, «суммы скрыты до вскрытия» here, and «Ставка вскрыта» on the
+            row — a bid marked opened under a caption about opening, beside a padlock.
+            Nothing is wrong with the figures: an auction's price IS public (the panel shows
+            the running best, which is the mechanism), and whose price it is stays sealed
+            until the opening, as it does in a tender. Only the words were borrowed from the
+            sealed envelope. The bid row of a live auction is a position in the bidding, not
+            an envelope anyone has opened, and `state` reads OPENED there because the price
+            was never sealed — see auction.service.ts. */}
+        <h3>{t('bids')} {!ev.amounts_visible && (
+          <span className="sealed">🔒 {t(liveAuction ? 'auction_amounts_note' : 'amounts_hidden')}</span>
+        )}</h3>
         <table>
           {/* The score heading used the `score` key — the same entry as the «Score» BUTTON
               below the table — so the column was titled with an imperative verb
@@ -539,7 +554,7 @@ export default function EventDetail() {
                   )}
                   {ev.amounts_visible && <BidDocs bidId={b.id} canUpload={false} />}
                 </td>
-                <td><Badge status={b.state} /></td>
+                <td>{liveAuction ? <span className="badge">{t('auction_in_play')}</span> : <Badge status={b.state} />}</td>
                 <td className="num">{ev.amounts_visible ? fmtMoney(b.total_minor, b.currency) : '🔒'}</td>
                 <td>{ev.amounts_visible ? (b.delivery_days ?? '—') : '🔒'}</td>
                 {showScores && <td className="num">{weightedByBid.has(b.id) ? weightedByBid.get(b.id)!.toFixed(1) : '—'}</td>}

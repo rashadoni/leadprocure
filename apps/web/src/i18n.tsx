@@ -20,6 +20,13 @@ const dict: Record<Lang, Record<string, string>> = {
     // whether something is broken, forbidden or simply not started — and on a new tenant this
     // is the FIRST screen. Each list says what fills it, in the «<X> yoxdur — <do this>» shape
     // the pages that already had such a line use (hint_catalogs_empty and the two beside it).
+    // Serverin «yox» cavabları. Açar `err_<CODE>` — components/refusal.ts koda görə axtarır
+    // və tapmasa, ingilis mətni olduğu kimi qalır: tərcüməsi olmayan rədd cavabı pisləşmir.
+    err_BID_ITEMS_REQUIRED: 'Heç olmasa bir mövqeyə qiymət yazın: göndəriləsi bir şey yoxdur.',
+    err_BID_LOT_INCOMPLETE: 'Lotun ya BÜTÜN mövqelərinə qiymət verin, ya da lotu tamamilə buraxın — yarımçıq təklif qiymətləndirilmir.',
+    err_AUCTION_BID_TOO_HIGH: 'Təklif ən çox {maxAllowed} ola bilər: cari ən yaxşıdan ən azı addım qədər aşağı.',
+    err_CATALOG_BELOW_MOQ: 'Minimum sifariş həcmi — {moq} ({item}), sorğuda isə daha azdır.',
+    empty_events: 'Elan edilmiş tender yoxdur — təsdiqlənmiş sorğudan elan edin.',
     // Hər siyahının yanında, həmişə: bu bölmədəki şeylər HARADA yaranır. Əvvəllər bu cavab
     // yalnız boş siyahıda yazılırdı — yəni onu artıq bilənə görünürdü, bilməyənə yox.
     // Boş siyahının öz sətri ona görə qısadır: mənbə cümləsi onun üstündə dayanır.
@@ -365,6 +372,10 @@ const dict: Record<Lang, Record<string, string>> = {
     tip_activate: 'Müqaviləni aktivləşdir — sifariş vermək olar', tip_create_po: 'Müqavilə üzrə sifariş (PO) yarat',
     tip_po_issue: 'Qaralama sifarişi yalnız siz görürsünüz — «ver» onu təchizatçıya göndərir.',
     tip_bid_needs_price: 'Heç olmasa bir mövqeyə qiymət yazın — göndəriləsi bir şey olsun.',
+    // Auksionda qiymət gizli deyil — mexanizm elə canlı qiymətdir; gizli qalan odur ki,
+    // qiymət kimindir. «Möhürlü» sözləri bu şəkilə yad idi.
+    auction_amounts_note: 'Qiymət canlı gedir — ən yaxşısı yuxarıdadır; kimin olduğu açılışda bilinir.',
+    auction_in_play: 'Təklif verir',
     tip_catalog_from: 'Müqavilədən kataloq yarat', tip_receive: 'Gələn malı qəbul et', tip_amend: 'Sifarişə dəyişiklik təklif et (say/qiymət)',
     tip_inv_approve: 'Qaiməni ödənişə təsdiqlə', tip_inv_reject: 'Qaiməni rədd et', tip_pay: 'Qaiməni ödənilmiş kimi işarələ',
     tip_supplier_approve: 'Təchizatçını təsdiqlə — birbaşa sifariş və kataloqlar açılır', tip_supplier_block: 'Blokla — təchizatçı sifariş ala bilməyəcək',
@@ -419,6 +430,13 @@ const dict: Record<Lang, Record<string, string>> = {
     po_created: 'Создан', po_issued: 'Выпущен',
     no_shipment: 'Отгрузки по этому заказу нет.',
     amendments_decide_elsewhere: 'Решение принимается у поставщика, на «Заказах в работе».',
+    // Отказы сервера. Ключ — `err_<CODE>`; components/refusal.ts ищет его по коду, а не
+    // найдя, оставляет английский текст как есть: непереведённый отказ не становится хуже.
+    err_BID_ITEMS_REQUIRED: 'Впишите цену хотя бы в одну позицию: отправлять нечего.',
+    err_BID_LOT_INCOMPLETE: 'В лоте нужно оценить ВСЕ позиции либо не трогать лот вовсе — неполное предложение не рассматривается.',
+    err_AUCTION_BID_TOO_HIGH: 'Ставка может быть не выше {maxAllowed}: ниже текущей лучшей хотя бы на шаг.',
+    err_CATALOG_BELOW_MOQ: 'Минимальная партия — {moq} ({item}), а в заказе меньше.',
+    empty_events: 'Объявленных тендеров нет — объявите из утверждённой заявки.',
     // Рядом с каждым списком, всегда: ГДЕ заводится то, что в этом разделе. Раньше этот
     // ответ стоял только в пустом списке — то есть был виден лишь тому, кто его уже знает.
     // Сама строка пустого списка поэтому короткая: фраза про источник стоит над ней.
@@ -760,6 +778,10 @@ const dict: Record<Lang, Record<string, string>> = {
     tip_activate: 'Активировать контракт — можно выпускать заказы', tip_create_po: 'Сформировать заказ (PO) по контракту',
     tip_po_issue: 'Пока заказ в черновике, поставщик его не видит — «выпустить» и значит отправить.',
     tip_bid_needs_price: 'Впишите цену хотя бы в одну позицию — иначе отправлять нечего.',
+    // В аукционе цена не секрет — живая цена и есть механизм; секрет — чья она.
+    // Слова от запечатанного конверта этой картине были чужими.
+    auction_amounts_note: 'Цена идёт живым торгом — лучшая выше; чья она, станет видно при вскрытии.',
+    auction_in_play: 'Торгуется',
     tip_catalog_from: 'Создать каталог из контракта', tip_receive: 'Оприходовать полученный товар', tip_amend: 'Предложить изменение заказа (кол-во/цена)',
     tip_inv_approve: 'Одобрить счёт к оплате', tip_inv_reject: 'Отклонить счёт', tip_pay: 'Отметить счёт оплаченным',
     tip_supplier_approve: 'Одобрить поставщика — открываются прямые заказы и каталоги', tip_supplier_block: 'Заблокировать — поставщик не сможет получать заказы',
@@ -814,6 +836,14 @@ const dict: Record<Lang, Record<string, string>> = {
     po_created: 'Created', po_issued: 'Issued',
     no_shipment: 'No shipment on this order.',
     amendments_decide_elsewhere: 'Decided on the supplier side, under Orders in progress.',
+    // The server's refusals. The key is `err_<CODE>`; components/refusal.ts looks it up by
+    // code and, finding none, leaves the English message as it was — an untranslated
+    // refusal is no worse off than before.
+    err_BID_ITEMS_REQUIRED: 'Enter a price for at least one line: there is nothing to send.',
+    err_BID_LOT_INCOMPLETE: 'Price EVERY line of a lot or leave the lot alone — a partial bid is not evaluated.',
+    err_AUCTION_BID_TOO_HIGH: 'A bid may be at most {maxAllowed}: below the current best by at least one decrement.',
+    err_CATALOG_BELOW_MOQ: 'The minimum order size is {moq} ({item}); the order asks for less.',
+    empty_events: 'No tenders announced yet — announce one from an approved request.',
     // Beside every list, always: WHERE the things in this section come from. That answer
     // used to live in the empty state alone — visible only to someone who already knew it.
     // The empty line itself is short for that reason: the origin sentence stands above it.
@@ -1155,6 +1185,10 @@ const dict: Record<Lang, Record<string, string>> = {
     tip_activate: 'Activate the contract — orders can be issued', tip_create_po: 'Create a purchase order from the contract',
     tip_po_issue: 'A draft order is yours alone — issuing is what sends it to the supplier.',
     tip_bid_needs_price: 'Enter a price for at least one line — there is nothing to send otherwise.',
+    // In an auction the price is not a secret — the running price IS the mechanism; whose
+    // price it is stays sealed. The sealed-envelope words never fitted this picture.
+    auction_amounts_note: 'The price is bid live — the best is above; whose it is shows at the opening.',
+    auction_in_play: 'Bidding',
     tip_catalog_from: 'Create a catalog from the contract', tip_receive: 'Record the goods received', tip_amend: 'Propose a change order (qty / price)',
     tip_inv_approve: 'Approve the invoice for payment', tip_inv_reject: 'Reject the invoice', tip_pay: 'Mark the invoice as paid',
     tip_supplier_approve: 'Approve the supplier — unlocks direct orders and catalogs', tip_supplier_block: 'Block — the supplier can no longer receive orders',
