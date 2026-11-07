@@ -331,22 +331,30 @@ test.describe('buyer panel', () => {
   // of bubbles that actually opened is asserted — an empty list of offenders proves nothing
   // if nothing ever opened.
   test('no hint pushes the page sideways', async () => {
+    // 1280 explicitly: the measurement that found this was made there — it is the width the
+    // owner works at — and tests before this one leave the viewport wherever they finished.
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const idle = () => page.evaluate(() =>
+      document.scrollingElement!.scrollWidth - document.scrollingElement!.clientWidth);
+    const seenAnywhere = { opened: 0, pulled: 0 };
     for (const path of ['/buyer/suppliers', '/buyer/dashboard']) {
       await page.goto(path);
       await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
-      const idle = () => page.evaluate(() =>
-        document.scrollingElement!.scrollWidth - document.scrollingElement!.clientWidth);
-      const base = await idle();
-      expect(base, `${path} scrolls sideways with every hint shut — a different fault`).toBeLessThanOrEqual(1);
+      expect(await idle(), `${path} scrolls sideways with every hint shut — a different fault`)
+        .toBeLessThanOrEqual(1);
 
       const tips = page.locator('[data-tip]');
       const over: string[] = [];
-      let opened = 0;
-      let pulled = 0;
+      let visible = 0;
       for (let i = 0; i < await tips.count(); i++) {
         const tip = tips.nth(i);
         if (!(await tip.isVisible())) continue;
+        // The baseline is taken again for EVERY hint, not once per page: these pages finish
+        // arriving after `[role=status]` is gone — a late notification row is enough — and a
+        // page-wide baseline would hand that width to whichever hint was open at the time.
+        const before = await idle();
         if (!await tip.hover({ timeout: 2000 }).then(() => true, () => false)) continue;
+        visible++;
         const seen = await tip.evaluate((node) => ({
           width: parseFloat(getComputedStyle(node as Element, '::after').width) || 0,
           scroll: document.scrollingElement!.scrollWidth - document.scrollingElement!.clientWidth,
@@ -355,21 +363,21 @@ test.describe('buyer panel', () => {
           shift: (node as HTMLElement).style.getPropertyValue('--tip-shift'),
           text: (node.getAttribute('data-tip') ?? '').slice(0, 30),
         }));
-        if (seen.width > 20) opened++;
-        if (seen.shift) pulled++;
-        if (seen.scroll - base > 1) over.push(`+${seen.scroll - base}px on «${seen.text}…»`);
+        if (seen.width > 20) seenAnywhere.opened++;
+        if (seen.shift) seenAnywhere.pulled++;
+        if (seen.scroll - before > 1) over.push(`+${seen.scroll - before}px on «${seen.text}…»`);
         await page.mouse.move(2, 2);
-        // the bubble fades out before the next one is measured, or its width would be
-        // counted against its neighbour
         await page.waitForTimeout(160);
       }
-      expect(opened, `${path}: not one bubble opened — nothing was measured`).toBeGreaterThan(0);
-      // Both pages carried an offender when this was measured (+82px here on the block
-      // button, +71px on the dashboard's last KPI tile). If none is pulled back any more,
-      // the clean result above is clean for some other reason and proves nothing.
-      expect(pulled, `${path}: no bubble needed pulling back — the check has stopped testing the fix`).toBeGreaterThan(0);
+      expect(visible, `${path}: no hint could be hovered at all`).toBeGreaterThan(0);
       expect(over, `${path}: a hint pushed the page sideways`).toEqual([]);
     }
+    // Across the two pages, not per page: which hints a page shows depends on the seed and
+    // on the role, and the claim is about the mechanism, not about one screen. Both numbers
+    // matter — bubbles that open prove something was measured, and at least one pulled back
+    // proves the clean result above is the fix working rather than nothing to fix.
+    expect(seenAnywhere.opened, 'not one bubble opened anywhere — nothing was measured').toBeGreaterThan(0);
+    expect(seenAnywhere.pulled, 'no bubble needed pulling back — the check has stopped testing the fix').toBeGreaterThan(0);
   });
 
   // A load that fails must SAY so. The KPI used to leave "…" on screen for ever — the page
