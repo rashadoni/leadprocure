@@ -148,7 +148,13 @@ export class CatalogsService {
       const ci = byId.get(l.catalogItemId);
       if (!ci) throw new BadRequestException(`Unknown catalog item ${l.catalogItemId}`);
       if (!(Number(l.qty) > 0)) throw new BadRequestException('qty must be positive');
-      if (Number(l.qty) < Number(ci.moq)) throw new BadRequestException(`Below MOQ (${ci.moq}) for ${ci.name}`);
+      if (Number(l.qty) < Number(ci.moq)) {
+        throw new BadRequestException({
+          statusCode: 400, error: 'Bad Request', code: 'CATALOG_BELOW_MOQ',
+          moq: Number(ci.moq), item: ci.name,
+          message: `Below MOQ (${ci.moq}) for ${ci.name}`,
+        });
+      }
       const lineTotal = lineMoney(Number(l.qty), Number(ci.unit_price_minor));
       total += lineTotal;
       poLines.push({ ci, qty: Number(l.qty), lineTotal });

@@ -344,9 +344,12 @@ export class SourcingService {
     for (const itemIds of itemsByLot.values()) {
       const touched = itemIds.some((id) => submitted.has(id));
       if (touched && !itemIds.every((id) => submitted.has(id))) {
-        throw new BadRequestException(
-          'Incomplete lot bid is non-responsive: price every item of a lot, or omit the lot entirely',
-        );
+        throw new BadRequestException({
+          statusCode: 400,
+          error: 'Bad Request',
+          code: 'BID_LOT_INCOMPLETE',
+          message: 'Incomplete lot bid is non-responsive: price every item of a lot, or omit the lot entirely',
+        });
       }
     }
   }
@@ -381,7 +384,13 @@ export class SourcingService {
       if (dto.items?.length) throw new BadRequestException('RFI does not accept priced items');
       if (!proposalText) throw new BadRequestException('RFI requires a response text');
     } else {
-      if (!dto.items?.length) throw new BadRequestException('Bid items required');
+      // `code` beside the message, as budgets and the self-approval guard already do: the
+      // client translates by code and falls back to the message, so a supplier stops being
+      // answered in English on an Azerbaijani screen. The English text is left exactly as
+      // it was — it is what the API's own tests read.
+      if (!dto.items?.length) {
+        throw new BadRequestException({ statusCode: 400, error: 'Bad Request', code: 'BID_ITEMS_REQUIRED', message: 'Bid items required' });
+      }
       if (ev.type === 'RFP' && !proposalText) throw new BadRequestException('RFP requires a technical proposal');
     }
 

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useI18n } from '../i18n';
+import { refusalText } from './refusal';
 
 // The product's own dialogs, replacing 74 calls to the browser's alert / prompt / confirm.
 //
@@ -100,11 +101,10 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
     if (kind !== 'error') setTimeout(() => setToasts((all) => all.filter((x) => x.id !== id)), 6000);
   }, []);
 
+  // One place decides what a refusal says — by `code` where the server sends one, by its
+  // English message where it does not. See components/refusal.ts.
   const notifyError = useCallback((e: unknown) => {
-    const body = (e as any)?.response?.data?.message;
-    const text = (Array.isArray(body) ? body.join('. ') : body?.toString())
-      || (e as any)?.message || t('error_generic');
-    notify(text, 'error');
+    notify(refusalText(t, e), 'error');
   }, [notify, t]);
 
   // A second dialog on top of an open one would strand the first `await` for ever, so the

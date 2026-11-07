@@ -200,7 +200,13 @@ export class AuctionService {
 
     if (total > maxAllowed) {
       // Rejected requests roll back; the accepted ledger intentionally records only committed ticks.
-      throw new BadRequestException(`Bid must be at most ${maxAllowed} (best ${best ?? '—'} − decrement)`);
+      throw new BadRequestException({
+        statusCode: 400, error: 'Bad Request', code: 'AUCTION_BID_TOO_HIGH',
+        // The figures as fields too, not only inside the sentence: a translated refusal
+        // builds its own sentence and would otherwise lose them.
+        maxAllowed, best: best ?? null,
+        message: `Bid must be at most ${maxAllowed} (best ${best ?? '—'} − decrement)`,
+      });
     }
 
     const tick = await record(true);
