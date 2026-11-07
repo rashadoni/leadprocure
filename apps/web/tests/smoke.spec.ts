@@ -216,10 +216,10 @@ test.describe('buyer panel', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/learn');
     const rows = page.getByTestId('learn-row');
-    await expect(rows).toHaveCount(18);
+    await expect(rows).toHaveCount(20);
     // A fresh context has watched nothing, so the count is the whole course and the first
     // lesson is the one offered to carry on with.
-    await expect(page.getByTestId('learn-count')).toContainText('0 / 18');
+    await expect(page.getByTestId('learn-count')).toContainText('0 / 20');
     await expect(rows.first()).toHaveClass(/is-next/);
 
     await rows.first().getByTestId('learn-play').click();
