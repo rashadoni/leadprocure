@@ -214,6 +214,17 @@ describe('order card (API e2e)', () => {
       expect(myLines.body.summary).toHaveLength(1);
     });
 
+    it('refuses a write on it the same way it refuses a read', async () => {
+      // A door that refuses differently is a door that answers: `po_apply_status` runs as
+      // the owner and would have said «Illegal transition DRAFT → CONFIRMED for this
+      // actor», naming both the order's existence and its state to someone who cannot see
+      // it. 404, like the card.
+      await http().post(`/orders/${draftId}/status`).set(...bearer(supplier))
+        .send({ status: 'CONFIRMED' }).expect(404);
+      // and the buyer's own legal move on it is untouched
+      await http().get(`/orders/${draftId}`).set(...bearer(buyer)).expect(200);
+    });
+
     it('says nothing to the supplier until it is issued, then says it once', async () => {
       const mine = async () => (await http().get('/notifications').set(...bearer(supplier)).expect(200)).body
         .filter((n: any) => n.payload?.po_id === draftId);

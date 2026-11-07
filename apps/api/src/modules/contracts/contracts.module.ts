@@ -512,6 +512,13 @@ export class ContractsService {
 
   async setOrderStatus(id: string, status: PoStatus, note: string | undefined, auth: AccessTokenPayload) {
     await lockOrder(this.rc.manager, id);
+    // Read it under the policies first. `po_apply_status` runs as the owner, so without
+    // this an order the caller cannot SEE still answers them — «Illegal transition DRAFT →
+    // CONFIRMED» names both its existence and its state. Since 0045 a supplier cannot see a
+    // draft, and a door that refuses differently is a door that answers. `createReceipt`
+    // above has always done exactly this.
+    const seen = await this.rc.manager.query(`SELECT 1 FROM purchase_orders WHERE id = $1`, [id]);
+    if (!seen.length) throw new NotFoundException('Order not found');
     try {
       const rows = await this.rc.manager.query(`SELECT * FROM po_apply_status($1, $2, $3)`, [
         id, status, note ?? null,
