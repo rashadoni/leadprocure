@@ -198,9 +198,12 @@ export default function Invoices() {
                   <td>
                     {ok ? '✅' : '⚠️'}
                     {!ok && (
-                      <div className="hint">
+                      <div className="hint" data-testid="match-why">
                         {[
                           !l.price_ok && t('inv_why_price'),
+                          // `??`, never `||`: nought is the commonest answer here — the
+                          // delivery was received and already billed, so nothing is left —
+                          // and `||` would print a dash where the whole point is the zero.
                           !l.qty_ok && `${t('inv_why_qty')} · ${t('inv_billable')}: ${l.billable ?? '—'}`,
                         ].filter(Boolean).join(' · ')}
                       </div>
