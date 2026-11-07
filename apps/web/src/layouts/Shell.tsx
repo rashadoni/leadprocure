@@ -57,6 +57,7 @@ export default function Shell() {
             {!isFinance && <NavLink to="/buyer/suppliers">{t('suppliers')}</NavLink>}
             {!isFinance && <NavLink to="/buyer/verification">{t('verification')}</NavLink>}
             <NavLink to="/buyer/settings">{t('settings')}</NavLink>
+            <NavLink to="/learn">{t('learn')}</NavLink>
           </>
         ) : (
           <>
@@ -67,6 +68,7 @@ export default function Shell() {
             <NavLink to="/supplier/invoices">{t('invoices')}</NavLink>
             <NavLink to="/supplier/catalogs">{t('catalogs')}</NavLink>
             <NavLink to="/supplier/verification">{t('verification')}</NavLink>
+            <NavLink to="/learn">{t('learn')}</NavLink>
           </>
         )}
         <div className="spacer" />

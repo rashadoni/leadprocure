@@ -25,6 +25,8 @@ import EventDetail from './pages/buyer/EventDetail';
 import Suppliers from './pages/buyer/Suppliers';
 import Market from './pages/supplier/Market';
 import SupplierEvent from './pages/supplier/SupplierEvent';
+import Learn from './pages/Learn';
+import { BUYER, FINANCE_READ, SUPPLIER } from './roles';
 import './styles.css';
 
 function Home() {
@@ -45,9 +47,6 @@ function NotFound() {
   );
 }
 
-const BUYER = ['BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER'];
-const FINANCE_READ = [...BUYER, 'BUYER_FINANCE'];
-const SUPPLIER = ['SUPPLIER_USER'];
 
 const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
@@ -58,6 +57,7 @@ const router = createBrowserRouter([
     element: <Protected><Shell /></Protected>,
     errorElement: <NotFound />,
     children: [
+      { path: '/learn', element: <Protected><Learn /></Protected> },
       { path: '/buyer/dashboard', element: <Protected roles={FINANCE_READ}><Dashboard /></Protected> },
       { path: '/buyer/settings', element: <Protected roles={FINANCE_READ}><Settings /></Protected> },
       { path: '/buyer/logistics', element: <Protected roles={BUYER}><Logistics /></Protected> },
