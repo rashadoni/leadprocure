@@ -9,17 +9,21 @@ import { BUYER, FINANCE_READ, SUPPLIER } from './roles';
 // interface language. Settled by the owner on 2026-11-01, with the two leftover
 // buyer-settings .ru/.en files deleted — nothing had ever loaded them.
 //
-// Two gaps, both deliberate rather than forgotten:
+// One gap is left, and it is deliberate rather than forgotten:
 //  · `sup-auction` is recorded (scripts/produce-guides.mjs has its scenario) but is NOT in
 //    the map below and cannot be: a reverse auction lives on the same /supplier/events/:id
 //    route as a sealed tender, and this map keys on the route alone, so that route plays
 //    `sup-market`. Wiring it needs the bar to choose by the event's own format, not by path.
-//  · `/supplier/catalogs` and `/supplier/contracts` are real routes with no entry here, so
-//    they show no help line. They render the SAME components as the buyer's pages but
-//    without the buyer's controls, so pointing them at `buyer-catalogs` / `buyer-contracts`
-//    would hand a supplier a walkthrough of buttons they do not have; covering them properly
-//    means two more recordings. Adding a key whose file does not exist gives the player a
-//    404, so the entry must land together with the recording, never before it.
+//    The course below reaches it by NAME, which is how it finally gets watched at all.
+//
+// `/supplier/catalogs` and `/supplier/contracts` were the other gap until 2026-11-07: real
+// routes with no entry here, so no help line at all. They render the SAME components as the
+// buyer's pages but without the buyer's controls, so pointing them at `buyer-catalogs` /
+// `buyer-contracts` would have handed a supplier a walkthrough of buttons he does not have —
+// covering them properly meant two more recordings, and `sup-catalogs` / `sup-contracts` are
+// those two. The rule that kept them out still holds for anything new: adding a key whose
+// file does not exist gives the player a 404, so the entry lands together with the
+// recording, never before it.
 
 export interface SectionGuide { key: string }
 
@@ -46,6 +50,8 @@ export const GUIDES: Record<string, SectionGuide> = {
   '/supplier/orders': g('sup-orders'),
   '/supplier/invoices': g('sup-invoices'),
   '/supplier/verification': g('sup-verification'),
+  '/supplier/catalogs': g('sup-catalogs'),
+  '/supplier/contracts': g('sup-contracts'),
 };
 
 // Route → the i18n key the sidebar already uses for that section, so the help card is
@@ -70,6 +76,8 @@ export const SECTION_TITLE_KEY: Record<string, string> = {
   '/supplier/orders': 'my_orders',
   '/supplier/invoices': 'invoices',
   '/supplier/verification': 'verification',
+  '/supplier/catalogs': 'catalogs',
+  '/supplier/contracts': 'contracts',
 };
 
 // ── The course behind /learn ────────────────────────────────────────────────────────────
@@ -87,6 +95,11 @@ export const SECTION_TITLE_KEY: Record<string, string> = {
 // with the other. Re-measure after re-recording:
 //   for f in apps/web/public/guides/*.az.webm; do
 //     ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$f"; done
+// The recorder no longer trusts anyone to remember that: scripts/produce-guides.mjs probes
+// every file it has just produced and REFUSES the run when the length here is more than a
+// couple of seconds away from it. Nothing else would ever notice a truncated re-recording —
+// the poster is still there, the video still answers 200, every suite stays green — and the
+// only one who finds out that the promised minutes are not the ones that play is a viewer.
 //
 // `to` is the section the lesson is about, and `roles` is copied from NOTHING — it is the
 // same array the router guards that path with (src/roles.ts), so the «go to the section»
@@ -138,8 +151,14 @@ export const COURSE: Track[] = [
       // finally runs. The jump goes to the open tenders, which is where an auction is
       // found; there is no auction URL to send anyone to without an event id.
       { key: 'sup-auction', titleKey: 'learn_s_auction', to: '/supplier/market', roles: SUPPLIER, sec: 104 },
+      // Winning is where the supplier's money starts, so the contract comes before the
+      // deliveries it pays for — the same place `buyer-contracts` sits in the track above.
+      { key: 'sup-contracts', titleKey: 'learn_s_contracts', to: '/supplier/contracts', roles: SUPPLIER, sec: 224 },
       { key: 'sup-orders', titleKey: 'learn_s_orders', to: '/supplier/orders', roles: SUPPLIER, sec: 171 },
       { key: 'sup-invoices', titleKey: 'learn_s_invoices', to: '/supplier/invoices', roles: SUPPLIER, sec: 126 },
+      // And last before the panel, for the reason the buyer's catalogue lesson is late too:
+      // it is the route AROUND the tender, and it only makes sense once the tender does.
+      { key: 'sup-catalogs', titleKey: 'learn_s_catalogs', to: '/supplier/catalogs', roles: SUPPLIER, sec: 140 },
       { key: 'sup-dashboard', titleKey: 'learn_s_dashboard', to: '/supplier/dashboard', roles: SUPPLIER, sec: 119 },
     ],
   },

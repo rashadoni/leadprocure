@@ -131,7 +131,10 @@ export default function Learn() {
       <div className="card">
         <h3>{t('learn_how')}</h3>
         <p className="muted">{t('learn_how_body')}</p>
-        <p className="muted learn-note">{t('learn_gap')}</p>
+        {/* A second line here used to name the two supplier sections that had no recording
+            — /supplier/catalogs and /supplier/contracts. Both are recorded since
+            2026-11-07 and sit in the supplier track below, so the caveat was removed
+            together with its `learn_gap` strings rather than left standing as a lie. */}
       </div>
 
       {playing && (

@@ -997,8 +997,102 @@ const SECTIONS = {
     { az: 'Sonra qərar sifarişçinin tərəfindədir. Təsdiq alan kimi idarə panelinizdəki yoxlama sətri yaşıla dönür və birbaşa sifarişlər açılır — bu, sizin üçün əlavə satış kanalıdır. Nə qədər ki qərar verilməyib, sətir nə gözlənildiyini deyir.',
       do: async (p, l, h) => { await h.scrollTo('h1'); await h.holdUntil(0.3); await h.moveTo(p.locator('tbody tr').first().locator('.badge')); await h.holdUntil(0.7); await h.moveTo('table'); await h.holdUntil(0.95); } },
   ]},
+  // Supplier catalogs — the first of the two sections that had no recording at all, and the
+  // reason they could not borrow the buyer's: this page renders the SAME component as
+  // /buyer/catalogs with `isBuyer` false, so the activate button, the quantity field, the
+  // department select and the «Sifariş» button are not merely disabled, they are not drawn.
+  // Pointing a supplier at `buyer-catalogs` would have walked him through four controls he
+  // does not have. What he DOES do here is read: whose catalogue it is, whether it is live,
+  // and at which agreed prices his own goods may now be called off without a tender.
+  // Nothing on the page can be pressed, so the scenes read and the one action is an
+  // expand — a GET that leaves the stand exactly as the other recordings need it.
+  'sup-catalogs': { role: 'sup', path: '/supplier/catalogs', scenes: [
+    { az: 'Kataloqlar bölməsi. Burada sifarişçinin sizinlə razılaşdırdığı qiymət cədvəli durur. Kataloq tender deyil: qiymətlər bir dəfə razılaşdırılır, sonra sifarişçi təkrarlanan xırda alışları hər dəfə prosedur keçirmədən verir.',
+      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.45); await h.moveTo('table'); await h.holdUntil(0.92); } },
+    { az: 'Cədvəldə dörd sütun var: kataloqun adı, sifarişçi, status və mövqelərin sayı. İkinci sütuna diqqət edin — orada sifarişçi yazılıb, çünki bu, sizin ekranınızdır. Eyni cədvəl sifarişçinin özündə təchizatçının adını göstərir.',
+      do: async (p, l, h) => { const th = p.locator('thead th'); await h.moveTo(th.nth(0)); await h.holdUntil(0.3); await h.moveTo(th.nth(1)); await h.holdUntil(0.6); await h.moveTo(p.locator('tbody tr').first().locator('td').nth(1)); await h.holdUntil(0.92); } },
+    { az: 'Mövqelərin sayının öz izahı var — rəqəm tək başına nəyin sayı olduğunu demir. Kataloqu sifarişçi müqavilədən yaradır, qiymətlər isə sizin udmuş təklifinizdən köçürülür. Yəni buradaki rəqəmləri heç kim əl ilə yazmır.',
+      do: async (p, l, h) => { await h.hover(p.locator('thead th').nth(3), 1600); await h.holdUntil(0.6); await h.moveTo(p.locator('tbody tr').first().locator('td').nth(3)); await h.holdUntil(0.92); } },
+    { az: 'Status iki şeyi deyir. Aktiv kataloq üzrə sifariş vermək mümkündür; qaralama hələ hazırlıq mərhələsidir. Sifarişçidə burada «Aktivləşdir» düyməsi olur — sizdə o düymə yoxdur, və bu qəsdəndir: kataloqu işə salmaq onun qərarıdır, siz nəticəsini görürsünüz.',
+      do: async (p, l, h) => { await h.hover(p.locator('tbody .badge').first(), 1600); await h.holdUntil(0.6); await h.moveTo(p.locator('thead th').nth(2)); await h.holdUntil(0.92); } },
+    { az: 'Kataloqun adına klikləyirik — içindəki mövqelər açılır.',
+      do: async (p, l, h) => { await h.moveTo(p.locator('tbody tr a').first()); await h.holdUntil(0.45); await h.click(p.locator('tbody tr a').first(), 1600); await h.holdUntil(0.95); } },
+    { az: 'Üç sütun: mövqenin adı, minimum sifariş həcmi və razılaşdırılmış vahid qiymət. Minimum həcm sizin şərtinizdir — ondan az sifariş sistem qəbul etmir, və sütunun izahı da bunu deyir. Qiymət isə razılaşdırılmış qiymətdir, siyahı qiyməti deyil.',
+      do: async (p, l, h) => { const card = p.locator('.card').last(); await h.scrollTo(card); await h.holdUntil(0.3); await h.hover(card.locator('thead th').nth(1), 1600); await h.holdUntil(0.65); await h.moveTo(card.locator('thead th').nth(2)); await h.holdUntil(0.93); } },
+    { az: 'Mövqelər sətir-sətir durur, hər birinin öz minimumu və öz qiyməti var. Bu səhifədə sizin üçün bir düymə də yoxdur, və bu çatışmazlıq deyil: qiymət razılaşdırılıb, ona görə onu buradan dəyişmək mümkün olmamalıdır. Kataloqda qiymətin redaktəsi ümumiyyətlə yoxdur — dəyişiklik lazımdırsa, bu, müqavilə səviyyəsində həll olunur.',
+      do: async (p, l, h) => { const card = p.locator('.card').last(); const rows = card.locator('tbody tr'); await h.moveTo(rows.nth(0)); await h.holdUntil(0.35); await h.moveTo(rows.nth(1).locator('td').nth(1)); await h.holdUntil(0.65); await h.moveTo(rows.nth(2).locator('td').nth(2)); await h.holdUntil(0.93); } },
+    { az: 'Sifarişçi kataloqdan sifariş verəndə o, tendersiz və danışıqsız dərhal yaranır — əvvəlcə qaralama kimi, sonra sifarişçi onu verir və sifariş sizin «İşdə olan sifarişlər» ekranınızda adi sifariş kimi işə düşür: təsdiq, qablaşdırma, göndərmə, çatdırılma, qaimə. Yəni bu cədvəl sizin daimi təklifinizdir: qiymət bir dəfə razılaşdırılıb durur, sifariş isə özü gəlir.',
+      do: async (p, l, h) => { await h.scrollTo('h1'); await h.holdUntil(0.3); await h.moveTo(p.locator('tbody tr').first().locator('.badge')); await h.holdUntil(0.6); await h.moveTo('table'); await h.holdUntil(0.93); } },
+  ]},
+  // Supplier contracts — the second missing one, and read from the side that has to DELIVER
+  // against the ceiling rather than set it. Same component as /buyer/contracts with
+  // `isBuyerSide` false: neither table draws an actions column at all (there is a browser
+  // spec for exactly that), so the buyer's recording would have spent half its length on
+  // «Aktivləşdir», «Sifariş yarat», «Mal qəbulu» and «Dəyişdir» — four controls a supplier
+  // never sees. The ONE press here is a navigation into the order's own card, which changes
+  // nothing on the stand; the forward steps live in `sup-orders` and stay there.
+  'sup-contracts': { role: 'sup', path: '/supplier/contracts', scenes: [
+    { az: 'Müqavilələr bölməsi. Müqavilə sizin udmuş təklifinizdən doğulur: tenderdə qalib seçiləndən sonra sistem təklifin şərtlərini müqaviləyə köçürür. Ona görə buradaki rəqəmlər sonrakı danışıqdan yox, sizin öz təklifinizdən gəlir.',
+      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.45); await h.moveTo(p.locator('.card').first().locator('table')); await h.holdUntil(0.92); } },
+    { az: 'Sütunlar: müqavilənin nömrəsi, başlıq, sifarişçi, qüvvədə olma müddəti, ümumi məbləğ, istifadə olunmuş hissə, status və bu müqavilə üzrə verilmiş sifarişlərin sayı. Ümumi məbləğ müqavilənin tavanıdır — birdəfəlik ödəniş deyil.',
+      do: async (p, l, h) => { const th = p.locator('.card').first().locator('thead th'); await h.moveTo(th.nth(0)); await h.holdUntil(0.28); await h.moveTo(th.nth(3)); await h.holdUntil(0.55); await h.moveTo(th.nth(4)); await h.holdUntil(0.8); await h.moveTo(th.nth(7)); await h.holdUntil(0.93); } },
+    { az: 'İstifadə olunub sütunu tavandan nə qədərinin sifarişlərə çevrildiyini göstərir, və onun izahı var: ləğv edilmiş və rədd edilmiş sifarişlər bu cəmə düşmür. Bu rəqəm təchizatçıya da lazımdır — çərçivə müqaviləsi bir neçə sifarişə bölünür, və burada hər iki rəqəm bərabərdir, yəni müqavilə tam istifadə olunub.',
+      do: async (p, l, h) => { await h.hover(p.locator('thead th:has-text("İstifadə olunub")').first(), 1700); await h.holdUntil(0.6); const row = p.locator('tbody tr:has-text("CTR-2026-0001")').first(); await h.moveTo(row.locator('td').nth(4)); await h.holdUntil(0.78); await h.moveTo(row.locator('td').nth(5)); await h.holdUntil(0.93); } },
+    { az: 'Status yalnız aktiv müqavilənin sifariş buraxa bildiyini deyir. Müqaviləni aktivləşdirmək sifarişçinin addımıdır, ona görə bu cədvəldə sizin üçün əməliyyatlar sütunu ümumiyyətlə çəkilmir — boş sütun da yerini tutur və «burada nəsə etmək lazımdır» deyə oxunur.',
+      do: async (p, l, h) => { const row = p.locator('tbody tr:has-text("CTR-2026-0001")').first(); await h.hover(row.locator('.badge').first(), 1600); await h.holdUntil(0.6); await h.moveTo(p.locator('.card').first().locator('thead th').last()); await h.holdUntil(0.93); } },
+    { az: 'Aşağıda satınalma sifarişləri — bu müqavilə üzrə və ondan kənarda verilmiş bütün sifarişlər bir siyahıda. Burada onlar yalnız oxunur: nömrə, sifarişçi, tarix, məbləğ və status. İşin özü — təsdiq, qablaşdırma, göndəriş, qaimə — «İşdə olan sifarişlər» bölməsindədir. Yəni bu səhifə hesabatdır, o səhifə iş yeridir.',
+      do: async (p, l, h) => { await h.scrollTo('h3:text-is("Satınalma sifarişləri")'); await h.holdUntil(0.4); const card = p.locator('.card:has(h3:text-is("Satınalma sifarişləri"))'); await h.moveTo(card.locator('table')); await h.holdUntil(0.72); await h.moveTo(card.locator('thead th').nth(2)); await h.holdUntil(0.93); } },
+    { az: 'Status sütunu sifarişin harada olduğunu deyir: verilib, təchizatçı təsdiqləyib, göndərilib, çatdırılıb, qəbul edilib. Qaralama statuslu sətir də görünür — o, hələ verilməmiş, sifarişçinin hazırladığı sifarişdir; nişanın üzərinə gətirsəniz, hər statusun izahı açılır.',
+      do: async (p, l, h) => { const card = p.locator('.card:has(h3:text-is("Satınalma sifarişləri"))'); await h.hover(card.locator('tbody tr').first().locator('.badge'), 1500); await h.holdUntil(0.45); await h.hover(card.locator('tbody tr:has-text("PO-2026-0004") .badge').first(), 1400); await h.holdUntil(0.72); await h.hover(card.locator('tbody tr:has-text("PO-2026-0001") .badge').first(), 1400); await h.holdUntil(0.93); } },
+    { az: 'Sifarişin nömrəsi onun öz səhifəsinə aparır. Müqavilə üzrə verilmiş sifarişi açırıq.',
+      do: async (p, l, h) => { const link = p.locator('tbody tr:has-text("PO-2026-0001") a').first(); await h.moveTo(link); await h.holdUntil(0.4); await h.click(link, 1800); await p.waitForSelector('h1', { timeout: 15000 }); await h.holdUntil(0.95); } },
+    { az: 'Başlıqda nömrə və status. Altda sifarişçi, məbləğ və iki tarix: sifariş nə vaxt yaradılıb və nə vaxt sizə verilib. Onlar eyni gün də ola bilər, fərqlənə də — sifariş əvvəlcə qaralama kimi yaranır, verilmə isə onu sizə göndərən andır.',
+      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.35); await h.moveTo(p.locator('.fact').nth(0)); await h.holdUntil(0.6); await h.moveTo(p.locator('.fact').nth(2)); await h.holdUntil(0.78); await h.moveTo(p.locator('.fact').nth(3)); await h.holdUntil(0.93); } },
+    { az: 'Sonra səhifənin ən faydalı sətri: bu sifariş hansı müqaviləyə əsaslanır və hansı tenderdən gəlir. Tenderin yanında keçid var, yəni öz udduğunuz prosedura geri qayıdıb şərtləri oxuya bilirsiniz. Sifarişçinin daxili sorğusu burada görünmür — o, onun öz sənədidir, və bunu gizlədən əlavə şərt deyil, bazanın öz qaydasıdır.',
+      do: async (p, l, h) => { const chain = p.locator('.fact-row').nth(1); await h.moveTo(chain.locator('.fact').nth(0)); await h.holdUntil(0.45); await h.moveTo(chain.locator('.fact').nth(0).locator('.fact-v')); await h.holdUntil(0.7); await h.hover(chain.locator('a').first(), 1500); await h.holdUntil(0.93); } },
+    { az: 'Sifarişin sətirləri üç miqdarı üz-üzə qoyur: nə sifariş edilib, faktiki nə qəbul edilib və qaiməyə nə qalıb. Üçüncü rəqəm sizin üçün ən vacibidir — qaimə məhz ondan doldurulur. Burada sıfırdır, çünki qəbul edilmiş miqdarın hamısına qaimə artıq verilib.',
+      do: async (p, l, h) => { const card = p.locator('.card:has(h3:text-is("Sifarişin sətirləri"))'); await h.scrollTo(card); await h.holdUntil(0.3); const th = card.locator('thead th'); await h.moveTo(th.nth(2)); await h.holdUntil(0.5); await h.moveTo(th.nth(3)); await h.holdUntil(0.7); await h.moveTo(th.nth(4)); await h.holdUntil(0.85); await h.moveTo(card.locator('tbody tr').first().locator('td').nth(4)); await h.holdUntil(0.95); } },
+    { az: 'Aşağıda tarixçə: hər status dəyişikliyi vaxtı və səbəbi ilə. Bu, mübahisədə ən sadə dəlildir — nə vaxt göndərdiyinizi və nə vaxt qəbul edildiyini yadda saxlamaq lazım gəlmir.',
+      do: async (p, l, h) => { const card = p.locator('.card:has(h3:text-is("Tarixçə"))'); await h.scrollTo(card); await h.holdUntil(0.4); await h.moveTo(card.locator('tbody tr').first()); await h.holdUntil(0.68); await h.moveTo(card.locator('tbody tr').last()); await h.holdUntil(0.93); } },
+    { az: 'Ən sonda logistika: daşıyıcı, izləmə nömrəsi və göndərişin cari vəziyyəti. Hadisələri siz özünüz «İşdə olan sifarişlər» bölməsində əlavə edirsiniz, burada isə onların yekunu görünür. Beləliklə bir səhifədə üç sual bağlanır: nə razılaşdırılıb, nə sifariş edilib və nə baş verib.',
+      do: async (p, l, h) => { const card = p.locator('.card:has(h3:has-text("Logistika"))'); await h.scrollTo(card); await h.holdUntil(0.4); await h.moveTo(card.locator('.fact').nth(0)); await h.holdUntil(0.62); await h.moveTo(card.locator('.fact').nth(1)); await h.holdUntil(0.78); await h.moveTo(card.locator('.fact').nth(2)); await h.holdUntil(0.93); } },
+  ]},
 
 };
+
+// How far a finished file may stand from the length the course promises, in seconds.
+// The declared numbers are the measured ones rounded to a whole second, so anything past a
+// couple of seconds is a real divergence and not rounding.
+const SEC_TOLERANCE = 2;
+
+// What /learn promises each lesson lasts, read straight out of apps/web/src/guides.ts.
+//
+// Those numbers are measured BY HAND and then written down, and nothing downstream notices
+// when a re-recording changes a length: the poster is still there, the video still answers
+// 200, every test stays green — and the course page goes on offering «5:48» for a clip that
+// now runs four minutes. The only one who finds out is the viewer. So the file is measured
+// HERE, where it is born, and held against what the product says about it.
+//
+// Parsed rather than imported: this is a .mjs script and guides.ts is TypeScript inside the
+// web app's build. The shape it looks for is one lesson object per line, which is how the
+// COURSE tracks are written.
+function courseSeconds() {
+  const file = join(ROOT, 'apps/web/src/guides.ts');
+  const src = readFileSync(file, 'utf8');
+  const map = new Map();
+  for (const m of src.matchAll(/\{\s*key:\s*'([a-z0-9-]+)'[^}]*?\bsec:\s*(\d+(?:\.\d+)?)\s*,?\s*\}/g)) {
+    map.set(m[1], Number(m[2]));
+  }
+  // A parse that finds nothing would make every comparison below pass without comparing
+  // anything — the one failure worse than no check at all. guides.ts holds a lesson per
+  // recording (twenty of them) and will not plausibly hold fewer than ten, so an empty or
+  // near-empty map means the pattern has gone stale and must be fixed, not ignored.
+  if (map.size < 10) {
+    throw new Error(`Не удалось прочитать длительности уроков из ${file}: найдено ${map.size}. `
+      + `Разбор устарел — сверка длительностей превратилась бы в молчаливое «всё хорошо».`);
+  }
+  return map;
+}
 
 // What the stand must actually HOLD for a section to film what it narrates.
 //
@@ -1077,6 +1171,10 @@ async function login(ctx, email) {
 (async () => {
   const keys = ONLY.length ? ONLY : Object.keys(SECTIONS);
   await assertStandHolds(keys);
+  // Read before anything is recorded: a stale parse should stop the run at the start, not
+  // after the footage and the narration have been paid for.
+  const declaredSec = courseSeconds();
+  const durationProblems = [];
   const tmp = mkdtempSync(join(tmpdir(), 'guides-'));
   console.log(`langs ${LANGS.join(',')} · stand ${BASE} · ${keys.length} sections`);
 
@@ -1198,13 +1296,36 @@ async function login(ctx, email) {
       // are about to stop using.
       copyFileSync(out, join(OUT, `${key}.${lang}.webm`));
       rmSync(out, { force: true });
-      console.log(`🎬 ${key}.${lang}.webm (${dur(join(OUT, `${key}.${lang}.webm`)).toFixed(1)}s)`);
+      const seconds = dur(join(OUT, `${key}.${lang}.webm`));
+      console.log(`🎬 ${key}.${lang}.webm (${seconds.toFixed(1)}s)`);
+      // Only az: the course ships the az recordings and its `sec` was measured on them, so
+      // holding a ru or en file against that number would fail for being a different
+      // language rather than a different cut.
+      if (lang === 'az') {
+        const declared = declaredSec.get(key);
+        if (declared === undefined) {
+          console.log(`  ↳ в курсе (apps/web/src/guides.ts) этого урока ещё нет — `
+            + `объявить sec: ${Math.round(seconds)}`);
+        } else if (Math.abs(seconds - declared) > SEC_TOLERANCE) {
+          durationProblems.push(`${key}: файл ${seconds.toFixed(1)}с, в курсе объявлено ${declared}с`);
+        }
+      }
     }
   }
   if (MISSES) {
     console.log(`\n⚠ промахов курсора: ${MISSES} — эти сцены играли по неподвижному экрану, смотрите ✗ выше`);
   } else {
     console.log('\nпромахов курсора: 0');
+  }
+  // Loud, and last: every other line of the log is already printed, so the refusal is read
+  // together with the run that produced it. The files are on disk — what is wrong is that
+  // the course promises a different length, and only a person can say which of the two is
+  // the mistake: a truncated recording, or a number nobody updated after re-recording.
+  if (durationProblems.length) {
+    throw new Error(`Длительность снятого файла расходится с тем, что обещает раздел «Обучение»:\n  `
+      + `${durationProblems.join('\n  ')}\n`
+      + `Либо запись обрезана — тогда переснимать, либо sec в COURSE (apps/web/src/guides.ts) `
+      + `устарел — тогда поправить число. Допуск ${SEC_TOLERANCE}с.`);
   }
   console.log('Done. Rebuild the web container to ship.');
 })().catch((e) => { console.error('FAILED:', e); process.exit(1); });
