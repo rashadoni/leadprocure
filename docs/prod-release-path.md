@@ -1655,20 +1655,33 @@ Leadprocure снаружи и только на чтение, через `TLS_CE
 ### Что сделать один раз, в этом порядке
 
 ```bash
+# ВСЕ команды этого блока — функции, и ни в одной нет `exit`. Причина не стиль:
+# строка 590 велит держать $SHA, $REL и $ENVP в ОДНОМ shell до шага 8, а `exit 1`,
+# вставленный в интерактивную оболочку, её закрывает — то есть отказ проверки
+# уносил бы ровно то состояние, на котором держится вся процедура. Функции
+# возвращают код и оболочку не трогают.
+#
+# $REL и $ENVP должны быть уже заданы (шаг 6), $SHA — тоже (шаг 3).
+
 # 0. положить конфиг входа в СТАБИЛЬНЫЙ каталог, вне чекаутов и воркитри.
 #    Копировать ВСЕГДА и сверять, а не вспоминать, менялся ли conf: `cp -p`
 #    идемпотентен, а `cmp` дешевле памяти. `-p` обязателен — reload-loop.sh без
 #    бита исполнения entrypoint пропустит молча.
 TLSD=/home/rashad/leadprocure-prod/tls
-install -d "$TLSD"
-cp -p "$REL/infra/nginx/leadprocure-tls.conf" "$REL/infra/nginx/reload-loop.sh" "$TLSD"/
-for f in leadprocure-tls.conf reload-loop.sh; do
-  cmp -s "$REL/infra/nginx/$f" "$TLSD/$f" || { echo "РАСХОЖДЕНИЕ: $f"; exit 1; }
-  # -f, а НЕ -x: бит исполнения у каталога значит «можно войти», поэтому `test -x`
-  # проходит на каталоге-подкидыше (см. ловушку 4) и сторожит не то. Тип проверяет -f.
-  test -f "$TLSD/$f" || { echo "НЕ файл (каталог-подкидыш?): $TLSD/$f"; exit 1; }
-done
-test -x "$TLSD/reload-loop.sh" || { echo 'reload-loop.sh НЕ исполняемый'; exit 1; }
+
+TLS_STAGE() {
+  install -d "$TLSD" || return 1
+  cp -p "$REL/infra/nginx/leadprocure-tls.conf" "$REL/infra/nginx/reload-loop.sh" "$TLSD"/ || return 1
+  for f in leadprocure-tls.conf reload-loop.sh; do
+    cmp -s "$REL/infra/nginx/$f" "$TLSD/$f" || { echo "РАСХОЖДЕНИЕ: $f"; return 1; }
+    # -f, а НЕ -x: бит исполнения у каталога значит «можно войти», поэтому `test -x`
+    # проходит на каталоге-подкидыше (см. ловушку 4) и сторожит не то. Тип проверяет -f.
+    test -f "$TLSD/$f" || { echo "НЕ файл (каталог-подкидыш?): $TLSD/$f"; return 1; }
+  done
+  test -x "$TLSD/reload-loop.sh" || { echo 'reload-loop.sh НЕ исполняемый'; return 1; }
+}
+
+TLS_STAGE || echo 'шаг 0 не прошёл — дальше не идти'
 
 # 1. дописать в ЖИВОЙ .env.prod (прежний файл сохранить рядом, как с лицензией)
 TLS_CONF_DIR=/home/rashad/leadprocure-prod/tls
@@ -1678,21 +1691,29 @@ WEB_ORIGIN=https://75.119.156.234:10443
 S3_PUBLIC_URL=https://75.119.156.234:10444
 REFRESH_COOKIE_SECURE=true
 
-# 1a. СВЕРИТЬ по dry-run, что живой конфиг взят из стабильного каталога, а не из
-#     чекаута. Нужно потому, что `${TLS_CONF_DIR:-./nginx}` при забытой переменной
-#     молча развернётся от --project-directory, то есть снова в воркитри, и
+# 1a. СТОРОЖ, он же проверка «ничего не запуская». ОДНО определение на весь
+#     документ: две копии одного грепа уже начали расходиться (`-q` против
+#     `-E` без `-q`), и разошлись бы молча.
+#
+#     Зачем он: `${TLS_CONF_DIR:-./nginx}` при забытой переменной молча
+#     развернётся от --project-directory, то есть снова в воркитри, и
 #     `create_host_path: false` не поможет — путь-то существует. Случай штатный:
 #     шаг 1 велит сохранить прежний .env.prod рядом, а «вернуть прежний файл»
-#     возвращает поломку. Как и для лицензии: смотреть dry-run, а не читать .env.prod.
-#     Сужено до двух источников tls НАМЕРЕННО: по всем `source:` grep ловил бы и
+#     возвращает поломку. Как и для лицензии: смотреть dry-run, а не читать файл.
+#     Сужено до двух источников tls НАМЕРЕННО: по всем `source:` греп ловил бы и
 #     законные /infra/license и /infra/postgres/init, то есть срабатывал бы всегда.
-RELEASE_SHA="$SHA" docker compose -p leadprocure-prod \
-  --project-directory "$REL/infra" \
-  -f "$REL/infra/docker-compose.prod.yml" -f "$REL/infra/docker-compose.release.yml" \
-  --env-file "$ENVP" --profile tls config \
+TLS_GUARD() {
+  RELEASE_SHA="$SHA" docker compose -p leadprocure-prod \
+    --project-directory "$REL/infra" \
+    -f "$REL/infra/docker-compose.prod.yml" -f "$REL/infra/docker-compose.release.yml" \
+    --env-file "$ENVP" --profile tls config \
   | grep -E 'source:.*(leadprocure-tls\.conf|reload-loop\.sh)$' \
-  | grep -E '\.claude/worktrees|/projects/Leadprocure/' && \
-  { echo 'живой конфиг в чекауте — TLS_CONF_DIR не доехал'; exit 1; }
+  | grep -qE '\.claude/worktrees|/projects/Leadprocure/' \
+  && { echo 'СТОП: конфиг входа взят из чекаута — не тот воркитри или нет TLS_CONF_DIR'; return 1; }
+  return 0
+}
+
+TLS_GUARD && echo 'конфиг вне чекаутов — можно поднимать'
 
 # 2. поднять только вход, ничего больше не трогая. --profile tls обязателен:
 #    служба стоит в профиле, иначе её поднимал бы и обычный up — в том числе
@@ -1706,18 +1727,10 @@ RELEASE_SHA="$SHA" docker compose -p leadprocure-prod \
 #    SHA таким местом НЕ является, пока выложенный SHA старше `bfa4635`. Оговорка
 #    снимется сама, когда очередной релиз выложит `bfa4635`+, — но не раньше.
 #
-#    Поэтому сторож шага 1a и команда ниже соединены `&&`: пропустить проверку,
-#    запустив только вторую половину, уже не выйдет случайно.
-GUARD() { RELEASE_SHA="$SHA" docker compose -p leadprocure-prod \
-  --project-directory "$REL/infra" \
-  -f "$REL/infra/docker-compose.prod.yml" -f "$REL/infra/docker-compose.release.yml" \
-  --env-file "$ENVP" --profile tls config \
-  | grep -E 'source:.*(leadprocure-tls\.conf|reload-loop\.sh)$' \
-  | grep -qE '\.claude/worktrees|/projects/Leadprocure/' \
-  && { echo 'СТОП: конфиг входа взят из чекаута — не тот воркитри или нет TLS_CONF_DIR'; return 1; }
-  return 0; }
-
-GUARD && RELEASE_SHA="$SHA" docker compose -p leadprocure-prod \
+#    Сторож сцеплен с командой через `&&`: пропустить проверку, запустив только
+#    вторую половину, случайно не выйдет. Проверено на обоих местах запуска —
+#    из воркитри выложенного SHA сторож останавливает, из `bfa4635` пропускает.
+TLS_GUARD && RELEASE_SHA="$SHA" docker compose -p leadprocure-prod \
   --project-directory "$REL/infra" \
   -f "$REL/infra/docker-compose.prod.yml" -f "$REL/infra/docker-compose.release.yml" \
   --env-file "$ENVP" --profile tls up -d --no-build --no-deps tls
