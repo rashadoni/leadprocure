@@ -1107,6 +1107,64 @@ function courseSeconds() {
 // this cannot become a second route to a non-disposable stack. A run that cannot ask is
 // refused rather than quietly filmed: a check that passes when it fails to run is the
 // one thing worse than no check.
+// The declarations above are read BY NAME, and a name read by hand is a name that can be
+// misspelled. `requires: { eventOpenn: … }` or `require: { eventOpen: … }` both leave the
+// guard's list short — and if every declaration is misspelled, empty, so it returns at once
+// and the run proceeds as if the stand had been checked. That is the very blindness the
+// guard exists to prevent, one level up: it would green on its own failure to read.
+//
+// So the shape is checked instead of trusted. A section carries exactly these fields and a
+// `requires` exactly these predicates; anything else stops the run and is named. Checked for
+// EVERY section, not only the ones being filmed: a typo in a section nobody films today is
+// still a requirement that will not be enforced tomorrow, and it costs one line to fix now.
+const SECTION_FIELDS = new Set(['role', 'path', 'requires', 'scenes']);
+const REQUIRE_PREDICATES = new Set(['eventOpen']);
+// A scene is narration per language plus the camera move. `do` is the dangerous name here:
+// it is called as `scene.do?.(…)`, so a scene whose `do` is misspelled performs NO action,
+// raises nothing, counts no miss — and the run ends by printing «промахов курсора: 0» over a
+// motionless picture. Misspelt, it is simply an unknown field, which is why this list is the
+// whole fix.
+//
+// This is the scene AS DECLARED, and that makes assertSectionShape a START-OF-RUN check and
+// nothing else: the narration pass writes `audio` and `sec` onto these same objects (see
+// SECTIONS[key].scenes[i].audio = … below), so called again after tts() it would refuse every
+// scene in the file. Calling it a second time, say right before recording, is the natural
+// thing to reach for — hence this note. The service fields are deliberately NOT admitted to
+// the list: listing them would licence a typo named `sec`, which is the hole this closes.
+const SCENE_FIELDS = new Set(['az', 'ru', 'en', 'do']);
+
+function assertSectionShape() {
+  const bad = [];
+  for (const [key, section] of Object.entries(SECTIONS)) {
+    for (const field of Object.keys(section)) {
+      if (!SECTION_FIELDS.has(field)) bad.push(`${key}: неизвестное поле «${field}» — опечатка? Допустимы: ${[...SECTION_FIELDS].join(', ')}`);
+    }
+    for (const predicate of Object.keys(section.requires ?? {})) {
+      if (!REQUIRE_PREDICATES.has(predicate)) bad.push(`${key}.requires: неизвестное требование «${predicate}» — опечатка? Допустимы: ${[...REQUIRE_PREDICATES].join(', ')}`);
+    }
+    (section.scenes ?? []).forEach((scene, i) => {
+      for (const field of Object.keys(scene)) {
+        if (!SCENE_FIELDS.has(field)) bad.push(`${key}, сцена ${i + 1}: неизвестное поле «${field}» — опечатка? Допустимы: ${[...SCENE_FIELDS].join(', ')}`);
+      }
+    });
+  }
+  if (bad.length) {
+    throw new Error(`Объявления разделов прочитаны не полностью — такое объявление молча не работало бы:\n  `
+      + `${bad.join('\n  ')}`);
+  }
+}
+
+// The key an operator typed. `sup-catalogz` passes every check above — it is not a section at
+// all — so the stand guard requires nothing for it and the run dies much later on a bare
+// «Cannot read properties of undefined», naming neither the key nor the typo.
+function assertKeysExist(keys) {
+  const unknown = keys.filter((k) => !SECTIONS[k]);
+  if (unknown.length) {
+    throw new Error(`Таких разделов нет: ${unknown.map((k) => `«${k}»`).join(', ')}.\n`
+      + `  Есть: ${Object.keys(SECTIONS).join(', ')}`);
+  }
+}
+
 async function assertStandHolds(keys) {
   const wanted = [...new Set(keys.flatMap((k) => SECTIONS[k]?.requires?.eventOpen ?? []))];
   if (!wanted.length) return;
@@ -1170,6 +1228,10 @@ async function login(ctx, email) {
 
 (async () => {
   const keys = ONLY.length ? ONLY : Object.keys(SECTIONS);
+  // Before the stand is asked anything: these judge the source and the arguments, not the
+  // data, and an early `return` added to assertStandHolds some day must not carry them off.
+  assertSectionShape();
+  assertKeysExist(keys);
   await assertStandHolds(keys);
   // Read before anything is recorded: a stale parse should stop the run at the start, not
   // after the footage and the narration have been paid for.
