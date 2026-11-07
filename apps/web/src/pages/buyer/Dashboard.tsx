@@ -59,7 +59,10 @@ export default function Dashboard() {
   // figures are net of VAT, cover ALL time rather than a period, and count AZN awards only —
   // none of which the bare number said.
   const cards = [
-    { label: t('spend'), value: fmtMoney(kpi.data.awardedSpend), tip: t('tip_spend') },
+    // «Присуждено», not «Объём закупок»: this is the sum of winning bids over all time,
+    // which the tooltip always said and the label never did — while Аналитика printed a
+    // different number under the very same word.
+    { label: t('kpi_awarded'), value: fmtMoney(kpi.data.awardedSpend), tip: t('tip_spend') },
     { label: t('savings'), value: fmtMoney(kpi.data.savings), tip: t('tip_savings') },
     { label: t('active_events'), value: kpi.data.activeEvents, tip: t('tip_active_events') },
     { label: t('pending'), value: kpi.data.pendingApprovals, tip: t('tip_pending') },

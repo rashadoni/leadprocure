@@ -320,6 +320,45 @@ test.describe('buyer panel', () => {
     await expect(page.locator('text=AZN').first()).toBeVisible({ timeout: 10_000 });
   });
 
+  // Two complaints from the audit, both about a number and the word over it.
+  //
+  // The rollup's first row is «Вся организация» — the org-wide BUDGET, the one that catches
+  // what no department budget matches — and it stood above IT and OPS with a smaller plan
+  // than either, reading like a total that did not add up. There was no total at all.
+  //
+  // And «Объём закупок» stood over two different figures: on the dashboard the sum of
+  // winning bids over all time, in analytics the accepted orders of the window. Both
+  // honest, one word. The tooltips always said which was which; the labels never did.
+  test('the rollup adds itself up, and the two spend tiles no longer share a word', async () => {
+    await page.goto('/buyer/budgets');
+    await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+    const rollup = page.getByTestId('budget-rollup');
+    const money = (text: string) => Number(text.replace(/[^\d.-]/g, '')) || 0;
+    // Top-level rows only, read the way the component decides it: a parent's figures already
+    // include its units (its first cell is indented, theirs are indented further).
+    const planned = await rollup.locator('tbody tr').evaluateAll((rows) => rows
+      .filter((r) => parseFloat(getComputedStyle(r.children[0] as Element).paddingLeft) <= 10.5)
+      .map((r) => (r.children[1] as HTMLElement).innerText));
+    const totalRow = rollup.getByTestId('rollup-total');
+    if (planned.length > 1) {
+      const total = money(await totalRow.locator('td').nth(1).innerText());
+      expect(total, `the total is not the sum of its rows (${planned.join(' + ')})`)
+        .toBeCloseTo(planned.reduce((n, cell) => n + money(cell), 0), 2);
+    } else {
+      // One row IS the organisation; a total under it would be the same figure twice. How
+      // many rows this stand has depends on its seed, so the arithmetic is asked directly
+      // in tests/rollup-total.spec.ts — including the nested case CI cannot build at all.
+      await expect(totalRow).toHaveCount(0);
+    }
+
+    await page.goto('/buyer/dashboard');
+    await expect(page.getByText('Awarded in tenders', { exact: true })).toBeVisible({ timeout: 10_000 });
+    await page.goto('/buyer/analytics');
+    await expect(page.getByText('Accepted orders', { exact: true }).first()).toBeVisible({ timeout: 10_000 });
+    // the word that used to stand over both is now over neither
+    await expect(page.getByText('Total spend', { exact: true })).toHaveCount(0);
+  });
+
   // Hovering a hint must not move the page. The bubble is centred on its host, so on an
   // element near the right edge half of it lands past the window — and a box past the edge
   // is part of the width the page can scroll. Measured at 1280 before the fix: +82px on the
@@ -467,6 +506,10 @@ test.describe('buyer panel', () => {
     await page.fill('[data-testid=item-name-0]', 'Playwright item');
     await page.fill('[data-testid=item-qty-0]', '2');
     await page.fill('[data-testid=item-price-0]', '10');
+    // 2 × 10.00 — on screen while it is being typed. The sum decides whether this becomes a
+    // direct purchase or a tender, and which budget it charges; it used to appear only in
+    // the list afterwards, so the one number that mattered was invisible while it was made.
+    await expect(page.getByTestId('req-total')).toContainText('20.00');
     // BEFORE the submit: the form clears itself on success, and the layout this picture
     // exists to answer for — field widths against what each field holds, labels level
     // across inputs and a select — cannot be read off empty fields.

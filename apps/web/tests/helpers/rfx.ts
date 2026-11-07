@@ -71,7 +71,14 @@ export async function verifyRfiRfp({ browser, buyerPage, call, buyerToken, appro
       const text = `${marker}\nSecond paragraph ${scenario.lang}`;
       await supplierPage.getByRole('textbox', { name: scenario.label, exact: true }).fill(text);
       if (scenario.type === 'RFP') {
+        // Shut until there is a price. It used to be live over «Сумма 0,00», and the press
+        // came back refused — in English, on whichever language the supplier had chosen.
+        // Matched by prefix, not exactly: a shut button carries its reason in its
+        // accessible name, which is what `data-tip` does to every control here.
+        const submitBid = supplierPage.getByRole('button', { name: new RegExp(`^🔒 ${scenario.submit}`) });
+        await expect(submitBid).toBeDisabled();
         await supplierPage.locator('tr').filter({ hasText: itemName }).getByRole('spinbutton').fill('12.00');
+        await expect(submitBid).toBeEnabled();
       } else {
         await expect(supplierPage.getByRole('spinbutton')).toHaveCount(0);
       }

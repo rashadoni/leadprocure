@@ -69,6 +69,13 @@ export default function SupplierEvent() {
     && (ev.lots ?? []).some((l: any) => l.awarded_bid_id === ev.my_bid.id);
   const lost = ev.status === 'AWARDED' && !won && !!ev.my_bid;
   const canBid = ['PUBLISHED', 'OPEN'].includes(ev.status);
+  // Nothing priced is nothing to send: the server refuses an empty `items` outright, and a
+  // button that is live for a refusal is a button that lies. RFI carries no prices at all —
+  // its text is the bid — and RFP needs both.
+  const priced = ev.items.some((i: any) => String(prices[i.id] ?? '').trim() !== '');
+  const blocked = ev.status !== 'OPEN'
+    || (ev.type === 'RFI' ? proposalText.trim().length < 3
+      : !priced || (ev.type === 'RFP' && proposalText.trim().length < 3));
 
   return (
     <>
@@ -175,7 +182,12 @@ export default function SupplierEvent() {
               </div>
             </>
           )}
-          <button className="btn" disabled={ev.status !== 'OPEN' || ((ev.type === 'RFP' || ev.type === 'RFI') && proposalText.trim().length < 3)} onClick={submit}>
+          {/* Live on an empty form, with «Сумма 0,00 AZN» printed beside it, the button
+              invited a press the server then refused — in English, on an Azerbaijani screen.
+              It is now shut until there is something to send, and says why, the way
+              «Параметры» already shuts its Save with «изменений нет». */}
+          <button className="btn" data-tip={blocked ? t('tip_bid_needs_price') : undefined}
+            disabled={blocked} onClick={submit}>
             {ev.format === 'REVERSE' ? `⚡ ${t('place_bid')}` : `🔒 ${ev.type === 'RFI' ? t('send') : t('bid')}`}
           </button>
         </div>

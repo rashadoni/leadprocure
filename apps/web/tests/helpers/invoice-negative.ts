@@ -50,6 +50,16 @@ export async function verifyInvoiceCancellationAndRejection({ page, supplierPage
       .filter({ has: page.getByRole('cell', { name: poNo, exact: true }) });
     await row.getByRole('link', { name: invoice.invoice_no, exact: true }).click();
     const heading = page.getByRole('heading', { level: 3 }).filter({ hasText: invoice.invoice_no });
+
+    // The table said ⚠️ and nothing else; the buyer decides whether to pay from it. The
+    // snapshot has always carried the answer — which check failed, and how much of the
+    // delivery is still billable — so the line that now says it is asserted here, on the
+    // figure the check actually failed on: this fixture's quantity is already allocated,
+    // so nothing is billable and the reason ends in a nought. `||` in place of `??` would
+    // turn that nought into a dash and leave the sentence saying nothing.
+    const why = page.getByTestId('match-why').first();
+    await expect(why).toBeVisible();
+    await expect(why).toContainText(': 0');
     const path = `/invoices/${invoice.id}/approve`, pattern = `**${path}`;
     let unexpectedApprovals = 0;
     const forbid = async (route: import('@playwright/test').Route) => {
