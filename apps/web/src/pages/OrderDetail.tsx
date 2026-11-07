@@ -3,7 +3,7 @@ import { api, fmtDate, fmtDateTime, fmtMoney } from '../api/client';
 import { useI18n } from '../i18n';
 import { useAuth } from '../auth/auth';
 import { Badge } from '../components/Badge';
-import { statusLabel } from '../components/humanize';
+import { statusLabel, amendedQty, amendedPrice } from '../components/humanize';
 import { ListState, useLoad } from '../components/ListState';
 
 // The order's own page. Until it existed the PO number was printed in four places — the
@@ -210,7 +210,10 @@ export default function OrderDetail() {
               <div className="hint">#{a.amendment_no} · {a.reason}</div>
               {(a.changes ?? []).map((c: any) => (
                 <div key={c.poItemId} style={{ fontSize: 12, margin: '4px 0' }}>
-                  {c.name}: {c.oldQty} → <b>{c.newQty}</b> × {fmtMoney(c.oldUnitPriceMinor, po.currency)} → <b>{fmtMoney(c.newUnitPriceMinor, po.currency)}</b>
+                  {c.name}:{' '}
+                  {amendedQty(c) && <>{c.oldQty} → <b>{c.newQty}</b></>}
+                  {amendedQty(c) && amendedPrice(c) && ' · '}
+                  {amendedPrice(c) && <>{fmtMoney(c.oldUnitPriceMinor, po.currency)} → <b>{fmtMoney(c.newUnitPriceMinor, po.currency)}</b></>}
                 </div>
               ))}
               <div style={{ fontSize: 12 }}>
