@@ -186,7 +186,13 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 /* Styled hover tooltip: put data-tip="text" on any button / link / badge. Replaces the
    slow, unstyled native title with an instant dark bubble + arrow above the element. */
 [data-tip] { position: relative; }
-[data-tip]::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 9px);
+/* `--tip-shift` is set by components/tip-fit.ts, and only on a host whose centred bubble
+   would otherwise hang past the window — see that file for the measurements. It rides on
+   `left`, not on the transform, BECAUSE the transform is now transitioned on the way in:
+   a shift applied there would be drawn as the bubble sliding sideways into place. `left`
+   is in no transition, so the bubble simply opens where it fits. Default 0, so everything
+   that already fitted is drawn exactly as before. */
+[data-tip]::after { content: attr(data-tip); position: absolute; left: calc(50% + var(--tip-shift, 0px)); bottom: calc(100% + 9px);
   transform: translateX(-50%) translateY(4px); background: #10231c; color: #fff; font-size: 12px;
   font-weight: 500; line-height: 1.35; letter-spacing: normal; text-align: left; padding: 7px 10px;
   border-radius: 8px; white-space: normal; width: max-content; box-shadow: var(--shadow-lg);

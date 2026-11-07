@@ -4,6 +4,7 @@ import { useAuth } from '../auth/auth';
 import { useI18n, LANGS } from '../i18n';
 import Guide, { useGuidesHidden } from '../components/Guide';
 import { useNarrowLayout } from '../components/narrow';
+import { useTipFit } from '../components/tip-fit';
 
 export default function Shell() {
   const { session, logout } = useAuth();
@@ -15,6 +16,7 @@ export default function Shell() {
   // and nobody wants to dismiss a menu they have just navigated with.
   const [menuOpen, setMenuOpen] = useState(false);
   useNarrowLayout();
+  useTipFit();
   // Escape closes it, the way the product's own modal does.
   useEffect(() => {
     if (!menuOpen) return;
