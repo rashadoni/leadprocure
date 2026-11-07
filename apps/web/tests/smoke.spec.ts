@@ -320,6 +320,39 @@ test.describe('buyer panel', () => {
     await expect(page.locator('text=AZN').first()).toBeVisible({ timeout: 10_000 });
   });
 
+  // Two complaints from the audit, both about a number and the word over it.
+  //
+  // The rollup's first row is «Вся организация» — the org-wide BUDGET, the one that catches
+  // what no department budget matches — and it stood above IT and OPS with a smaller plan
+  // than either, reading like a total that did not add up. There was no total at all.
+  //
+  // And «Объём закупок» stood over two different figures: on the dashboard the sum of
+  // winning bids over all time, in analytics the accepted orders of the window. Both
+  // honest, one word. The tooltips always said which was which; the labels never did.
+  test('the rollup adds itself up, and the two spend tiles no longer share a word', async () => {
+    await page.goto('/buyer/budgets');
+    await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+    const rollup = page.getByTestId('budget-rollup');
+    const money = (text: string) => Number(text.replace(/[^\d.-]/g, '')) || 0;
+    // Top-level rows only, read the way the component decides it: a parent's figures already
+    // include its units (its first cell is indented, theirs are indented further), and
+    // adding every row would count that money twice.
+    const planned = await rollup.locator('tbody tr').evaluateAll((rows) => rows
+      .filter((r) => parseFloat(getComputedStyle(r.children[0] as Element).paddingLeft) <= 10.5)
+      .map((r) => (r.children[1] as HTMLElement).innerText));
+    expect(planned.length, 'the rollup has one row — a total would say nothing').toBeGreaterThan(1);
+    const total = money(await rollup.locator('tfoot td').nth(1).innerText());
+    expect(total, `the total is not the sum of its rows (${planned.join(' + ')})`)
+      .toBeCloseTo(planned.reduce((n, cell) => n + money(cell), 0), 2);
+
+    await page.goto('/buyer/dashboard');
+    await expect(page.getByText('Awarded in tenders', { exact: true })).toBeVisible({ timeout: 10_000 });
+    await page.goto('/buyer/analytics');
+    await expect(page.getByText('Accepted orders', { exact: true }).first()).toBeVisible({ timeout: 10_000 });
+    // the word that used to stand over both is now over neither
+    await expect(page.getByText('Total spend', { exact: true })).toHaveCount(0);
+  });
+
   // A load that fails must SAY so. The KPI used to leave "…" on screen for ever — the page
   // never came back and never explained itself — because the only rejection handler was none.
   test('a failed dashboard load reports itself, and Retry really retries', async () => {
