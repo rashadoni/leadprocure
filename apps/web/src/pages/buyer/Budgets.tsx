@@ -447,6 +447,34 @@ export default function Budgets() {
                 );
               })}
             </tbody>
+            {/* The organisation's own line, and the one finance came for. Without it the
+                first row read as the total — «Вся организация» standing above IT and OPS
+                with a smaller plan than either, because it is the org-wide BUDGET (the one
+                that catches what no department budget matches), not a sum of the rows.
+                Only top-level rows are added: a parent department's figures already include
+                its units (the ⤵ beside its name), and its units are listed under it, so
+                adding every row would count that money twice. */}
+            {depSummary.length > 1 && (() => {
+              const top = depSummary.filter((d) => (d.depth ?? 0) === 0);
+              const sum = (f: (d: any) => number) => top.reduce((n, d) => n + Number(f(d) || 0), 0);
+              const plan = sum((d) => d.amountMinor);
+              const used = sum((d) => d.committedMinor) + sum((d) => d.actualMinor);
+              const cur = top[0]?.currency;
+              return (
+                <tfoot>
+                  <tr>
+                    <td><b>{t('bud_total')}</b></td>
+                    <td className="num"><b>{fmtMoney(plan, cur)}</b></td>
+                    <td className="num">{fmtMoney(sum((d) => d.committedMinor), cur)}</td>
+                    <td className="num">{fmtMoney(sum((d) => d.actualMinor), cur)}</td>
+                    <td className="hint num">{fmtMoney(sum((d) => d.paidMinor), cur)}</td>
+                    <td className="num">{fmtMoney(sum((d) => d.remainingMinor), cur)}</td>
+                    <td className="num hint">{fmtMoney(sum((d) => d.forecastMinor), cur)}</td>
+                    <td className="num">{plan > 0 ? `${Math.round((used / plan) * 100)}%` : '—'}</td>
+                  </tr>
+                </tfoot>
+              );
+            })()}
           </table>
           {/* Two screens report settled invoices and deliberately report different numbers.
               A finance reader comparing them must find the reason on the page, not file it
