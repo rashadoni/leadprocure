@@ -3,9 +3,16 @@ on:
   workflow_dispatch:
     inputs:
       public_api_url:
-        description: Browser-reachable API URL baked into web
+        # БЕЗ `default` намеренно. Адрес вшивается в бандл при сборке и зависит от
+        # состояния прода, которое меняется между релизами: 7 ноября прод переехал на
+        # https://…:10443/api, и прежний адрес стал неверным. `default` подставляется
+        # в поле формы «Run workflow», то есть человек, нажимающий кнопку, получает
+        # устаревший адрес уже набранным — и он выглядит согласованным значением.
+        # Дисциплина «брать адрес из живого .env.prod» (docs/prod-release-path.md,
+        # шаг 2) спасает того, кто читает документ; того, кто нажимает кнопку, спасает
+        # только пустое поле. При `required: true` пустой ввод запустить не даст.
+        description: Browser-reachable API URL baked into web; take it from PUBLIC_API_URL in the live .env.prod
         required: true
-        default: http://75.119.156.234:3100
   pull_request:
     paths:
       - .github/workflows/release-artifacts.yml
@@ -19,7 +26,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
-      PUBLIC_API_URL: ${{ inputs.public_api_url || 'http://75.119.156.234:3100' }}
+      # Запас нужен и НЕ мёртв: на событии `pull_request` (ниже) входов нет вовсе, а
+      # build-images.sh требует непустой PUBLIC_API_URL — без запаса упал бы каждый
+      # PR-прогон упаковки. Но адрес здесь нарочно невозможный: `.invalid` —
+      # зарезервированный домен, он не разрешается никогда, и ни один
+      # продакшен-адрес в этом файле больше не стоит. `validateEndpoint` его
+      # принимает (проверено), так что упаковка на PR по-прежнему собирается.
+      PUBLIC_API_URL: ${{ inputs.public_api_url || 'http://pr-packaging-smoke.invalid' }}
     steps:
       - uses: actions/checkout@v4
         with:
