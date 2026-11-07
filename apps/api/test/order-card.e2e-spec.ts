@@ -174,6 +174,57 @@ describe('order card (API e2e)', () => {
     });
   });
 
+  // The audit's finding, and the rule the «Выдать заказ» button is for. A draft order is
+  // the buyer still writing it: it has a number, lines and a total, and until it is issued
+  // it is nobody else's business. The policy used to admit both parties from the moment the
+  // row existed, so the supplier had it in «Заказы в работе» before the buyer had decided
+  // to send it, and issuing changed nothing they could perceive.
+  describe('an order still in draft', () => {
+    let draftId: string;
+
+    beforeAll(async () => {
+      const req = await http().post('/requests').set(...bearer(buyer))
+        .send({ title: `Card draft ${tag}`, items: [{ name: 'Desk lamp', qty: 2, estUnitPriceMinor: 30_000 }] })
+        .expect(201);
+      await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
+      await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approver)).expect(201);
+      draftId = (await http().post(`/orders/direct/from-request/${req.body.id}`).set(...bearer(buyer))
+        .send({ supplierOrgId: supplierOrg }).expect(201)).body.id;
+    });
+
+    it('is the buyer’s alone — the supplier cannot list it or open it', async () => {
+      const mine = await http().get('/orders').set(...bearer(buyer)).expect(200);
+      expect(mine.body.items.map((p: any) => p.id)).toContain(draftId);
+
+      const theirs = await http().get('/orders').set(...bearer(supplier)).expect(200);
+      expect(theirs.body.items.map((p: any) => p.id)).not.toContain(draftId);
+      await http().get(`/orders/${draftId}`).set(...bearer(supplier)).expect(404);
+      // …and not through the lines either: they carry the money and have no status of
+      // their own, so they ask the header for one. This endpoint answers 200 to anybody —
+      // it is the policy that empties it, which is why the buyer's own answer is asserted
+      // beside it: an empty list that is empty for everyone would prove nothing.
+      const theirLines = await http().get(`/orders/${draftId}/receipts`).set(...bearer(supplier)).expect(200);
+      expect(theirLines.body.summary).toHaveLength(0);
+      const myLines = await http().get(`/orders/${draftId}/receipts`).set(...bearer(buyer)).expect(200);
+      expect(myLines.body.summary).toHaveLength(1);
+    });
+
+    it('says nothing to the supplier until it is issued, then says it once', async () => {
+      const mine = async () => (await http().get('/notifications').set(...bearer(supplier)).expect(200)).body
+        .filter((n: any) => n.payload?.po_id === draftId);
+      expect(await mine()).toHaveLength(0);
+
+      await http().post(`/orders/${draftId}/status`).set(...bearer(buyer)).send({ status: 'ISSUED' }).expect(201);
+
+      const after = await mine();
+      expect(after.map((n: any) => n.type).sort()).toEqual(['DIRECT_ORDER_CREATED', 'PO_STATUS_CHANGED']);
+      // …and the order is theirs to read from this moment, lines and all
+      const r = await http().get(`/orders/${draftId}`).set(...bearer(supplier)).expect(200);
+      expect(r.body.items).toHaveLength(1);
+      expect(r.body.po_no).toBeTruthy();
+    });
+  });
+
   it('does not exist for an organisation that is not a party to it', async () => {
     await http().get(`/orders/${poId}`).set(...bearer(foreignBuyer)).expect(404);
     await http().get(`/orders/${poId}`).set(...bearer(foreignSupplier)).expect(404);
