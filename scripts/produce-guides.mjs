@@ -1124,6 +1124,13 @@ const REQUIRE_PREDICATES = new Set(['eventOpen']);
 // raises nothing, counts no miss — and the run ends by printing «промахов курсора: 0» over a
 // motionless picture. Misspelt, it is simply an unknown field, which is why this list is the
 // whole fix.
+//
+// This is the scene AS DECLARED, and that makes assertSectionShape a START-OF-RUN check and
+// nothing else: the narration pass writes `audio` and `sec` onto these same objects (see
+// SECTIONS[key].scenes[i].audio = … below), so called again after tts() it would refuse every
+// scene in the file. Calling it a second time, say right before recording, is the natural
+// thing to reach for — hence this note. The service fields are deliberately NOT admitted to
+// the list: listing them would licence a typo named `sec`, which is the hole this closes.
 const SCENE_FIELDS = new Set(['az', 'ru', 'en', 'do']);
 
 function assertSectionShape() {
