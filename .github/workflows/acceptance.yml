@@ -96,6 +96,10 @@ jobs:
           cache: pnpm
       - run: node scripts/acceptance/assert-isolated.cjs
       - run: pnpm install --frozen-lockfile
+      # Before anything long: the browser suite is compiled by esbuild, which strips types
+      # without reading them, so a misspelled helper used to surface as a test failure
+      # eleven minutes in — and read like a broken product. A second here answers it.
+      - run: pnpm --filter web typecheck
       - name: Bootstrap application role
         run: |
           psql "$DATABASE_OWNER_URL" -v ON_ERROR_STOP=1 <<'SQL'
