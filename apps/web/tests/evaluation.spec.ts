@@ -160,6 +160,19 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
   for (const [supplier, price] of [[s1, 9000], [s2, 8000]] as const) {
     await call(`/events/${auction.id}/auction/bids`, { items: [{ eventItemId: auction.items[0].id, unitPriceMinor: price }] }, supplier.accessToken);
   }
+  // While it is still running, the card must say what an auction actually is. It used to
+  // borrow the sealed envelope's words: «amounts are hidden until opening» under a panel
+  // printing the best price in the open, over rows whose status read «Bid opened». Three
+  // statements, no two of them agreeing. The padlock on each supplier's own figure stays —
+  // whose price it is IS sealed until the opening; only the price itself is public.
+  await page.goto(`/buyer/events/${auction.id}`);
+  await expect(page.getByText('The price is bid live', { exact: false })).toBeVisible({ timeout: 10_000 });
+  // the sealed caption's own words, copied from the dictionary — «Amounts are hidden»
+  // would have been a check that passed because that sentence never existed
+  await expect(page.getByText('Amounts sealed until opening', { exact: false })).toHaveCount(0);
+  await expect(page.getByText('Bid opened', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Bidding', { exact: true }).first()).toBeVisible();
+
   const clock = new Client({ connectionString: process.env.DATABASE_OWNER_URL });
   await clock.connect();
   try {
