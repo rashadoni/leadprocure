@@ -333,9 +333,12 @@ test.describe('buyer panel', () => {
     expect((await opened).status()).toBe(201);
 
     await page.goto('/buyer/verification');
-    await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+    // Waited FOR, not counted after a check that passes on an empty page: `[role=status]`
+    // having count 0 is also true before React has drawn the loader, which is how this read
+    // the list as empty while the case was still arriving.
+    await expect(page.getByTestId('verif-open').first(),
+      'the case just opened never appeared — nothing is being measured').toBeVisible({ timeout: 20_000 });
     const rows = await page.locator('tbody tr').count();
-    expect(rows, 'the case just opened is not in the list — nothing is being measured').toBeGreaterThan(0);
     expect(await page.getByTestId('verif-open').count(),
       'a row without a button is a row whose decision hides behind a name').toBe(rows);
     const gate = page.waitForResponse((r) => /\/verification\/cases\/[0-9a-f-]+$/.test(new URL(r.url()).pathname));
