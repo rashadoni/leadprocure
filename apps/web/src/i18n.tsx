@@ -24,8 +24,8 @@ const dict: Record<Lang, Record<string, string>> = {
     // və tapmasa, ingilis mətni olduğu kimi qalır: tərcüməsi olmayan rədd cavabı pisləşmir.
     err_BID_ITEMS_REQUIRED: 'Heç olmasa bir mövqeyə qiymət yazın: göndəriləsi bir şey yoxdur.',
     err_BID_LOT_INCOMPLETE: 'Lotun ya BÜTÜN mövqelərinə qiymət verin, ya da lotu tamamilə buraxın — yarımçıq təklif qiymətləndirilmir.',
-    err_AUCTION_BID_TOO_HIGH: 'Təklif cari ən yaxşıdan ən azı addım qədər aşağı olmalıdır.',
-    err_CATALOG_BELOW_MOQ: 'Say minimum sifariş həcmindən azdır.',
+    err_AUCTION_BID_TOO_HIGH: 'Təklif ən çox {maxAllowed} ola bilər: cari ən yaxşıdan ən azı addım qədər aşağı.',
+    err_CATALOG_BELOW_MOQ: 'Minimum sifariş həcmi — {moq} ({item}), sorğuda isə daha azdır.',
     empty_events: 'Elan edilmiş tender yoxdur — təsdiqlənmiş sorğudan elan edin.',
     empty_notes: 'Bildiriş yoxdur.',
     empty_logistics: 'Göndəriş yoxdur — sifariş təsdiqləndikdən sonra burada görünür.',
@@ -413,8 +413,8 @@ const dict: Record<Lang, Record<string, string>> = {
     // найдя, оставляет английский текст как есть: непереведённый отказ не становится хуже.
     err_BID_ITEMS_REQUIRED: 'Впишите цену хотя бы в одну позицию: отправлять нечего.',
     err_BID_LOT_INCOMPLETE: 'В лоте нужно оценить ВСЕ позиции либо не трогать лот вовсе — неполное предложение не рассматривается.',
-    err_AUCTION_BID_TOO_HIGH: 'Ставка должна быть ниже текущей лучшей как минимум на шаг.',
-    err_CATALOG_BELOW_MOQ: 'Количество меньше минимальной партии.',
+    err_AUCTION_BID_TOO_HIGH: 'Ставка может быть не выше {maxAllowed}: ниже текущей лучшей хотя бы на шаг.',
+    err_CATALOG_BELOW_MOQ: 'Минимальная партия — {moq} ({item}), а в заказе меньше.',
     empty_events: 'Объявленных тендеров нет — объявите из утверждённой заявки.',
     empty_notes: 'Уведомлений нет.',
     empty_logistics: 'Отгрузок нет — появятся, когда заказ подтвердят.',
@@ -799,8 +799,8 @@ const dict: Record<Lang, Record<string, string>> = {
     // refusal is no worse off than before.
     err_BID_ITEMS_REQUIRED: 'Enter a price for at least one line: there is nothing to send.',
     err_BID_LOT_INCOMPLETE: 'Price EVERY line of a lot or leave the lot alone — a partial bid is not evaluated.',
-    err_AUCTION_BID_TOO_HIGH: 'A bid must be below the current best by at least one decrement.',
-    err_CATALOG_BELOW_MOQ: 'The quantity is below the minimum order size.',
+    err_AUCTION_BID_TOO_HIGH: 'A bid may be at most {maxAllowed}: below the current best by at least one decrement.',
+    err_CATALOG_BELOW_MOQ: 'The minimum order size is {moq} ({item}); the order asks for less.',
     empty_events: 'No tenders announced yet — announce one from an approved request.',
     empty_notes: 'No notifications.',
     empty_logistics: 'No shipments yet — they appear once an order is confirmed.',

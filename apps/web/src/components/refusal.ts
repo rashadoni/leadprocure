@@ -19,7 +19,20 @@ export function refusalText(t: (k: string) => string, e: unknown): string {
     const said = t(key);
     // `t` returns the key itself when it has no entry — that is the whole test for «is
     // this one translated yet».
-    if (said !== key) return said;
+    if (said !== key) {
+      // …and the numbers come with it. The English sentence carried them inside itself
+      // («Below MOQ (5) for A4 kağız»), so a translation without them would be POORER than
+      // the text it replaces — «the quantity is below the minimum» leaves the reader
+      // guessing what the minimum is. The server already puts those fields in the body;
+      // the placeholder syntax is the one the notifications use (`notifText`).
+      return said
+        .replace(/\{(\w+)\}/g, (_, field: string) => {
+          const value = data?.[field];
+          return value == null ? '' : String(value);
+        })
+        .replace(/\(\s*\)|«\s*»/g, '')
+        .trim();
+    }
   }
   const body = data?.message;
   return (Array.isArray(body) ? body.join('. ') : body?.toString())
