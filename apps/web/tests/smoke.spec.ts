@@ -243,41 +243,65 @@ test.describe('buyer panel', () => {
   // открываются. Живёт внутри блока закупщика намеренно — у него уже есть вход, а третий
   // вход в наборе упирается в 10 запросов в минуту на /auth/login (первая попытка так и
   // упала, на своём же `login`).
+  //
+  // Опорный замер обязателен: если страница на этой ширине вылезает САМА — широкой
+  // таблицей, длинным названием, чем угодно, — то условие «после наведения есть
+  // превышение» выполнится у КАЖДОЙ подсказки подряд, и отчёт будет списком страницы, а не
+  // списком виновников. Поэтому меряем покой до первого наведения и печатаем разницу.
   test('ЗАМЕР: какие подсказки двигают страницу вбок', async () => {
-    test.setTimeout(300_000);
-    const found: string[] = [];
-    for (const path of ['/buyer/budgets', '/buyer/requests', '/buyer/contracts', '/buyer/invoices']) {
+    test.setTimeout(900_000);
+    const over = () => page.evaluate(() => {
+      const r = document.scrollingElement!;
+      return r.scrollWidth - r.clientWidth;
+    });
+    let total = 0;
+    console.log('=== TIP OVERFLOW REPORT ===');
+    for (const path of ['/buyer/budgets', '/buyer/requests', '/buyer/contracts', '/buyer/invoices',
+      '/buyer/dashboard', '/buyer/analytics', '/buyer/suppliers', '/buyer/settings']) {
       for (const width of [1440, 1280, 1024]) {
         await page.setViewportSize({ width, height: 900 });
         await page.goto(path);
         await settle(page);
         await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+        // покой: до первого наведения и после того, как всё долетело
+        const base = await over();
+        console.log(`BASE ${path} @${width}: ${base}px`);
         const tips = page.locator('[data-tip]');
         const n = await tips.count();
         for (let i = 0; i < n; i++) {
           const el = tips.nth(i);
           if (!(await el.isVisible())) continue;
-          await el.hover({ timeout: 2000 }).catch(() => {});
+          // наведение могло не удаться — тогда мерить нечего, иначе чужое превышение
+          // уедет в отчёт под именем этой подсказки
+          const hovered = await el.hover({ timeout: 2000 }).then(() => true).catch(() => false);
+          if (!hovered) continue;
           const m = await el.evaluate((node) => {
             const root = document.scrollingElement!;
-            const over = root.scrollWidth - root.clientWidth;
-            if (over <= 1) return null;
             const c = getComputedStyle(node as Element, '::after');
             const cell = (node as Element).closest('td, th');
-            return { over, host: `${node.tagName.toLowerCase()}.${(node as HTMLElement).className || '—'}`,
-              cell: cell ? `${cell.tagName.toLowerCase()}.${cell.className || '—'}` : '—',
+            return {
+              over: root.scrollWidth - root.clientWidth,
+              host: `${node.tagName.toLowerCase()}.${String((node as HTMLElement).className || '—')}`,
+              cell: cell ? `${cell.tagName.toLowerCase()}.${String(cell.className || '—')}` : '—',
               right: Math.round((node as Element).getBoundingClientRect().right),
               bubble: Math.round(parseFloat(c.width)),
-              tip: ((node as Element).getAttribute('data-tip') || '').slice(0, 40) };
+              tip: ((node as Element).getAttribute('data-tip') || '').slice(0, 40),
+            };
           });
-          if (m) found.push(`OVERFLOW ${path} @${width}: +${m.over}px · host ${m.host} · cell ${m.cell} · right ${m.right} · bubble ${m.bubble} · "${m.tip}"`);
+          if (m.over - base > 1) {
+            total += 1;
+            // печатаем сразу: восемь страниц на трёх ширинах — это минуты, и отчёт,
+            // собранный в конце, пропадёт целиком, если упрёмся в таймаут
+            console.log(`OVERFLOW ${path} @${width}: +${m.over - base}px (покой ${base}) · host ${m.host} · cell ${m.cell} · right ${m.right} · bubble ${m.bubble} · "${m.tip}"`);
+          }
           await page.mouse.move(2, 2);
+          // ветка отрезана от main, где затухание ещё живёт: пузырёк держит ширину 140 мс
+          // после ухода курсора, и без паузы хвост предыдущего попал бы в замер следующего
+          await page.waitForTimeout(180);
         }
       }
     }
-    console.log('=== TIP OVERFLOW REPORT ===');
-    for (const line of found) console.log(line);
-    console.log(`=== TIP OVERFLOW TOTAL: ${found.length} ===`);
+    console.log(`=== TIP OVERFLOW TOTAL: ${total} ===`);
     await page.setViewportSize({ width: 1280, height: 900 });
   });
 
