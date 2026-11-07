@@ -1588,6 +1588,15 @@ Leadprocure снаружи и только на чтение, через `TLS_CE
    `:80`. То есть прод без HTTPS и без входа, при зелёном `docker ps`. С
    `create_host_path: false` тот же случай даёт отказ демона «bind source path does
    not exist» и не создаёт ничего — проверено и для каталога, и для файла.
+
+   **Но `create_host_path: false` сторожит СУЩЕСТВОВАНИЕ пути, а не его тип**, и
+   это третье последствие короткой формы. Если каталог-подкидыш уже лежит на месте
+   файла, исправленное монтирование запускается как ни в чём не бывало: замерено —
+   контейнер `Started`, шаблон внутри снова каталог, `nginx -T | grep -c "listen
+   443"` даёт **0**. Та же тихая поломка при установленной защите. Хуже: подкидыш
+   создаётся от root, и `rm -rf` под обычным пользователем его **молча не удалит** —
+   для записи в root-овый каталог нужны права. Поэтому тип проверяет шаг 0
+   (`test -f`), а не только защита в compose.
 5. **Служба стоит в профиле, а переменные — со значениями по умолчанию.** С
    `${TLS_CERT_NAME:?…}` файл перестаёт РАЗБИРАТЬСЯ без этой переменной, то есть
    падает любая команда compose — и `up -d --no-deps api web` на проде, и
@@ -1606,13 +1615,20 @@ Leadprocure снаружи и только на чтение, через `TLS_CE
 ### Что сделать один раз, в этом порядке
 
 ```bash
-# 0. положить конфиг входа в СТАБИЛЬНЫЙ каталог, вне чекаутов и воркитри, и
-#    повторять этот шаг при каждой выкладке, если conf менялся. -p обязателен:
-#    reload-loop.sh без бита исполнения entrypoint пропустит молча.
-install -d /home/rashad/leadprocure-prod/tls
-cp -p "$REL/infra/nginx/leadprocure-tls.conf" "$REL/infra/nginx/reload-loop.sh" \
-   /home/rashad/leadprocure-prod/tls/
-test -x /home/rashad/leadprocure-prod/tls/reload-loop.sh || echo 'НЕ исполняемый!'
+# 0. положить конфиг входа в СТАБИЛЬНЫЙ каталог, вне чекаутов и воркитри.
+#    Копировать ВСЕГДА и сверять, а не вспоминать, менялся ли conf: `cp -p`
+#    идемпотентен, а `cmp` дешевле памяти. `-p` обязателен — reload-loop.sh без
+#    бита исполнения entrypoint пропустит молча.
+TLSD=/home/rashad/leadprocure-prod/tls
+install -d "$TLSD"
+cp -p "$REL/infra/nginx/leadprocure-tls.conf" "$REL/infra/nginx/reload-loop.sh" "$TLSD"/
+for f in leadprocure-tls.conf reload-loop.sh; do
+  cmp -s "$REL/infra/nginx/$f" "$TLSD/$f" || { echo "РАСХОЖДЕНИЕ: $f"; exit 1; }
+  # -f, а НЕ -x: бит исполнения у каталога значит «можно войти», поэтому `test -x`
+  # проходит на каталоге-подкидыше (см. ловушку 4) и сторожит не то. Тип проверяет -f.
+  test -f "$TLSD/$f" || { echo "НЕ файл (каталог-подкидыш?): $TLSD/$f"; exit 1; }
+done
+test -x "$TLSD/reload-loop.sh" || { echo 'reload-loop.sh НЕ исполняемый'; exit 1; }
 
 # 1. дописать в ЖИВОЙ .env.prod (прежний файл сохранить рядом, как с лицензией)
 TLS_CONF_DIR=/home/rashad/leadprocure-prod/tls
@@ -1621,6 +1637,22 @@ TLS_CERT_NAME=75.119.156.234
 WEB_ORIGIN=https://75.119.156.234:10443
 S3_PUBLIC_URL=https://75.119.156.234:10444
 REFRESH_COOKIE_SECURE=true
+
+# 1a. СВЕРИТЬ по dry-run, что живой конфиг взят из стабильного каталога, а не из
+#     чекаута. Нужно потому, что `${TLS_CONF_DIR:-./nginx}` при забытой переменной
+#     молча развернётся от --project-directory, то есть снова в воркитри, и
+#     `create_host_path: false` не поможет — путь-то существует. Случай штатный:
+#     шаг 1 велит сохранить прежний .env.prod рядом, а «вернуть прежний файл»
+#     возвращает поломку. Как и для лицензии: смотреть dry-run, а не читать .env.prod.
+#     Сужено до двух источников tls НАМЕРЕННО: по всем `source:` grep ловил бы и
+#     законные /infra/license и /infra/postgres/init, то есть срабатывал бы всегда.
+RELEASE_SHA="$SHA" docker compose -p leadprocure-prod \
+  --project-directory "$REL/infra" \
+  -f "$REL/infra/docker-compose.prod.yml" -f "$REL/infra/docker-compose.release.yml" \
+  --env-file "$ENVP" --profile tls config \
+  | grep -E 'source:.*(leadprocure-tls\.conf|reload-loop\.sh)$' \
+  | grep -E '\.claude/worktrees|/projects/Leadprocure/' && \
+  { echo 'живой конфиг в чекауте — TLS_CONF_DIR не доехал'; exit 1; }
 
 # 2. поднять только вход, ничего больше не трогая. --profile tls обязателен:
 #    служба стоит в профиле, иначе её поднимал бы и обычный up — в том числе
