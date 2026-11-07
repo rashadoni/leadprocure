@@ -1,6 +1,14 @@
 # Production/demo stack. Build context is the repo root so the pnpm workspace is visible.
 #   cd infra && cp .env.prod.example .env.prod && edit secrets
-#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#
+# And then DO NOT build from here. `up -d --build` is how this production was once raised
+# by hand, and docs/prod-release-path.md exists so that it is not done again: images are
+# built in Actions (release-artifacts.yml), travel as a package whose checksums and
+# `revision` labels are verified on the host, are loaded with `docker image load`, and only
+# then swapped in — step 6, with `--no-build --no-deps`, from a worktree at the deployed
+# SHA. A release is steps 1-9 of that document, not one command; the steps before the swap
+# are a database copy with a proven restore, the read-only preflight, and a rollback point.
+# For a local or a demo stack, `scripts/demo-stand.sh` builds and seeds one on purpose.
 # Own project name: both compose files live in infra/, and without this they would share
 # the default "infra" project and `up` on one stack would replace the other's containers.
 name: leadprocure-prod
