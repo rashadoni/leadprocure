@@ -3,6 +3,7 @@ import { Explain, hintOf } from '../../components/Explain';
 import { api, fmtAmount, fmtDate, fmtMoney, tableCurrency } from '../../api/client';
 import { Cur } from '../../components/Cur';
 import { statusGroup } from '../../components/Badge';
+import { rollupTotals } from '../../components/humanize';
 import { Actions } from '../../components/Actions';
 import { MenuSep, RowMenu } from '../../components/RowMenu';
 import { Link } from 'react-router-dom';
@@ -455,22 +456,19 @@ export default function Budgets() {
                 its units (the ⤵ beside its name), and its units are listed under it, so
                 adding every row would count that money twice. */}
             {depSummary.length > 1 && (() => {
-              const top = depSummary.filter((d) => (d.depth ?? 0) === 0);
-              const sum = (f: (d: any) => number) => top.reduce((n, d) => n + Number(f(d) || 0), 0);
-              const plan = sum((d) => d.amountMinor);
-              const used = sum((d) => d.committedMinor) + sum((d) => d.actualMinor);
-              const cur = top[0]?.currency;
+              const sums = rollupTotals(depSummary);
+              const cur = depSummary[0]?.currency;
               return (
-                <tfoot>
+                <tfoot data-testid="rollup-total">
                   <tr>
                     <td><b>{t('bud_total')}</b></td>
-                    <td className="num"><b>{fmtMoney(plan, cur)}</b></td>
-                    <td className="num">{fmtMoney(sum((d) => d.committedMinor), cur)}</td>
-                    <td className="num">{fmtMoney(sum((d) => d.actualMinor), cur)}</td>
-                    <td className="hint num">{fmtMoney(sum((d) => d.paidMinor), cur)}</td>
-                    <td className="num">{fmtMoney(sum((d) => d.remainingMinor), cur)}</td>
-                    <td className="num hint">{fmtMoney(sum((d) => d.forecastMinor), cur)}</td>
-                    <td className="num">{plan > 0 ? `${Math.round((used / plan) * 100)}%` : '—'}</td>
+                    <td className="num"><b>{fmtMoney(sums.plan, cur)}</b></td>
+                    <td className="num">{fmtMoney(sums.committed, cur)}</td>
+                    <td className="num">{fmtMoney(sums.actual, cur)}</td>
+                    <td className="hint num">{fmtMoney(sums.paid, cur)}</td>
+                    <td className="num">{fmtMoney(sums.remaining, cur)}</td>
+                    <td className="num hint">{fmtMoney(sums.forecast, cur)}</td>
+                    <td className="num">{sums.utilizationPct == null ? '—' : `${sums.utilizationPct}%`}</td>
                   </tr>
                 </tfoot>
               );

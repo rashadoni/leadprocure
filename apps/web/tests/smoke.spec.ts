@@ -335,15 +335,21 @@ test.describe('buyer panel', () => {
     const rollup = page.getByTestId('budget-rollup');
     const money = (text: string) => Number(text.replace(/[^\d.-]/g, '')) || 0;
     // Top-level rows only, read the way the component decides it: a parent's figures already
-    // include its units (its first cell is indented, theirs are indented further), and
-    // adding every row would count that money twice.
+    // include its units (its first cell is indented, theirs are indented further).
     const planned = await rollup.locator('tbody tr').evaluateAll((rows) => rows
       .filter((r) => parseFloat(getComputedStyle(r.children[0] as Element).paddingLeft) <= 10.5)
       .map((r) => (r.children[1] as HTMLElement).innerText));
-    expect(planned.length, 'the rollup has one row — a total would say nothing').toBeGreaterThan(1);
-    const total = money(await rollup.locator('tfoot td').nth(1).innerText());
-    expect(total, `the total is not the sum of its rows (${planned.join(' + ')})`)
-      .toBeCloseTo(planned.reduce((n, cell) => n + money(cell), 0), 2);
+    const totalRow = rollup.getByTestId('rollup-total');
+    if (planned.length > 1) {
+      const total = money(await totalRow.locator('td').nth(1).innerText());
+      expect(total, `the total is not the sum of its rows (${planned.join(' + ')})`)
+        .toBeCloseTo(planned.reduce((n, cell) => n + money(cell), 0), 2);
+    } else {
+      // One row IS the organisation; a total under it would be the same figure twice. How
+      // many rows this stand has depends on its seed, so the arithmetic is asked directly
+      // in tests/rollup-total.spec.ts — including the nested case CI cannot build at all.
+      await expect(totalRow).toHaveCount(0);
+    }
 
     await page.goto('/buyer/dashboard');
     await expect(page.getByText('Awarded in tenders', { exact: true })).toBeVisible({ timeout: 10_000 });
