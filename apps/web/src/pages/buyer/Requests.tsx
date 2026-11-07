@@ -352,6 +352,16 @@ export default function Requests() {
                 <input id={`request-item-${idx}-price`} data-testid={`item-price-${idx}`} type="number" step="0.01" min={0} value={it.price} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, price: e.target.value } : x)))} /></div>
             </div>
           ))}
+          {/* What it adds up to, while it is still being typed. The sum existed only on the
+              server and appeared only in the list afterwards — yet it is the sum that decides
+              whether this becomes a direct purchase or a tender (the value bands behind
+              «Политика метода») and which budget it will charge. Counted exactly as the
+              request is sent, minor units and all, so the line cannot drift from what the
+              server will store. */}
+          <div className="hint" data-testid="req-total" style={{ marginTop: 12 }}>
+            {t('total')}: <b>{fmtMoney(items.reduce((sum, i) =>
+              sum + Math.round(Number(i.price) * 100 || 0) * Number(i.qty || 0), 0), 'AZN')}</b>
+          </div>
           <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
             <button type="button" className="btn ghost small" onClick={() => setItems([...items, { name: '', qty: 1, price: '' }])}>+ {t('items')}</button>
             <button className="btn">{t('create')}</button>

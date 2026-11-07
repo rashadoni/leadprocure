@@ -402,6 +402,10 @@ test.describe('buyer panel', () => {
     await page.fill('[data-testid=item-name-0]', 'Playwright item');
     await page.fill('[data-testid=item-qty-0]', '2');
     await page.fill('[data-testid=item-price-0]', '10');
+    // 2 × 10.00 — on screen while it is being typed. The sum decides whether this becomes a
+    // direct purchase or a tender, and which budget it charges; it used to appear only in
+    // the list afterwards, so the one number that mattered was invisible while it was made.
+    await expect(page.getByTestId('req-total')).toContainText('20.00');
     // BEFORE the submit: the form clears itself on success, and the layout this picture
     // exists to answer for — field widths against what each field holds, labels level
     // across inputs and a select — cannot be read off empty fields.
