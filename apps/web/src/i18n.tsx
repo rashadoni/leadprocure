@@ -20,6 +20,12 @@ const dict: Record<Lang, Record<string, string>> = {
     // whether something is broken, forbidden or simply not started — and on a new tenant this
     // is the FIRST screen. Each list says what fills it, in the «<X> yoxdur — <do this>» shape
     // the pages that already had such a line use (hint_catalogs_empty and the two beside it).
+    // Serverin «yox» cavabları. Açar `err_<CODE>` — components/refusal.ts koda görə axtarır
+    // və tapmasa, ingilis mətni olduğu kimi qalır: tərcüməsi olmayan rədd cavabı pisləşmir.
+    err_BID_ITEMS_REQUIRED: 'Heç olmasa bir mövqeyə qiymət yazın: göndəriləsi bir şey yoxdur.',
+    err_BID_LOT_INCOMPLETE: 'Lotun ya BÜTÜN mövqelərinə qiymət verin, ya da lotu tamamilə buraxın — yarımçıq təklif qiymətləndirilmir.',
+    err_AUCTION_BID_TOO_HIGH: 'Təklif cari ən yaxşıdan ən azı addım qədər aşağı olmalıdır.',
+    err_CATALOG_BELOW_MOQ: 'Say minimum sifariş həcmindən azdır.',
     empty_events: 'Elan edilmiş tender yoxdur — təsdiqlənmiş sorğudan elan edin.',
     empty_notes: 'Bildiriş yoxdur.',
     empty_logistics: 'Göndəriş yoxdur — sifariş təsdiqləndikdən sonra burada görünür.',
@@ -403,6 +409,12 @@ const dict: Record<Lang, Record<string, string>> = {
     po_created: 'Создан', po_issued: 'Выпущен',
     no_shipment: 'Отгрузки по этому заказу нет.',
     amendments_decide_elsewhere: 'Решение принимается у поставщика, на «Заказах в работе».',
+    // Отказы сервера. Ключ — `err_<CODE>`; components/refusal.ts ищет его по коду, а не
+    // найдя, оставляет английский текст как есть: непереведённый отказ не становится хуже.
+    err_BID_ITEMS_REQUIRED: 'Впишите цену хотя бы в одну позицию: отправлять нечего.',
+    err_BID_LOT_INCOMPLETE: 'В лоте нужно оценить ВСЕ позиции либо не трогать лот вовсе — неполное предложение не рассматривается.',
+    err_AUCTION_BID_TOO_HIGH: 'Ставка должна быть ниже текущей лучшей как минимум на шаг.',
+    err_CATALOG_BELOW_MOQ: 'Количество меньше минимальной партии.',
     empty_events: 'Объявленных тендеров нет — объявите из утверждённой заявки.',
     empty_notes: 'Уведомлений нет.',
     empty_logistics: 'Отгрузок нет — появятся, когда заказ подтвердят.',
@@ -782,6 +794,13 @@ const dict: Record<Lang, Record<string, string>> = {
     po_created: 'Created', po_issued: 'Issued',
     no_shipment: 'No shipment on this order.',
     amendments_decide_elsewhere: 'Decided on the supplier side, under Orders in progress.',
+    // The server's refusals. The key is `err_<CODE>`; components/refusal.ts looks it up by
+    // code and, finding none, leaves the English message as it was — an untranslated
+    // refusal is no worse off than before.
+    err_BID_ITEMS_REQUIRED: 'Enter a price for at least one line: there is nothing to send.',
+    err_BID_LOT_INCOMPLETE: 'Price EVERY line of a lot or leave the lot alone — a partial bid is not evaluated.',
+    err_AUCTION_BID_TOO_HIGH: 'A bid must be below the current best by at least one decrement.',
+    err_CATALOG_BELOW_MOQ: 'The quantity is below the minimum order size.',
     empty_events: 'No tenders announced yet — announce one from an approved request.',
     empty_notes: 'No notifications.',
     empty_logistics: 'No shipments yet — they appear once an order is confirmed.',
