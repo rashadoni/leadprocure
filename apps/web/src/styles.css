@@ -191,17 +191,22 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
   font-weight: 500; line-height: 1.35; letter-spacing: normal; text-align: left; padding: 7px 10px;
   border-radius: 8px; white-space: normal; width: max-content; box-shadow: var(--shadow-lg);
   opacity: 0; pointer-events: none; z-index: 90;
-  /* `max-width` is in the transition with a ZERO duration and a delay equal to the fade.
-     It is not an animation — the cap still changes in one step — but WHEN it changes now
-     differs between opening and closing. Closing is the case this exists for: without the
-     delay the cap went back to 0 the instant the pointer left, while the opacity took
-     another 140ms to follow, so for those 140ms the bubble was fully visible and nought
-     pixels wide. Padding cannot shrink, so what was left on screen was a ~20px pill with
-     the text clipped to a character or two per line — a black vertical ribbon hanging over
-     the page. It is in every section, because this rule is. Measured in Chromium: 20ms
-     after the pointer leaves, width 0 at opacity 0.87; at 60ms, width 0 at opacity 0.22.
-     The owner caught it on a screen recording before any test did. */
-  transition: opacity .14s ease, transform .14s ease, max-width 0s linear .14s;
+  /* NOTHING is transitioned here, so the bubble leaves in one frame; the fade lives in the
+     `:hover`/`:focus` rules below and therefore plays only on the way IN (a transition is
+     taken from the state being transitioned TO).
+     Why it has to go out instantly: the cap was never animated, the opacity was, so when the
+     pointer left, the width snapped to 0 while the bubble went on fading for 140ms. Padding
+     cannot shrink, so what stayed on screen was a ~20px pill with its text clipped to a
+     character or two per line — a black vertical ribbon over the page, in every section,
+     after every tooltip. The owner caught it on a screen recording before any test did.
+     The first repair kept the width through the fade (a delayed cap). It removed the ribbon
+     and bought two defects: measured at 1440px, the page went on scrolling sideways by 85px
+     for the whole tail — the very thing `max-width: 0` exists to prevent — and in the narrow
+     layout the cap goes to `none`, which is a DISCRETE change and so is not delayed at all,
+     leaving the ribbon exactly where it was. Measured: 1024px and 375px still showed width 0
+     at opacity 0.62. Going out in one frame has neither problem and needs no exception for
+     the narrow layout. */
+  transition: none;
   /* Nothing until it is shown. `opacity: 0` hides the bubble from the eye but NOT from the
      page: an absolutely positioned box is part of the width the page can scroll, so a 240px
      bubble centred on a chip near the right edge of the window put a horizontal scrollbar on
@@ -211,12 +216,12 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
      `max-width: 0` with the text clipped rather than `display: none`, for two reasons: a
      display:none pseudo-element leaves the accessible name, and this product's specs are
      built around that text BEING in the name (`controlName()` in tests/helpers/rfx.ts); and
-     a box that is still there can still fade in — the cap is not transitioned, so it lifts
-     at once and the bubble fades in at full size exactly as it did before. */
+     a box that is still there can still fade in — the cap lifts in one step on the way in,
+     so the bubble fades in at full size exactly as it did before. */
   max-width: 0; overflow: hidden; }
 [data-tip]::before { content: ''; position: absolute; left: 50%; bottom: calc(100% + 4px);
   transform: translateX(-50%); border: 5px solid transparent; border-top-color: #10231c;
-  opacity: 0; pointer-events: none; transition: opacity .14s ease; z-index: 90;
+  opacity: 0; pointer-events: none; transition: none; z-index: 90;
   /* All border and no text, so this one can simply not exist until it is wanted — its five
      pixels either side counted towards the page's width exactly as the bubble's did. */
   display: none; }
@@ -225,16 +230,16 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
    black land on the rows underneath. Wider costs nothing — the bubble is `max-width: 0`
    until it is hovered, so it never adds to the page's own width (that is what the note
    above is about), and nothing is cut to make it fit. */
-[data-tip]:hover::after { opacity: 1; max-width: 360px; transform: translateX(-50%) translateY(0); transition: opacity .14s ease, transform .14s ease, max-width 0s; }
-[data-tip]:hover::before { opacity: 1; display: block; }
+[data-tip]:hover::after { opacity: 1; max-width: 360px; transform: translateX(-50%) translateY(0); transition: opacity .14s ease, transform .14s ease; }
+[data-tip]:hover::before { opacity: 1; display: block; transition: opacity .14s ease; }
 /* A bubble drawn by ::after is not an element anyone can reach — it does land in its host's
    accessible NAME, which is why tests/helpers/rfx.ts has to match control labels by prefix —
    and there is no hover on a touch screen, so focus has to open it too — :focus rather than :focus-visible, because a
    tap gives plain focus and would otherwise reach nothing. This only fires where an element
    was deliberately made focusable (the spend chart's columns), and the ring below is keyboard
    only, so a mouse click does not leave one behind. */
-[data-tip]:focus::after { opacity: 1; max-width: 360px; transform: translateX(-50%) translateY(0); transition: opacity .14s ease, transform .14s ease, max-width 0s; }
-[data-tip]:focus::before { opacity: 1; display: block; }
+[data-tip]:focus::after { opacity: 1; max-width: 360px; transform: translateX(-50%) translateY(0); transition: opacity .14s ease, transform .14s ease; }
+[data-tip]:focus::before { opacity: 1; display: block; transition: opacity .14s ease; }
 /* For an element at the very top of the page — the section's help line — where a bubble
    drawn above would sit off the top of the window with nowhere to scroll to it. */
 [data-tip].tip-below::after { bottom: auto; top: calc(100% + 9px); transform: translateX(-50%) translateY(-4px); }
