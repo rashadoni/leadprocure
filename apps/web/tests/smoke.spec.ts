@@ -27,6 +27,19 @@ async function login(page: Page, email: string): Promise<void> {
 // Waiting for the network to settle after each navigation lets the rotation land before the
 // next one starts. It costs about half a second per page and removes a failure that reads
 // as a broken layout.
+//
+// THIS CURES THE RUN, NOT THE PRODUCT, and the difference is worth stating here rather than
+// leaving the next reader to assume otherwise. The same race is available to a person:
+// open a section, click a link before the bootstrap answers, come back a minute later — the
+// cookie the browser still holds is now older than the leeway (`JWT_REFRESH_REUSE_LEEWAY_MS`,
+// 15s by default in config.service.ts), so the product reads its own aborted request as
+// theft and runs `UPDATE sessions SET revoked = true, revoked_at = NULL WHERE user_id = $1`
+// (identity.service.ts) — every session that person has, on every device, hard-revoked.
+// Whether that is the right answer to a race the product itself lost is the owner's call,
+// not a test's: the options are not rotating twice inside the window, narrowing the response
+// to the one chain instead of the whole user, or widening the window (which only hides it).
+// Measured here, not argued: the suite lost the supplier's session this way three times
+// today, and it is the lightest pages — the ones that answer fastest — that lose it.
 async function settle(page: Page): Promise<void> {
   await page.waitForLoadState('networkidle').catch(() => { /* a page that never idles is the test's problem, not this helper's */ });
 }
