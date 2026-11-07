@@ -28,3 +28,13 @@ export const notifText = (t: (k: string) => string, n: { type: string; payload?:
     .replace(/\(\s*\)|«\s*»/g, '') // drop empty brackets when a payload field is missing
     .trim();
 };
+
+// A change order's line printed both sides of both figures always, so an amendment that
+// touched only the quantity read «40 → 60 × 7.00 AZN → 7.00 AZN»: half the sentence said
+// that nothing happened. Both the supplier's list and the order's own card draw this line,
+// so what counts as changed is decided once, here. Numbers come out of a jsonb snapshot and
+// may be strings on one side and numbers on the other — compare as numbers.
+export const amendedQty = (c: { oldQty: unknown; newQty: unknown }): boolean =>
+  Number(c.oldQty) !== Number(c.newQty);
+export const amendedPrice = (c: { oldUnitPriceMinor: unknown; newUnitPriceMinor: unknown }): boolean =>
+  Number(c.oldUnitPriceMinor) !== Number(c.newUnitPriceMinor);

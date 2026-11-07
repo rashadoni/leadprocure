@@ -6,7 +6,7 @@ import { useDialogs } from '../../components/Dialogs';
 import { PO_SUPPLIER_TRANSITIONS, SHIPMENT_STATUSES } from '@leadprocure/shared';
 import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
-import { statusLabel } from '../../components/humanize';
+import { statusLabel, amendedQty, amendedPrice } from '../../components/humanize';
 import { Actions } from '../../components/Actions';
 import { ListState, useLoad } from '../../components/ListState';
 import { orderHref } from '../OrderDetail';
@@ -152,7 +152,10 @@ export default function Orders() {
                         <div className="hint">✎ {t('amendments')} #{a.amendment_no} · {a.reason}</div>
                         {a.changes.map((c: any) => (
                           <div key={c.poItemId} style={{ fontSize: 12, margin: '4px 0' }}>
-                            {c.name}: {c.oldQty} → <b>{c.newQty}</b> × {fmtMoney(c.oldUnitPriceMinor)} → <b>{fmtMoney(c.newUnitPriceMinor)}</b>
+                            {c.name}:{' '}
+                            {amendedQty(c) && <>{c.oldQty} → <b>{c.newQty}</b></>}
+                            {amendedQty(c) && amendedPrice(c) && ' · '}
+                            {amendedPrice(c) && <>{fmtMoney(c.oldUnitPriceMinor)} → <b>{fmtMoney(c.newUnitPriceMinor)}</b></>}
                           </div>
                         ))}
                         <div style={{ fontSize: 12, marginBottom: 6 }}>
