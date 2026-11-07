@@ -705,8 +705,12 @@ test.describe('supplier panel', () => {
     await page.goto('/supplier/market');
     const empty = page.getByTestId('list-empty');
     await expect(empty).toBeVisible({ timeout: 20_000 });
-    // The sentence, not just the box: a generic line would satisfy the id alone.
-    await expect(empty).toContainText('open announcements');
+    // What fills this section is now said by the section itself, above the list, so it is
+    // there whether the list is empty or full — which is the point: the sentence used to
+    // live in the empty state and vanish with the first row. The empty line keeps the bare
+    // fact; the caption keeps the answer. Both on screen, two elements, never one.
+    await expect(page.getByTestId('section-origin')).toContainText('Open tenders');
+    await expect(empty).toContainText('No tender is taking bids');
     await page.unroute('**/events?**');
   });
 
