@@ -776,9 +776,18 @@ test.describe('supplier panel', () => {
     test.setTimeout(180_000);
     // The card layout itself is proved on the buyer's side, on a table that cannot be empty;
     // it is one shared mechanism, so what is asked here is the widths and the menu.
+    // `/learn` is NOT in this list, and that is a decision rather than an omission: it is
+    // one component with one layout for both roles — the only role-dependent thing on it is
+    // the door inside the player, which no width touches — and the buyer's walk above
+    // measures it at all five widths. Measured here as well it bought nothing and cost this
+    // chain a cold load: the supplier describe shares ONE page across its tests, every
+    // `goto` is a cold load (the access token lives in memory), and /learn is the only page
+    // in the product that waits for no list, so the next load starts while its own
+    // `/auth/refresh` is still in flight. The run on 0576a38 ended with this test looking at
+    // the LOGIN page — the session was gone before the menu was asked for — while the
+    // buyer's thirteen-page walk with /learn in it passed in that same run, twice.
     for (const path of ['/supplier/dashboard', '/supplier/market', '/supplier/orders',
-      '/supplier/contracts', '/supplier/invoices', '/supplier/catalogs', '/supplier/verification',
-      '/learn']) {
+      '/supplier/contracts', '/supplier/invoices', '/supplier/catalogs', '/supplier/verification']) {
       await assertFitsEveryWidth(page, path);
     }
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -790,6 +799,11 @@ test.describe('supplier panel', () => {
     await page.setViewportSize({ width: 375, height: 820 });
     await page.goto('/supplier/orders');
     const rail = page.locator('.side');
+    // The session first, and before the two checks below rather than after: on the login
+    // page `.side` does not exist, so «the rail is hidden» passes vacuously and the failure
+    // surfaces as a missing ☰ — which reads as a broken narrow layout. It is not one.
+    await expect(page.getByRole('button', { name: /^☰/ }),
+      'the supplier session is gone — this is not a layout failure').toBeVisible({ timeout: 20_000 });
     await expect(rail).toBeHidden();
     const menu = page.getByRole('button', { name: /^☰/ });
     await expect(menu).toContainText('Menu');
