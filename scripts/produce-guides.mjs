@@ -879,7 +879,12 @@ const SECTIONS = {
   // Supplier market → a real sealed bid on a live tender. The market list gained the
   // procedure column in PR #79: before it, a closed tender, a live auction and a request
   // for information looked identical until the row was opened.
-  'sup-market': { role: 'sup', path: '/supplier/market', scenes: [
+  // Third section holding the same auction's state, and the most deliberate of the
+  // three: scene 5 parks the cursor ON its status badge for 1.3s while the narration
+  // explains that the deadline is absolute. The row survives closing — GET /events
+  // does not filter by status — so nothing misses and nothing is empty; what breaks is
+  // the set, which would show one auction open in one guide and closed in another.
+  'sup-market': { role: 'sup', path: '/supplier/market', requires: { eventOpen: 'Auksion: ofis kağızı' }, scenes: [
     { az: 'Açıq tenderlər bölməsi. Burada sifarişçinin sizi dəvət etdiyi prosedurlar və hamıya açıq elan olunanlar bir siyahıdadır. Yəni işi axtarmaq lazım deyil — o özü bu ekranda görünür.',
       do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.4); await h.moveTo('table'); await h.holdUntil(0.95); } },
     { az: 'Sütunlar: başlıq, metod, sifarişçi, status, son tarix və ən sonda «Mənim təklifim». Sonuncu sütun dərhal göstərir, harada artıq iştirak edirsiniz, harada isə yox.',
@@ -1024,14 +1029,22 @@ async function assertStandHolds(keys) {
     // STDIN, not -c: psql interpolates :'title' only in a script it lexes itself, and with
     // -c the string is handed to the server verbatim — which fails on the colon. Feeding it
     // in keeps the title quoted by psql instead of by us.
-    const row = execFileSync('docker', ['exec', '-i', pg, 'psql', '-U', 'leadprocure_owner', '-d', dbName, '-At',
+    const found = execFileSync('docker', ['exec', '-i', pg, 'psql', '-U', 'leadprocure_owner', '-d', dbName, '-At',
       '-v', `title=${title}`, '-f', '-'],
       { encoding: 'utf8', input: "SELECT status, close_at > now(), to_char(close_at,'YYYY-MM-DD HH24:MI')"
         + " FROM sourcing_events WHERE title = :'title';" }).trim();
-    if (!row) { problems.push(`«${title}»: события нет на стенде`); continue; }
-    const [status, live, closes] = row.split('|');
-    if (status !== 'OPEN' || live !== 't') problems.push(`«${title}»: статус ${status}, срок ${closes} — приём закрыт`);
-    else console.log(`  стенд: «${title}» принимает ставки до ${closes}`);
+    // EVERY row, not the first one. The query cannot promise a single match and `-At`
+    // separates rows by a newline, so reading the output as one record made
+    // «OPEN|t|…\nCLOSED|f|…» pass as open — the guard would wave through the very state it
+    // exists to catch, and which of the two the recording films is Postgres's choice, not
+    // ours. A stand filled twice really does hold two events of one name: demo-fill clears
+    // the old story only under DEMO_RESET.
+    const rows = found.split('\n').filter(Boolean).map((r) => r.split('|'));
+    if (!rows.length) { problems.push(`«${title}»: события нет на стенде`); continue; }
+    const many = rows.length > 1 ? ` (событий с этим названием: ${rows.length})` : '';
+    const closed = rows.filter(([status, live]) => status !== 'OPEN' || live !== 't');
+    if (closed.length) for (const [status, , closes] of closed) problems.push(`«${title}»: статус ${status}, срок ${closes} — приём закрыт${many}`);
+    else console.log(`  стенд: «${title}» принимает ставки до ${rows[0][2]}${many}`);
   }
   if (problems.length) {
     throw new Error(`Стенд не в том состоянии, которое снимают эти разделы:\n  ${problems.join('\n  ')}\n`
