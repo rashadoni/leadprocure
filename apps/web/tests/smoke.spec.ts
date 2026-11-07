@@ -16,8 +16,24 @@ async function login(page: Page, email: string): Promise<void> {
   await page.waitForURL(/\/(buyer|supplier)\//, { timeout: 15_000 });
 }
 
+// Every `goto` here is a COLD load: the access token lives in memory only, so each one
+// bootstraps through `/auth/refresh`, which ROTATES the refresh cookie. Navigating again
+// while that request is in flight aborts it — the browser then still holds the old cookie
+// and presents it next time. A replay inside `JWT_REFRESH_REUSE_LEEWAY_MS` is tolerated by
+// design; a stale one is treated as theft and the whole session family is revoked. That is
+// the product behaving exactly as intended, and it is why this suite kept losing the
+// supplier's session mid-walk and finishing on the login page: the supplier's pages are the
+// lightest in the product, so its loads come fast enough to cut their own bootstrap off.
+// Waiting for the network to settle after each navigation lets the rotation land before the
+// next one starts. It costs about half a second per page and removes a failure that reads
+// as a broken layout.
+async function settle(page: Page): Promise<void> {
+  await page.waitForLoadState('networkidle').catch(() => { /* a page that never idles is the test's problem, not this helper's */ });
+}
+
 async function assertRenders(page: Page, path: string, headingHint: RegExp): Promise<void> {
   await page.goto(path);
+  await settle(page);
   await expect(page.locator('h1').first()).toContainText(headingHint, { timeout: 20_000 });
   await expect(page.locator('text=Unexpected Application Error')).toHaveCount(0);
 }
@@ -96,6 +112,7 @@ async function assertNoSidewaysScroll(page: Page, where: string): Promise<void> 
 // loading pages it has already loaded.
 async function assertFitsEveryWidth(page: Page, path: string): Promise<void> {
   await page.goto(path);
+  await settle(page);
   await expect(page.locator('h1').first()).toBeVisible({ timeout: 20_000 });
   // Then wait for the LISTS to have answered, not just for the heading to be painted. The
   // access token lives in memory only, so every visit is a cold load — bundle,
