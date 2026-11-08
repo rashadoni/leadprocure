@@ -55,6 +55,17 @@ export default function SupplierEvent() {
     catch (e: any) { setMsg(refusalText(t, e)); }
   };
 
+  // Хук стоит ДО раннего возврата ниже и читает `ev` через `?.` — после возврата React на
+  // первой отрисовке (ev ещё null) выполнил бы хуков меньше, чем на следующей, и страница
+  // падает целиком. Именно так и упало: «Rendered more hooks than during the previous
+  // render» в браузерном наборе, а не в типах и не в юнит-проверках.
+  //
+  // Смысл тот же, что на карточке покупателя: «срок истёк» не появится, пока страницу не
+  // перезагрузят, — а именно в эту минуту человек и смотрит на срок.
+  const nowMs = useDeadlineTick(((ev?.results ?? []) as any[])
+    .filter((r) => !r.cancelled_at && !r.standstill_waived_reason)
+    .map((r) => r.standstill_until));
+
   // Until the event is here this page is only a spinner, and a failed load used to
   // leave that spinner on screen for ever instead of saying what happened.
   if (!ev) return <div className="card"><ListState of={{ loading: !evFailed, failed: evFailed, reload: load }} /></div>;
@@ -74,11 +85,7 @@ export default function SupplierEvent() {
   const won = ev.status === 'AWARDED' && ev.my_bid
     && (ev.lots ?? []).some((l: any) => l.awarded_bid_id === ev.my_bid.id);
   const lost = ev.status === 'AWARDED' && !won && !!ev.my_bid;
-  // То же, что на карточке покупателя: иначе «срок истёк» не появится, пока страницу не
-  // перезагрузят, — а именно в эту минуту человек и смотрит на срок.
-  const nowMs = useDeadlineTick(results
-    .filter((r: any) => !r.cancelled_at && !r.standstill_waived_reason)
-    .map((r: any) => r.standstill_until));
+
   const canBid = ['PUBLISHED', 'OPEN'].includes(ev.status);
   // Nothing priced is nothing to send: the server refuses an empty `items` outright, and a
   // button that is live for a refusal is a button that lies. RFI carries no prices at all —
