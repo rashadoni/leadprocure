@@ -16,9 +16,11 @@ export default function Settings() {
   const userList = useLoad(() => api.get('/settings/users').then((r) => r.data), [], [] as any[]);
   const policyList = useLoad(() => api.get('/requests/method-policies').then((r) => r.data), [], [] as any[]);
   const approvalList = useLoad(() => api.get('/requests/approval-policies').then((r) => r.data), [], [] as any[]);
+  const standstillList = useLoad(() => api.get('/events/standstill-policies').then((r) => r.data), [], [] as any[]);
   const users = userList.data;
   const policies = policyList.data;
   const approvals = approvalList.data;
+  const standstills = standstillList.data;
   const [cats, setCats] = useState<any[]>([]);
   const [newCat, setNewCat] = useState({ code: '', name: '' });
   const [deps, setDeps] = useState<any[]>([]);
@@ -63,7 +65,9 @@ export default function Settings() {
     }).catch(quiet);
   };
   useEffect(loadOptional, []);
-  const load = () => { userList.reload(); policyList.reload(); approvalList.reload(); loadOptional(); };
+  const load = () => {
+    userList.reload(); policyList.reload(); approvalList.reload(); standstillList.reload(); loadOptional();
+  };
 
   const run = async (fn: () => Promise<unknown>) => {
     try { await fn(); load(); } catch (e: any) { notifyError(e); }
@@ -161,7 +165,7 @@ export default function Settings() {
         <a href="#set-approval">{t('approval_chain')}</a>
         <a href="#set-channels">{t('channels_hdr')}</a>
       </div>
-      <ListState of={[userList, policyList, approvalList,
+      <ListState of={[userList, policyList, approvalList, standstillList,
         { loading: false, failed: refFailed, reload: loadOptional }]} />
       <div className="card">
         <h3 id="set-users">{t('users')}</h3>
@@ -394,6 +398,47 @@ export default function Settings() {
         </div>
       )}
 
+        {/* Пауза на возражение. Раньше это была переменная окружения — одна на всех
+            арендаторов, и «регулируемой закупке ставят 24 часа» было невыполнимо буквально:
+            ставили не закупке, а серверу. Срок привязан к МЕТОДУ: открытому тендеру пауза
+            нужна, закупке из трёх предложений — нет. */}
+        <div className="card" data-testid="set-standstill">
+          <h3 id="set-standstill">{t('standstill_policy')}</h3>
+          <p className="hint" style={{ marginTop: 2 }}>{t('standstill_policy_desc')}</p>
+          <table>
+            <thead><tr>
+              <th>{t('method')}</th><th className="num">{t('standstill_hours')}</th><th />
+            </tr></thead>
+            <tbody>
+              {(['OPEN_TENDER', 'RFQ', 'DIRECT'] as const).map((method) => {
+                const cur = standstills.find((p: any) => p.method === method);
+                return (
+                  <tr key={method}>
+                    <td>{mLabel(method)}</td>
+                    <td className="num">
+                      <input type="number" min={0} max={720} style={{ width: 90 }}
+                        data-testid={`standstill-${method}`}
+                        defaultValue={cur ? Number(cur.hours) : ''}
+                        placeholder={t('standstill_default')}
+                        onBlur={(e) => {
+                          const raw = e.target.value.trim();
+                          const next = standstills
+                            .filter((p: any) => p.method !== method)
+                            .map((p: any) => ({ method: p.method, hours: Number(p.hours) }));
+                          if (raw !== '') next.push({ method, hours: Number(raw) });
+                          run(() => api.put('/events/standstill-policies', { policies: next }));
+                        }} />
+                    </td>
+                    <td className="hint">
+                      {cur ? (Number(cur.hours) === 0 ? t('standstill_off') : t('standstill_on'))
+                        : t('standstill_unset')}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       <div className="card">
         <h3 id="set-method">⚖️ {t('method_policy')}</h3>
         <p className="hint" style={{ marginTop: 2 }}>{t('method_policy_desc')}</p>

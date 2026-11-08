@@ -758,6 +758,11 @@ export class SourcingService {
     if (!bidRows.length) throw new NotFoundException('Bid not found on this event');
     if (bidRows[0].state !== 'OPENED') throw new BadRequestException('Only OPENED bids can be awarded');
 
+    // Срок паузы — по политике организации для метода этой закупки; без политики умолчание
+    // из окружения. Разрешается ОДИН раз и тут же записывается в присуждение: дальше срок
+    // уже факт, а не правило, и смена политики задним числом ничего не двигает.
+    const standstillHours = await this.standstillHoursFor(eventId);
+
     // Сумма присуждения по ЛОТУ — и только по лоту.
     //
     // Здесь стоял `COALESCE(…, bids.total_minor)` «для аукциона, где позиций по лоту может
@@ -787,7 +792,7 @@ export class SourcingService {
                $8,$9,$10)
        RETURNING id, standstill_until`,
       [eventId, dto.lotId, dto.bidId, auth.sub, evaluationId, justification,
-       this.cfg.awardStandstillHours,
+       standstillHours,
        supplier.supplier_org_id, lotTotal?.total_minor ?? null, bidRows[0].currency],
     );
     await m.query(`UPDATE event_lots SET awarded_bid_id=$2 WHERE id=$1`, [dto.lotId, dto.bidId]);
@@ -806,6 +811,7 @@ export class SourcingService {
     await this.audit.record('EVENT_AWARDED', 'sourcing_event', eventId, {
       lot_id: dto.lotId, winning_bid_id: dto.bidId, total_minor: bidRows[0].total_minor,
       evaluation_id: evaluationId, top_ranked: isTop, single_bid: singleBid, justification,
+      standstill_hours: standstillHours,
       signature: sig, signer: this.signature.kind,
     });
       // Участников уведомляют ВСЕХ, а не одного победителя.
@@ -836,6 +842,55 @@ export class SourcingService {
       }
     this.rt(eventId, 'event.awarded', { lot_id: dto.lotId });
     return { award: inserted[0], idempotent: false };
+  }
+
+  // Сколько длится пауза на возражение ДЛЯ ЭТОЙ закупки.
+  //
+  // Раньше число приходило из окружения процесса — одно на всех арендаторов, и
+  // регулируемый закупщик не мог получить свои 24 часа, не изменив паузу всем. Теперь
+  // политика организации по МЕТОДУ закупки: открытому тендеру пауза нужна, закупке из трёх
+  // предложений — нет, и это одна и та же организация.
+  //
+  // Метод берётся с заявки, из которой выросла закупка (`method_resolved`): это та же
+  // величина, по которой продукт уже решает, чем закупать. Закупка без заявки и метод без
+  // политики берут умолчание из окружения — так ничего не меняется у тех, кто политик не
+  // заводил.
+  private async standstillHoursFor(eventId: string): Promise<number> {
+    const rows = await this.rc.manager.query(
+      `SELECT p.hours FROM sourcing_events e
+         JOIN procurement_requests r ON r.id = e.request_id
+         JOIN award_standstill_policies p
+           ON p.buyer_org_id = e.buyer_org_id AND p.method = r.method_resolved
+        WHERE e.id = $1`,
+      [eventId],
+    );
+    return rows.length ? Number(rows[0].hours) : this.cfg.awardStandstillHours;
+  }
+
+  async getStandstillPolicies() {
+    return this.rc.manager.query(
+      `SELECT id, method, hours FROM award_standstill_policies ORDER BY method`,
+    );
+  }
+
+  // Замена целым набором, как у `procurement_method_policies`: частичная правка оставила бы
+  // набор, про который неизвестно, полон ли он.
+  async replaceStandstillPolicies(orgId: string, policies: Array<{ method: string; hours: number }>) {
+    const m = this.rc.manager;
+    const seen = new Set<string>();
+    for (const p of policies) {
+      if (seen.has(p.method)) throw new BadRequestException(`Duplicate method ${p.method}`);
+      seen.add(p.method);
+    }
+    await m.query(`DELETE FROM award_standstill_policies`);
+    for (const p of policies) {
+      await m.query(
+        `INSERT INTO award_standstill_policies(buyer_org_id, method, hours) VALUES ($1,$2,$3)`,
+        [orgId, p.method, p.hours],
+      );
+    }
+    await this.audit.record('STANDSTILL_POLICIES_REPLACED', 'organization', orgId, { policies });
+    return this.getStandstillPolicies();
   }
 
   // Кто участвовал в ЛОТЕ. У `bids` нет колонки лота — участие в лоте выражено строками
