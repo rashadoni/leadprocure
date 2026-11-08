@@ -540,7 +540,10 @@ export default function EventDetail() {
                           disabled={!isReverse && !weightedByBid.has(t2.bid_id)}
                           data-tip={leader ? t('tip_award_leader') : t('tip_award_bid')}
                           onClick={() => awardBid(l.id, t2.bid_id)}>
-                          {bid?.supplier_name} · {fmtMoney(t2.total_minor, ev.evaluation_currency)}{leader ? ' ⭐' : ''}
+                          {/* Со словами: это самое необратимое действие раздела, а подпись
+                              называла только поставщика и сумму — что нажатие присуждает,
+                              знал лишь тот, кто навёл мышь и прочитал подсказку. */}
+                          {t('award')}: {bid?.supplier_name} · {fmtMoney(t2.total_minor, ev.evaluation_currency)}{leader ? ' ⭐' : ''}
                         </button>
                       );
                     })}
