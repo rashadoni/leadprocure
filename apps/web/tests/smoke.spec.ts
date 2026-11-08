@@ -982,6 +982,13 @@ test.describe('supplier panel', () => {
     await page.goto('/supplier/catalogs');
     const origin = page.getByTestId('section-origin');
     await expect(origin).toBeVisible({ timeout: 20_000 });
+    // Both sides of the same claim: it is THIS caption, and it is not the other one. The
+    // negative alone goes green if the caption disappears, if the key is misspelt (t()
+    // returns the key itself), or if the buyer's line is reworded without the button in it;
+    // «by the buyer» appears in the supplier's wording and in no other, so the pair says
+    // «that line, and precisely not the wrong one».
+    await expect(origin, 'the supplier is not shown the supplier wording')
+      .toContainText('by the buyer');
     await expect(origin, 'the supplier is told to press a button he does not have')
       .not.toContainText('Catalogs button');
     await expect(page.getByRole('columnheader', { name: 'Actions', exact: true })).toHaveCount(0);
