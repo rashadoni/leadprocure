@@ -345,12 +345,22 @@ export class SourcingService {
           ORDER BY criterion`,
         [myBid.id],
       ) : [];
+      // Свой итог считается ТОЙ ЖЕ суммой в SQL, что и снимок балла победителя, а не
+      // сложением в JS с округлением. При целых весах и баллах результат один и тот же, но
+      // веса бывают дробными (`normalizeCriteria` допускает сумму с точностью 0.001), и
+      // тогда округлённая в JS своя сумма и точная numeric-сумма победителя разошлись бы во
+      // втором знаке — в таблице, которая существует ровно для сравнения этих двух чисел.
+      const myTotal = myBid ? (await m.query(
+        `SELECT sum(weighted)::float AS total FROM evaluation_scores
+          WHERE bid_id = $1
+            AND evaluation_id = (SELECT evaluation_id FROM evaluation_scores
+                                  WHERE bid_id = $1 ORDER BY created_at DESC LIMIT 1)`,
+        [myBid.id],
+      ))[0]?.total ?? null : null;
       return {
         ...ev, lots, items: supplierItems, my_bid: myBid, results,
         my_scores: myScores,
-        my_weighted_total: myScores.length
-          ? Math.round(myScores.reduce((t: number, r: any) => t + Number(r.weighted), 0) * 100) / 100
-          : null,
+        my_weighted_total: myTotal,
         amounts_visible: amountsVisible,
       };
     }

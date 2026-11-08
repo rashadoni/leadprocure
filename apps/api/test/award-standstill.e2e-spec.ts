@@ -373,6 +373,12 @@ describe('пауза на возражение и итоги для участн
     }
     expect(Number(asLoser.my_weighted_total)).toBeCloseTo(
       asLoser.my_scores.reduce((t: number, r: any) => t + Number(r.weighted), 0), 2);
+    // Свой итог и снимок победителя считаются ОДНОЙ формулой — суммой в SQL. Раньше своё
+    // число складывалось в JS с округлением, и на дробных весах два числа в таблице,
+    // которая существует ровно для их сравнения, разошлись бы во втором знаке.
+    const lot1row2 = asLoser.results.find((r: any) => r.lot_id === lot1 && !r.cancelled_at);
+    expect(typeof asLoser.my_weighted_total).toBe('number');
+    expect(Number(lot1row2.winning_weighted_total)).toBeGreaterThan(0);
 
     // Обоснование выбора по лоту 2 покупатель написал при присуждении — участник его видит.
     const lot2row = asLoser.results.find((r: any) => r.lot_id === lot2 && !r.cancelled_at);

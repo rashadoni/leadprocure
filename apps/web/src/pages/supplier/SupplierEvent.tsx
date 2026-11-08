@@ -182,12 +182,17 @@ export default function SupplierEvent() {
                         {(ev.evaluation_criteria ?? []).find((c: any) => c.key === sc.criterion)?.weight ?? '—'}
                       </td>
                       <td className="num">{Number(sc.score)}</td>
-                      <td className="num">{Number(sc.weighted)}</td>
+                      {/* Два знака у всех взвешенных чисел в этой таблице. Она существует
+                          ровно для сравнения, а «66» рядом с «85.00» заставляет человека
+                          сначала понять, одного ли они вида. */}
+                      <td className="num">{Number(sc.weighted).toFixed(2)}</td>
                     </tr>
                   ))}
                   <tr>
                     <td colSpan={3}><b>{t('my_weighted_total')}</b></td>
-                    <td className="num" data-testid="sup-my-total"><b>{ev.my_weighted_total}</b></td>
+                    <td className="num" data-testid="sup-my-total">
+                      <b>{ev.my_weighted_total == null ? '—' : Number(ev.my_weighted_total).toFixed(2)}</b>
+                    </td>
                   </tr>
                   {/* Балл победителя рядом со своим — иначе своё число не сравнить ни с чем:
                       оно отвечает «сколько мне поставили», а не «почему не я». Отдельной
