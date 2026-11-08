@@ -297,18 +297,72 @@ export class SourcingService {
         // перерисовывается сама по истечении срока — ровно тогда дубль и проявляется.
         `SELECT a.id, a.lot_id, l.lot_no, l.title AS lot_title, a.awarded_at,
                 a.winner_org_id, o.legal_name AS winner_name,
-                a.winning_total_minor, a.winning_currency,
+                -- Сумма победителя — только в ОТКРЫТОЙ закупке. Там её публикуют и
+                -- госпорталы: это award.value в выгрузке OCDS, и скрывать её незачем. В
+                -- закрытой процедуре это коммерчески чувствительная цена поставщика, которую
+                -- иначе вручили бы тем самым конкурентам, против которых он играет в
+                -- следующем квартале, — а для возражения она и не нужна: оспаривают своё
+                -- отклонение, а не чужую цену. Отсюда и my_scores ниже.
+                CASE WHEN $3 = 'PUBLIC' THEN a.winning_total_minor END AS winning_total_minor,
+                a.winning_currency,
+                -- Обоснование выбора участнику показывают: оно обязательно именно тогда,
+                -- когда победил не первый по рангу или ставка была единственной (0020), то
+                -- есть ровно в тех случаях, которые и оспаривают. Это не «внутреннее»: это
+                -- причина решения, принятого в отношении участника.
+                a.justification,
                 a.standstill_until, a.standstill_waived_reason,
                 a.cancelled_at,
+                -- Балл победителя рядом со своим: именно это в правилах ЕС и Великобритании
+                -- называется «относительными преимуществами» выбранного предложения, и без
+                -- второго числа первое не сравнить ни с чем. Читается из снимка на самом
+                -- присуждении — доступа к чужим оценкам у поставщика нет и не появляется.
+                a.winning_weighted_total,
                 (a.winner_org_id = $2) AS won_by_me
            FROM awards a
            LEFT JOIN event_lots l ON l.id = a.lot_id
            LEFT JOIN organizations o ON o.id = a.winner_org_id
           WHERE a.event_id = $1
           ORDER BY l.lot_no NULLS LAST, a.awarded_at`,
-        [eventId, auth.org_id],
+        [eventId, auth.org_id, ev.visibility],
       );
-      return { ...ev, lots, items: supplierItems, my_bid: myBid, results, amounts_visible: amountsVisible };
+      // Свой разбор: баллы по закреплённым критериям за СВОЮ ставку.
+      //
+      // Критерии с весами участник уже получает — они на самой закупке
+      // (`evaluation_criteria`), закреплены при создании и после вскрытия не переписываются.
+      // Не хватало собственного балла, а без него страница отвечала «за сколько выиграл
+      // сосед» и молчала о том, что единственно и оспаривается.
+      //
+      // Берётся ПОСЛЕДНЯЯ оценка — та, по которой присуждали; `evaluations` поставщику
+      // закрыта, поэтому последняя определяется по его же строкам, а не по таблице оценок.
+      // Чужих баллов здесь нет и быть не может: политика `es_participant_select` отдаёт
+      // только оценки собственных ставок.
+      const myScores = myBid ? await m.query(
+        `SELECT criterion, score::float AS score, weighted::float AS weighted
+           FROM evaluation_scores
+          WHERE bid_id = $1
+            AND evaluation_id = (SELECT evaluation_id FROM evaluation_scores
+                                  WHERE bid_id = $1 ORDER BY created_at DESC LIMIT 1)
+          ORDER BY criterion`,
+        [myBid.id],
+      ) : [];
+      // Свой итог считается ТОЙ ЖЕ суммой в SQL, что и снимок балла победителя, а не
+      // сложением в JS с округлением. При целых весах и баллах результат один и тот же, но
+      // веса бывают дробными (`normalizeCriteria` допускает сумму с точностью 0.001), и
+      // тогда округлённая в JS своя сумма и точная numeric-сумма победителя разошлись бы во
+      // втором знаке — в таблице, которая существует ровно для сравнения этих двух чисел.
+      const myTotal = myBid ? (await m.query(
+        `SELECT sum(weighted)::float AS total FROM evaluation_scores
+          WHERE bid_id = $1
+            AND evaluation_id = (SELECT evaluation_id FROM evaluation_scores
+                                  WHERE bid_id = $1 ORDER BY created_at DESC LIMIT 1)`,
+        [myBid.id],
+      ))[0]?.total ?? null : null;
+      return {
+        ...ev, lots, items: supplierItems, my_bid: myBid, results,
+        my_scores: myScores,
+        my_weighted_total: myTotal,
+        amounts_visible: amountsVisible,
+      };
     }
 
     // Buyer view: participation always; amounts only once the ceremony opened them.
@@ -719,6 +773,11 @@ export class SourcingService {
     if (!bidRows.length) throw new NotFoundException('Bid not found on this event');
     if (bidRows[0].state !== 'OPENED') throw new BadRequestException('Only OPENED bids can be awarded');
 
+    // Срок паузы — по политике организации для метода этой закупки; без политики умолчание
+    // из окружения. Разрешается ОДИН раз и тут же записывается в присуждение: дальше срок
+    // уже факт, а не правило, и смена политики задним числом ничего не двигает.
+    const standstillHours = await this.standstillHoursFor(eventId);
+
     // Сумма присуждения по ЛОТУ — и только по лоту.
     //
     // Здесь стоял `COALESCE(…, bids.total_minor)` «для аукциона, где позиций по лоту может
@@ -739,17 +798,29 @@ export class SourcingService {
       [dto.bidId, dto.lotId],
     ))[0];
 
+    // Балл победителя — снимком, рядом с суммой и по той же причине: решение принималось на
+    // той оценке, которая была в эту минуту, и переоценка после отзыва присуждения не должна
+    // задним числом менять число, которым человеку объяснили отказ. У аукциона взвешенной
+    // оценки нет вовсе — там ценовая борьба И ЕСТЬ оценка, — и тогда остаётся NULL.
+    const winnerScore = evaluationId ? (await m.query(
+      `SELECT sum(weighted)::float AS total FROM evaluation_scores
+        WHERE evaluation_id = $1 AND bid_id = $2`,
+      [evaluationId, dto.bidId],
+    ))[0]?.total ?? null : null;
+
     // Partial unique index (awards_active_lot) makes the award idempotent under concurrency.
     const inserted = await m.query(
       `INSERT INTO awards(event_id, lot_id, winning_bid_id, awarded_by, evaluation_id, justification,
-                           standstill_until, winner_org_id, winning_total_minor, winning_currency)
+                           standstill_until, winner_org_id, winning_total_minor, winning_currency,
+                           winning_weighted_total)
        VALUES ($1,$2,$3,$4,$5,$6,
                CASE WHEN $7::int > 0 THEN now() + ($7::int * interval '1 hour') ELSE NULL END,
-               $8,$9,$10)
+               $8,$9,$10,$11)
        RETURNING id, standstill_until`,
       [eventId, dto.lotId, dto.bidId, auth.sub, evaluationId, justification,
-       this.cfg.awardStandstillHours,
-       supplier.supplier_org_id, lotTotal?.total_minor ?? null, bidRows[0].currency],
+       standstillHours,
+       supplier.supplier_org_id, lotTotal?.total_minor ?? null, bidRows[0].currency,
+       winnerScore],
     );
     await m.query(`UPDATE event_lots SET awarded_bid_id=$2 WHERE id=$1`, [dto.lotId, dto.bidId]);
 
@@ -767,6 +838,7 @@ export class SourcingService {
     await this.audit.record('EVENT_AWARDED', 'sourcing_event', eventId, {
       lot_id: dto.lotId, winning_bid_id: dto.bidId, total_minor: bidRows[0].total_minor,
       evaluation_id: evaluationId, top_ranked: isTop, single_bid: singleBid, justification,
+      standstill_hours: standstillHours,
       signature: sig, signer: this.signature.kind,
     });
       // Участников уведомляют ВСЕХ, а не одного победителя.
@@ -797,6 +869,65 @@ export class SourcingService {
       }
     this.rt(eventId, 'event.awarded', { lot_id: dto.lotId });
     return { award: inserted[0], idempotent: false };
+  }
+
+  // Сколько длится пауза на возражение ДЛЯ ЭТОЙ закупки.
+  //
+  // Раньше число приходило из окружения процесса — одно на всех арендаторов, и
+  // регулируемый закупщик не мог получить свои 24 часа, не изменив паузу всем. Теперь
+  // политика организации по МЕТОДУ закупки: открытому тендеру пауза нужна, закупке из трёх
+  // предложений — нет, и это одна и та же организация.
+  //
+  // Метод берётся с заявки, из которой выросла закупка (`method_resolved`): это та же
+  // величина, по которой продукт уже решает, чем закупать. Закупка без заявки и метод без
+  // политики берут умолчание из окружения — так ничего не меняется у тех, кто политик не
+  // заводил.
+  //
+  // Что метод не поменяется под живой закупкой, держится НЕ здесь, и это стоит знать:
+  // `method_resolved` пишется в одном месте — `approve()` в `requests.module.ts`, — а
+  // `approve()` требует SUBMITTED, `submit()` требует DRAFT, и закупка создаётся только из
+  // APPROVED. Дороги из APPROVED обратно в DRAFT нет, значит второго утверждения не бывает.
+  // Если когда-нибудь появится «вернуть заявку в черновик» — желание естественное, — эта
+  // величина станет изменяемой при живой закупке. Прошлые присуждения от этого не поедут:
+  // срок уходит в присуждение снимком. Но присуждения после такого возврата пойдут по
+  // другому методу молча, и тогда разрешение надо будет брать не с заявки, а со снимка на
+  // самой закупке.
+  private async standstillHoursFor(eventId: string): Promise<number> {
+    const rows = await this.rc.manager.query(
+      `SELECT p.hours FROM sourcing_events e
+         JOIN procurement_requests r ON r.id = e.request_id
+         JOIN award_standstill_policies p
+           ON p.buyer_org_id = e.buyer_org_id AND p.method = r.method_resolved
+        WHERE e.id = $1`,
+      [eventId],
+    );
+    return rows.length ? Number(rows[0].hours) : this.cfg.awardStandstillHours;
+  }
+
+  async getStandstillPolicies() {
+    return this.rc.manager.query(
+      `SELECT id, method, hours FROM award_standstill_policies ORDER BY method`,
+    );
+  }
+
+  // Замена целым набором, как у `procurement_method_policies`: частичная правка оставила бы
+  // набор, про который неизвестно, полон ли он.
+  async replaceStandstillPolicies(orgId: string, policies: Array<{ method: string; hours: number }>) {
+    const m = this.rc.manager;
+    const seen = new Set<string>();
+    for (const p of policies) {
+      if (seen.has(p.method)) throw new BadRequestException(`Duplicate method ${p.method}`);
+      seen.add(p.method);
+    }
+    await m.query(`DELETE FROM award_standstill_policies`);
+    for (const p of policies) {
+      await m.query(
+        `INSERT INTO award_standstill_policies(buyer_org_id, method, hours) VALUES ($1,$2,$3)`,
+        [orgId, p.method, p.hours],
+      );
+    }
+    await this.audit.record('STANDSTILL_POLICIES_REPLACED', 'organization', orgId, { policies });
+    return this.getStandstillPolicies();
   }
 
   // Кто участвовал в ЛОТЕ. У `bids` нет колонки лота — участие в лоте выражено строками

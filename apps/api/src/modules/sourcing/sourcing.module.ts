@@ -3,7 +3,7 @@ import { Body, Controller, Get, Injectable, Logger, Module, Param, Post, Put, Qu
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DataSource } from 'typeorm';
-import { IsArray, IsIn, IsInt, IsISO8601, IsOptional, IsString, IsUUID, Min, MinLength, ValidateNested } from 'class-validator';
+import { IsArray, IsIn, IsInt, IsISO8601, IsOptional, IsString, IsUUID, Max, Min, MinLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
 import type { AccessTokenPayload } from '@leadprocure/shared';
@@ -69,6 +69,21 @@ class CancelAwardDto {
   @IsUUID() lotId!: string;
   @IsString() @MinLength(3) reason!: string;
 }
+class StandstillPolicyDto {
+  // DIRECT тут НЕТ, и это не упущение: прямая закупка не создаёт закупочной процедуры
+  // вовсе — `createFromRequest` отказывает ей прямым текстом, — значит нет присуждения, а
+  // значит и паузы. Настройка на DIRECT принималась бы, сохранялась и не срабатывала ни
+  // разу: закупщик, поставивший там 48 часов, получил бы тишину. Продукт не предлагает
+  // того, что не может сделать.
+  @IsIn(['RFQ', 'OPEN_TENDER']) method!: 'RFQ' | 'OPEN_TENDER';
+  // Верхняя граница та же, что в БД: 720 часов. Паузы такой длины не бывает нигде — срок в
+  // месяц это ошибка ввода, а не процедура.
+  @IsInt() @Min(0) @Max(720) hours!: number;
+}
+class ReplaceStandstillPoliciesDto {
+  @IsArray() @ValidateNested({ each: true }) @Type(() => StandstillPolicyDto)
+  policies!: StandstillPolicyDto[];
+}
 class WaiveStandstillDto {
   @IsUUID() lotId!: string;
   // Не меньше десяти знаков: это объяснение, а не отписка. То же требует CHECK в БД.
@@ -132,6 +147,28 @@ export class SourcingController {
   list(@CurrentUser() auth: AccessTokenPayload, @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
     return this.sourcing.list(auth, parsePaging(page, pageSize));
   }
+
+  // Политика паузы: читают все роли покупателя (срок касается всех, кто ведёт закупку),
+  // меняет только BUYER_ADMIN — как и прочие политики закупки.
+  @Get('standstill-policies')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER', 'BUYER_FINANCE')
+  standstillPolicies() {
+    return this.sourcing.getStandstillPolicies();
+  }
+
+  @Put('standstill-policies')
+  @Roles('BUYER_ADMIN')
+  replaceStandstillPolicies(
+    @Body() body: ReplaceStandstillPoliciesDto,
+    @CurrentUser() auth: AccessTokenPayload,
+  ) {
+    return this.sourcing.replaceStandstillPolicies(auth.org_id, body.policies ?? []);
+  }
+
+  // ВЫШЕ `@Get(':id')` намеренно: Nest сопоставляет маршруты в порядке объявления, и
+  // параметрический `:id` съел бы `standstill-policies` — закупка с таким «идентификатором»
+  // не находится, запрос отвечает 500, и это читается как поломка, а не как порядок
+  // маршрутов. Так и было поймано.
 
   @Get(':id')
   detail(@Param('id') id: string, @CurrentUser() auth: AccessTokenPayload) {
