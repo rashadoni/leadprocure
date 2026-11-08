@@ -64,6 +64,7 @@ export default function Catalogs() {
   return (
     <>
       <h1>{t('catalogs')}</h1>
+      <div className="hint" data-testid="section-origin">{t('origin_catalogs')}</div>
       <div className="card">
         <ListState of={[catalogs, { loading: false, failed: depsFailed, reload: loadDeps }]} />
         <table>
@@ -89,7 +90,10 @@ export default function Catalogs() {
             ))}
           </tbody>
         </table>
-        {!catalogs.loading && !catalogs.failed && rows.length === 0 && <div className="hint">— {isBuyer ? t('hint_catalogs_empty') : ''}</div>}
+        {/* «create one from a contract» used to be said HERE and only here; it is the
+            section's standing line now, so an empty list says only that it is empty. */}
+        {!catalogs.loading && !catalogs.failed && rows.length === 0
+          && <p className="hint state-empty" data-testid="list-empty">{t('empty_catalogs')}</p>}
       </div>
 
       {Object.entries(open).filter(([, v]) => v).map(([id, cat]) => (
