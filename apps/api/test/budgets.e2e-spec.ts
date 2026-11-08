@@ -771,9 +771,11 @@ describe('budgets & commitment control (API e2e)', () => {
       [dep.id],
     )).rows[0];
     await db.query(
+      // issue_date — день выставления, зафиксированный при записи (миграция 0051): у
+      // колонки нарочно нет умолчания, чтобы INSERT, забывший про день, падал громко.
       `INSERT INTO invoices(buyer_org_id, supplier_org_id, po_id, invoice_no, currency, net_minor, vat_minor,
-         gross_minor, status, department_id)
-       VALUES ($1,$2,$3,$4,'AZN',40000,0,40000,'PAID',$5)`,
+         gross_minor, status, department_id, issue_date)
+       VALUES ($1,$2,$3,$4,'AZN',40000,0,40000,'PAID',$5,(now() AT TIME ZONE 'Asia/Baku')::date)`,
       [po.buyer_org_id, po.supplier_org_id, po.id, `INV-PAID-${tag}`, dep.id],
     );
 

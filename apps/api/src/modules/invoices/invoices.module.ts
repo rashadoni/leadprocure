@@ -19,6 +19,7 @@ import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorator
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
 import { NotifyService } from '../../common/notify/notify.module';
+import { AppConfig } from '../../common/config/config.service';
 
 const VAT_RATE_BP = 1800; // 18% ƏDV
 
@@ -28,6 +29,7 @@ export class InvoicesService {
     private readonly rc: RequestContextService,
     private readonly audit: AuditService,
     private readonly notify: NotifyService,
+    private readonly cfg: AppConfig,
   ) {}
 
   // Supplier submits an invoice for a PO; a 3-way match (invoice ↔ PO ↔ receipt) runs
@@ -92,16 +94,35 @@ export class InvoicesService {
     const gross = safeMoney(net + vat);
     const status: InvoiceStatus = allOk ? 'MATCHED' : 'DISPUTED';
 
+    // День выставления фиксируется ЗДЕСЬ и больше не пересчитывается: дата налогового
+    // документа принадлежит тому, кто его выставил. См. миграцию 0051 и
+    // docs/invoice-issue-date-decision.md.
+    //
+    // Берётся из `now()` в поясе установки — и это ТОТ ЖЕ момент, который попадёт в
+    // `issued_at`: `now()` это `transaction_timestamp()`, а весь запрос идёт одной
+    // транзакцией (TransactionInterceptor), так что умолчание колонки `issued_at` и этот
+    // расчёт читают одни и те же часы. Два вызова `new Date()` в JS такого не обещают.
+    //
+    // Пояс считает Postgres, а не JS: `AT TIME ZONE` работает с тем же моментом, из
+    // которого получится `issued_at`, и день с мгновением не могут разойтись.
+    const issueDate: string = (
+      await m.query(`SELECT (now() AT TIME ZONE $1)::date AS d`, [this.cfg.appTimezone])
+    )[0].d;
     const n = await m.query(`SELECT next_document_no($1,'INV') AS n`, [auth.org_id]);
-    const invoiceNo = `INV-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
+    // Год номера — из того же дня, а не из `new Date().getFullYear()` (это год по поясу
+    // ПРОЦЕССА). Иначе счёт, выписанный 1 января в 02:00 по Баку, получал бы номер
+    // прошлого года при дате этого: номер и дата в одном документе называли бы разные годы,
+    // и разбираться с этим пришлось бы бухгалтеру. Счётчик `next_document_no` сквозной по
+    // организации и от года не зависит, поэтому смена основания не может дать коллизию.
+    const invoiceNo = `INV-${issueDate.slice(0, 4)}-${String(Number(n[0].n)).padStart(4, '0')}`;
     const inv = (
       await m.query(
-        `INSERT INTO invoices(buyer_org_id, supplier_org_id, po_id, invoice_no, currency, net_minor, vat_minor, gross_minor, status, match, due_date, created_by, department_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
+        `INSERT INTO invoices(buyer_org_id, supplier_org_id, po_id, invoice_no, currency, net_minor, vat_minor, gross_minor, status, match, due_date, created_by, department_id, issue_date)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
         [po.buyer_org_id, auth.org_id, poId, invoiceNo, po.currency, net, vat, gross, status,
          JSON.stringify({ ok: allOk, lines: matchLines }), dto.dueDate ?? null, auth.sub,
          // inherited from the PO so paid-spend reporting survives the PO being re-scoped
-         po.department_id ?? null],
+         po.department_id ?? null, issueDate],
       )
     )[0];
     for (const it of dto.items) {
@@ -139,7 +160,7 @@ export class InvoicesService {
   // expects). Not full CommerceML — a mappable flat file the accountant loads into 1C.
   async export1cCsv(): Promise<string> {
     const rows = await this.rc.manager.query(
-      `SELECT i.invoice_no, i.issued_at, i.created_at, i.status, i.net_minor, i.vat_minor, i.gross_minor,
+      `SELECT i.invoice_no, i.issue_date, i.status, i.net_minor, i.vat_minor, i.gross_minor,
               i.currency, p.po_no, os.legal_name AS supplier, os.voen AS supplier_voen
        FROM invoices i
        JOIN organizations os ON os.id = i.supplier_org_id
@@ -150,7 +171,11 @@ export class InvoicesService {
     const money = (m: unknown) => (Number(m) / 100).toFixed(2);
     const header = ['Номер', 'Дата', 'Статус', 'Поставщик', 'ВОЕН', 'Заказ', 'Без НДС', 'НДС', 'Итого', 'Валюта'];
     const lines = rows.map((r: any) => [
-      r.invoice_no, new Date(r.issued_at ?? r.created_at).toISOString().slice(0, 10), r.status,
+      // День берётся готовым: он зафиксирован при выставлении, и `date` драйвер отдаёт
+      // текстом `YYYY-MM-DD` (common/db/pg-date-type.ts). Считать здесь нечего — а всякий
+      // расчёт из `issued_at` на этом месте снова выбирал бы пояс, и прошлый выбор (UTC
+      // через `toISOString()`) давал в Баку предыдущее число.
+      r.invoice_no, r.issue_date, r.status,
       r.supplier, r.supplier_voen, r.po_no, money(r.net_minor), money(r.vat_minor), money(r.gross_minor), r.currency,
     ].map(esc).join(';'));
     return '﻿' + [header.map(esc).join(';'), ...lines].join('\r\n'); // BOM so 1C/Excel read UTF-8
@@ -222,7 +247,7 @@ export class InvoicesService {
          xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
          xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
   <cbc:ID>${esc(inv.invoice_no)}</cbc:ID>
-  <cbc:IssueDate>${new Date(inv.issued_at).toISOString().slice(0, 10)}</cbc:IssueDate>
+  <cbc:IssueDate>${inv.issue_date}</cbc:IssueDate>
   <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
   <cbc:DocumentCurrencyCode>${inv.currency}</cbc:DocumentCurrencyCode>
   <cac:OrderReference><cbc:ID>${esc(inv.po_no)}</cbc:ID></cac:OrderReference>
