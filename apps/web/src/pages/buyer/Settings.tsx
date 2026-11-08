@@ -410,7 +410,10 @@ export default function Settings() {
               <th>{t('method')}</th><th className="num">{t('standstill_hours')}</th><th />
             </tr></thead>
             <tbody>
-              {(['OPEN_TENDER', 'RFQ', 'DIRECT'] as const).map((method) => {
+              {/* Только два метода. Прямая закупка не создаёт процедуры вовсе, значит нет
+                  ни присуждения, ни паузы: строка на DIRECT принималась бы и не срабатывала
+                  ни разу — закупщик поставил бы 48 часов и получил тишину. */}
+              {(['OPEN_TENDER', 'RFQ'] as const).map((method) => {
                 const cur = standstills.find((p: any) => p.method === method);
                 return (
                   <tr key={method}>
@@ -438,6 +441,10 @@ export default function Settings() {
               })}
             </tbody>
           </table>
+          {/* Открытость процедуры и длина паузы — две разные настройки, и их сочетание
+              имеет смысл, которого не видно ни в одной из них по отдельности. Сказано там,
+              где человек ставит число. */}
+          <p className="hint" style={{ marginTop: 8 }}>{t('standstill_vs_visibility')}</p>
         </div>
       <div className="card">
         <h3 id="set-method">⚖️ {t('method_policy')}</h3>

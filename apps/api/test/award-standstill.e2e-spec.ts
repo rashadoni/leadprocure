@@ -534,6 +534,11 @@ describe('пауза на возражение и итоги для участн
     // Два правила на один метод — набор, про который неизвестно, какое из них верно.
     await http().put('/events/standstill-policies').set(...bearer(buyer))
       .send({ policies: [{ method: 'RFQ', hours: 1 }, { method: 'RFQ', hours: 2 }] }).expect(400);
+    // DIRECT не принимается: прямая закупка не создаёт процедуры, значит нет ни
+    // присуждения, ни паузы. Принятая настройка там не сработала бы ни разу, и закупщик,
+    // поставивший 48 часов, получил бы тишину — продукт не предлагает того, чего не может.
+    await http().put('/events/standstill-policies').set(...bearer(buyer))
+      .send({ policies: [{ method: 'DIRECT', hours: 48 }] }).expect(400);
     // Поставщик не видит политик закупщика вовсе.
     await http().get('/events/standstill-policies').set(...bearer(s1)).expect(403);
     expect((await http().get('/events/standstill-policies').set(...bearer(buyer)).expect(200)).body)
