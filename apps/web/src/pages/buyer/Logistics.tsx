@@ -18,6 +18,7 @@ export default function Logistics() {
   return (
     <>
       <h1>{t('logistics')}</h1>
+      <div className="hint" data-testid="section-origin">{t('origin_logistics')}</div>
       <div className="card">
         <table>
           <thead><tr>

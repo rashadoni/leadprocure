@@ -23,6 +23,9 @@ export default function Events() {
   return (
     <>
       <h1>{t('events')}</h1>
+      {/* Where a tender comes from, said where a tender is looked for. The sentence existed
+          already — in `empty_events`, which only a buyer with no tenders ever saw. */}
+      <div className="hint" data-testid="section-origin">{t('origin_events')}</div>
       <div className="card">
         <ListState of={events} empty={!rows.length} emptyKey="empty_events" />
         <table>
