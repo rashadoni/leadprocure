@@ -51,15 +51,27 @@ export class AwardStandstill1720000000047 implements MigrationInterface {
         ADD COLUMN winner_org_id uuid REFERENCES organizations(id) ON DELETE SET NULL,
         ADD COLUMN winning_total_minor bigint,
         ADD COLUMN winning_currency char(3)`);
+    // Бэкфилл БЕЗ COALESCE, и это не упущение.
+    //
+    // В `award()` COALESCE нужен: там он покрывает однолотовый аукционный путь, где итог
+    // ставки И ЕСТЬ сумма лота. Здесь он опасен. Присуждения, сделанные до миграции 0020
+    // (когда проверки допустимости ставки по лоту ещё не было), бывают такими, что у
+    // победившей ставки нет ни одной позиции присуждаемого лота. До сих пор контракт по
+    // такой строке отказывал — «Award has no priced lot snapshot». С COALESCE бэкфилл
+    // записал бы туда итог ВСЕЙ ставки, то есть цену других лотов за этот, и отказ
+    // превратился бы в контракт с неверной цифрой, по которому даже заказ не собрать
+    // («No priced items on the awarded bid»). Прежний отказ честнее нового согласия.
+    //
+    // Поэтому таким строкам `winning_total_minor` остаётся NULL — и контракт по ним
+    // отказывает ровно как отказывал. Цифру, которую никто не считал, не подставляем.
     await q.query(`
       UPDATE awards a SET
         winner_org_id = b.supplier_org_id,
         winning_currency = b.currency,
-        winning_total_minor = COALESCE(
+        winning_total_minor =
           (SELECT sum(bi.line_total_minor) FROM bid_items bi
              JOIN event_items ei ON ei.id = bi.event_item_id
-           WHERE bi.bid_id = a.winning_bid_id AND ei.lot_id = a.lot_id),
-          b.total_minor)
+           WHERE bi.bid_id = a.winning_bid_id AND ei.lot_id = a.lot_id)
       FROM bids b WHERE b.id = a.winning_bid_id AND a.winner_org_id IS NULL`);
 
     // Участник закупки читает её присуждения. Политика добавочная: `awards_rls` остаётся

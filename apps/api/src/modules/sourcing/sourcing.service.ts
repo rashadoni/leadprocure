@@ -281,15 +281,25 @@ export class SourcingService {
         // покупателя (`justification`), автора решения и ссылку на оценку. Проверка на это
         // есть в `award-standstill.e2e-spec.ts`.
         //
-        // `cancelled_at` и `cancel_reason` участнику показывают намеренно: ему уже сказали
-        // «решение принято, возражения до такого-то числа», и отозванное решение без
-        // причины читается как сбой. Это та же причина, по которой видна причина досрочного
-        // закрытия срока.
-        `SELECT a.lot_id, l.lot_no, l.title AS lot_title, a.awarded_at,
+        // `cancelled_at` участнику показывают: ему уже сказали «решение принято, возражения
+        // до такого-то числа», и молча исчезнувшая строка читается как сбой.
+        //
+        // А `cancel_reason` НЕ показывают, и это решение, а не список колонок. Это свободный
+        // текст покупателя о том, почему он отозвал решение, и он бывает про конкретного
+        // поставщика — «нашли нарушение», «не прошёл проверку». Раздать такое дословно всем
+        // конкурентам хуже, чем промолчать: обоснование выбора (`justification`) мы тоже не
+        // отдаём, а причину дисквалификации получает только тот, кого дисквалифицировали.
+        // Участнику нужен ФАКТ отзыва, чтобы не читать исчезновение как поломку; подробности
+        // он спрашивает у заказчика, как и всюду в закупке.
+        //
+        // `a.id` в выборке — ключ строки. Отменённые присуждения видны, и у переприсуждённого
+        // лота строк несколько с одним `lot_id`: ключ по лоту давал дубль, а таблица теперь
+        // перерисовывается сама по истечении срока — ровно тогда дубль и проявляется.
+        `SELECT a.id, a.lot_id, l.lot_no, l.title AS lot_title, a.awarded_at,
                 a.winner_org_id, o.legal_name AS winner_name,
                 a.winning_total_minor, a.winning_currency,
                 a.standstill_until, a.standstill_waived_reason,
-                a.cancelled_at, a.cancel_reason,
+                a.cancelled_at,
                 (a.winner_org_id = $2) AS won_by_me
            FROM awards a
            LEFT JOIN event_lots l ON l.id = a.lot_id
@@ -851,6 +861,14 @@ export class SourcingService {
     if (new Date(award.standstill_until).getTime() <= Date.now()) {
       throw new BadRequestException('The standstill period has already expired — there is nothing to waive');
     }
+    // Проверки «нет ли уже контракта» здесь НЕТ, и это разобрано, а не забыто. Контракт по
+    // присуждению возможен только тремя путями, и каждый отвечает раньше: паузы не было
+    // (NULL — первый отказ выше), паузу уже сняли (идемпотентный возврат выше, без письма и
+    // без записи в журнал) или срок истёк (отказ строкой выше). Состояния «живая пауза и
+    // контракт» не существует, потому что контракт эту паузу и не прошёл бы. Добавлять
+    // недостижимую проверку — писать код, который нельзя ни проверить, ни опровергнуть.
+    // Если когда-нибудь появится ручка, двигающая `standstill_until` вперёд, это
+    // рассуждение рушится — и тогда проверка нужна.
     await m.query(
       `UPDATE awards SET standstill_waived_reason=$2, standstill_waived_by=$3, standstill_waived_at=now()
         WHERE id=$1`,
@@ -899,8 +917,10 @@ export class SourcingService {
     // помечается отозванной. Молча это читается как сбой продукта, а не как отозванное
     // решение. Поэтому говорят всем участникам лота и с причиной.
     for (const orgId of await this.lotParticipants(eventId, lotId)) {
+      // Без причины: см. выборку итогов в `detail()` — свободный текст покупателя об
+      // отзыве решения всем участникам дословно не раздают.
       await this.notify.notifyOrg(orgId, 'EVENT_AWARD_CANCELLED', {
-        event_id: eventId, lot_id: lotId, reason: reason.trim(),
+        event_id: eventId, lot_id: lotId,
       });
     }
     this.rt(eventId, 'event.status', { status: 'EVALUATION' });
@@ -950,7 +970,9 @@ export class SourcingService {
           awards: awardDetails.map((a: any) => ({
             id: a.id, status: a.cancelled_at ? 'cancelled' : 'active', date: a.awarded_at,
             suppliers: [{id:a.supplier_org_id,name:a.supplier_name}],
-            value: {amount:Number(a.lot_total ?? 0)/100,currency:a.currency},
+            // Нет снимка суммы — не публикуем ноль: контракт по такой строке отказывает, и
+            // выгрузка не должна утверждать, что присудили на нулевую сумму.
+            value: a.lot_total == null ? undefined : {amount:Number(a.lot_total)/100,currency:a.currency},
           })),
         },
       ],

@@ -174,9 +174,16 @@ describe('пауза на возражение и итоги для участн
     const mine = async () => (await http().get('/notifications').set(...bearer(s5)).expect(200)).body
       .filter((n: any) => n.type === 'BID_NOT_AWARDED');
     expect(await mine()).toHaveLength(0); // лот 1 уже присуждён, а он в нём не участвовал
+
+    // Присуждение лота 2 — отдельным шагом и ДО утверждений: когда оно стояло внутри
+    // проверки адресности, её падение оставляло `award2` пустым, и два следующих теста
+    // падали вместе с ней. Мутация тогда красила четыре проверки вместо двух — табличка
+    // читалась сильнее, чем есть на самом деле.
     const a2 = await http().post(`/events/${eventId}/award`).set(...bearer(buyer))
       .send({ lotId: lot2, bidId: bid2, justification: 'лучшая цена по лоту 2' }).expect(201);
     award2 = a2.body.award.id;
+    expect(award2).toBeTruthy();
+
     const after = await mine();
     expect(after).toHaveLength(1);
     expect(after[0].payload.lot_id).toBe(lot2);
@@ -186,7 +193,9 @@ describe('пауза на возражение и итоги для участн
     const asLoser = (await http().get(`/events/${eventId}`).set(...bearer(s2)).expect(200)).body;
     // Строка ищется по лоту, а не по позиции: число присуждённых лотов меняется по ходу
     // спека, и проверка «первая строка» молча начала бы мерить другой лот.
-    const r = asLoser.results.find((x: any) => x.lot_id === lot1);
+    // Живая строка, а не любая по лоту: отозванные присуждения теперь тоже видны, и у
+    // переприсуждённого лота строк несколько — отозванная идёт первой.
+    const r = asLoser.results.find((x: any) => x.lot_id === lot1 && !x.cancelled_at);
     expect(r).toBeTruthy();
     expect(r.winner_name).toBe(s1Name);
     expect(Number(r.winning_total_minor)).toBe(900_000); // 10 × 90k по лоту 1
@@ -194,7 +203,7 @@ describe('пауза на возражение и итоги для участн
     expect(r.standstill_until).toBeTruthy();
 
     const asWinner = (await http().get(`/events/${eventId}`).set(...bearer(s1)).expect(200)).body;
-    expect(asWinner.results.find((x: any) => x.lot_id === lot1).won_by_me).toBe(true);
+    expect(asWinner.results.find((x: any) => x.lot_id === lot1 && !x.cancelled_at).won_by_me).toBe(true);
 
     // S4 приглашён, видит закупку — но ставку не подавал, и итоги ему не принадлежат.
     const asBystander = (await http().get(`/events/${eventId}`).set(...bearer(s4)).expect(200)).body;
@@ -233,7 +242,8 @@ describe('пауза на возражение и итоги для участн
     expect(Number(c.body.total_minor)).toBe(900_000);
     // Отказ виден участнику вместе с причиной: иначе исчезнувший срок читается как сбой.
     const asLoser = (await http().get(`/events/${eventId}`).set(...bearer(s2)).expect(200)).body;
-    expect(asLoser.results.find((x: any) => x.lot_id === lot1).standstill_waived_reason).toBe(reason);
+    expect(asLoser.results.find((x: any) => x.lot_id === lot1 && !x.cancelled_at)
+      .standstill_waived_reason).toBe(reason);
   });
 
   it('истёкший срок открывает дверь сам, без отказа', async () => {
@@ -274,11 +284,74 @@ describe('пауза на возражение и итоги для участн
     expect(told).toHaveLength(1);
     expect(told[0].payload.lot_id).toBe(lot3);
 
+    // Причина отзыва участнику НЕ уходит — ни в письме, ни на странице: свободный текст
+    // покупателя бывает про конкретного поставщика, и раздавать его конкурентам дословно
+    // хуже, чем промолчать. Участнику нужен факт отзыва.
+    expect(told[0].payload.reason).toBeUndefined();
     const asLoser = (await http().get(`/events/${eventId}`).set(...bearer(s2)).expect(200)).body;
     const row = asLoser.results.find((r: any) => r.lot_id === lot3);
     expect(row).toBeTruthy();
     expect(row.cancelled_at).toBeTruthy();
-    expect(row.cancel_reason).toContain('снял потребность');
+    expect(Object.keys(row)).not.toContain('cancel_reason');
+  });
+
+  it('переприсуждённый лот даёт две строки итогов, и у каждой свой ключ', async () => {
+    // До того как отменённые присуждения стали видны, на лот была максимум одна строка, и
+    // ключ по лоту был уникален. Теперь нет: у переприсуждённого лота строк две, и ключ по
+    // лоту давал дубль — React сопоставляет строки неопределённо, а таблица теперь
+    // перерисовывается сама по истечении срока.
+    const a3b = await http().post(`/events/${eventId}/award`).set(...bearer(buyer))
+      .send({ lotId: lot3, bidId: bid2, justification: 'переприсуждение после отзыва' }).expect(201);
+    expect(a3b.body.award.id).toBeTruthy();
+
+    const asLoser = (await http().get(`/events/${eventId}`).set(...bearer(s2)).expect(200)).body;
+    const forLot3 = asLoser.results.filter((r: any) => r.lot_id === lot3);
+    expect(forLot3).toHaveLength(2);
+    expect(forLot3.filter((r: any) => !r.cancelled_at)).toHaveLength(1);
+    // Ключ строки — id присуждения, и он есть в ответе и уникален.
+    const ids = forLot3.map((r: any) => r.id);
+    expect(ids.every((x: string) => !!x)).toBe(true);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('старое присуждение без позиций лота по-прежнему отказывает, а не даёт цифру', async () => {
+    // Самая опасная из находок разбора. Присуждения, сделанные до миграции 0020 (когда
+    // проверки допустимости ставки по лоту ещё не было), бывают такими, что у победившей
+    // ставки нет ни одной позиции присуждаемого лота. Контракт по такой строке отказывал.
+    // Бэкфилл с COALESCE записал бы туда итог ВСЕЙ ставки — цену других лотов за этот, — и
+    // отказ стал бы контрактом с неверной цифрой, по которому и заказ не собрать.
+    // Лот заводится прямо в БД: закупка уже не в DRAFT, и API лоты в этом состоянии не
+    // добавляет — а строка, которую мы воспроизводим, и есть «старая», сделанная до
+    // нынешних правил.
+    const lot4 = (await db.query(
+      `INSERT INTO event_lots(event_id, lot_no, title) VALUES ($1, 4, 'Lot 4') RETURNING id`,
+      [eventId])).rows[0].id;
+    // `organization_users` не знает организации — связь через `memberships`; берём
+    // покупателя по его почте, она в этом спеке известна.
+    const au = await db.query(
+      `SELECT id FROM organization_users WHERE email=$1`, [`ssb-${tag}@t.test`]);
+    const inserted = await db.query(
+      `INSERT INTO awards(event_id, lot_id, winning_bid_id, awarded_by, winner_org_id, winning_currency)
+       VALUES ($1,$2,$3,$4,$5,'AZN') RETURNING id`,
+      [eventId, lot4, bid5, au.rows[0].id, s5Org]);
+    const oldAward = inserted.rows[0].id;
+
+    // Дословный бэкфилл из миграции 0047 — он не должен заполнить эту строку.
+    await db.query(
+      `UPDATE awards a SET
+         winner_org_id = b.supplier_org_id,
+         winning_currency = b.currency,
+         winning_total_minor =
+           (SELECT sum(bi.line_total_minor) FROM bid_items bi
+              JOIN event_items ei ON ei.id = bi.event_item_id
+            WHERE bi.bid_id = a.winning_bid_id AND ei.lot_id = a.lot_id)
+       FROM bids b WHERE b.id = a.winning_bid_id AND a.id = $1`, [oldAward]);
+    const after = await db.query(`SELECT winning_total_minor FROM awards WHERE id=$1`, [oldAward]);
+    expect(after.rows[0].winning_total_minor).toBeNull();
+
+    const refused = await http().post(`/contracts/from-award/${oldAward}`).set(...bearer(buyer)).expect(400);
+    expect(String(refused.body.message)).toContain('priced lot snapshot');
+    await db.query(`DELETE FROM awards WHERE id=$1`, [oldAward]);
   });
 
   it('итоги участника не несут внутреннего: ни обоснования, ни автора решения', async () => {

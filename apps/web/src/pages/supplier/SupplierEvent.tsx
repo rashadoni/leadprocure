@@ -132,7 +132,9 @@ export default function SupplierEvent() {
                 const until = r.standstill_until ? new Date(r.standstill_until).getTime() : null;
                 const open = !!until && !r.standstill_waived_reason && until > nowMs;
                 return (
-                  <tr key={r.lot_id ?? 'single'} data-testid="sup-results-row"
+                  // Ключ — id присуждения, а не лота: у переприсуждённого лота строк
+                  // несколько (отозванная и действующая), и ключ по лоту давал дубль.
+                  <tr key={r.id} data-testid="sup-results-row"
                     style={r.cancelled_at ? { opacity: 0.65 } : undefined}>
                     <td>{r.lot_no ? `#${r.lot_no} ${r.lot_title ?? ''}` : (r.lot_title ?? '—')}</td>
                     <td>{r.winner_name ?? '—'}{r.won_by_me && <> — <b>{t('results_you')}</b></>}</td>
@@ -142,7 +144,7 @@ export default function SupplierEvent() {
                       {/* Отозванное решение говорит о себе первым: срок возражения против
                           того, чего больше нет, — не то, что человеку надо прочитать. */}
                       {r.cancelled_at
-                        ? <b>{t('results_cancelled')}{r.cancel_reason ? `: ${r.cancel_reason}` : ''}</b>
+                        ? <b>{t('results_cancelled')}</b>
                         : r.standstill_waived_reason
                           ? `${t('results_objection_waived')}: ${r.standstill_waived_reason}`
                           : until ? (open ? fmtDateTime(r.standstill_until) : t('results_objection_over')) : '—'}
