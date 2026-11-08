@@ -137,6 +137,12 @@ export default function Contracts() {
                 <td className="num" style={over ? { color: 'var(--bad, #e5484d)' } : undefined}
                     title={over ? t('over_ceiling') : undefined}>
                   {fmtMoney(c.drawn_minor, c.currency)}{over ? ' ⚠' : ''}
+                  {/* How much of the ceiling is left — the figure «Создать заказ» is pressed
+                      against. The column said only how much was taken, so a contract drawn
+                      to the last manat looked exactly like one just started, and the button
+                      beside it read the same in both. Under the figure, not in a column of
+                      its own: this table is already nine columns wide. */}
+                  <div className="hint">{t('remaining')}: {fmtMoney(Number(c.total_minor) - Number(c.drawn_minor), c.currency)}</div>
                 </td>
                 <td><Badge status={c.status} /></td>
                 <td className="num">{c.po_count}</td>

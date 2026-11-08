@@ -460,6 +460,32 @@ test.describe('buyer panel', () => {
       .not.toEqual([]);
   });
 
+  // A decision is reached by a button that says what it does. The verification list had no
+  // actions column at all: the only way into the card where the decision is made was the
+  // company's name, which looks like a name — and a sentence under the table said so.
+  // A sentence is not a button; the owner has said as much about icons and links before.
+  test('a verification case is opened by a button, not by a company name', async () => {
+    await page.goto('/buyer/suppliers');
+    await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+    // the stand has no case of its own — the registry's own button makes one
+    const opened = page.waitForResponse((r) => r.url().endsWith('/verification/cases') && r.request().method() === 'POST');
+    await page.getByRole('button', { name: /^🛡 Verification/ }).first().click();
+    expect((await opened).status()).toBe(201);
+
+    await page.goto('/buyer/verification');
+    // Waited FOR, not counted after a check that passes on an empty page: `[role=status]`
+    // having count 0 is also true before React has drawn the loader, which is how this read
+    // the list as empty while the case was still arriving.
+    await expect(page.getByTestId('verif-open').first(),
+      'the case just opened never appeared — nothing is being measured').toBeVisible({ timeout: 20_000 });
+    const rows = await page.locator('tbody tr').count();
+    expect(await page.getByTestId('verif-open').count(),
+      'a row without a button is a row whose decision hides behind a name').toBe(rows);
+    const gate = page.waitForResponse((r) => /\/verification\/cases\/[0-9a-f-]+$/.test(new URL(r.url()).pathname));
+    await page.getByTestId('verif-open').first().click();
+    expect((await gate).status()).toBe(200);
+  });
+
   // A load that fails must SAY so. The KPI used to leave "…" on screen for ever — the page
   // never came back and never explained itself — because the only rejection handler was none.
   test('a failed dashboard load reports itself, and Retry really retries', async () => {
