@@ -61,6 +61,31 @@ describe('date columns are days, not instants (API e2e)', () => {
     expect(row.empty).toBeNull();
   });
 
+  // The guard above argues from the TYPE, so the type is what has to hold: this is the set of
+  // columns that argument covers. Failing here is the point of the test — a day-shaped column
+  // added as a `timestamptz` sits outside the parser and comes back as an instant, and one
+  // quietly retyped away from `date` leaves it the same way. Add a new `date` column to this
+  // list once you have checked that nothing reads it through `new Date()`.
+  it('keeps every day-shaped column typed as `date`', async () => {
+    const rows = await app.get(DataSource).query(
+      `SELECT table_name || '.' || column_name AS col FROM information_schema.columns
+       WHERE table_schema = 'public' AND data_type = 'date' ORDER BY col`,
+    );
+    expect(rows.map((r: any) => r.col)).toEqual([
+      'bids.fx_date',
+      'budget_phasing.month_start',
+      'budgets.period_end',
+      'budgets.period_start',
+      'catalogs.valid_from',
+      'catalogs.valid_to',
+      'contracts.valid_from',
+      'contracts.valid_to',
+      'fx_rates.as_of',
+      'invoices.due_date',
+      'shipments.eta',
+    ]);
+  });
+
   // The product half, with the clock where the customers are. Under Asia/Baku this used to
   // answer periodStart `${YEAR - 1}-12-31`, periodYear `YEAR - 1` and the label
   // `${YEAR - 1} Q4` — a plan for next January filed under last year.

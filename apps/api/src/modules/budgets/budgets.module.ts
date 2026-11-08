@@ -573,9 +573,11 @@ export class BudgetsService {
     const phasing = new Map<string, Array<{ month_start: string; share_bp: number }>>();
     if (budgets.length) {
       const rows = await this.rc.manager.query(
-        // to_char, not the raw date: the driver hands back a Date object for a `date` column,
-        // and String()-slicing that yields "Tue Aug 11" — which parses to NaN and silently
-        // made every phased budget report a planned share of zero.
+        // to_char, and it stays. This was written when the driver handed back a Date object
+        // for a `date` column and String()-slicing it yielded "Tue Aug 11", which parses to
+        // NaN and silently made every phased budget report a planned share of zero. Since
+        // common/db/pg-date-type.ts the driver returns the ISO day itself, so the cast is no
+        // longer what saves this query — it is simply explicit about the form, at no cost.
         `SELECT budget_id, to_char(month_start, 'YYYY-MM-DD') AS month_start, share_bp
          FROM budget_phasing WHERE budget_id = ANY($1::uuid[]) ORDER BY month_start`,
         [budgets.map((b: any) => b.id)],
