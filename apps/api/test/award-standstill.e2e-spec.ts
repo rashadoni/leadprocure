@@ -189,7 +189,7 @@ describe('пауза на возражение и итоги для участн
     expect(after[0].payload.lot_id).toBe(lot2);
   });
 
-  it('участник видит итог: кто победил и за сколько; посторонний — нет', async () => {
+  it('участник видит итог: кто победил; посторонний — нет', async () => {
     const asLoser = (await http().get(`/events/${eventId}`).set(...bearer(s2)).expect(200)).body;
     // Строка ищется по лоту, а не по позиции: число присуждённых лотов меняется по ходу
     // спека, и проверка «первая строка» молча начала бы мерить другой лот.
@@ -198,7 +198,9 @@ describe('пауза на возражение и итоги для участн
     const r = asLoser.results.find((x: any) => x.lot_id === lot1 && !x.cancelled_at);
     expect(r).toBeTruthy();
     expect(r.winner_name).toBe(s1Name);
-    expect(Number(r.winning_total_minor)).toBe(900_000); // 10 × 90k по лоту 1
+    // Сумма победителя в этой закупке (INVITED) участнику не уходит — проверка про цену
+    // отдельная, ниже: там же показано, что в открытой закупке она появляется.
+    expect(r.winning_total_minor).toBeNull();
     expect(r.won_by_me).toBe(false);
     expect(r.standstill_until).toBeTruthy();
 
@@ -354,6 +356,78 @@ describe('пауза на возражение и итоги для участн
     await db.query(`DELETE FROM awards WHERE id=$1`, [oldAward]);
   });
 
+  it('участник видит СВОЙ балл по закреплённым критериям и обоснование выбора', async () => {
+    const asLoser = (await http().get(`/events/${eventId}`).set(...bearer(s2)).expect(200)).body;
+    // Критерии закупки участник получает с самой закупкой — они закреплены при создании.
+    const weights = new Map<string, number>(
+      (asLoser.evaluation_criteria ?? []).map((c: any) => [c.key, Number(c.weight)]));
+    expect(weights.size).toBeGreaterThan(0);
+
+    // Свой балл — по каждому закреплённому критерию, и вес применён той же формулой,
+    // что при оценке (`score * weight / 100`).
+    expect(asLoser.my_scores).toHaveLength(weights.size);
+    for (const sc of asLoser.my_scores) {
+      expect(weights.has(sc.criterion)).toBe(true);
+      expect(Number(sc.weighted)).toBeCloseTo(Number(sc.score) * weights.get(sc.criterion)! / 100, 6);
+    }
+    expect(Number(asLoser.my_weighted_total)).toBeCloseTo(
+      asLoser.my_scores.reduce((t: number, r: any) => t + Number(r.weighted), 0), 2);
+
+    // Обоснование выбора по лоту 2 покупатель написал при присуждении — участник его видит.
+    const lot2row = asLoser.results.find((r: any) => r.lot_id === lot2 && !r.cancelled_at);
+    expect(lot2row.justification).toContain('лучшая цена');
+
+    // И это ТОЛЬКО свои баллы: чужая ставка через API не приходит...
+    const mine = new Set(asLoser.my_scores.map((r: any) => r.criterion));
+    expect(mine.size).toBe(weights.size);
+    // ...и на уровне БД под правами поставщика видны только оценки своих ставок.
+    await db.query(`SELECT set_config('app.org_id',$1,false), set_config('app.role','SUPPLIER_USER',false)`, [s2Org]);
+    const own = await db.query(`SELECT count(*)::int AS n FROM evaluation_scores WHERE bid_id=$1`, [bid2]);
+    const foreign = await db.query(`SELECT count(*)::int AS n FROM evaluation_scores WHERE bid_id=$1`, [bid1]);
+    expect(own.rows[0].n).toBeGreaterThan(0);
+    expect(foreign.rows[0].n).toBe(0);
+  });
+
+  it('свой балл открывается решением: без живого присуждения оценок не видно', async () => {
+    // Срок раскрытия — живое присуждение. До решения оценка может ещё измениться
+    // (переоценка разрешена), и балл, который завтра другой, хуже, чем его отсутствие:
+    // человек возразит на цифру, которой уже нет. Проверяется в транзакции с откатом,
+    // чтобы не портить состояние остальным проверкам.
+    await db.query('BEGIN');
+    try {
+      await db.query(`SELECT set_config('app.org_id',$1,true), set_config('app.role','SUPPLIER_USER',true)`, [s2Org]);
+      const before = await db.query(`SELECT count(*)::int AS n FROM evaluation_scores WHERE bid_id=$1`, [bid2]);
+      expect(before.rows[0].n).toBeGreaterThan(0);
+      await db.query(`SELECT set_config('app.role','BUYER_ADMIN',true), set_config('app.org_id',$1,true)`, [buyerOrg]);
+      await db.query(`UPDATE awards SET cancelled_at = now() WHERE event_id=$1 AND cancelled_at IS NULL`, [eventId]);
+      await db.query(`SELECT set_config('app.org_id',$1,true), set_config('app.role','SUPPLIER_USER',true)`, [s2Org]);
+      const after = await db.query(`SELECT count(*)::int AS n FROM evaluation_scores WHERE bid_id=$1`, [bid2]);
+      expect(after.rows[0].n).toBe(0);
+    } finally {
+      await db.query('ROLLBACK');
+    }
+  });
+
+  it('цену победителя в закрытой закупке не публикуют, в открытой — публикуют', async () => {
+    // Закупка этого спека INVITED: сумма победителя участнику не уходит вовсе — не
+    // «спрятана на экране», а отсутствует в ответе.
+    const closed = (await http().get(`/events/${eventId}`).set(...bearer(s2)).expect(200)).body;
+    expect(closed.visibility).toBe('INVITED');
+    for (const r of closed.results) expect(r.winning_total_minor).toBeNull();
+
+    // Та же закупка, открытая: сумма появляется. Там её публикуют и госпорталы.
+    await db.query(`SELECT set_config('app.org_id',$1,false), set_config('app.role','BUYER_ADMIN',false)`, [buyerOrg]);
+    await db.query(`UPDATE sourcing_events SET visibility='PUBLIC' WHERE id=$1`, [eventId]);
+    try {
+      const open = (await http().get(`/events/${eventId}`).set(...bearer(s2)).expect(200)).body;
+      const live = open.results.filter((r: any) => !r.cancelled_at);
+      expect(live.length).toBeGreaterThan(0);
+      expect(live.every((r: any) => r.winning_total_minor != null)).toBe(true);
+    } finally {
+      await db.query(`UPDATE sourcing_events SET visibility='INVITED' WHERE id=$1`, [eventId]);
+    }
+  });
+
   it('аукцион нельзя «вскрыть» церемонией — вскрывать там нечего', async () => {
     // Последнее место, где продукт выдумывал денежную цифру. Церемония вскрытия формат не
     // проверяла, у аукциона не находила запечатанных ставок и молча считала дело сделанным,
@@ -386,14 +460,19 @@ describe('пауза на возражение и итоги для участн
     expect(st.rows[0].status).toBe('CLOSED');
   });
 
-  it('итоги участника не несут внутреннего: ни обоснования, ни автора решения', async () => {
+  it('итоги участника не несут внутреннего: ни автора решения, ни ссылки на оценку', async () => {
     // Политика `awards_participant_select` отдаёт строку целиком, поэтому единственное, что
-    // отделяет обоснование покупателя от конкурента, — список колонок в `detail()`. Эта
-    // проверка краснеет, если кто-нибудь напишет там `SELECT *`.
+    // отделяет внутреннее от конкурента, — список колонок в `detail()`. Эта проверка
+    // краснеет, если кто-нибудь напишет там `SELECT *`.
+    //
+    // `justification` из этого списка ВЫВЕДЕН намеренно: обоснование обязательно именно
+    // тогда, когда победил не первый по рангу или ставка была единственной, то есть ровно
+    // в тех случаях, которые и оспаривают. Скрывать от участника причину решения,
+    // принятого в отношении него, — оставить паузу на возражение без предмета.
     const asLoser = (await http().get(`/events/${eventId}`).set(...bearer(s2)).expect(200)).body;
     expect(asLoser.results.length).toBeGreaterThan(0);
     for (const r of asLoser.results) {
-      for (const forbidden of ['justification', 'awarded_by', 'evaluation_id', 'winning_bid_id']) {
+      for (const forbidden of ['awarded_by', 'evaluation_id', 'winning_bid_id']) {
         expect(Object.keys(r)).not.toContain(forbidden);
       }
     }

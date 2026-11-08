@@ -297,7 +297,19 @@ export class SourcingService {
         // перерисовывается сама по истечении срока — ровно тогда дубль и проявляется.
         `SELECT a.id, a.lot_id, l.lot_no, l.title AS lot_title, a.awarded_at,
                 a.winner_org_id, o.legal_name AS winner_name,
-                a.winning_total_minor, a.winning_currency,
+                -- Сумма победителя — только в ОТКРЫТОЙ закупке. Там её публикуют и
+                -- госпорталы: это award.value в выгрузке OCDS, и скрывать её незачем. В
+                -- закрытой процедуре это коммерчески чувствительная цена поставщика, которую
+                -- иначе вручили бы тем самым конкурентам, против которых он играет в
+                -- следующем квартале, — а для возражения она и не нужна: оспаривают своё
+                -- отклонение, а не чужую цену. Отсюда и my_scores ниже.
+                CASE WHEN $3 = 'PUBLIC' THEN a.winning_total_minor END AS winning_total_minor,
+                a.winning_currency,
+                -- Обоснование выбора участнику показывают: оно обязательно именно тогда,
+                -- когда победил не первый по рангу или ставка была единственной (0020), то
+                -- есть ровно в тех случаях, которые и оспаривают. Это не «внутреннее»: это
+                -- причина решения, принятого в отношении участника.
+                a.justification,
                 a.standstill_until, a.standstill_waived_reason,
                 a.cancelled_at,
                 (a.winner_org_id = $2) AS won_by_me
@@ -306,9 +318,36 @@ export class SourcingService {
            LEFT JOIN organizations o ON o.id = a.winner_org_id
           WHERE a.event_id = $1
           ORDER BY l.lot_no NULLS LAST, a.awarded_at`,
-        [eventId, auth.org_id],
+        [eventId, auth.org_id, ev.visibility],
       );
-      return { ...ev, lots, items: supplierItems, my_bid: myBid, results, amounts_visible: amountsVisible };
+      // Свой разбор: баллы по закреплённым критериям за СВОЮ ставку.
+      //
+      // Критерии с весами участник уже получает — они на самой закупке
+      // (`evaluation_criteria`), закреплены при создании и после вскрытия не переписываются.
+      // Не хватало собственного балла, а без него страница отвечала «за сколько выиграл
+      // сосед» и молчала о том, что единственно и оспаривается.
+      //
+      // Берётся ПОСЛЕДНЯЯ оценка — та, по которой присуждали; `evaluations` поставщику
+      // закрыта, поэтому последняя определяется по его же строкам, а не по таблице оценок.
+      // Чужих баллов здесь нет и быть не может: политика `es_participant_select` отдаёт
+      // только оценки собственных ставок.
+      const myScores = myBid ? await m.query(
+        `SELECT criterion, score::float AS score, weighted::float AS weighted
+           FROM evaluation_scores
+          WHERE bid_id = $1
+            AND evaluation_id = (SELECT evaluation_id FROM evaluation_scores
+                                  WHERE bid_id = $1 ORDER BY created_at DESC LIMIT 1)
+          ORDER BY criterion`,
+        [myBid.id],
+      ) : [];
+      return {
+        ...ev, lots, items: supplierItems, my_bid: myBid, results,
+        my_scores: myScores,
+        my_weighted_total: myScores.length
+          ? Math.round(myScores.reduce((t: number, r: any) => t + Number(r.weighted), 0) * 100) / 100
+          : null,
+        amounts_visible: amountsVisible,
+      };
     }
 
     // Buyer view: participation always; amounts only once the ceremony opened them.
