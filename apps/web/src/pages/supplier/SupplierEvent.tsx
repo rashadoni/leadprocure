@@ -138,7 +138,16 @@ export default function SupplierEvent() {
                     style={r.cancelled_at ? { opacity: 0.65 } : undefined}>
                     <td>{r.lot_no ? `#${r.lot_no} ${r.lot_title ?? ''}` : (r.lot_title ?? '—')}</td>
                     <td>{r.winner_name ?? '—'}{r.won_by_me && <> — <b>{t('results_you')}</b></>}</td>
-                    <td className="num">{fmtMoney(r.winning_total_minor, r.winning_currency ?? ev.evaluation_currency)}</td>
+                    <td className="num">
+                      {/* Не «неизвестно», а «не публикуется»: в закрытой процедуре цену
+                          победителя не раздают конкурентам, и прочерк соврал бы, что её
+                          просто нет. Почему не я — ниже, в своей оценке. */}
+                      {r.winning_total_minor != null
+                        ? fmtMoney(r.winning_total_minor, r.winning_currency ?? ev.evaluation_currency)
+                        : ev.visibility !== 'PUBLIC'
+                          ? <span className="hint">{t('results_amount_closed')}</span>
+                          : fmtMoney(null)}
+                    </td>
                     <td>{fmtDateTime(r.awarded_at)}</td>
                     <td>
                       {/* Отозванное решение говорит о себе первым: срок возражения против
@@ -154,6 +163,45 @@ export default function SupplierEvent() {
               })}
             </tbody>
           </table>
+          {/* Почему не я. Это и есть предмет возражения: свой балл по закреплённым
+              критериям и причина, по которой выбрали не первого по рангу. Без этого
+              страница отвечала «за сколько выиграл сосед», а на это возразить нечем. */}
+          {(ev.my_scores ?? []).length > 0 && (
+            <div style={{ marginTop: 12 }} data-testid="sup-my-evaluation">
+              <b>{t('my_evaluation')}</b>
+              <table>
+                <thead><tr>
+                  <th>{t('criterion')}</th><th className="num">{t('criterion_weight')}</th>
+                  <th className="num">{t('criterion_score')}</th><th className="num">{t('criterion_weighted')}</th>
+                </tr></thead>
+                <tbody>
+                  {(ev.my_scores ?? []).map((sc: any) => (
+                    <tr key={sc.criterion}>
+                      <td>{t(`crit_${sc.criterion}`) !== `crit_${sc.criterion}` ? t(`crit_${sc.criterion}`) : sc.criterion}</td>
+                      <td className="num">
+                        {(ev.evaluation_criteria ?? []).find((c: any) => c.key === sc.criterion)?.weight ?? '—'}
+                      </td>
+                      <td className="num">{Number(sc.score)}</td>
+                      <td className="num">{Number(sc.weighted)}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td colSpan={3}><b>{t('my_weighted_total')}</b></td>
+                    <td className="num" data-testid="sup-my-total"><b>{ev.my_weighted_total}</b></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+          {/* Обоснование выбора: оно обязательно именно тогда, когда победил не первый по
+              рангу или ставка была единственной, — то есть ровно в тех случаях, которые и
+              оспаривают. */}
+          {results.filter((r: any) => r.justification).map((r: any) => (
+            <div key={`j-${r.id}`} className="hint" style={{ marginTop: 8 }} data-testid="sup-justification">
+              {t('results_justification')}
+              {r.lot_no ? ` (#${r.lot_no})` : ''}: {r.justification}
+            </div>
+          ))}
           {/* Срок без канала — украшение. Канал в продукте один и он тут же ниже. */}
           {liveResults.some((r: any) => r.standstill_until && !r.standstill_waived_reason
             && new Date(r.standstill_until).getTime() > nowMs) && (
