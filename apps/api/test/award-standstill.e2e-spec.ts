@@ -461,10 +461,23 @@ describe('пауза на возражение и итоги для участн
     // Опечатка в ссылке уходила в SQL и возвращалась пятисоткой: авария в мониторинге там,
     // где человек просто оборвал адрес. Фильтр узкий — ловит только 22P02.
     const bad = await http().get('/events/не-uuid').set(...bearer(buyer)).expect(400);
-    expect(String(bad.body.message)).toMatch(/identifier/i);
+    expect(String(bad.body.message)).toMatch(/malformed value/i);
     await http().get('/events/events').set(...bearer(buyer)).expect(400);
     // А настоящее «не найдено» осталось 404, а не стало 400.
     await http().get(`/events/${randomUUID()}`).set(...bearer(buyer)).expect(404);
+  });
+
+  it('любая другая ошибка базы по-прежнему ОТВЕЧАЕТ, а не вешает запрос', async () => {
+    // Первая редакция фильтра делала `throw err` для чужих кодов — и это не передаёт
+    // ошибку дальше: Nest брошенное из фильтра не подхватывает, в сокет не пишется ничего,
+    // запрос висит до таймаута клиента. Пятисоток бы не стало, потому что не стало бы
+    // ответов, и мониторинг на этом замолчал бы — хуже той беды, которую фильтр чинит.
+    //
+    // `?from=abc` это `'abc'::date`, код 22007, а не 22P02. Проверка здесь не про код
+    // ответа, а про то, что ответ ЕСТЬ: таймаут supertest уронил бы её.
+    const res = await http().get('/budgets?from=abc').set(...bearer(buyer)).timeout(8000);
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.body).toBeDefined();
   });
 
   it('аукцион нельзя «вскрыть» церемонией — вскрывать там нечего', async () => {
