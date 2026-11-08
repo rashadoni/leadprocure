@@ -64,7 +64,12 @@ export default function Catalogs() {
   return (
     <>
       <h1>{t('catalogs')}</h1>
-      <div className="hint" data-testid="section-origin">{t('origin_catalogs')}</div>
+      {/* Two wordings, as on every other page this component serves both sides of. The
+          buyer's line names the button that creates a catalogue; the supplier has neither
+          that button nor the action column it lives in, so telling him to press it is
+          worse than saying nothing — it reads as «you are doing it wrong». Contracts.tsx
+          splits its two origin lines the same way; this page was the one that did not. */}
+      <div className="hint" data-testid="section-origin">{t(isBuyer ? 'origin_catalogs' : 'origin_catalogs_sup')}</div>
       <div className="card">
         <ListState of={[catalogs, { loading: false, failed: depsFailed, reload: loadDeps }]} />
         <table>
