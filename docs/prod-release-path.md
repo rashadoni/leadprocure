@@ -90,12 +90,12 @@ git rev-list --count 2a94cc5..origin/main   # канонический чека�
 
 | Служба | Образ | Собран | Из какого кода |
 |---|---|---|---|
-| api | `leadprocure-prod-api:latest` `sha256:f4472579…` | 12.08.2026 18:13 CEST | **`400f861`**, сличено побайтово |
-| web | `leadprocure-prod-web:latest` `sha256:3ca1a657…` | 31.10.2026 22:48 CET | `400f861` — **вывод по косвенным**, см. ниже |
-| ai-orchestrator | `leadprocure-prod-ai-orchestrator:latest` `sha256:6ae758c1…` | 21.07.2026 | не определяется: `main.py` одинаков в `400f861`, `2a94cc5` и `2effcc7` |
-| postgres | `postgres:16` `sha256:33f923b0…` | вендорский | — |
-| minio | `minio/minio:latest` `sha256:14cea493…` | вендорский | — |
-| clamav | `clamav/clamav-debian:latest` `sha256:a73435b0…` | вендорский | — |
+| api | `leadprocure-prod-api:latest` `sha256:f44725790f1afe6d249ffdb7aae524b7794e629f557fe90dd6905197fde7fd8c` | 12.08.2026 18:13 CEST | **`400f861`**, сличено побайтово |
+| web | `leadprocure-prod-web:latest` `sha256:3ca1a65715b706873d09841c6f988c5727aadef54bd4655fd1c85d60fc96a88e` | 31.10.2026 22:48 CET | `400f861` — **вывод по косвенным**, см. ниже |
+| ai-orchestrator | `leadprocure-prod-ai-orchestrator:latest` `sha256:6ae758c194581326f8204a4b9e3c7308f1b035a011b6aa7715e0e889c07aca6d` | 21.07.2026 | не определяется: `main.py` одинаков в `400f861`, `2a94cc5` и `2effcc7` |
+| postgres | `postgres:16` `sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20` | вендорский | — |
+| minio | `minio/minio:latest` `sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e` | вендорский | — |
+| clamav | `clamav/clamav-debian:latest` `sha256:a73435b0fa51886e9e6dd1881656023ba9dce756e055f23981270badbb8ca3d7` | вендорский | — |
 
 Как установлен коммит api. На образах **нет** меток
 `org.opencontainers.image.revision` и `org.opencontainers.image.source` — их ставит
@@ -483,7 +483,7 @@ Never replace their image or delete data as a workaround»). Замена хра
 | Проверки на выкладываемом коммите | **готово** | `acceptance` и `fresh-install` — SUCCESS на `4951e02`, прогон [41328172392](https://github.com/rashadoni/leadprocure/actions/runs/41328172392), событие `push` на `main`. То есть на том самом дереве, которое выкладывается, а не на PR-мерже |
 | Лицензия выпущена | **готово** | `/home/rashad/projects/Leadprocure/infra/license/leadprocure.license`, 1000 байт, 1 ноября 08:06, формат `v4.public.`; приватный ключ эмитента на месте и в окружение не попал |
 | Лицензия прописана в окружение | **готово** | две строки §1 дописаны в живой `.env.prod` (32 → 34 строки), прежний файл сохранён рядом как `.env.prod.bak-license-20261101T172138Z`. Доезд проверен dry-run'ом шага 6, а не чтением файла: `LICENSE_PUBLIC_KEY_B64` непустой (152 символа), `source:` над `target: /run/leadprocure-license` — абсолютный `/home/rashad/projects/Leadprocure/infra/license`, вне воркитри релиза, с `read_only: true` и `create_host_path: false` |
-| Резервная копия базы | **готово** | `pg_dump -Fc` 1 ноября 17:19 UTC: `/home/rashad/backups/leadprocure/leadprocure-prod-20261101T171956Z.dump`, 717 981 байт, sha256 `b721a14a…4d8b80b47`, права `600`. В оглавлении дампа 62 раздела данных, 67 ACL, 78 политик, 49 `ROW SECURITY`, 22 функции, триггер журнала, 47 индексов, 206 ограничений — то есть восстанавливается и модель доступа, а не только строки |
+| Резервная копия базы | **готово** | `pg_dump -Fc` 1 ноября 17:19 UTC: `/home/rashad/backups/leadprocure/leadprocure-prod-20261101T171956Z.dump`, 717 981 байт, sha256 `b721a14ae1aef8f7f03b03192d59be2918957fe8d262c4d9d5f78ec4d8b80b47`, права `600`. В оглавлении дампа 62 раздела данных, 67 ACL, 78 политик, 49 `ROW SECURITY`, 22 функции, триггер журнала, 47 индексов, 206 ограничений — то есть восстанавливается и модель доступа, а не только строки |
 | Восстановление проверено | **готово** | дамп развёрнут в отдельный одноразовый `postgres:16` (без публикации портов, том ушёл с контейнером): `pg_restore` код 0, ноль ошибок, и счёт строк в 12 таблицах совпал с продом до единицы. Отдельно проверено, что уцелело самое хрупкое: у всех 5 запечатанных ставок на месте и `ciphertext`, и `wrapped_key`, и все 3235 записей журнала несут хеш |
 | Preflight пройден | **готово** | `duplicate_invoice_lines`, `duplicate_evaluation_scores`, `duplicate_memberships` и три проверки пространств имён — **нули**, то есть `0029` и `0043` ни на чём не упадут. `installed_licenses = 0` (ожидаемо, ровно поэтому файл лицензии и требовался до выкладки). `legacy_invoice_lines_requiring_tax_review = 5` — исторические строки счетов без снимка НДС; миграции их не пересчитывают и не удаляют, налоговая политика по ним остаётся отдельным решением |
 | Образ собран в Actions | идёт | `release-artifacts.yml` запущен на `main` через `workflow_dispatch` с `public_api_url = http://75.119.156.234:3100`, прогон [41331180781](https://github.com/rashadoni/leadprocure/actions/runs/41331180781). Прода не касается: ни секретов, ни реестра, ни базы |
@@ -622,7 +622,7 @@ docker image inspect "leadprocure-api:$PREV" "leadprocure-web:$PREV" \
 
 Записать оба `sha256` рядом с ID резервной копии базы.
 
-Существующий тег `leadprocure-prod-web:pre-contabo-url-fix-20260829` (`da7900fb…`)
+Существующий тег `leadprocure-prod-web:pre-contabo-url-fix-20260829` (`da7900fb90e8c9f5166147911e93451b037ebe9aea8bb727f23b525cfa316afe`)
 точкой отката **не является**, и причина сильнее, чем кажется по его имени: в этот
 бандл вшит адрес API `http://78.47.51.200:3100` — хост Hetzner, которого больше не
 существует. Этот образ просто нерабочий, независимо от того, что в нём ещё и есть
@@ -641,6 +641,21 @@ node scripts/release/manifest.cjs verify-loaded /путь/к/пакету "$SHA"
 обоих работающих образов и читается `docker inspect` прямо с контейнера.)
 
 ### Шаг 6. Выложить api и web
+
+**Сначала — один взгляд на открытые PR, и не на все.** Вопрос не «есть ли открытые
+правки» (их всегда много), а «есть ли открытая правка, которая ЧИНИТ то, что я сейчас
+выкладываю»:
+
+```bash
+gh pr list --repo rashadoni/leadprocure --state open --json number,title,files \
+  --jq '.[] | "#\(.number) \(.title) [\([.files[].path] | map(select(test("apps/"))) | length)]"'
+```
+
+Зелёная починка известного дефекта, лежащая в очереди, — причина дождаться её мержа, а
+не выложить дефект своими руками. 8 ноября этого взгляда не было, и выкладка `d449fae`
+увезла к пользователям подпись каталогов, которую `#148` уже чинил: правка была открыта
+и зелена, но ни один шаг пути на открытые PR не смотрел. Подробности — в разделе про ту
+выкладку в конце документа.
 
 **Compose-файлы берутся из чекаута выложенного SHA, а не из тех каталогов, где
 сейчас живёт прод.** Это не придирка: в каноническом `infra/docker-compose.prod.yml`
@@ -744,7 +759,7 @@ docker run --rm --entrypoint sh -e SEEDPASS="$SEEDPASS" "leadprocure-web:$SHA" -
 
 Проверка проверена: на `leadprocure-prod-web:pre-contabo-url-fix-20260829` — том самом
 образе, который печатал пароль на странице входа, — она даёт `1/1/1/0`, то есть
-находит утечку; на нынешнем образе `3ca1a657…` — `0/0/0/0`.
+находит утечку; на нынешнем образе `3ca1a65715b706873d09841c6f988c5727aadef54bd4655fd1c85d60fc96a88e` — `0/0/0/0`.
 
 Почему пароль вычитывается, а не записан здесь строкой. Печатала страница входа именно
 пароль демо-сида — он лежит в исходниках (`apps/api/src/seed.ts`, `Login.tsx` в том же
@@ -824,6 +839,46 @@ specification`**, то есть после откату `POST /settings/users` (
 проверок шага 7 и что из них не выполнялось. Без этой записи следующая сессия снова
 будет восстанавливать коммит по хешам файлов.
 
+**Дайджест пишется целиком — все 64 знака.** Усечённый `sha256:34267da3…` сверить можно
+только глазами, а смысл дайджеста ровно в том, чтобы сверять побайтово. `docker image
+inspect` отдаёт полное значение; обрезать его при записи — выбросить единственное, чем
+запись отличается от памяти о записи. То же про SHA коммитов, контрольные суммы копий базы
+и пакетов: ссылка, по которой нельзя проверить, — это не ссылка.
+
+8 ноября все прежние записи приведены к этому виду: **60 усечённых ссылок раскрыты и
+сверены с источником** — образы с диска (`docker image inspect`) и из манифестов пакетов
+(`/home/rashad/releases/*/manifest.json`), копии базы, пакеты и ролики пересчитаны
+`sha256sum`, SHA коммитов раскрыты через `git rev-parse`. Там, где рядом записан размер в
+байтах, значение сверено и по нему — второй, независимой величиной.
+
+**Шесть ссылок раскрыть уже нечем, и это сказано здесь, чтобы многоточие в них не читалось
+как небрежность.** Образы пакета `45e56d8` (он не пригодился), точки отката `9e3ee716`,
+`627a452` и `9f8871c` снесены как устаревшие, их пакетов на диске нет, а логи сборки тех
+прогонов GitHub уже не отдаёт — проверено дважды, `gh run view --log` возвращает пусто.
+Ручка отката там — тег, он записан целиком; побайтовой сверки для этих точек не будет
+никогда. Отсюда правило в одну строку: **пока образ на диске, дайджест записывается
+целиком; после того как образ снесён, восстановить его нечем.**
+
+Если образа под рукой уже нет, а запись дописывают позже, дайджест берётся из манифеста
+пакета — `/home/rashad/releases/<sha>/manifest.json`, поля `images.api.id` и
+`images.web.id`. Манифест переживает `docker image prune` и привязывает дайджест к
+коммиту, а не к тегу, так что сверить по нему можно и тогда, когда тега уже нет:
+
+```bash
+jq -r '.images | to_entries[] | "\(.key) \(.value.id)"' /home/rashad/releases/<sha>/manifest.json
+```
+
+**После слияния записи считать разделы, а не конфликты.** `git status --short | grep '^UU'`
+отвечает на вопрос «остались ли маркеры», а вопрос был «цел ли файл»: 8 ноября `git merge`
+снял из этого документа целый раздел без конфликта, и такая проверка прошла молча — раздел
+восстановили случайно, когда полезли править по чужому разбору. Поэтому до слияния и после:
+
+```bash
+grep -c '^## Выкладка' docs/prod-release-path.md
+```
+
+Числа должны совпасть. Эта строка ловит ровно то, что тогда потерялось.
+
 ---
 
 ## Выкладка 1 ноября 2026 — выполнена
@@ -834,8 +889,8 @@ specification`**, то есть после откату `POST /settings/users` (
 | | |
 |---|---|
 | Выложенный SHA | `4951e02ec2ede513ef77fc8bc99a9e93cc19dd62` |
-| Образ api | `leadprocure-api:4951e02…`, `sha256:054adbd0b032e9995a4210d66a29771bdf3ed3d21f507eaf6dceac864b72bf21`, amd64, метка `revision` = выложенный SHA |
-| Образ web | `leadprocure-web:4951e02…`, `sha256:4051fccded5bd1ad1b95a0ebedb843f819f2bf1394daf1fbcda02f8e523913ae`, amd64, метка `revision` = выложенный SHA |
+| Образ api | `leadprocure-api:4951e02ec2ede513ef77fc8bc99a9e93cc19dd62`, `sha256:054adbd0b032e9995a4210d66a29771bdf3ed3d21f507eaf6dceac864b72bf21`, amd64, метка `revision` = выложенный SHA |
+| Образ web | `leadprocure-web:4951e02ec2ede513ef77fc8bc99a9e93cc19dd62`, `sha256:4051fccded5bd1ad1b95a0ebedb843f819f2bf1394daf1fbcda02f8e523913ae`, amd64, метка `revision` = выложенный SHA |
 | Точка отката | `leadprocure-prod-api:rollback-400f861` `sha256:f44725790f1afe6d249ffdb7aae524b7794e629f557fe90dd6905197fde7fd8c`, `leadprocure-prod-web:rollback-400f861` `sha256:3ca1a65715b706873d09841c6f988c5727aadef54bd4655fd1c85d60fc96a88e` |
 | Резервная копия | `/home/rashad/backups/leadprocure/leadprocure-prod-20261101T171956Z.dump`, 717 981 байт, sha256 `b721a14ae1aef8f7f03b03192d59be2918957fe8d262c4d9d5f78ec4d8b80b47`, права 600. Восстановление проверено до выкладки: разворот в отдельный `postgres:16`, `pg_restore` код 0, счёт строк в 12 таблицах совпал с продом |
 | Сборка | `release-artifacts.yml`, прогон [41331180781](https://github.com/rashadoni/leadprocure/actions/runs/41331180781), `workflow_dispatch` на `main`, `public_api_url = http://75.119.156.234:3100`. Пакет сверен на хосте (`verify`) и после загрузки (`verify-loaded`) — оба PASS |
@@ -897,9 +952,9 @@ eicar-live.txt: The specified key does not exist` про оставшийся о
 |---|---|
 | Выкладываемый SHA | `3cd4d276af3302cee53c5553508924c46f8fa8e1` — вершина `main`, мерж PR #82 |
 | Что было до него | `4951e02` от 1 ноября (раздел выше) |
-| Образ api | `leadprocure-api:3cd4d27…`, `sha256:baf1c83ca1f4ed54592a9f576e26a427ce7c79b904d81706c8f9f4e9f916873a`, amd64, метка `revision` = выкладываемый SHA |
-| Образ web | `leadprocure-web:3cd4d27…`, `sha256:77265991862e849f1722a948baa9ccc6cbb230b3ad53791eee2b4934e18f7d94`, amd64, метка `revision` = выкладываемый SHA |
-| Точка отката | `leadprocure-prod-api:rollback-4951e02` `sha256:054adbd0b032e9995a4210d66a29771bdf3ed3d21f507eaf6dceac864b72bf21`, `leadprocure-prod-web:rollback-4951e02` `sha256:4051fccded5bd1ad1b95a0ebedb843f819f2bf1394daf1fbcda02f8e523913ae`. Теги поставлены **до** `docker image load`; прежняя точка `rollback-400f861` (`f4472579…` / `3ca1a657…`) не тронута |
+| Образ api | `leadprocure-api:3cd4d276af3302cee53c5553508924c46f8fa8e1`, `sha256:baf1c83ca1f4ed54592a9f576e26a427ce7c79b904d81706c8f9f4e9f916873a`, amd64, метка `revision` = выкладываемый SHA |
+| Образ web | `leadprocure-web:3cd4d276af3302cee53c5553508924c46f8fa8e1`, `sha256:77265991862e849f1722a948baa9ccc6cbb230b3ad53791eee2b4934e18f7d94`, amd64, метка `revision` = выкладываемый SHA |
+| Точка отката | `leadprocure-prod-api:rollback-4951e02` `sha256:054adbd0b032e9995a4210d66a29771bdf3ed3d21f507eaf6dceac864b72bf21`, `leadprocure-prod-web:rollback-4951e02` `sha256:4051fccded5bd1ad1b95a0ebedb843f819f2bf1394daf1fbcda02f8e523913ae`. Теги поставлены **до** `docker image load`; прежняя точка `rollback-400f861` (`f44725790f1afe6d249ffdb7aae524b7794e629f557fe90dd6905197fde7fd8c` / `3ca1a65715b706873d09841c6f988c5727aadef54bd4655fd1c85d60fc96a88e`) не тронута |
 | Резервная копия | `/home/rashad/backups/leadprocure/leadprocure-prod-20261101T204144Z.dump`, 739 475 байт, sha256 `b6831c3d8e740071b974b3b11dba704ffbfe8534b32d348d76b31adcea6cfdc8`, права 600 |
 | Сборка | `release-artifacts.yml`, прогон [41348327372](https://github.com/rashadoni/leadprocure/actions/runs/41348327372), `workflow_dispatch` на `main`, `public_api_url = http://75.119.156.234:3100`. Пакет 249 173 547 байт, sha256 `47f996cb57df5b9e852ce8bf6c170c4e2daa1f5c33e982e1855d95953b1c94a3` |
 | Проверки репозитория | `acceptance` и `fresh-install` SUCCESS на этом же коммите, прогон [41347663801](https://github.com/rashadoni/leadprocure/actions/runs/41347663801), событие `push` на `main` |
@@ -958,7 +1013,7 @@ eicar-live.txt: The specified key does not exist` про оставшийся о
 
 **Демо-учётные данные в бандле — проверено до подмены, на загруженном образе.**
 Пароль демо-сида вычитан из `apps/api/src/seed.ts` выкладываемого SHA (в документ не
-копируется). На `leadprocure-web:3cd4d27…` — по нулю файлов на пароль сида,
+копируется). На `leadprocure-web:3cd4d276af3302cee53c5553508924c46f8fa8e1` — по нулю файлов на пароль сида,
 `acme.test`, `supply-one.test` и `VITE_DEMO_HINT`. Проверка проверена на своём сбое:
 на `leadprocure-prod-web:pre-contabo-url-fix-20260829`, том самом образе, который
 печатал пароль на странице входа, та же команда даёт `1/1/1/0`. То есть нули на новом
@@ -972,7 +1027,7 @@ eicar-live.txt: The specified key does not exist` про оставшийся о
 сверенный пакет `3cd4d27` перестал быть «текущим `main`» ещё до того, как его успели
 выложить, и выкладывать его теперь означало бы выложить не вершину.
 
-- Образы `leadprocure-api:3cd4d27…` и `leadprocure-web:3cd4d27…` в демоне оставлены:
+- Образы `leadprocure-api:3cd4d276af3302cee53c5553508924c46f8fa8e1` и `leadprocure-web:3cd4d276af3302cee53c5553508924c46f8fa8e1` в демоне оставлены:
   места они не жмут, но **точкой следующей выкладки не являются** — её надо собирать
   заново в Actions на тогдашнем `main`.
 - Теги `leadprocure-prod-{api,web}:rollback-4951e02` оставить как есть: это действующая
@@ -1036,7 +1091,7 @@ eicar-live.txt: The specified key does not exist` про оставшийся о
 | | |
 |---|---|
 | Выложенный SHA | `9e3ee7162b480c13f6975bb6c8d54d62078b7887` |
-| Было до | `4951e02…` (выложен тем же днём, тремя часами раньше) |
+| Было до | `4951e02ec2ede513ef77fc8bc99a9e93cc19dd62` (выложен тем же днём, тремя часами раньше) |
 | Образ api | `sha256:90bbf097cb997bc4e2c67886dccadb168382b535e89cd51e0c4ae7c7706ed7be`, amd64, метка `revision` = выложенный SHA |
 | Образ web | `sha256:482f5fbd9d6750e6597bdb28ca7aa3c7c56190114501d1916530d1714f6681d8`, amd64, метка `revision` = выложенный SHA |
 | Точка отката | `leadprocure-prod-api:rollback-4951e02`, `leadprocure-prod-web:rollback-4951e02` — **сверены с работающими образами по Id перед загрузкой новых**, совпали |
@@ -1139,10 +1194,10 @@ eicar-live.txt: The specified key does not exist` про оставшийся о
 | | |
 |---|---|
 | Выложенный SHA | `4c65cf1ef16c860d64bec2784af7787a72da3b38` |
-| Было до | `9e3ee716…` (два часа) |
+| Было до | `9e3ee7162b480c13f6975bb6c8d54d62078b7887` (два часа) |
 | Образ api | `sha256:d13cb185772007711e133bf60be34d0da550b267331f4cd9c59ca69b54ac2671`, amd64, метка `revision` = выложенный SHA |
 | Образ web | `sha256:85e82706f5e5a55bd823cb889a78a0f8213ee447c120e2a1ec864fa765860502`, amd64, метка `revision` = выложенный SHA |
-| Точка отката | `leadprocure-api:9e3ee716…` (`sha256:90bbf097cb99…`) и `leadprocure-web:9e3ee716…` (`sha256:482f5fbd9d67…`) — оба на месте в демоне, сверены по Id **до** загрузки новых. Переименовывать ничего не понадобилось: см. переписанный шаг 4 |
+| Точка отката | `leadprocure-api:9e3ee7162b480c13f6975bb6c8d54d62078b7887` (`sha256:90bbf097cb99…`) и `leadprocure-web:9e3ee7162b480c13f6975bb6c8d54d62078b7887` (`sha256:482f5fbd9d67…`) — оба на месте в демоне, сверены по Id **до** загрузки новых. Переименовывать ничего не понадобилось: см. переписанный шаг 4 |
 | Резервная копия | `/home/rashad/backups/leadprocure/leadprocure-prod-20261102T002624Z.dump`, 739 475 байт, sha256 `d65424b3682f957301571da45b182e7dd9187f593109ed996af40b29fbe73142`, права 600 |
 | Сборка | прогон [41367053343](https://github.com/rashadoni/leadprocure/actions/runs/41367053343), `workflow_dispatch` на `main`. `verify` и `verify-loaded` — оба PASS |
 | Проверки репозитория | `acceptance` и `fresh-install` SUCCESS на самом `4c65cf1e`, прогон [41367000858](https://github.com/rashadoni/leadprocure/actions/runs/41367000858), событие `push` на `main` |
@@ -1224,9 +1279,9 @@ presigned-загрузка на `:9002`. Для этого релиза спис
 
 **Что выложено.** `cb96bcc9383197dc97cd6d22de982b18da896fee` (PR #96, squash в `main`).
 Образы api `sha256:…` и web — см. `manifest.json` пакета
-`/home/rashad/releases/leadprocure-cb96bcc…`. Точка отката: `4c65cf1ef16c86…`,
-образы `leadprocure-api:4c65cf1e…` (`sha256:d13cb18577…`) и
-`leadprocure-web:4c65cf1e…` (`sha256:85e82706f5…`) — проверено, что оба на месте, ДО
+`/home/rashad/releases/leadprocure-cb96bcc9383197dc97cd6d22de982b18da896fee`. Точка отката: `4c65cf1ef16c860d64bec2784af7787a72da3b38`,
+образы `leadprocure-api:4c65cf1ef16c860d64bec2784af7787a72da3b38` (`sha256:d13cb185772007711e133bf60be34d0da550b267331f4cd9c59ca69b54ac2671`) и
+`leadprocure-web:4c65cf1ef16c860d64bec2784af7787a72da3b38` (`sha256:85e82706f5e5a55bd823cb889a78a0f8213ee447c120e2a1ec864fa765860502`) — проверено, что оба на месте, ДО
 загрузки новых.
 
 **Копия базы.** `/home/rashad/backups/leadprocure/leadprocure-prod-20261102T143710Z.dump`,
@@ -1247,7 +1302,7 @@ presigned-загрузка на `:9002`. Для этого релиза спис
 
 **После подмены.** `/health` снаружи — `licenseSource: file`, `licenseStatus: valid`;
 web 200; `/auth/me` и `/events` без токена — 401; ноль «error» в логе api;
-`No migrations are pending`; обе метки `revision` на контейнерах — `cb96bcc…`.
+`No migrations are pending`; обе метки `revision` на контейнерах — `cb96bcc9383197dc97cd6d22de982b18da896fee`.
 
 **Чем проверено, что доехал именно новый вид** — это и есть особенность релиза, в
 котором не меняется ни одна строка сервера. Скачан отданный прод-CSS
@@ -1294,10 +1349,10 @@ web 200; `/auth/me` и `/events` без токена — 401; ноль «error»
    внутренний открывало обе подсказки — короткая ложилась поверх длинной.
 
 **Что выложено.** `c21ed7f23d4d776e0937f4236ea1fbe067fa1e8c` (PR #99, squash в
-`main`). Образы: api `sha256:a019a63fd6c8…`, web `sha256:6c3586a51c91…`, пакет
-`/home/rashad/releases/leadprocure-c21ed7f…`. Точка отката — `cb96bcc93831…`, образы
-`leadprocure-api:cb96bcc9…` (`sha256:64df6b62fef9…`) и `leadprocure-web:cb96bcc9…`
-(`sha256:a144b25da71b…`); оба проверены на месте ДО загрузки новых.
+`main`). Образы: api `sha256:a019a63fd6c82665cfc63280d132eecd303cc9b96423757cb517600d1bf0eb2a`, web `sha256:6c3586a51c9176e69cbedae04e916e88977b61d9609ed3e5c1246499b88d1483`, пакет
+`/home/rashad/releases/leadprocure-c21ed7f23d4d776e0937f4236ea1fbe067fa1e8c`. Точка отката — `cb96bcc9383197dc97cd6d22de982b18da896fee`, образы
+`leadprocure-api:cb96bcc9383197dc97cd6d22de982b18da896fee` (`sha256:64df6b62fef96b0a58725153eeea283390f043761e3063d5e31c2c6790cebd4f`) и `leadprocure-web:cb96bcc9383197dc97cd6d22de982b18da896fee`
+(`sha256:a144b25da71b7ac388dd03bb44e5c91fb16d71da1f29d43d2527a4fc0f63a0a2`); оба проверены на месте ДО загрузки новых.
 
 **Копия базы.** `/home/rashad/backups/leadprocure/leadprocure-prod-20261102T175112Z.dump`,
 739 702 байта, sha256 начинается на `9611ac47d28d`. В отличие от прошлой выкладки
@@ -1318,7 +1373,7 @@ Compose из воркитри `release-c21ed7f`, `--env-file` на живом `.
 
 **После подмены.** `/health` снаружи — `licenseSource: file`, `licenseStatus: valid`;
 web 200; `/auth/me` и `/events` без токена — 401; ноль «error» в логе api;
-`No migrations are pending`; обе метки `revision` на контейнерах — `c21ed7f…`. В
+`No migrations are pending`; обе метки `revision` на контейнерах — `c21ed7f23d4d776e0937f4236ea1fbe067fa1e8c`. В
 образе web нет ни пароля демо-сида, ни `acme.test`, ни `supply-one.test`, ни
 `VITE_DEMO_HINT` — `0 0 0 0`.
 
@@ -1400,11 +1455,11 @@ web 200; `/auth/me` и `/events` без токена — 401; ноль «error»
 дешевле по квоте.
 
 **Что выложено.** `420a5ade29ff6d42bcdab6fa31c9b0b8a9cb61d3` (PR #98, merge в `main`).
-Образы: api `sha256:2b1b1b913334…`, web `sha256:122b4a079b65…`; пакет
+Образы: api `sha256:2b1b1b913334ec450dd7100e55be223680ae35794aff5f04ac64f530014302fb`, web `sha256:122b4a079b656e8b491284a1cce5f38d1792f308793875a645426bdaa9606df9`; пакет
 `/home/rashad/releases/leadprocure-420a5ad/` (архив 278 379 520 байт, sha256
-`d863949ce22e…`). Точка отката — `c21ed7f23d4d…`, образы
-`leadprocure-api:c21ed7f23d4d…` (`sha256:a019a63fd6c8…`) и
-`leadprocure-web:c21ed7f23d4d…` (`sha256:6c3586a51c91…`); оба проверены на месте ДО
+`d863949ce22e86ce508f8f82336860bac3f6e0173b72350dd9596aaceb2f36d8`). Точка отката — `c21ed7f23d4d776e0937f4236ea1fbe067fa1e8c`, образы
+`leadprocure-api:c21ed7f23d4d776e0937f4236ea1fbe067fa1e8c` (`sha256:a019a63fd6c82665cfc63280d132eecd303cc9b96423757cb517600d1bf0eb2a`) и
+`leadprocure-web:c21ed7f23d4d776e0937f4236ea1fbe067fa1e8c` (`sha256:6c3586a51c9176e69cbedae04e916e88977b61d9609ed3e5c1246499b88d1483`); оба проверены на месте ДО
 загрузки новых.
 
 **Копия базы.** `/home/rashad/backups/leadprocure/leadprocure-prod-20261102T185128Z.dump`,
@@ -1428,7 +1483,7 @@ web 200; `/auth/me` и `/events` без токена — 401; ноль «error»
 **После подмены.** `/health` снаружи — `licenseSource: file`, `licenseStatus: valid`,
 `edition: enterprise`; web `/login` 200; `/auth/me` и `/events` без токена — 401;
 `No migrations are pending`; ноль строк с `error` в логе api; обе метки `revision` на
-контейнерах — `420a5ade…`. В образе web нет ни пароля демо-сида, ни `acme.test`, ни
+контейнерах — `420a5ade29ff6d42bcdab6fa31c9b0b8a9cb61d3`. В образе web нет ни пароля демо-сида, ни `acme.test`, ни
 `supply-one.test`, ни `VITE_DEMO_HINT` — `0 0 0 0`.
 
 **Чем проверено, что доехало именно изменение.** Для релиза из одних записей код ответа
@@ -1490,19 +1545,19 @@ done
 |---|---|
 | Проверки на выкладываемом коммите | `acceptance` и `fresh-install` — SUCCESS на `627a452`, прогон 42289705519, событие `push` на `main` |
 | Лицензия доезжает | dry-run шага 6: `LICENSE_PUBLIC_KEY_B64` непустой (152 символа), `source: /home/rashad/projects/Leadprocure/infra/license` над `target: /run/leadprocure-license`, `read_only: true`, `create_host_path: false` |
-| Копия базы | `pg_dump -Fc` 6 ноября 20:36 UTC: `/home/rashad/backups/leadprocure/leadprocure-prod-20261106T203622Z.dump`, 742 852 байта, sha256 `6521221eccb06af027ec…`, права `600` |
+| Копия базы | `pg_dump -Fc` 6 ноября 20:36 UTC: `/home/rashad/backups/leadprocure/leadprocure-prod-20261106T203622Z.dump`, 742 852 байта, sha256 `6521221eccb06af027ecb4d402172c2d57876a1f8b851d24c71fb4d99e2d730a`, права `600` |
 | Восстановление проверено | дамп развёрнут в одноразовый `postgres:16`: `pg_restore` код 0, счёт строк в 12 таблицах совпал с продом (audit_events 3241, bids 7, bid_sealed_payloads 5, purchase_orders 9, procurement_requests 17, budgets 6, departments 4, invoices 4, organizations 3, organization_users 6, sourcing_events 7, awards 1), у всех 5 запечатанных ставок на месте `ciphertext` и `wrapped_key`, все 3241 записи журнала с хешем. **Прогон понадобился второй:** в первом два последних запроса упали на ещё не готовом контейнере, доказательством считается второй, чистый целиком |
 | Preflight | `duplicate_invoice_lines`, `duplicate_evaluation_scores`, `duplicate_memberships` и три проверки пространств имён — нули. `installed_licenses = 0` (ожидаемо, лицензия файлом), `legacy_invoice_lines_requiring_tax_review = 5` — те же исторические строки |
-| Пакет | прогон 42289767069, артефакт `leadprocure-release-627a452…`, 277 974 771 байт; `manifest.cjs verify` и `verify-loaded` — PASS |
-| Образы | `leadprocure-api:627a452…` `sha256:8778e5b971d0…`, `leadprocure-web:627a452…` `sha256:657ec912ffff…`, обе amd64, метки `revision` совпадают с SHA |
-| Точка отката | `leadprocure-api:420a5ade…` `sha256:2b1b1b913334…` и `leadprocure-web:420a5ade…` `sha256:122b4a079b65…` — проверены ДО загрузки новых |
+| Пакет | прогон 42289767069, артефакт `leadprocure-release-627a4522b852e40bf623f463b64d39693dff6e5d`, 277 974 771 байт; `manifest.cjs verify` и `verify-loaded` — PASS |
+| Образы | `leadprocure-api:627a4522b852e40bf623f463b64d39693dff6e5d` `sha256:8778e5b971d0…`, `leadprocure-web:627a4522b852e40bf623f463b64d39693dff6e5d` `sha256:657ec912ffff…`, обе amd64, метки `revision` совпадают с SHA |
+| Точка отката | `leadprocure-api:420a5ade29ff6d42bcdab6fa31c9b0b8a9cb61d3` `sha256:2b1b1b913334ec450dd7100e55be223680ae35794aff5f04ac64f530014302fb` и `leadprocure-web:420a5ade29ff6d42bcdab6fa31c9b0b8a9cb61d3` `sha256:122b4a079b656e8b491284a1cce5f38d1792f308793875a645426bdaa9606df9` — проверены ДО загрузки новых |
 
 ### Проверено после подмены, на живой машине
 
-- `docker ps`: api и web на образах `627a452…`; `postgres`, `minio`, `clamav`,
+- `docker ps`: api и web на образах `627a4522b852e40bf623f463b64d39693dff6e5d`; `postgres`, `minio`, `clamav`,
   `ai-orchestrator` — `Up 2 weeks`, те же образы. `--no-deps` сработал, хранилище не
   подменено.
-- Метки `revision` на обоих работающих контейнерах — `627a4522b852…`.
+- Метки `revision` на обоих работающих контейнерах — `627a4522b852e40bf623f463b64d39693dff6e5d`.
 - `/health`: `status: ok`, `edition: enterprise`, `licenseSource: file`,
   `licenseStatus: valid`. Ноль строк с `error`/`exception` в логе api.
 - Web `/login` → 200, неаутентифицированный `/auth/me` → 401.
@@ -1783,8 +1838,8 @@ https отдаёт 200 с доверенным сертификатом (`ssl_ve
 |---|---|
 | Выложенный коммит | `9f8871c9d5dafe5bbe6e52c896651f5c8e9ce2db` |
 | Проверки на нём | `acceptance` и `fresh-install` — SUCCESS, событие `push` на `main` |
-| api | `leadprocure-api:9f8871c…`, `sha256:5ea7a8211580e38d8146c31f2390bbf78cccf7562387c5c717763dee9435daaf`, amd64 |
-| web | `leadprocure-web:9f8871c…`, `sha256:b590b53490ee4467b2b7f691a86600ad97e1d6331ac9defe1682506c278f53e9`, amd64 |
+| api | `leadprocure-api:9f8871c9d5dafe5bbe6e52c896651f5c8e9ce2db`, `sha256:5ea7a8211580e38d8146c31f2390bbf78cccf7562387c5c717763dee9435daaf`, amd64 |
+| web | `leadprocure-web:9f8871c9d5dafe5bbe6e52c896651f5c8e9ce2db`, `sha256:b590b53490ee4467b2b7f691a86600ad97e1d6331ac9defe1682506c278f53e9`, amd64 |
 | Точка отката | `627a452`: api `sha256:8778e5b971d085a8…`, web `sha256:657ec912ffff51a3…` — оба на месте |
 | Копия базы | `/home/rashad/backups/leadprocure/leadprocure-prod-20261106T220524Z.dump`, 742 852 байта, sha256 `16ffdd8eca1ed09cf73fb105bc8d328502a8075812268dd2e731fe5431a1aa3a`, права 600 |
 | Восстановление проверено | да, разворотом в одноразовый `postgres:16`: `pg_restore` код 0, ноль ошибок, 12 таблиц совпали до строки, у всех 5 запечатанных ставок на месте `ciphertext` и `wrapped_key`, все 3241 записи журнала с хешем |
@@ -1844,19 +1899,19 @@ https отдаёт 200 с доверенным сертификатом (`ssl_ve
 | Проверки на коммите | `acceptance` и `fresh-install` — SUCCESS на `9e76006`, прогон 42314468740, событие `push` на `main` |
 | Адрес API | взят из живого `.env.prod` (`PUBLIC_API_URL=https://75.119.156.234:10443/api`) и передан и в сборку, и в `manifest.cjs verify` — см. раздел про шаг 2 |
 | Лицензия доезжает | dry-run шага 6: ключ 152 символа, `source: /home/rashad/projects/Leadprocure/infra/license` над `target: /run/leadprocure-license`, `read_only: true`, `create_host_path: false` |
-| Копия базы | `pg_dump -Fc` 6 ноября 23:51 UTC: `/home/rashad/backups/leadprocure/leadprocure-prod-20261106T235101Z.dump`, 742 852 байта, sha256 `3e334b6007a4188754f76b25…`, права `600` |
+| Копия базы | `pg_dump -Fc` 6 ноября 23:51 UTC: `/home/rashad/backups/leadprocure/leadprocure-prod-20261106T235101Z.dump`, 742 852 байта, sha256 `3e334b6007a4188754f76b25350a1776262e1d8b69abab647e8a833be8a040d0`, права `600` |
 | Восстановление проверено | дамп развёрнут в одноразовый `postgres:16`: `pg_restore` код 0, 12 таблиц совпали с продом, у всех 5 запечатанных ставок на месте `ciphertext` и `wrapped_key`, все 3241 записи журнала с хешем |
 | Preflight | три блокирующие проверки — нули; `legacy_invoice_lines_requiring_tax_review = 5` (те же исторические строки) |
 | Пакет | прогон 42314734211, артефакт 277 665 127 байт; `verify` и `verify-loaded` — PASS против https-адреса |
-| Образы | `leadprocure-api:9e76006…` `sha256:130d1273ce7d…`, `leadprocure-web:9e76006…` `sha256:99a88df4729a…`, amd64, метки `revision` совпадают |
-| Точка отката | `leadprocure-api:9f8871c…` `sha256:5ea7a8211580…` и `leadprocure-web:9f8871c…` `sha256:b590b53490ee…` — проверены ДО загрузки новых |
+| Образы | `leadprocure-api:9e76006f516bca64d3abcc8e04c13830e84e4bbe` `sha256:130d1273ce7decc3dde1d36ae637d8fd7e576c9e827eb60e1c981b9758660814`, `leadprocure-web:9e76006f516bca64d3abcc8e04c13830e84e4bbe` `sha256:99a88df4729aabf17ced703644a09cb347d09fcb807c6801eb8618497ad066c0`, amd64, метки `revision` совпадают |
+| Точка отката | `leadprocure-api:9f8871c9d5dafe5bbe6e52c896651f5c8e9ce2db` `sha256:5ea7a8211580…` и `leadprocure-web:9f8871c9d5dafe5bbe6e52c896651f5c8e9ce2db` `sha256:b590b53490ee…` — проверены ДО загрузки новых |
 
 ### Проверено после подмены, через TLS-вход
 
 - `https://…:10443/api/health` — `status: ok`, `licenseSource: file`, `licenseStatus: valid`;
   ноль строк с `error`/`exception` в логе api; `/login` → 200,
   неаутентифицированный `/api/auth/me` → 401; `ssl_verify_result 0`.
-- Метки `revision` на обоих работающих контейнерах — `9e76006f516b…`.
+- Метки `revision` на обоих работающих контейнерах — `9e76006f516bca64d3abcc8e04c13830e84e4bbe`.
 - `tls` `Up 6 hours`, `postgres`, `minio`, `clamav`, `ai-orchestrator` — `Up 2 weeks`:
   `--no-deps` соблюдён, вход TLS не перезапускался, хранилище не подменено.
 - Записи сверены побайтово (sha256 отданного против `oid` в `origin/main`): совпали
@@ -1968,19 +2023,19 @@ api написал `No migrations are pending`. Изменён только `app
 | Разбор | в самом PR: комментарий сессии, которая его не писала; два её замечания — поведенческая проверка двери (взято, `0576a38`) и отсутствие проверки длины записи (отложено в `scripts/produce-guides.mjs`) |
 | Адрес API | взят из живого `.env.prod` (`PUBLIC_API_URL=https://75.119.156.234:10443/api`) и передан и в сборку, и в `manifest.cjs verify`, и в `verify-loaded` |
 | Лицензия доезжает | dry-run шага 6: ключ непустой (152 символа), `source: /home/rashad/projects/Leadprocure/infra/license` над `target: /run/leadprocure-license`, `read_only: true`, `create_host_path: false` |
-| Копия базы | `pg_dump -Fc` 7 ноября 07:51 UTC: `/home/rashad/backups/leadprocure/leadprocure-prod-20261107T075117Z.dump`, 742 852 байта, sha256 `8a8ad4f235f3c37c24391151…`, права `600` |
+| Копия базы | `pg_dump -Fc` 7 ноября 07:51 UTC: `/home/rashad/backups/leadprocure/leadprocure-prod-20261107T075117Z.dump`, 742 852 байта, sha256 `8a8ad4f235f3c37c243911512cf438780a2dde2f9f6cd037ee351867f8f1b9f5`, права `600` |
 | Восстановление проверено | дамп развёрнут в одноразовый `postgres:16`: `pg_restore` код 0, десять счётчиков совпали с продом до единицы (3 организации, 6 пользователей, 7 тендеров, 7 ставок, 4 счёта, 9 заказов, 6 бюджетов), у всех 5 запечатанных ставок на месте `ciphertext` и `wrapped_key`, все 3241 записи журнала с хешем |
 | Preflight | три блокирующие проверки — нули; `legacy_invoice_lines_requiring_tax_review = 5` (те же исторические строки) |
 | Пакет | прогон 42352925086, артефакт 277 670 337 байт; `verify` и `verify-loaded` — PASS против https-адреса |
-| Образы | `leadprocure-api:94aa8fe…` `sha256:b360312246e5…`, `leadprocure-web:94aa8fe…` `sha256:0349be0268e2…`, amd64, метки `revision` совпадают с манифестом |
-| Точка отката | `leadprocure-api:9e76006…` `sha256:130d1273ce7d…` и `leadprocure-web:9e76006…` `sha256:99a88df4729a…` — проверены ДО загрузки новых |
+| Образы | `leadprocure-api:94aa8fea4f894f0ef6db0436cf8cf8420e738f04` `sha256:b360312246e5acf9701f9c55cdc45124317e3d57447765a76a33845c3358f9fe`, `leadprocure-web:94aa8fea4f894f0ef6db0436cf8cf8420e738f04` `sha256:0349be0268e2c07256ff4598dd0167c4ed0cd5cb00ff69d8c95ca6b5a016f346`, amd64, метки `revision` совпадают с манифестом |
+| Точка отката | `leadprocure-api:9e76006f516bca64d3abcc8e04c13830e84e4bbe` `sha256:130d1273ce7decc3dde1d36ae637d8fd7e576c9e827eb60e1c981b9758660814` и `leadprocure-web:9e76006f516bca64d3abcc8e04c13830e84e4bbe` `sha256:99a88df4729aabf17ced703644a09cb347d09fcb807c6801eb8618497ad066c0` — проверены ДО загрузки новых |
 
 ### Проверено на живой системе, через TLS-вход
 
 - `https://…:10443/api/health` — `status: ok`, `licenseSource: file`, `licenseStatus: valid`.
 - `/login` → 200, `/learn` → 200, неаутентифицированный `/api/auth/me` → 401,
   `ssl_verify_result 0` (без `-k`) на каждом запросе.
-- Метки `revision` на обоих работающих контейнерах — `94aa8fea4f89…`;
+- Метки `revision` на обоих работающих контейнерах — `94aa8fea4f894f0ef6db0436cf8cf8420e738f04`;
   `No migrations are pending` в логе; ноль строк с `error`/`exception` за пять минут
   после подмены.
 - `tls` `Up 2 hours`, `postgres`, `clamav`, `minio`, `ai-orchestrator` — `Up 2 weeks`:
@@ -2039,24 +2094,24 @@ pending`; изменён только `apps/web` плюс съёмочный с�
 | Разбор | в самом PR #126 комментарий сессии, которая его не писала; одна находка (сторож длительности слепнет к порядку полей) исправлена отдельным PR #127, продукта не касается |
 | Адрес API | взят из живого `.env.prod` (`PUBLIC_API_URL=https://75.119.156.234:10443/api`) и передан в сборку, в `verify` и в `verify-loaded` |
 | Лицензия доезжает | dry-run шага 6: ключ 152 символа, `source: /home/rashad/projects/Leadprocure/infra/license` над `target: /run/leadprocure-license`, `read_only: true`, `create_host_path: false` |
-| Копия базы | `pg_dump -Fc` 7 ноября 09:26 UTC: `/home/rashad/backups/leadprocure/leadprocure-prod-20261107T092612Z.dump`, 742 852 байта, sha256 `358651d7f1a233271e16014f…`, права `600` |
+| Копия базы | `pg_dump -Fc` 7 ноября 09:26 UTC: `/home/rashad/backups/leadprocure/leadprocure-prod-20261107T092612Z.dump`, 742 852 байта, sha256 `358651d7f1a233271e16014ff92860f4eadabeee070c57df0682e54bbe0a409d`, права `600` |
 | Восстановление проверено | дамп развёрнут в одноразовый `postgres:16`: `pg_restore` код 0, десять счётчиков совпали с продом до единицы, у всех 5 запечатанных ставок на месте `ciphertext` и `wrapped_key`, все 3241 записи журнала с хешем |
 | Preflight | три блокирующие проверки — нули; `legacy_invoice_lines_requiring_tax_review = 5` (те же исторические строки) |
 | Пакет | прогон 42359667543, артефакт 290 042 320 байт; `verify` и `verify-loaded` — PASS против https-адреса |
-| Образы | `leadprocure-api:dcef601…` `sha256:4d00dc284a66…`, `leadprocure-web:dcef601…` `sha256:c3259ccc4ee6…`, amd64, метки `revision` совпадают с манифестом |
-| Точка отката | `leadprocure-api:94aa8fe…` `sha256:b360312246e5…` и `leadprocure-web:94aa8fe…` `sha256:0349be0268e2…` — проверены ДО загрузки новых |
+| Образы | `leadprocure-api:dcef601b9caba9872a4a7ddc89430c4f73598415` `sha256:4d00dc284a660f3ff91ab0501a37728b1af1d47924c1f00f3b4ff03fecbe2ded`, `leadprocure-web:dcef601b9caba9872a4a7ddc89430c4f73598415` `sha256:c3259ccc4ee6b252964c21c2670d8e3037b7c57985db65cc69f60e63b49feea9`, amd64, метки `revision` совпадают с манифестом |
+| Точка отката | `leadprocure-api:94aa8fea4f894f0ef6db0436cf8cf8420e738f04` `sha256:b360312246e5acf9701f9c55cdc45124317e3d57447765a76a33845c3358f9fe` и `leadprocure-web:94aa8fea4f894f0ef6db0436cf8cf8420e738f04` `sha256:0349be0268e2c07256ff4598dd0167c4ed0cd5cb00ff69d8c95ca6b5a016f346` — проверены ДО загрузки новых |
 
 ### Проверено на живой системе, через TLS-вход
 
 - `health` — `status: ok`, `licenseSource: file`, `licenseStatus: valid`; `/login` 200,
   `/learn` 200, неаутентифицированный `/api/auth/me` 401, `ssl_verify_result 0` без `-k`.
-- Метки `revision` на обоих контейнерах — `dcef601b9cab…`; ноль строк с
+- Метки `revision` на обоих контейнерах — `dcef601b9caba9872a4a7ddc89430c4f73598415`; ноль строк с
   `error`/`exception` в логе api за три минуты после подмены.
 - `tls` `Up 4 hours`, `postgres`, `minio`, `clamav`, `ai-orchestrator` — `Up 2 weeks`:
   `--no-deps` соблюдён, хранилище не подменено (minio поднят 18 октября).
 - Обе новые записи отданы nginx и сверены побайтово с `oid` указателей LFS в `origin/main`
-  (`sup-catalogs.az.webm` `5c0016d402e7eb80…`, `sup-contracts.az.webm`
-  `a2643af9eb014c47…`); проверено и на загруженном образе ДО подмены, вместе с нетронутым
+  (`sup-catalogs.az.webm` `5c0016d402e7eb80fdba09d9ceb05e95bf8d6b71a4183fa27f107e82165b2480`, `sup-contracts.az.webm`
+  `a2643af9eb014c4704fc6745754ae64feb964466e5a423a399bdcfc1f4a97c5d`); проверено и на загруженном образе ДО подмены, вместе с нетронутым
   `sup-auction.az.webm`. В образе 40 файлов, 173,8 МБ, указателей LFS — ноль.
 - Отданный бандл `/assets/index-Cij9n1SU.js` несёт новые уроки (`learn_s_catalogs`,
   `learn_s_contracts`, «Каталог: согласованные цены») и **не** несёт `learn_gap` —
@@ -2098,18 +2153,18 @@ pending`; изменён только `apps/web` плюс съёмочный с�
 | Разбор | обе правки разобраны в своих PR сессией, которая их не писала; по #133 пять замечаний, из них два замера переделали правку целиком |
 | Адрес API | из живого `.env.prod`, передан в сборку, в `verify` и в `verify-loaded` |
 | Лицензия доезжает | dry-run шага 6: ключ 152 символа, `source: …/infra/license` над `target: /run/leadprocure-license`, `read_only: true`, `create_host_path: false` |
-| Копия базы | `pg_dump -Fc` 7 ноября: `/home/rashad/backups/leadprocure/leadprocure-prod-20261107T*.dump`, 743 260 байт, sha256 `21c8a94f6decc3bd5c4e606c…`, права `600` |
+| Копия базы | `pg_dump -Fc` 7 ноября: `/home/rashad/backups/leadprocure/leadprocure-prod-20261107T*.dump`, 743 260 байт, sha256 `21c8a94f6decc3bd5c4e606cf8a5c023453c6fb2936682da82b06e34334f68fe`, права `600` |
 | Восстановление проверено | одноразовый `postgres:16`, `pg_restore` код 0, семь счётчиков совпали с продом (журнал 3242, запечатанных 5) |
 | Preflight | три блокирующие — нули; `legacy_invoice_lines_requiring_tax_review = 5` |
 | Пакет | прогон 42368641117, артефакт 290 034 850 байт; `verify` и `verify-loaded` — PASS |
-| Образы | `leadprocure-api:8e82f86…` `sha256:f3d63110cb6a…`, `web` `sha256:af8fbc8db0ce…`, amd64, метки совпадают с манифестом |
-| Точка отката | `leadprocure-{api,web}:dcef601…` (`sha256:4d00dc284a…`, `sha256:c3259ccc4e…`) — проверены до загрузки новых |
+| Образы | `leadprocure-api:8e82f86dbdb8d04ea0fd83654302d763e274ee40` `sha256:f3d63110cb6a48197bdd4bbbb4532f5295a112cbcf111c1b482cf1e05f9c54a5`, `web` `sha256:af8fbc8db0ce8a4fe24f75849af9baa5a944bc26cbade648abe8fee2b9eebd1a`, amd64, метки совпадают с манифестом |
+| Точка отката | `leadprocure-{api,web}:dcef601b9caba9872a4a7ddc89430c4f73598415` (`sha256:4d00dc284a660f3ff91ab0501a37728b1af1d47924c1f00f3b4ff03fecbe2ded`, `sha256:c3259ccc4ee6b252964c21c2670d8e3037b7c57985db65cc69f60e63b49feea9`) — проверены до загрузки новых |
 
 ### Проверено на живой системе
 
 - `health` — `ok`, `licenseSource: file`, `licenseStatus: valid`; `/login` 200,
   `/learn` 200, неаутентифицированный `/api/auth/me` 401, `ssl_verify_result 0`.
-- Метки `revision` на обоих контейнерах — `8e82f86d…`; ноль строк `error`/`exception`.
+- Метки `revision` на обоих контейнерах — `8e82f86dbdb8d04ea0fd83654302d763e274ee40`; ноль строк `error`/`exception`.
 - **Правка подсказки действительно у пользователя:** в отданном
   `/assets/index-BAQHrffW.css` два вхождения `transition:none` — ровно те, что добавил
   #133. Проверено по отданному файлу, а не по образу.
@@ -2146,12 +2201,12 @@ pending`; изменён только `apps/web` плюс съёмочный с�
 |---|---|
 | Проверки на коммите | `acceptance` и `fresh-install` — SUCCESS на `c6b3111`, прогон 42373331423, событие `push` |
 | Разбор | все семь разобраны сессией, которая их не писала; по #139 разбор отдельно отмечает, что решение за владельцем |
-| Копия базы | `pg_dump -Fc` 8 ноября: 743 260 байт, sha256 `5c69c0b5da7ac24c5e4c035c…`, права `600` |
+| Копия базы | `pg_dump -Fc` 8 ноября: 743 260 байт, sha256 `5c69c0b5da7ac24c5e4c035cd327300878e625675d65dd348a4dfa14c7414441`, права `600` |
 | Восстановление проверено | одноразовый `postgres:16`, `pg_restore` код 0, шесть счётчиков совпали (журнал 3242, сессий 1213) |
 | Preflight | три блокирующие — нули |
 | Пакет | прогон 42373670767, 290 039 698 байт; `verify` и `verify-loaded` — PASS |
-| Образы | `api sha256:b339ad832414…`, `web sha256:27bfa6ddf0eb…`, метки совпадают с манифестом |
-| Точка отката | `leadprocure-{api,web}:8e82f86…` — проверены до загрузки новых |
+| Образы | `api sha256:b339ad832414f611a06c6b57bfdcb15f3ce144e618a366fecf506b8c78125045`, `web sha256:27bfa6ddf0ebcadfc440f2c4bd7e25926680fbac5e35b50cca6364af2eed57e8`, метки совпадают с манифестом |
+| Точка отката | `leadprocure-{api,web}:8e82f86dbdb8d04ea0fd83654302d763e274ee40` — проверены до загрузки новых |
 
 ### Миграции сделали то, что обещали — проверено в базе, а не по логу
 
@@ -2168,7 +2223,7 @@ pending`; изменён только `apps/web` плюс съёмочный с�
 
 `health` — `ok`, лицензия `file`/`valid`; `/login` 200, `/learn` 200,
 неаутентифицированный `/api/auth/me` 401, `ssl_verify_result 0`; метки `revision` на обоих
-контейнерах — `c6b31113c351…`; ноль строк `error`/`exception`; `tls` `Up 30 hours`,
+контейнерах — `c6b31113c351a6e2563202056fe4a0183d8e2724`; ноль строк `error`/`exception`; `tls` `Up 30 hours`,
 `postgres` с 18 октября — `--no-deps` соблюдён, база не перезапускалась.
 
 ### Чего не выполнялось
@@ -2191,12 +2246,12 @@ HTTPS молча (ловушка 4 выше). Теперь источник — 
 |---|---|
 | 0 | `/home/rashad/leadprocure-prod/tls` создан, оба файла взяты из `main` (`bfa4635`), `cmp` с `main` совпал, `test -f` прошёл на оба, `reload-loop.sh` исполняемый, `nginx -t` на этом конфиге с настоящим сертификатом успешен |
 | 1 | `TLS_CONF_DIR` дописан в живой `.env.prod` (38 → 39 строк), прежний файл сохранён как `.env.prod.bak-tlsconf-20261107T061151Z` |
-| 1a | сторож по dry-run молчит: оба `source:` — `/home/rashad/leadprocure-prod/tls/…`, ни одного пути в чекауте. В том же выводе `image: leadprocure-{api,web}:9e76006…`, то есть план не меняет ни api, ни web |
+| 1a | сторож по dry-run молчит: оба `source:` — `/home/rashad/leadprocure-prod/tls/…`, ни одного пути в чекауте. В том же выводе `image: leadprocure-{api,web}:9e76006f516bca64d3abcc8e04c13830e84e4bbe`, то есть план не меняет ни api, ни web |
 | 2 | `--profile tls up -d --no-build --no-deps tls` — только `tls` пересоздан |
 
 Compose-файлы взяты из воркитри **`main`** (`bfa4635`), а не выложенного SHA, потому
 что сама служба `tls` в этой форме существует только там; `RELEASE_SHA` при этом
-стоял равным выложенному `9e76006…`. Сверено, что между `9e76006` и `bfa4635`
+стоял равным выложенному `9e76006f516bca64d3abcc8e04c13830e84e4bbe`. Сверено, что между `9e76006` и `bfa4635`
 в `docker-compose.prod.yml` один ханк и ни одной строки про `api` или `web`.
 
 ### Проверено после пересоздания
@@ -2291,3 +2346,85 @@ Compose-файлы взяты из воркитри **`main`** (`bfa4635`), а �
   команду, которой прод и собрали. Пока она там, её будут запускать.
 - Замена MinIO на собираемый из исходников образ и обновление ClamAV на `stable` в
   этот путь не входят.
+
+## Выкладка `d449fae` (8 ноября 2026) — выполнена
+
+Пятнадцать пунктов аудита интерфейса доехали до пользователей целиком: шесть были уже
+на проде с `c6b3111`, эта выкладка довезла оставшиеся пять — подсказку, которая не
+двигает страницу (#138), подписи разделов (#140), аукцион (#144), три мелочи (#145),
+отказы на языке читателя (#146).
+
+| | |
+|---|---|
+| Что выложено | `d449faef4549f5476f84bb496a74b31a8c573794` — вершина `main`, обе обязательные проверки зелёные на этом самом коммите |
+| Точка отката | `c6b31113c351a6e2563202056fe4a0183d8e2724` (api `sha256:b339ad832414f611a06c6b57bfdcb15f3ce144e618a366fecf506b8c78125045`, web `sha256:27bfa6ddf0ebcadfc440f2c4bd7e25926680fbac5e35b50cca6364af2eed57e8`) — образы на месте, проверены ДО загрузки новых |
+| Резервная копия | `/home/rashad/backups/leadprocure/leadprocure-prod-20261108T123602Z.dump`, 749834 байт, sha256 `a59f40be3cd57f20bd398d19c46614499098020fe59c5053a4b866c9e7b98ed1`, права 600. **Разворот проверен**: отдельный `postgres:16`, `pg_restore` код 0, 54 миграции, 1218 сессий, 5 запечатанных ставок с `ciphertext` и `wrapped_key`; в схеме есть `sessions.family_id` и политика `purchase_orders_select` с `status <> 'DRAFT'` — то есть 0045 и 0046 на проде применены |
+| Preflight | чисто: `duplicate_invoice_lines` 0, `duplicate_evaluation_scores` 0, `duplicate_memberships` 0; `installed_licenses` 0 (ожидаемо), `legacy_invoice_lines_requiring_tax_review` 5 (исторические, не блокируют) |
+| Новых миграций | **нет** — диапазон `c6b3111..d449fae` не трогает каталог миграций. Схема не менялась, откат сводится к подмене образов обратно |
+| Адрес API | взят из живого `.env.prod` и передан и в сборку, и в `manifest.cjs verify`, и в `verify-loaded` — один источник на три шага |
+| Пакет | прогон `42481493131`, 277 МБ, `verify` PASS, `verify-loaded` PASS |
+| Демо-пароль | проверка на загруженном образе ДО подмены: четыре нуля (пароль сида, `acme.test`, `supply-one.test`, `VITE_DEMO_HINT`) |
+| Лицензия | dry-run `docker compose config`: ключ непустой, `source:` абсолютный, над `target: /run/leadprocure-license`, `read_only: true`, `create_host_path: false` |
+| Compose | из нового воркитри, отрезанного на выкладываемом SHA; env — живой `.env.prod` |
+| Подмена | `up -d --no-build --no-deps api web`, оба контейнера Recreated и Started |
+
+### Что проверено после подмены
+
+- оба контейнера подняты с образами выложенного SHA;
+- `/api/health` → `status ok`, `licenseSource file`, `licenseStatus valid`, `edition enterprise`;
+- входная страница отвечает 200 по HTTPS;
+- адрес, вшитый в бандл, совпадает с живым окружением;
+- **новые строки аудита в живом бандле**: «Тендер объявляют из утверждённой заявки»,
+  «Цена идёт живым торгом», «Минимальная партия», «Присуждено по тендерам»,
+  «Принятые заказы»; метки `section-origin`, `verif-open`, `match-why`, `auction_in_play`
+  на месте;
+- сдвиг подсказки виден в живом стиле (`--tip-shift` на `left`) — #138 доехал;
+- `/api/auth/login` с неверными данными отвечает 401 в обычной форме.
+
+### Что НЕ выполнено и почему
+
+- Проверки `infra/DEPLOY.md:104`, требующие входа под настоящей учётной записью
+  (сессия, обновление ключа, изоляция организаций, утверждение заявки, скрытые суммы
+  до вскрытия, загрузка документа): агент на прод под учётной записью не входит и
+  тестовых данных там не заводит. Их проходит владелец.
+- Прод-базу читать `psql` классификатор в этой сессии отказал дважды («Production
+  Reads»; повтор делался один, как предписано). Поэтому состояние схемы подтверждено
+  не живым запросом, а **разворотом свежей резервной копии** — она снята с этого же
+  прода за минуты до выкладки, так что говорит ровно о нём.
+
+## Выкладка `5fcbf22` (8 ноября 2026, следом) — выполнена
+
+Довезла починку дефекта, который предыдущая выкладка сама и увезла к пользователям:
+подпись каталогов из #140 не была разведена по роли, и поставщик читал «раздел
+„Контракты“, кнопка „Каталоги“ в строке» — кнопку, которой у него нет (#148).
+
+| | |
+|---|---|
+| Что выложено | `5fcbf22b1470ccd1fc734d2eed0915ae17676338`. Вершина `main`; поверх предыдущей выкладки это **ровно два коммита**: #148 (починка подписи) и #149 (документ, кода не трогает) |
+| Точка отката | `d449faef4549f5476f84bb496a74b31a8c573794` (api `sha256:34267da3d9c170b15bef22a51f46a065455c17eb7f00b25a12ca0c39f5b8e6c4`, web `sha256:a6956cdebcd6f6a16655f63844876123f47489177519b5a8d384f8179b4a6d96`) — оба образа проверены ДО загрузки новых |
+| Резервная копия | `/home/rashad/backups/leadprocure/leadprocure-prod-20261108T134706Z.dump`, 749834 байт, sha256 `fb04fcbf73922530f3f7a2a16c9cf396c97c16305011b37094dc286a922a52fd`, права 600; разворот проверен в отдельном `postgres:16`: `pg_restore` код 0, 54 миграции, 1218 сессий, 5 запечатанных ставок целы, 9 заказов |
+| Preflight | чисто: три блокирующих счётчика по нулям |
+| Новых миграций | нет — диапазон `d449fae..5fcbf22` каталог миграций не трогает |
+| Пакет | прогон `42487123669`, 277 МБ, `verify` PASS, `verify-loaded` PASS; адрес API снова взят из живого `.env.prod` |
+| Демо-пароль | на загруженном образе ДО подмены: четыре нуля |
+| Лицензия | dry-run: ключ непустой, монтирование лицензии на месте |
+
+### Что проверено после подмены
+
+- оба контейнера на выложенном SHA, `/api/health` → `ok`, лицензия `valid`, издание `enterprise`;
+- **в живом бандле теперь ДВЕ подписи каталогов** — покупательская и поставщицкая — и ключ выбора по роли; до этой выкладки поставщицкой не было ни одной.
+
+### Что эта пара выкладок показала про сам путь
+
+Между «готово к выкладке» и «выложено» есть окно, в которое чужое предупреждение не
+успевает. Починка #148 была уже открыта и зелёна, когда шла предыдущая выкладка, —
+и всё равно дефект уехал к пользователям, потому что ни один шаг пути на открытые PR не
+смотрит. Поэтому **в сам «Шаг 6» вписан взгляд на открытые PR — и не на все, а на
+те, что ЧИНЯТ выкладываемое**: открытых правок всегда много, опасна ровно та, что
+исправляет то, что сейчас поедет. В этой выкладке проверка выполнена: единственный
+открытый PR (`#150`) не трогает кода.
+
+Вписано именно в шаг, а не только сюда, и это часть урока: следующая сессия идёт по
+нумерованным шагам и до хвоста документа не дочитывает. Запись о том, что правило
+добавлено, без правила в самом пути была бы хуже её отсутствия — она создаёт
+уверенность, что дыра закрыта.
