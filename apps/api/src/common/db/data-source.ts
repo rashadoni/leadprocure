@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import './pg-date-type';
 import { DataSource } from 'typeorm';
 import { loadRootEnv } from '../config/env';
 

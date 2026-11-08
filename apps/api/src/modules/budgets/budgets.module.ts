@@ -870,8 +870,11 @@ export class BudgetsService {
     // Utilization is what the budget is actually carrying: orders placed plus estimates
     // not yet ordered.
     const used = committed + actual;
-    const start = iso(new Date(r.period_start));
-    const end = iso(new Date(r.period_end));
+    // A `date` column arrives as the ISO day itself — see common/db/pg-date-type.ts for
+    // why it must never be read through a Date. The slice only guards a future SELECT that
+    // hands back a timestamp instead of a day.
+    const start = String(r.period_start).slice(0, 10);
+    const end = String(r.period_end).slice(0, 10);
     return {
       // derived from the range, not stored — one source of truth for the period
       id: r.id, name: r.name, category: r.category, periodYear: Number(start.slice(0, 4)),
@@ -1368,7 +1371,7 @@ export class BudgetsService {
     await this.lockPlans();
     const b = await this.requireStatus(id, ['APPROVED']);
     const today = new Date().toISOString().slice(0, 10);
-    if (iso(new Date(b.period_end)) >= today) {
+    if (String(b.period_end).slice(0, 10) >= today) {
       throw new BadRequestException('The period has not ended yet — a budget can only be closed after its last day');
     }
     // Freeze what the budget WAS at sign-off. Read the live figures first, then store them:
@@ -1554,10 +1557,10 @@ export class BudgetsService {
       .filter((r: any) => r.used > Number(r.amount_minor))
       .map((r: any) => ({
         budgetId: r.id, name: r.name, category: r.category,
-        periodYear: Number(iso(new Date(r.period_start)).slice(0, 4)),
+        periodYear: Number(String(r.period_start).slice(0, 4)),
         departmentCode: r.department_code ?? null,
         periodType: r.period_type,
-        periodLabel: budgetPeriodLabel(r.period_type, iso(new Date(r.period_start))),
+        periodLabel: budgetPeriodLabel(r.period_type, String(r.period_start).slice(0, 10)),
         currency: r.currency, amountMinor: Number(r.amount_minor),
         committedMinor: r.used,
         overByMinor: r.used - Number(r.amount_minor),

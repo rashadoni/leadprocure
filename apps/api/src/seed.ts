@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import './common/db/pg-date-type';
 import { loadRootEnv } from './common/config/env';
 
 loadRootEnv();

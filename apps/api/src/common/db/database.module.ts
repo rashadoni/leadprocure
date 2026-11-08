@@ -1,3 +1,4 @@
+import './pg-date-type'; // a `date` is a day, not an instant — must load before any query
 import { Global, Module, OnModuleDestroy } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { AppConfig } from '../config/config.service';

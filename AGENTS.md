@@ -230,8 +230,15 @@ The budget module finance actually uses. Read this before changing anything unde
   is the amount-weighted pace of its budgets, so a phased and a flat plan can sit under the
   same parent and still add up. `PUT /budgets/:id/phasing` replaces the whole set (a partial
   edit would leave shares that do not total 100%); an empty list clears it. Closed periods
-  refuse. **Read a `date` column through `to_char`** — the driver returns a Date object, and
-  string-slicing that yields "Tue Aug 11", which parses to NaN and silently zeroes the plan.
+  refuse. **A `date` column is a DAY: never put one through `new Date()`.** The driver used to
+  hand back a Date at the host's LOCAL midnight, which `toISOString()` then carried into the
+  previous day anywhere east of Greenwich — a 2026 budget reported `periodYear: 2025`, the 1C
+  export emitted thirteen months starting the previous December, and a period ending 31
+  December could be closed a day early. Since `common/db/pg-date-type.ts` the driver returns
+  the ISO day as text (`YYYY-MM-DD`), so read it as a string; `to_char` at a call site is no
+  longer needed, though the existing ones are correct and stay. Pinned by
+  `date-columns.e2e-spec.ts`, which moves the clock to Asia/Baku inside the spec so the guard
+  holds on a UTC runner.
 - **Visibility**: a plain BUYER_USER sees only their home department's budgets; with none
   set, an empty list (never the whole org's plan). See `scopeFor()`.
 - **`GET /budgets/rollup`** is the finance headline: plan / commitment / actual per
