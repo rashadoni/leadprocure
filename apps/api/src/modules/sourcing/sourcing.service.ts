@@ -312,6 +312,11 @@ export class SourcingService {
                 a.justification,
                 a.standstill_until, a.standstill_waived_reason,
                 a.cancelled_at,
+                -- Балл победителя рядом со своим: именно это в правилах ЕС и Великобритании
+                -- называется «относительными преимуществами» выбранного предложения, и без
+                -- второго числа первое не сравнить ни с чем. Читается из снимка на самом
+                -- присуждении — доступа к чужим оценкам у поставщика нет и не появляется.
+                a.winning_weighted_total,
                 (a.winner_org_id = $2) AS won_by_me
            FROM awards a
            LEFT JOIN event_lots l ON l.id = a.lot_id
@@ -783,17 +788,29 @@ export class SourcingService {
       [dto.bidId, dto.lotId],
     ))[0];
 
+    // Балл победителя — снимком, рядом с суммой и по той же причине: решение принималось на
+    // той оценке, которая была в эту минуту, и переоценка после отзыва присуждения не должна
+    // задним числом менять число, которым человеку объяснили отказ. У аукциона взвешенной
+    // оценки нет вовсе — там ценовая борьба И ЕСТЬ оценка, — и тогда остаётся NULL.
+    const winnerScore = evaluationId ? (await m.query(
+      `SELECT sum(weighted)::float AS total FROM evaluation_scores
+        WHERE evaluation_id = $1 AND bid_id = $2`,
+      [evaluationId, dto.bidId],
+    ))[0]?.total ?? null : null;
+
     // Partial unique index (awards_active_lot) makes the award idempotent under concurrency.
     const inserted = await m.query(
       `INSERT INTO awards(event_id, lot_id, winning_bid_id, awarded_by, evaluation_id, justification,
-                           standstill_until, winner_org_id, winning_total_minor, winning_currency)
+                           standstill_until, winner_org_id, winning_total_minor, winning_currency,
+                           winning_weighted_total)
        VALUES ($1,$2,$3,$4,$5,$6,
                CASE WHEN $7::int > 0 THEN now() + ($7::int * interval '1 hour') ELSE NULL END,
-               $8,$9,$10)
+               $8,$9,$10,$11)
        RETURNING id, standstill_until`,
       [eventId, dto.lotId, dto.bidId, auth.sub, evaluationId, justification,
        standstillHours,
-       supplier.supplier_org_id, lotTotal?.total_minor ?? null, bidRows[0].currency],
+       supplier.supplier_org_id, lotTotal?.total_minor ?? null, bidRows[0].currency,
+       winnerScore],
     );
     await m.query(`UPDATE event_lots SET awarded_bid_id=$2 WHERE id=$1`, [dto.lotId, dto.bidId]);
 

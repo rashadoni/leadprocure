@@ -378,6 +378,17 @@ describe('пауза на возражение и итоги для участн
     const lot2row = asLoser.results.find((r: any) => r.lot_id === lot2 && !r.cancelled_at);
     expect(lot2row.justification).toContain('лучшая цена');
 
+    // Балл победителя рядом со своим — то, что в правилах называется «относительным
+    // преимуществом». Без него свой балл не сравнить ни с чем. По лоту 1 победил s1 с
+    // оценками 90/90, значит его взвешенный итог выше, чем у s2 (70/70).
+    const lot1row = asLoser.results.find((r: any) => r.lot_id === lot1 && !r.cancelled_at);
+    expect(Number(lot1row.winning_weighted_total)).toBeGreaterThan(Number(asLoser.my_weighted_total));
+    // И это снимок, а не чужие оценки: доступа к оценкам победителя у поставщика нет.
+    await db.query(`SELECT set_config('app.org_id',$1,false), set_config('app.role','SUPPLIER_USER',false)`, [s2Org]);
+    const foreignScores = await db.query(
+      `SELECT count(*)::int AS n FROM evaluation_scores WHERE bid_id=$1`, [bid1]);
+    expect(foreignScores.rows[0].n).toBe(0);
+
     // И это ТОЛЬКО свои баллы: чужая ставка через API не приходит...
     const mine = new Set(asLoser.my_scores.map((r: any) => r.criterion));
     expect(mine.size).toBe(weights.size);

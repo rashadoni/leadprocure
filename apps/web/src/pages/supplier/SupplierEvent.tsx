@@ -189,6 +189,19 @@ export default function SupplierEvent() {
                     <td colSpan={3}><b>{t('my_weighted_total')}</b></td>
                     <td className="num" data-testid="sup-my-total"><b>{ev.my_weighted_total}</b></td>
                   </tr>
+                  {/* Балл победителя рядом со своим — иначе своё число не сравнить ни с чем:
+                      оно отвечает «сколько мне поставили», а не «почему не я». Отдельной
+                      строкой на лот, потому что присуждают лот, а оценивают ставку. */}
+                  {liveResults.filter((r: any) => r.winning_weighted_total != null && !r.won_by_me)
+                    .map((r: any) => (
+                      <tr key={`w-${r.id}`} data-testid="sup-winner-total">
+                        <td colSpan={3} className="hint">
+                          {t('winner_weighted_total')}
+                          {r.lot_no ? ` (#${r.lot_no})` : ''}
+                        </td>
+                        <td className="num">{Number(r.winning_weighted_total).toFixed(2)}</td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
