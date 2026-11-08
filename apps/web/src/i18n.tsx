@@ -26,7 +26,6 @@ const dict: Record<Lang, Record<string, string>> = {
     err_BID_LOT_INCOMPLETE: 'Lotun ya BÜTÜN mövqelərinə qiymət verin, ya da lotu tamamilə buraxın — yarımçıq təklif qiymətləndirilmir.',
     err_AUCTION_BID_TOO_HIGH: 'Təklif ən çox {maxAllowed} ola bilər: cari ən yaxşıdan ən azı addım qədər aşağı.',
     err_CATALOG_BELOW_MOQ: 'Minimum sifariş həcmi — {moq} ({item}), sorğuda isə daha azdır.',
-    empty_events: 'Elan edilmiş tender yoxdur — təsdiqlənmiş sorğudan elan edin.',
     // Hər siyahının yanında, həmişə: bu bölmədəki şeylər HARADA yaranır. Əvvəllər bu cavab
     // yalnız boş siyahıda yazılırdı — yəni onu artıq bilənə görünürdü, bilməyənə yox.
     // Boş siyahının öz sətri ona görə qısadır: mənbə cümləsi onun üstündə dayanır.
@@ -42,11 +41,11 @@ const dict: Record<Lang, Record<string, string>> = {
     empty_notes: 'Bildiriş yoxdur.',
     empty_logistics: 'Göndəriş yoxdur.',
     empty_sup_orders: 'İşdə olan sifariş yoxdur.',
-    empty_registry: 'Reyestrdə təchizatçı yoxdur — aşağıdakı soraq kitabından birincisini dəvət edin.',
-    empty_directory: 'Soraq kitabı boşdur — sistemdə hələ qeydiyyatdan keçmiş təchizatçı yoxdur.',
     empty_market: 'Təklif qəbul edən tender yoxdur.',
     empty_contracts: 'Müqavilə yoxdur.',
     empty_orders: 'Satınalma sifarişi yoxdur.',
+    empty_registry: 'Reyestrdə təchizatçı yoxdur — aşağıdakı soraq kitabından birincisini dəvət edin.',
+    empty_directory: 'Soraq kitabı boşdur — sistemdə hələ qeydiyyatdan keçmiş təchizatçı yoxdur.',
     what_is_this: 'Bu nə deməkdir?',
     row_more: 'Daha çox', row_more_tip: 'Bu sətir üçün qalan əməliyyatlar',
     announce_pick: 'Hansı prosedurla elan edilsin?', announce_policy_pick: 'Siyasət bu məbləğ üçün bunu seçib.',
@@ -436,7 +435,6 @@ const dict: Record<Lang, Record<string, string>> = {
     err_BID_LOT_INCOMPLETE: 'В лоте нужно оценить ВСЕ позиции либо не трогать лот вовсе — неполное предложение не рассматривается.',
     err_AUCTION_BID_TOO_HIGH: 'Ставка может быть не выше {maxAllowed}: ниже текущей лучшей хотя бы на шаг.',
     err_CATALOG_BELOW_MOQ: 'Минимальная партия — {moq} ({item}), а в заказе меньше.',
-    empty_events: 'Объявленных тендеров нет — объявите из утверждённой заявки.',
     // Рядом с каждым списком, всегда: ГДЕ заводится то, что в этом разделе. Раньше этот
     // ответ стоял только в пустом списке — то есть был виден лишь тому, кто его уже знает.
     // Сама строка пустого списка поэтому короткая: фраза про источник стоит над ней.
@@ -843,7 +841,6 @@ const dict: Record<Lang, Record<string, string>> = {
     err_BID_LOT_INCOMPLETE: 'Price EVERY line of a lot or leave the lot alone — a partial bid is not evaluated.',
     err_AUCTION_BID_TOO_HIGH: 'A bid may be at most {maxAllowed}: below the current best by at least one decrement.',
     err_CATALOG_BELOW_MOQ: 'The minimum order size is {moq} ({item}); the order asks for less.',
-    empty_events: 'No tenders announced yet — announce one from an approved request.',
     // Beside every list, always: WHERE the things in this section come from. That answer
     // used to live in the empty state alone — visible only to someone who already knew it.
     // The empty line itself is short for that reason: the origin sentence stands above it.
