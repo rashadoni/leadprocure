@@ -19,6 +19,7 @@ const MAIL_SUBJECTS: Record<string, string> = {
   BID_NOT_AWARDED: 'Решение по тендеру принято · Tender üzrə qərar verilib',
   BID_DISQUALIFIED: 'Ставка снята с рассмотрения · Təklif baxışdan çıxarıldı',
   AWARD_STANDSTILL_WAIVED: 'Срок возражения сокращён · Etiraz müddəti qısaldılıb',
+  EVENT_AWARD_CANCELLED: 'Решение по тендеру отозвано · Tender qərarı geri alındı',
   EVENT_PUBLISHED: 'Опубликован тендер · Tender dərc olunub',
   VERIFICATION_OPENED: 'Открыта верификация · Yoxlama açılıb',
   VERIFICATION_DECIDED: 'Решение по верификации · Yoxlama qərarı',

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { useDeadlineTick } from '../../hooks/useDeadlineTick';
 import { api, fmtDateTime, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { AuctionPanel } from '../../components/AuctionPanel';
@@ -68,11 +69,16 @@ export default function SupplierEvent() {
   // Итоги по лотам: кто победил, за сколько и до какого срока можно возразить. Приходят
   // из `detail()` только участнику — у кого есть своя ставка в этой закупке.
   const results: any[] = ev.results ?? [];
+  const liveResults = results.filter((r: any) => !r.cancelled_at);
   // Award outcome for THIS supplier: any lot awarded to my bid = won.
   const won = ev.status === 'AWARDED' && ev.my_bid
     && (ev.lots ?? []).some((l: any) => l.awarded_bid_id === ev.my_bid.id);
   const lost = ev.status === 'AWARDED' && !won && !!ev.my_bid;
-  const nowMs = Date.now();
+  // То же, что на карточке покупателя: иначе «срок истёк» не появится, пока страницу не
+  // перезагрузят, — а именно в эту минуту человек и смотрит на срок.
+  const nowMs = useDeadlineTick(results
+    .filter((r: any) => !r.cancelled_at && !r.standstill_waived_reason)
+    .map((r: any) => r.standstill_until));
   const canBid = ['PUBLISHED', 'OPEN'].includes(ev.status);
   // Nothing priced is nothing to send: the server refuses an empty `items` outright, and a
   // button that is live for a refusal is a button that lies. RFI carries no prices at all —
@@ -119,15 +125,20 @@ export default function SupplierEvent() {
                 const until = r.standstill_until ? new Date(r.standstill_until).getTime() : null;
                 const open = !!until && !r.standstill_waived_reason && until > nowMs;
                 return (
-                  <tr key={r.lot_id ?? 'single'} data-testid="sup-results-row">
+                  <tr key={r.lot_id ?? 'single'} data-testid="sup-results-row"
+                    style={r.cancelled_at ? { opacity: 0.65 } : undefined}>
                     <td>{r.lot_no ? `#${r.lot_no} ${r.lot_title ?? ''}` : (r.lot_title ?? '—')}</td>
                     <td>{r.winner_name ?? '—'}{r.won_by_me && <> — <b>{t('results_you')}</b></>}</td>
                     <td className="num">{fmtMoney(r.winning_total_minor, r.winning_currency ?? ev.evaluation_currency)}</td>
                     <td>{fmtDateTime(r.awarded_at)}</td>
                     <td>
-                      {r.standstill_waived_reason
-                        ? `${t('results_objection_waived')}: ${r.standstill_waived_reason}`
-                        : until ? (open ? fmtDateTime(r.standstill_until) : t('results_objection_over')) : '—'}
+                      {/* Отозванное решение говорит о себе первым: срок возражения против
+                          того, чего больше нет, — не то, что человеку надо прочитать. */}
+                      {r.cancelled_at
+                        ? <b>{t('results_cancelled')}{r.cancel_reason ? `: ${r.cancel_reason}` : ''}</b>
+                        : r.standstill_waived_reason
+                          ? `${t('results_objection_waived')}: ${r.standstill_waived_reason}`
+                          : until ? (open ? fmtDateTime(r.standstill_until) : t('results_objection_over')) : '—'}
                     </td>
                   </tr>
                 );
@@ -135,7 +146,7 @@ export default function SupplierEvent() {
             </tbody>
           </table>
           {/* Срок без канала — украшение. Канал в продукте один и он тут же ниже. */}
-          {results.some((r: any) => r.standstill_until && !r.standstill_waived_reason
+          {liveResults.some((r: any) => r.standstill_until && !r.standstill_waived_reason
             && new Date(r.standstill_until).getTime() > nowMs) && (
             <div className="hint">{t('results_objection_hint')}</div>
           )}

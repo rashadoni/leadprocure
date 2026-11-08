@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { useDeadlineTick } from '../../hooks/useDeadlineTick';
 import { Explain } from '../../components/Explain';
 import { useParams } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
@@ -145,9 +146,12 @@ export default function EventDetail() {
     try { await api.post(`/events/${id}/waive-standstill`, { lotId, reason }); load(); }
     catch (e: any) { notifyError(e); }
   };
-  // Срок считается один раз на отрисовку: иначе две проверки одного присуждения могут
-  // разойтись на границе секунды.
-  const nowMs = Date.now();
+  // Одно время на всю отрисовку, иначе две проверки одного присуждения разойдутся на
+  // границе секунды; и перерисовка в момент истечения ближайшей паузы, иначе кнопка
+  // «Сделать контракт» остаётся серой до перезагрузки, хотя ждать уже нечего.
+  const nowMs = useDeadlineTick((ev?.awards ?? [])
+    .filter((a: any) => !a.cancelled_at && !a.standstill_waived_reason)
+    .map((a: any) => a.standstill_until));
   const standstillOpen = (a: any) => !!a?.standstill_until && !a.standstill_waived_reason
     && new Date(a.standstill_until).getTime() > nowMs;
 

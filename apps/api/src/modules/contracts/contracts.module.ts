@@ -98,8 +98,12 @@ export class ContractsService {
       `SELECT a.id AS award_id, a.event_id, a.winning_bid_id, a.standstill_until,
               a.standstill_waived_reason, e.title, e.buyer_org_id,
               e.evaluation_currency, e.vat_mode, b.currency AS bid_currency, b.supplier_org_id,
-              (SELECT sum(bi.line_total_minor) FROM bid_items bi JOIN event_items ei ON ei.id=bi.event_item_id
-               WHERE bi.bid_id=a.winning_bid_id AND ei.lot_id=a.lot_id) AS total_minor
+              -- Сумма берётся из снимка на присуждении, а не пересчитывается здесь. Пересчёт на
+              -- трёх путях (контракт, выгрузка OCDS, сам снимок) давал на одном и том же
+              -- условии три разных ответа: отказ, ноль и значение всей ставки. Снимок — одна
+              -- цифра, записанная в минуту присуждения, и именно она ушла участникам в
+              -- уведомлении; контракт обязан быть на неё же.
+              a.winning_total_minor AS total_minor
        FROM awards a
        JOIN sourcing_events e ON e.id = a.event_id
        JOIN bids b ON b.id = a.winning_bid_id

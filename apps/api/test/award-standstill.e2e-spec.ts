@@ -22,12 +22,13 @@ describe('пауза на возражение и итоги для участн
   const bearer = (t: string) => ['Authorization', `Bearer ${t}`] as [string, string];
 
   let buyer: string, approver: string, buyerOrg: string;
-  let s1: string, s2: string, s3: string, s4: string;
-  let s1Org: string, s2Org: string, s3Org: string, s4Org: string;
+  let s1: string, s2: string, s3: string, s4: string, s5: string;
+  let s1Org: string, s2Org: string, s3Org: string, s4Org: string, s5Org: string;
   let s1Name: string;
-  let eventId: string, lot1: string, lot2: string, itemA: string, itemB: string;
-  let bid1: string, bid2: string, bid3: string;
-  let award1: string, award2: string;
+  let eventId: string, lot1: string, lot2: string, lot3: string;
+  let itemA: string, itemB: string, itemC: string;
+  let bid1: string, bid2: string, bid3: string, bid5: string;
+  let award1: string, award2: string, award3: string;
   const envBefore = process.env.AWARD_STANDSTILL_HOURS;
 
   beforeAll(async () => {
@@ -55,6 +56,10 @@ describe('пауза на возражение и итоги для участн
     // S4 приглашён, но не подавал ставку: он проверяет, что итоги открывает участие, а не
     // приглашение.
     ({ token: s4, org: s4Org } = await reg('/auth/register/supplier', `SS S4 ${tag}`, `sss4-${tag}@t.test`));
+    // S5 подаёт цену ТОЛЬКО по лоту 2 — он проверяет, что уведомления идут участникам
+    // ЛОТА, а не всей закупки. Без него «написали всем» прошло бы и у кода, который
+    // игнорирует лот вовсе.
+    ({ token: s5, org: s5Org } = await reg('/auth/register/supplier', `SS S5 ${tag}`, `sss5-${tag}@t.test`));
 
     await http().put('/requests/method-policies').set(...bearer(buyer))
       .send({ policies: [{ category: '*', minAmountMinor: 0, maxAmountMinor: null, method: 'RFQ' }] }).expect(200);
@@ -77,6 +82,7 @@ describe('пауза на возражение и итоги для участн
       items: [
         { name: 'Item A', qty: 10, estUnitPriceMinor: 100_000 },
         { name: 'Item B', qty: 5, estUnitPriceMinor: 200_000 },
+        { name: 'Item C', qty: 2, estUnitPriceMinor: 300_000 },
       ],
     }).expect(201);
     await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
@@ -88,22 +94,34 @@ describe('пауза на возражение и итоги для участн
     lot1 = ev.body.lots[0].id;
     itemA = ev.body.items.find((i: any) => i.name === 'Item A').id;
     itemB = ev.body.items.find((i: any) => i.name === 'Item B').id;
+    itemC = ev.body.items.find((i: any) => i.name === 'Item C').id;
     const l2 = await http().post(`/events/${eventId}/lots`).set(...bearer(buyer)).send({ title: 'Lot 2' }).expect(201);
     lot2 = l2.body.id;
     await http().put(`/events/${eventId}/items/${itemB}/lot`).set(...bearer(buyer)).send({ lotId: lot2 }).expect(200);
+    const l3 = await http().post(`/events/${eventId}/lots`).set(...bearer(buyer)).send({ title: 'Lot 3' }).expect(201);
+    lot3 = l3.body.id;
+    await http().put(`/events/${eventId}/items/${itemC}/lot`).set(...bearer(buyer)).send({ lotId: lot3 }).expect(200);
 
-    for (const org of [s1Org, s2Org, s3Org, s4Org]) {
+    for (const org of [s1Org, s2Org, s3Org, s4Org, s5Org]) {
       await http().post(`/events/${eventId}/invite`).set(...bearer(buyer)).send({ supplierOrgId: org }).expect(201);
     }
     await http().post(`/events/${eventId}/publish`).set(...bearer(buyer)).expect(201);
 
-    const bid = async (token: string, a: number, b: number) => (await http().post(`/events/${eventId}/bid`)
+    const bid = async (token: string, a: number, b: number, c: number) => (await http().post(`/events/${eventId}/bid`)
       .set(...bearer(token))
-      .send({ items: [{ eventItemId: itemA, unitPriceMinor: a }, { eventItemId: itemB, unitPriceMinor: b }] })
+      .send({ items: [
+        { eventItemId: itemA, unitPriceMinor: a },
+        { eventItemId: itemB, unitPriceMinor: b },
+        { eventItemId: itemC, unitPriceMinor: c },
+      ] })
       .expect(201)).body.id;
-    bid1 = await bid(s1, 90_000, 210_000);
-    bid2 = await bid(s2, 110_000, 180_000);
-    bid3 = await bid(s3, 95_000, 190_000);
+    bid1 = await bid(s1, 90_000, 210_000, 300_000);
+    bid2 = await bid(s2, 110_000, 180_000, 320_000);
+    bid3 = await bid(s3, 95_000, 190_000, 310_000);
+    // Только лот 2: участие в лоте выражено строками по позициям этого лота, и ставка,
+    // покрывающая один лот целиком, — законная (см. assertLotsFullyCovered).
+    bid5 = (await http().post(`/events/${eventId}/bid`).set(...bearer(s5))
+      .send({ items: [{ eventItemId: itemB, unitPriceMinor: 230_000 }] }).expect(201)).body.id;
 
     await db.query(`SELECT set_config('app.org_id',$1,false), set_config('app.role','BUYER_ADMIN',false)`, [buyerOrg]);
     await db.query(`UPDATE sourcing_events SET close_at = now() - interval '1 second' WHERE id=$1`, [eventId]);
@@ -127,6 +145,7 @@ describe('пауза на возражение и итоги для участн
       scores: [
         { bidId: bid1, key: 'price', score: 90 }, { bidId: bid1, key: 'delivery', score: 90 },
         { bidId: bid2, key: 'price', score: 70 }, { bidId: bid2, key: 'delivery', score: 70 },
+        { bidId: bid5, key: 'price', score: 50 }, { bidId: bid5, key: 'delivery', score: 50 },
       ],
     }).expect(201);
     const a1 = await http().post(`/events/${eventId}/award`).set(...bearer(buyer))
@@ -146,19 +165,36 @@ describe('пауза на возражение и итоги для участн
     expect(loser.payload.standstill_until).toBeTruthy();
     // Дисквалифицированному про присуждение не пишут — ему сказали своё и с причиной.
     expect(await typesOf(s3)).not.toContain('BID_NOT_AWARDED');
+    // И главное: участник ЛОТА 2 про лот 1 не узнаёт. Без этой строки проверка «написали
+    // всем» прошла бы и у кода, который лот вообще не смотрит.
+    expect(await typesOf(s5)).not.toContain('BID_NOT_AWARDED');
+  });
+
+  it('участнику, подавшему цену только по одному лоту, пишут только про этот лот', async () => {
+    const mine = async () => (await http().get('/notifications').set(...bearer(s5)).expect(200)).body
+      .filter((n: any) => n.type === 'BID_NOT_AWARDED');
+    expect(await mine()).toHaveLength(0); // лот 1 уже присуждён, а он в нём не участвовал
+    const a2 = await http().post(`/events/${eventId}/award`).set(...bearer(buyer))
+      .send({ lotId: lot2, bidId: bid2, justification: 'лучшая цена по лоту 2' }).expect(201);
+    award2 = a2.body.award.id;
+    const after = await mine();
+    expect(after).toHaveLength(1);
+    expect(after[0].payload.lot_id).toBe(lot2);
   });
 
   it('участник видит итог: кто победил и за сколько; посторонний — нет', async () => {
     const asLoser = (await http().get(`/events/${eventId}`).set(...bearer(s2)).expect(200)).body;
-    expect(asLoser.results).toHaveLength(1);
-    const r = asLoser.results[0];
+    // Строка ищется по лоту, а не по позиции: число присуждённых лотов меняется по ходу
+    // спека, и проверка «первая строка» молча начала бы мерить другой лот.
+    const r = asLoser.results.find((x: any) => x.lot_id === lot1);
+    expect(r).toBeTruthy();
     expect(r.winner_name).toBe(s1Name);
     expect(Number(r.winning_total_minor)).toBe(900_000); // 10 × 90k по лоту 1
     expect(r.won_by_me).toBe(false);
     expect(r.standstill_until).toBeTruthy();
 
     const asWinner = (await http().get(`/events/${eventId}`).set(...bearer(s1)).expect(200)).body;
-    expect(asWinner.results[0].won_by_me).toBe(true);
+    expect(asWinner.results.find((x: any) => x.lot_id === lot1).won_by_me).toBe(true);
 
     // S4 приглашён, видит закупку — но ставку не подавал, и итоги ему не принадлежат.
     const asBystander = (await http().get(`/events/${eventId}`).set(...bearer(s4)).expect(200)).body;
@@ -197,16 +233,68 @@ describe('пауза на возражение и итоги для участн
     expect(Number(c.body.total_minor)).toBe(900_000);
     // Отказ виден участнику вместе с причиной: иначе исчезнувший срок читается как сбой.
     const asLoser = (await http().get(`/events/${eventId}`).set(...bearer(s2)).expect(200)).body;
-    expect(asLoser.results[0].standstill_waived_reason).toBe(reason);
+    expect(asLoser.results.find((x: any) => x.lot_id === lot1).standstill_waived_reason).toBe(reason);
   });
 
   it('истёкший срок открывает дверь сам, без отказа', async () => {
-    const a2 = await http().post(`/events/${eventId}/award`).set(...bearer(buyer))
-      .send({ lotId: lot2, bidId: bid2, justification: 'лучшая цена по лоту 2' }).expect(201);
-    award2 = a2.body.award.id;
-    await http().post(`/contracts/from-award/${award2}`).set(...bearer(buyer)).expect(400);
+    const refused = await http().post(`/contracts/from-award/${award2}`).set(...bearer(buyer)).expect(400);
+    // Отказ именно из гейта паузы, а не любая другая 400: без проверки кода тест прошёл бы
+    // и на отказе по другой причине.
+    expect(refused.body.code).toBe('AWARD_STANDSTILL_ACTIVE');
     await db.query(`UPDATE awards SET standstill_until = now() - interval '1 minute' WHERE id=$1`, [award2]);
     const c = await http().post(`/contracts/from-award/${award2}`).set(...bearer(buyer)).expect(201);
     expect(Number(c.body.total_minor)).toBe(900_000); // 5 × 180k по лоту 2
+  });
+
+  it('истёкший срок нельзя «закрыть досрочно» — закрывать уже нечего', async () => {
+    // Срок у присуждения лота 2 сдвинут в прошлое предыдущей проверкой. Без этого запрета
+    // в журнал уходила запись о решении, которого не было, а участник вместо «срок истёк»
+    // читал «срок закрыт досрочно: <причина>».
+    await http().post(`/events/${eventId}/waive-standstill`).set(...bearer(buyer))
+      .send({ lotId: lot2, reason: 'попытка закрыть то, что кончилось само' }).expect(400);
+    const rows = await db.query(`SELECT standstill_waived_reason FROM awards WHERE id=$1`, [award2]);
+    expect(rows.rows[0].standstill_waived_reason).toBeNull();
+    const audit = await db.query(
+      `SELECT 1 FROM audit_events WHERE action='AWARD_STANDSTILL_WAIVED' AND payload->>'lot_id'=$1`, [lot2]);
+    expect(audit.rows).toHaveLength(0);
+  });
+
+  it('отзыв решения говорят участникам, и строка итогов помечается, а не исчезает', async () => {
+    const a3 = await http().post(`/events/${eventId}/award`).set(...bearer(buyer))
+      .send({ lotId: lot3, bidId: bid1 }).expect(201);
+    award3 = a3.body.award.id;
+    expect(award3).toBeTruthy();
+    await http().post(`/events/${eventId}/cancel-award`).set(...bearer(buyer))
+      .send({ lotId: lot3, reason: 'заказчик снял потребность по лоту 3' }).expect(201);
+
+    // Участнику уже написали «решение принято, возражения до такого-то числа». Отозванное
+    // решение без письма и с пропавшей строкой читается как сбой продукта.
+    const told = (await http().get('/notifications').set(...bearer(s2)).expect(200)).body
+      .filter((n: any) => n.type === 'EVENT_AWARD_CANCELLED');
+    expect(told).toHaveLength(1);
+    expect(told[0].payload.lot_id).toBe(lot3);
+
+    const asLoser = (await http().get(`/events/${eventId}`).set(...bearer(s2)).expect(200)).body;
+    const row = asLoser.results.find((r: any) => r.lot_id === lot3);
+    expect(row).toBeTruthy();
+    expect(row.cancelled_at).toBeTruthy();
+    expect(row.cancel_reason).toContain('снял потребность');
+  });
+
+  it('итоги участника не несут внутреннего: ни обоснования, ни автора решения', async () => {
+    // Политика `awards_participant_select` отдаёт строку целиком, поэтому единственное, что
+    // отделяет обоснование покупателя от конкурента, — список колонок в `detail()`. Эта
+    // проверка краснеет, если кто-нибудь напишет там `SELECT *`.
+    const asLoser = (await http().get(`/events/${eventId}`).set(...bearer(s2)).expect(200)).body;
+    expect(asLoser.results.length).toBeGreaterThan(0);
+    for (const r of asLoser.results) {
+      for (const forbidden of ['justification', 'awarded_by', 'evaluation_id', 'winning_bid_id']) {
+        expect(Object.keys(r)).not.toContain(forbidden);
+      }
+    }
+    // А на уровне БД оно поставщику читаемо — именно поэтому проверка выше и нужна.
+    await db.query(`SELECT set_config('app.org_id',$1,false), set_config('app.role','SUPPLIER_USER',false)`, [s2Org]);
+    const raw = await db.query(`SELECT justification FROM awards WHERE event_id=$1 LIMIT 1`, [eventId]);
+    expect(raw.rows.length).toBe(1);
   });
 });

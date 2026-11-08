@@ -48,7 +48,7 @@ export class AwardStandstill1720000000047 implements MigrationInterface {
     // Формула та же, что в выгрузке OCDS, чтобы две цифры об одном событии не разошлись.
     await q.query(`
       ALTER TABLE awards
-        ADD COLUMN winner_org_id uuid REFERENCES organizations(id),
+        ADD COLUMN winner_org_id uuid REFERENCES organizations(id) ON DELETE SET NULL,
         ADD COLUMN winning_total_minor bigint,
         ADD COLUMN winning_currency char(3)`);
     await q.query(`
@@ -72,12 +72,30 @@ export class AwardStandstill1720000000047 implements MigrationInterface {
     //
     // Отменённое присуждение не показывается: это отозванное решение, а не итог. Живое
     // видно всегда, а история отмен лежит в журнале.
+    //
+    // Видимость делегируется самой закупке — `EXISTS (… sourcing_events …)` поднимает
+    // `se_select`, как это делают все остальные дочерние таблицы в `init`. Без этого право
+    // давал сам факт ставки, и поставщик, у которого отозвали приглашение или чью закупку
+    // вернули в DRAFT, на уровне БД продолжал видеть её присуждения.
+    //
+    // Отменённое присуждение видно: оно помечено отозванным, а не спрятано. Исчезнувшая
+    // строка итогов читается как сбой продукта — тем же доводом, которым показывается
+    // причина досрочного закрытия срока.
+    //
+    // Состояние ставки в условии НЕ участвует намеренно: итоги видят и дисквалифицированный,
+    // и опоздавший. Они участвовали, и решение по закупке касается их так же.
+    //
+    // Политика отдаёт строку ЦЕЛИКОМ, а не выбранные колонки — построчных прав на колонки в
+    // Postgres нет. Значит `justification`, `awarded_by` и `cancel_reason` на уровне БД
+    // поставщику читаемы, и единственное, что отделяет обоснование покупателя от
+    // конкурента, — список колонок в `detail()`. НИКОГДА не писать `SELECT * FROM awards` в
+    // ветке поставщика; за этим следит отдельная проверка в `award-standstill.e2e-spec.ts`.
     await q.query(`
       CREATE POLICY awards_participant_select ON awards FOR SELECT USING (
         app_role() = 'SUPPLIER_USER'
-        AND cancelled_at IS NULL
         AND EXISTS (SELECT 1 FROM bids b
                     WHERE b.event_id = awards.event_id AND b.supplier_org_id = app_org_id())
+        AND EXISTS (SELECT 1 FROM sourcing_events e WHERE e.id = awards.event_id)
       )`);
   }
 
