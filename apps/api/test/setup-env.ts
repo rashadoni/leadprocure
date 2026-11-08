@@ -1,3 +1,4 @@
+import '../src/common/db/pg-date-type';
 import { loadRootEnv } from '../src/common/config/env';
 
 require('../../../scripts/acceptance/assert-isolated.cjs')();

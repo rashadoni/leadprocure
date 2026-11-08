@@ -573,9 +573,11 @@ export class BudgetsService {
     const phasing = new Map<string, Array<{ month_start: string; share_bp: number }>>();
     if (budgets.length) {
       const rows = await this.rc.manager.query(
-        // to_char, not the raw date: the driver hands back a Date object for a `date` column,
-        // and String()-slicing that yields "Tue Aug 11" — which parses to NaN and silently
-        // made every phased budget report a planned share of zero.
+        // to_char, and it stays. This was written when the driver handed back a Date object
+        // for a `date` column and String()-slicing it yielded "Tue Aug 11", which parses to
+        // NaN and silently made every phased budget report a planned share of zero. Since
+        // common/db/pg-date-type.ts the driver returns the ISO day itself, so the cast is no
+        // longer what saves this query — it is simply explicit about the form, at no cost.
         `SELECT budget_id, to_char(month_start, 'YYYY-MM-DD') AS month_start, share_bp
          FROM budget_phasing WHERE budget_id = ANY($1::uuid[]) ORDER BY month_start`,
         [budgets.map((b: any) => b.id)],
@@ -870,8 +872,11 @@ export class BudgetsService {
     // Utilization is what the budget is actually carrying: orders placed plus estimates
     // not yet ordered.
     const used = committed + actual;
-    const start = iso(new Date(r.period_start));
-    const end = iso(new Date(r.period_end));
+    // A `date` column arrives as the ISO day itself — see common/db/pg-date-type.ts for
+    // why it must never be read through a Date. The slice only guards a future SELECT that
+    // hands back a timestamp instead of a day.
+    const start = String(r.period_start).slice(0, 10);
+    const end = String(r.period_end).slice(0, 10);
     return {
       // derived from the range, not stored — one source of truth for the period
       id: r.id, name: r.name, category: r.category, periodYear: Number(start.slice(0, 4)),
@@ -1368,7 +1373,7 @@ export class BudgetsService {
     await this.lockPlans();
     const b = await this.requireStatus(id, ['APPROVED']);
     const today = new Date().toISOString().slice(0, 10);
-    if (iso(new Date(b.period_end)) >= today) {
+    if (String(b.period_end).slice(0, 10) >= today) {
       throw new BadRequestException('The period has not ended yet — a budget can only be closed after its last day');
     }
     // Freeze what the budget WAS at sign-off. Read the live figures first, then store them:
@@ -1554,10 +1559,10 @@ export class BudgetsService {
       .filter((r: any) => r.used > Number(r.amount_minor))
       .map((r: any) => ({
         budgetId: r.id, name: r.name, category: r.category,
-        periodYear: Number(iso(new Date(r.period_start)).slice(0, 4)),
+        periodYear: Number(String(r.period_start).slice(0, 4)),
         departmentCode: r.department_code ?? null,
         periodType: r.period_type,
-        periodLabel: budgetPeriodLabel(r.period_type, iso(new Date(r.period_start))),
+        periodLabel: budgetPeriodLabel(r.period_type, String(r.period_start).slice(0, 10)),
         currency: r.currency, amountMinor: Number(r.amount_minor),
         committedMinor: r.used,
         overByMinor: r.used - Number(r.amount_minor),
