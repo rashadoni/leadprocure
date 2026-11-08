@@ -160,6 +160,10 @@ export default function Settings() {
         <a href="#set-categories">{t('cat_hdr')}</a>
         <a href="#set-departments">{t('dep_hdr')}</a>
         {policyDraft && <a href="#set-thresholds">{t('bud_thresholds')}</a>}
+        {/* Раздел без ссылки в собственном оглавлении — раздел, до которого не доходят:
+            на этой странице восемь карточек, и до новой пришлось бы прокручивать, зная,
+            что она там есть. */}
+        <a href="#set-standstill">{t('standstill_policy')}</a>
         <a href="#set-method">{t('method_policy')}</a>
         <a href="#set-integrations">{t('integrations')}</a>
         <a href="#set-approval">{t('approval_chain')}</a>
