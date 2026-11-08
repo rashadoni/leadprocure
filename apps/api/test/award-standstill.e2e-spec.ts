@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
 import { addApprover } from './helpers';
+import { AppConfig } from '../src/common/config/config.service';
 
 // Пауза на возражение и итоги закупки глазами участника.
 //
@@ -483,6 +484,28 @@ describe('пауза на возражение и итоги для участн
   });
 
   // ---- политика паузы: по организации и методу, а не переменной на весь сервер ----
+
+  it('негодное AWARD_STANDSTILL_HOURS не даёт серверу подняться, а не укорачивает паузу молча', () => {
+    // Зажатие `Math.min(Math.max(...))` тихо делало защиту слабее, чем просил оператор:
+    // 5000 → 720, −24 → 0 (паузы нет вовсе), а нечисловое проходило как NaN и роняло само
+    // присуждение ошибкой уровня БД, в которой про эту переменную ничего нет.
+    const saved = process.env.AWARD_STANDSTILL_HOURS;
+    try {
+      for (const bad of ['abc', '-24', '5000', '24h', '1.5']) {
+        process.env.AWARD_STANDSTILL_HOURS = bad;
+        expect(() => new AppConfig()).toThrow(/AWARD_STANDSTILL_HOURS/);
+      }
+      process.env.AWARD_STANDSTILL_HOURS = '24';
+      expect(new AppConfig().awardStandstillHours).toBe(24);
+      process.env.AWARD_STANDSTILL_HOURS = '720';
+      expect(new AppConfig().awardStandstillHours).toBe(720);
+      delete process.env.AWARD_STANDSTILL_HOURS;
+      expect(new AppConfig().awardStandstillHours).toBe(0);
+    } finally {
+      if (saved === undefined) delete process.env.AWARD_STANDSTILL_HOURS;
+      else process.env.AWARD_STANDSTILL_HOURS = saved;
+    }
+  });
 
   it('срок берётся из политики организации по методу, а не из окружения', async () => {
     // В окружении этого спека 24 часа. Политика для RFQ ставит 1 час — если срок брался бы
