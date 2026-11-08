@@ -481,4 +481,91 @@ describe('пауза на возражение и итоги для участн
     const raw = await db.query(`SELECT justification FROM awards WHERE event_id=$1 LIMIT 1`, [eventId]);
     expect(raw.rows.length).toBe(1);
   });
+
+  // ---- политика паузы: по организации и методу, а не переменной на весь сервер ----
+
+  it('срок берётся из политики организации по методу, а не из окружения', async () => {
+    // В окружении этого спека 24 часа. Политика для RFQ ставит 1 час — если срок брался бы
+    // из окружения, проверка увидела бы 24 и покраснела.
+    await http().put('/events/standstill-policies').set(...bearer(buyer))
+      .send({ policies: [{ method: 'RFQ', hours: 1 }] }).expect(200);
+
+    // Сброс политики — в `finally`: без него падение этой проверки оставляло политику
+    // организации следующей, и мутация красила две проверки вместо одной. Состояние,
+    // которое проверка меняет у всей организации, она обязана вернуть при любом исходе.
+    try {
+    const ev = await buildSmallRfq('policy 1h');
+    const awarded = await http().post(`/events/${ev.eventId}/award`).set(...bearer(buyer))
+      .send({ lotId: ev.lotId, bidId: ev.bidId, justification: 'единственная ставка' }).expect(201);
+    const untilMs = new Date(awarded.body.award.standstill_until).getTime();
+    const hours = (untilMs - Date.now()) / 3600_000;
+    expect(hours).toBeGreaterThan(0.5);
+    expect(hours).toBeLessThan(1.5);
+
+    // Ноль в политике по-прежнему значит «паузы нет» — и это не то же самое, что
+    // отсутствие политики, при котором действует умолчание сервера.
+    await http().put('/events/standstill-policies').set(...bearer(buyer))
+      .send({ policies: [{ method: 'RFQ', hours: 0 }] }).expect(200);
+    const ev2 = await buildSmallRfq('policy 0h');
+    const awarded2 = await http().post(`/events/${ev2.eventId}/award`).set(...bearer(buyer))
+      .send({ lotId: ev2.lotId, bidId: ev2.bidId, justification: 'единственная ставка' }).expect(201);
+    expect(awarded2.body.award.standstill_until).toBeNull();
+    // И контракт по такому присуждению создаётся сразу: паузы нет.
+    await http().post(`/contracts/from-award/${awarded2.body.award.id}`).set(...bearer(buyer)).expect(201);
+
+    } finally {
+      // Вернуть умолчание, чтобы политика не протекла в другие проверки.
+      await http().put('/events/standstill-policies').set(...bearer(buyer))
+        .send({ policies: [] }).expect(200);
+    }
+  });
+
+  it('политику паузы меняет только администратор, и границы проверяются', async () => {
+    // Согласующий читать может — срок касается всех, кто ведёт закупку.
+    await http().get('/events/standstill-policies').set(...bearer(approver)).expect(200);
+    // А менять — нет.
+    await http().put('/events/standstill-policies').set(...bearer(approver))
+      .send({ policies: [{ method: 'RFQ', hours: 2 }] }).expect(403);
+    // Срок длиннее 30 суток интерфейс ждать не умеет — и БД его не принимает.
+    await http().put('/events/standstill-policies').set(...bearer(buyer))
+      .send({ policies: [{ method: 'RFQ', hours: 721 }] }).expect(400);
+    await http().put('/events/standstill-policies').set(...bearer(buyer))
+      .send({ policies: [{ method: 'RFQ', hours: -1 }] }).expect(400);
+    // Два правила на один метод — набор, про который неизвестно, какое из них верно.
+    await http().put('/events/standstill-policies').set(...bearer(buyer))
+      .send({ policies: [{ method: 'RFQ', hours: 1 }, { method: 'RFQ', hours: 2 }] }).expect(400);
+    // Поставщик не видит политик закупщика вовсе.
+    await http().get('/events/standstill-policies').set(...bearer(s1)).expect(403);
+    expect((await http().get('/events/standstill-policies').set(...bearer(buyer)).expect(200)).body)
+      .toEqual([]);
+  });
+
+  // Небольшая однолотовая закупка под проверки политики: заявка → закупка → ставка →
+  // вскрытие → оценка. Отдельная на каждый вызов, чтобы проверки не делили состояние.
+  async function buildSmallRfq(tag2: string) {
+    const req = await http().post('/requests').set(...bearer(buyer)).send({
+      title: `SS ${tag} ${tag2}`,
+      items: [{ name: 'Item P', qty: 1, estUnitPriceMinor: 50_000 }],
+    }).expect(201);
+    await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approver)).expect(201);
+    const ev = await http().post(`/events/from-request/${req.body.id}`).set(...bearer(buyer))
+      .send({ closeAt: new Date(Date.now() + 3600_000).toISOString(), visibility: 'INVITED' }).expect(201);
+    const eventId2 = ev.body.id;
+    const lotId = ev.body.lots[0].id;
+    const itemId = ev.body.items[0].id;
+    await http().post(`/events/${eventId2}/invite`).set(...bearer(buyer))
+      .send({ supplierOrgId: s1Org }).expect(201);
+    await http().post(`/events/${eventId2}/publish`).set(...bearer(buyer)).expect(201);
+    const bid = await http().post(`/events/${eventId2}/bid`).set(...bearer(s1))
+      .send({ items: [{ eventItemId: itemId, unitPriceMinor: 40_000 }] }).expect(201);
+    await db.query(`SELECT set_config('app.org_id',$1,false), set_config('app.role','BUYER_ADMIN',false)`, [buyerOrg]);
+    await db.query(`UPDATE sourcing_events SET close_at = now() - interval '1 second' WHERE id=$1`, [eventId2]);
+    await db.query(`SELECT * FROM close_due_events()`);
+    await http().post(`/events/${eventId2}/open`).set(...bearer(buyer)).expect(201);
+    await http().post(`/events/${eventId2}/evaluate`).set(...bearer(buyer)).send({
+      scores: [{ bidId: bid.body.id, key: 'price', score: 80 }, { bidId: bid.body.id, key: 'delivery', score: 80 }],
+    }).expect(201);
+    return { eventId: eventId2, lotId, bidId: bid.body.id };
+  }
 });
