@@ -8,6 +8,7 @@ import { BidDocs } from '../../components/BidDocs';
 import { Badge } from '../../components/Badge';
 import { ProcedureChip } from '../../components/ProcedureChip';
 import { ListState } from '../../components/ListState';
+import { refusalText } from '../../components/refusal';
 
 export default function SupplierEvent() {
   const { id } = useParams();
@@ -45,12 +46,12 @@ export default function SupplierEvent() {
         setMsg(`${t('bid_received')} · sha256 ${res.data.payload_sha256.slice(0, 16)}…`);
       }
       load();
-    } catch (e: any) { setMsg(e.response?.data?.message?.toString() ?? 'Error'); }
+    } catch (e: any) { setMsg(refusalText(t, e)); }
   };
 
   const withdraw = async () => {
     try { await api.post(`/events/${id}/withdraw`); load(); }
-    catch (e: any) { setMsg(e.response?.data?.message?.toString() ?? 'Error'); }
+    catch (e: any) { setMsg(refusalText(t, e)); }
   };
 
   // Until the event is here this page is only a spinner, and a failed load used to

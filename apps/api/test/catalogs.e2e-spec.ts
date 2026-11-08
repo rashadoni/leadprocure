@@ -53,8 +53,12 @@ describe('catalogs + instant re-order', () => {
   });
 
   it('an order below MOQ is rejected; at/above MOQ creates a PO', async () => {
-    await http().post(`/catalogs/${catalogId}/order`).set(...bearer(buyer))
+    const refused = await http().post(`/catalogs/${catalogId}/order`).set(...bearer(buyer))
       .send({ items: [{ catalogItemId: itemId, qty: 5 }] }).expect(400); // below MOQ 10
+    // The code, not only the status: the screen translates a refusal by it, and without one
+    // the reader gets the English sentence whatever language they chose.
+    expect(refused.body.code).toBe('CATALOG_BELOW_MOQ');
+    expect(refused.body.message).toContain('Below MOQ');
     const po = await http().post(`/catalogs/${catalogId}/order`).set(...bearer(buyer))
       .send({ items: [{ catalogItemId: itemId, qty: 10 }] }).expect(201);
     existingOrderId = po.body.id;

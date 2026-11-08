@@ -359,6 +359,71 @@ test.describe('buyer panel', () => {
     await expect(page.getByText('Total spend', { exact: true })).toHaveCount(0);
   });
 
+  // Hovering a hint must not move the page. The bubble is centred on its host, so on an
+  // element near the right edge half of it lands past the window — and a box past the edge
+  // is part of the width the page can scroll. Measured at 1280 before the fix: +82px on the
+  // block button here, +71px on the last KPI tile, +57px on the row menus of Бюджеты.
+  //
+  // `assertNoSidewaysScroll` could never see this: it HIDES every bubble before measuring,
+  // which is right for its own question and blind to this one. So this test opens them.
+  // Both pages carried an offender; both are checked with their own baseline, and the count
+  // of bubbles that actually opened is asserted — an empty list of offenders proves nothing
+  // if nothing ever opened.
+  test('no hint pushes the page sideways', async () => {
+    // 1280 explicitly: the measurement that found this was made there — it is the width the
+    // owner works at — and tests before this one leave the viewport wherever they finished.
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const idle = () => page.evaluate(() =>
+      document.scrollingElement!.scrollWidth - document.scrollingElement!.clientWidth);
+    const seenAnywhere = { opened: 0, pulled: 0 };
+    for (const path of ['/buyer/suppliers', '/buyer/dashboard']) {
+      await page.goto(path);
+      await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+      expect(await idle(), `${path} scrolls sideways with every hint shut — a different fault`)
+        .toBeLessThanOrEqual(1);
+
+      // Enumerated after the page has one, not on the way past: `[role=status]` with count
+      // 0 is also true before React draws anything at all, and a page counted then has no
+      // hints to hover — which is how this reported «no hint could be hovered» on the very
+      // page the measurement was made on.
+      const tips = page.locator('[data-tip]');
+      await tips.first().waitFor({ state: 'visible', timeout: 20_000 });
+      const over: string[] = [];
+      let visible = 0;
+      for (let i = 0; i < await tips.count(); i++) {
+        const tip = tips.nth(i);
+        if (!(await tip.isVisible())) continue;
+        // The baseline is taken again for EVERY hint, not once per page: these pages finish
+        // arriving after `[role=status]` is gone — a late notification row is enough — and a
+        // page-wide baseline would hand that width to whichever hint was open at the time.
+        const before = await idle();
+        if (!await tip.hover({ timeout: 2000 }).then(() => true, () => false)) continue;
+        visible++;
+        const seen = await tip.evaluate((node) => ({
+          width: parseFloat(getComputedStyle(node as Element, '::after').width) || 0,
+          scroll: document.scrollingElement!.scrollWidth - document.scrollingElement!.clientWidth,
+          // the clamp publishes itself here, so the test can tell «nothing stuck out»
+          // from «nothing was pulled back», which read the same before this line existed
+          shift: (node as HTMLElement).style.getPropertyValue('--tip-shift'),
+          text: (node.getAttribute('data-tip') ?? '').slice(0, 30),
+        }));
+        if (seen.width > 20) seenAnywhere.opened++;
+        if (seen.shift) seenAnywhere.pulled++;
+        if (seen.scroll - before > 1) over.push(`+${seen.scroll - before}px on «${seen.text}…»`);
+        await page.mouse.move(2, 2);
+        await page.waitForTimeout(160);
+      }
+      expect(visible, `${path}: no hint could be hovered at all`).toBeGreaterThan(0);
+      expect(over, `${path}: a hint pushed the page sideways`).toEqual([]);
+    }
+    // Across the two pages, not per page: which hints a page shows depends on the seed and
+    // on the role, and the claim is about the mechanism, not about one screen. Both numbers
+    // matter — bubbles that open prove something was measured, and at least one pulled back
+    // proves the clean result above is the fix working rather than nothing to fix.
+    expect(seenAnywhere.opened, 'not one bubble opened anywhere — nothing was measured').toBeGreaterThan(0);
+    expect(seenAnywhere.pulled, 'no bubble needed pulling back — the check has stopped testing the fix').toBeGreaterThan(0);
+  });
+
   // A decision is reached by a button that says what it does. The verification list had no
   // actions column at all: the only way into the card where the decision is made was the
   // company's name, which looks like a name — and a sentence under the table said so.
