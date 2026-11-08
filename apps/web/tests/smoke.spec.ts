@@ -971,6 +971,22 @@ test.describe('supplier panel', () => {
     await expect(page.getByRole('columnheader', { name: 'Actions', exact: true })).toHaveCount(0);
   });
 
+  // The same finding one page over, and the one the sweep above could not make: «every list
+  // says where its things come from» walks the BUYER's paths, so a shared page whose caption
+  // was never split by role passes it. Catalogs was that page — the supplier read «the
+  // Contracts section, the Catalogs button in the row» for a button that is `canManage`-only
+  // and sits in an action column he is not drawn. Asserted as the absence of the buyer's
+  // instruction rather than the presence of a particular sentence, because what must never
+  // come back is being told to press something that is not there.
+  test('the catalogs caption does not send a supplier to a buyer button', async () => {
+    await page.goto('/supplier/catalogs');
+    const origin = page.getByTestId('section-origin');
+    await expect(origin).toBeVisible({ timeout: 20_000 });
+    await expect(origin, 'the supplier is told to press a button he does not have')
+      .not.toContainText('Catalogs button');
+    await expect(page.getByRole('columnheader', { name: 'Actions', exact: true })).toHaveCount(0);
+  });
+
   // The market is the one list where the procedure decides whether to bid at all, and it
   // was the one tender list without the chip the buyer's list has carried since PR #71: a
   // closed tender, a live auction and a request for information looked identical until the
