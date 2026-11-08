@@ -127,7 +127,11 @@ All functional roadmap blocks are built and green (**143 e2e, 17 suites**):
   пересчитываемая: `issued_at` это момент, а день из момента получается только с поясом, и
   `toISOString()` давал его в UTC — в Баку счёт, выписанный между 00:00 и 04:00, уносил в
   e-qaimə предыдущую дату. У колонки нарочно нет умолчания (`DEFAULT CURRENT_DATE` вернул бы
-  тот же дефект через пояс сессии Postgres). Решение владельца и что НЕ закрыто —
+  тот же дефект через пояс сессии Postgres). **В `APP_TIMEZONE` только ИМЯ зоны:** Node и
+  Postgres читают строку-смещение с обратными знаками (`AT TIME ZONE '+04:00'` в Postgres это
+  UTC−4), поэтому `common/config/timezone.ts` отвергает смещения и сверяет имя с
+  `pg_timezone_names` при старте. Год в номере счёта берётся из того же дня; у номеров
+  `PO-`/`CTR-`/`REQ-` это ещё НЕ сделано. Решение владельца и что НЕ закрыто —
   `docs/invoice-issue-date-decision.md`.
 - Cross-org notifications via `app_notify` DEFINER (0010); DIRECT purchase→PO.
 - **Procurement-integrity controls** (0020, audit remediation): evaluation criteria are

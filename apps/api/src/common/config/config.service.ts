@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { DeploymentMode, Edition } from '@leadprocure/shared';
+import { resolveAppTimezone } from './timezone';
 
 function req(name: string): string {
   const v = process.env[name];
@@ -93,20 +94,10 @@ export class AppConfig {
   // настройка, без которой первая молча врёт, дороже той честности, которую она даёт.
   //
   // Значение ОТВЕРГАЕТСЯ, а не приводится: опечатка в названии пояса не должна тихо
-  // превратиться в UTC и сдвинуть дату налогового документа на сутки. Имя идёт дальше в
-  // Postgres (`AT TIME ZONE`), и базу тех же имён IANA читают оба — но проверить здесь
-  // можно только то, что знает Node, поэтому в переменной должно стоять имя зоны
-  // (`Asia/Baku`), а не смещение.
-  readonly appTimezone = (() => {
-    const raw = process.env.APP_TIMEZONE;
-    const tz = raw === undefined || raw === '' ? 'Asia/Baku' : raw;
-    try {
-      new Intl.DateTimeFormat('en-CA', { timeZone: tz });
-    } catch {
-      throw new Error(`APP_TIMEZONE must be an IANA time zone name, got ${JSON.stringify(raw)}`);
-    }
-    return tz;
-  })();
+  // превратиться в UTC и сдвинуть дату налогового документа на сутки. Почему именно имя
+  // зоны, а не смещение, и почему проверок две — в `timezone.ts`: Node и Postgres читают
+  // строку-смещение с ОБРАТНЫМИ знаками, и `+04:00` дал бы день от UTC−4.
+  readonly appTimezone = resolveAppTimezone(process.env.APP_TIMEZONE);
 
   readonly bidMasterKeyB64 = opt('BID_MASTER_KEY_B64', '');
 

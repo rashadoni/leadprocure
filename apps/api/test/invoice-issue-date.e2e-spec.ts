@@ -4,8 +4,10 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
+import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
 import { AppConfig } from '../src/common/config/config.service';
+import { assertZoneKnownToPostgres, resolveAppTimezone } from '../src/common/config/timezone';
 import { addApprover } from './helpers';
 
 // День счёта — не момент счёта.
@@ -102,9 +104,10 @@ describe('дата выставления счёта (API e2e)', () => {
   });
 
   // Утверждение, которое держится в любой час: сохранённый день — это день сохранённого
-  // момента в поясе установки. Пояс здесь +14, так что день по UTC отличается от него 14
-  // часов в сутки — то есть возврат к UTC-дню краснеет тут почти всегда, а в следующей
-  // проверке (там момент задан) — всегда.
+  // момента в поясе установки. Само по себе оно ловит не всё — возврат к дню в UTC краснеет
+  // тут 14 часов из 24, а зашитый `Asia/Baku` вместо чтения настройки и вовсе 10 из 24, —
+  // поэтому путь записи закрыт отдельно, двумя поясами («настройка решает» ниже), где
+  // расхождение гарантировано в любой час.
   it('день выставления — это день момента выставления в поясе установки', async () => {
     expect(invoice.issue_date).toBe(dayIn(ZONE, invoice.issued_at));
     // `date` драйвер отдаёт текстом (common/db/pg-date-type.ts), и это важно именно здесь:
@@ -154,33 +157,104 @@ describe('дата выставления счёта (API e2e)', () => {
     });
   });
 
-  // Настройка одна на установку, и у неё есть умолчание рынка. Опечатка в названии пояса
-  // отвергается, а не приводится к UTC: иначе она тихо сдвинула бы дату налогового
-  // документа на сутки — ровно то, от чего эта работа и затевалась.
-  describe('APP_TIMEZONE', () => {
-    const restore = (v: string | undefined) => {
-      if (v === undefined) delete process.env.APP_TIMEZONE;
-      else process.env.APP_TIMEZONE = v;
-    };
+  // Детерминированное доказательство того, что день берут из НАСТРОЙКИ.
+  //
+  // Проверка выше сравнивает с `now()`, и когда пояс установки и UTC называют одно число,
+  // она зелёная при любой реализации. Поэтому счёт выставляется ВТОРОЙ раз — вторым
+  // приложением, поднятым с другим поясом установки. Между `Pacific/Kiritimati` (+14) и
+  // `Etc/GMT+12` (−12) двадцать шесть часов, то есть их календарные дни не могут совпасть
+  // никогда, в любой час прогона. Любая реализация, которая настройку игнорирует — день в
+  // UTC, зашитый `Asia/Baku`, пояс процесса, — даёт у двух счетов ОДИН день и краснеет
+  // всегда.
+  describe('настройка решает, а не UTC и не зашитый пояс', () => {
+    const ZONE2 = 'Etc/GMT+12'; // −12; настоящее имя IANA, знак у него обратный по правилам самой IANA
+    let app2: INestApplication;
+    let second: any;
 
+    beforeAll(async () => {
+      process.env.APP_TIMEZONE = ZONE2;
+      const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
+      app2 = mod.createNestApplication();
+      app2.use(cookieParser());
+      app2.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+      await app2.init();
+      // Тот же заказ и тот же поставщик: нужен только день второго счёта. Количество уже
+      // выставлено первым счётом, поэтому этот выйдет DISPUTED — к делу это не относится.
+      second = (await request(app2.getHttpServer()).post(`/invoices/from-po/${poId}`).set(...bearer(supplier))
+        .send({ items: [{ poItemId, qty: 2, unitPriceMinor: 100_000 }] }).expect(201)).body;
+    });
+
+    afterAll(async () => {
+      // Дать дорассылке дойти до конца, прежде чем закрывать приложение. `notifyOrg`
+      // складывает рассылку в пост-коммитную очередь (`rc.onCommit`), и получателей она
+      // читает на СВОЁМ соединении уже после ответа. Закрыть приложение сразу после
+      // выставления счёта значит оборвать её на полуслове — письма тут и так не уходят
+      // (`SMTP_HOST` пуст), но в журнал прогона падает «Connection terminated», а лог после
+      // teardown это ровно та причина, по которой прогон однажды вышел с ошибкой при 374
+      // зелёных тестах (FollowupsScheduler, run 41226454840).
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      if (app2) await app2.close();
+      process.env.APP_TIMEZONE = ZONE;
+    });
+
+    it('два пояса установки дают разные дни для одного и того же мгновения', () => {
+      // Один момент, два пояса — расхождение здесь не зависит от часа прогона совсем.
+      expect(second.issue_date).toBe(dayIn(ZONE2, second.issued_at));
+      expect(second.issue_date).not.toBe(dayIn(ZONE, second.issued_at));
+      expect(invoice.issue_date).not.toBe(dayIn(ZONE2, invoice.issued_at));
+      // И то же самое как факт о двух документах: у них разные дни выставления.
+      expect(second.issue_date).not.toBe(invoice.issue_date);
+    });
+
+    it('номер второго счёта тоже называет год своей даты', () => {
+      expect(second.invoice_no).toMatch(new RegExp(`^INV-${second.issue_date.slice(0, 4)}-\\d{4}$`));
+    });
+  });
+
+  // Настройка одна на установку, и у неё есть умолчание рынка. Опечатка отвергается, а не
+  // приводится к UTC: иначе она тихо сдвинула бы дату налогового документа — ровно то, от
+  // чего эта работа и затевалась.
+  describe('APP_TIMEZONE', () => {
     it('по умолчанию Asia/Baku', () => {
       const was = process.env.APP_TIMEZONE;
       delete process.env.APP_TIMEZONE;
       try {
+        expect(resolveAppTimezone(undefined)).toBe('Asia/Baku');
+        expect(resolveAppTimezone('')).toBe('Asia/Baku');
         expect(new AppConfig().appTimezone).toBe('Asia/Baku');
       } finally {
-        restore(was);
+        if (was === undefined) delete process.env.APP_TIMEZONE;
+        else process.env.APP_TIMEZONE = was;
       }
     });
 
-    it('неизвестный пояс не поднимается', () => {
-      const was = process.env.APP_TIMEZONE;
-      process.env.APP_TIMEZONE = 'Asia/Baki';
-      try {
-        expect(() => new AppConfig()).toThrow(/APP_TIMEZONE/);
-      } finally {
-        restore(was);
+    // Главное здесь — смещения. Node принимает `+04:00` как идентификатор зоны, а Postgres
+    // читает строку-смещение по правилам POSIX, где знак ОБРАТНЫЙ: `AT TIME ZONE '+04:00'`
+    // это UTC−4. Такое значение положило бы в налоговый документ день, отстоящий от
+    // задуманного на восемь часов, и положило бы навсегда — день фиксируется при
+    // выставлении. Проверено живьём: `+04:00` дал в Postgres 2026-11-08 там, где
+    // `Asia/Baku` даёт 2026-11-09.
+    it.each(['+04:00', '+04', '-08:00', '04:00', 'UTC+4', 'Asia/Baki', 'Европа/Баку'])(
+      'не поднимается с APP_TIMEZONE=%s', (bad) => {
+        expect(() => resolveAppTimezone(bad)).toThrow(/APP_TIMEZONE/);
+      },
+    );
+
+    it('имена зон принимаются, включая Etc/GMT+N — его оба движка читают одинаково', () => {
+      for (const good of ['Asia/Baku', 'UTC', 'Europe/Berlin', 'Etc/GMT+4', 'America/Argentina/Buenos_Aires']) {
+        expect(resolveAppTimezone(good)).toBe(good);
       }
+    });
+
+    // Вторая половина проверки: имя должно знать та база, которая день и считает. Так
+    // утверждение «наборы зон у ICU и Postgres совпадают» перестаёт быть предположением.
+    // `+04:00` взят как заведомо неизвестное Postgres значение — форму оно уже не проходит,
+    // но для этой проверки важно именно то, что в `pg_timezone_names` его нет.
+    it('имя сверяется с самой базой при старте', async () => {
+      const q = (sql: string, params: unknown[]) => app.get(DataSource).query(sql, params);
+      await expect(assertZoneKnownToPostgres(q, 'Asia/Baku')).resolves.toBeUndefined();
+      await expect(assertZoneKnownToPostgres(q, ZONE)).resolves.toBeUndefined();
+      await expect(assertZoneKnownToPostgres(q, '+04:00')).rejects.toThrow(/pg_timezone_names/);
     });
   });
 });
