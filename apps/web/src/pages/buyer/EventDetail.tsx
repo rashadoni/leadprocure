@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { useDeadlineTick } from '../../hooks/useDeadlineTick';
 import { Explain } from '../../components/Explain';
 import { useParams } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
@@ -134,6 +135,26 @@ export default function EventDetail() {
     catch (e: any) { notifyError(e); }
   };
 
+  // Пауза на возражение: пока она идёт, контракт по лоту не создаётся. Закрыть её можно
+  // досрочно, но только с написанной причиной — ровно как обход блокировки по бюджету.
+  const waiveStandstill = async (lotId: string) => {
+    const reason = await ask({
+      title: t('waive_standstill'), label: t('waive_standstill_reason'), required: true, minLength: 10,
+      hint: t('waive_standstill_hint'), confirmLabel: t('waive_standstill'), danger: true,
+    });
+    if (!reason) return;
+    try { await api.post(`/events/${id}/waive-standstill`, { lotId, reason }); load(); }
+    catch (e: any) { notifyError(e); }
+  };
+  // Одно время на всю отрисовку, иначе две проверки одного присуждения разойдутся на
+  // границе секунды; и перерисовка в момент истечения ближайшей паузы, иначе кнопка
+  // «Сделать контракт» остаётся серой до перезагрузки, хотя ждать уже нечего.
+  const nowMs = useDeadlineTick((ev?.awards ?? [])
+    .filter((a: any) => !a.cancelled_at && !a.standstill_waived_reason)
+    .map((a: any) => a.standstill_until));
+  const standstillOpen = (a: any) => !!a?.standstill_until && !a.standstill_waived_reason
+    && new Date(a.standstill_until).getTime() > nowMs;
+
   const weightedByBid = useMemo(() => {
     const m = new Map<string, number>();
     for (const s of ev?.scores ?? []) m.set(s.bid_id, (m.get(s.bid_id) ?? 0) + Number(s.weighted));
@@ -210,7 +231,16 @@ export default function EventDetail() {
             <button className="btn" data-tip={t('tip_finalize')} onClick={() => act('auction/finalize')}>{t('finalize')}</button>
           )}
           <button className="btn ghost" data-tip={t('tip_ocds')} onClick={openOcds}>{t('ocds')}</button>
-          {(ev.awards ?? []).filter((a: any) => !a.cancelled_at).map((a: any) => (
+          {/* Пока идёт пауза на возражение, сервер откажет в контракте — кнопка, живая под
+              отказ, обманывает. Вместо неё здесь видно, до какого срока ждать, и чем его
+              закрыть досрочно. */}
+          {(ev.awards ?? []).filter((a: any) => !a.cancelled_at).map((a: any) => standstillOpen(a) ? (
+            <button key={a.id} className="btn ghost" disabled data-testid="make-contract-waiting"
+              data-tip={t('waive_standstill_hint')}>
+              {t('make_contract')} · {ev.lots.find((l: any) => l.id === a.lot_id)?.title}
+              {' — '}{t('standstill_until')} {fmtDateTime(a.standstill_until)}
+            </button>
+          ) : (
             <button key={a.id} className="btn" data-tip={t('tip_make_contract')} onClick={async () => {
               try {
                 const c = await api.post(`/contracts/from-award/${a.id}`);
@@ -479,6 +509,23 @@ export default function EventDetail() {
                   <>
                     <span className="badge is-good AWARDED">🏆 {t('st_AWARDED')}</span>{' '}
                     <button className="btn small ghost" data-tip={t('cancel_award_prompt')} onClick={() => cancelAward(l.id)}>✕ {t('cancel_award')}</button>
+                    {standstillOpen(awarded) && (
+                      <>
+                        {' '}
+                        <button className="btn small ghost" data-testid="waive-standstill"
+                          data-tip={t('waive_standstill_hint')} onClick={() => waiveStandstill(l.id)}>
+                          {t('waive_standstill')}
+                        </button>
+                        <div className="hint" style={{ marginTop: 4 }}>
+                          ⏳ {t('standstill_until')}: {fmtDateTime(awarded.standstill_until)}
+                        </div>
+                      </>
+                    )}
+                    {awarded.standstill_waived_reason && (
+                      <div className="hint" style={{ marginTop: 4 }}>
+                        {t('results_objection_waived')}: {awarded.standstill_waived_reason}
+                      </div>
+                    )}
                     {awarded.justification && <div className="hint" style={{ marginTop: 4 }}>📝 {awarded.justification}</div>}
                   </>
                 )}

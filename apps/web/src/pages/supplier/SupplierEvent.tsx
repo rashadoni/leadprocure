@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { useDeadlineTick } from '../../hooks/useDeadlineTick';
 import { api, fmtDateTime, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { AuctionPanel } from '../../components/AuctionPanel';
@@ -54,6 +55,17 @@ export default function SupplierEvent() {
     catch (e: any) { setMsg(refusalText(t, e)); }
   };
 
+  // Хук стоит ДО раннего возврата ниже и читает `ev` через `?.` — после возврата React на
+  // первой отрисовке (ev ещё null) выполнил бы хуков меньше, чем на следующей, и страница
+  // падает целиком. Именно так и упало: «Rendered more hooks than during the previous
+  // render» в браузерном наборе, а не в типах и не в юнит-проверках.
+  //
+  // Смысл тот же, что на карточке покупателя: «срок истёк» не появится, пока страницу не
+  // перезагрузят, — а именно в эту минуту человек и смотрит на срок.
+  const nowMs = useDeadlineTick(((ev?.results ?? []) as any[])
+    .filter((r) => !r.cancelled_at && !r.standstill_waived_reason)
+    .map((r) => r.standstill_until));
+
   // Until the event is here this page is only a spinner, and a failed load used to
   // leave that spinner on screen for ever instead of saying what happened.
   if (!ev) return <div className="card"><ListState of={{ loading: !evFailed, failed: evFailed, reload: load }} /></div>;
@@ -65,10 +77,15 @@ export default function SupplierEvent() {
   const total = ev.items.reduce(
     (s: number, i: any) => s + (Number(prices[i.id] || 0) * Number(i.qty)), 0,
   );
+  // Итоги по лотам: кто победил, за сколько и до какого срока можно возразить. Приходят
+  // из `detail()` только участнику — у кого есть своя ставка в этой закупке.
+  const results: any[] = ev.results ?? [];
+  const liveResults = results.filter((r: any) => !r.cancelled_at);
   // Award outcome for THIS supplier: any lot awarded to my bid = won.
   const won = ev.status === 'AWARDED' && ev.my_bid
     && (ev.lots ?? []).some((l: any) => l.awarded_bid_id === ev.my_bid.id);
   const lost = ev.status === 'AWARDED' && !won && !!ev.my_bid;
+
   const canBid = ['PUBLISHED', 'OPEN'].includes(ev.status);
   // Nothing priced is nothing to send: the server refuses an empty `items` outright, and a
   // button that is live for a refusal is a button that lies. RFI carries no prices at all —
@@ -95,6 +112,53 @@ export default function SupplierEvent() {
         <div className="card">
           <b>{t('you_lost')}</b>
           <div className="hint">{t('you_lost_hint')}</div>
+        </div>
+      )}
+      {/* Итоги закупки.
+          Раньше участник видел только «выбрана другая заявка» — без имени победителя, без
+          суммы и без срока, до которого решение ещё можно оспорить. Это строка, а не итог:
+          возразить по ней нечему, и проверяющему показать нечего. */}
+      {results.length > 0 && (
+        <div className="card" data-testid="sup-results">
+          <h3>{t('results_title')}</h3>
+          <table>
+            <thead><tr>
+              <th>{t('results_lot')}</th><th>{t('results_winner')}</th>
+              <th className="num">{t('results_amount')}</th>
+              <th>{t('results_decided')}</th><th>{t('results_objection_until')}</th>
+            </tr></thead>
+            <tbody>
+              {results.map((r: any) => {
+                const until = r.standstill_until ? new Date(r.standstill_until).getTime() : null;
+                const open = !!until && !r.standstill_waived_reason && until > nowMs;
+                return (
+                  // Ключ — id присуждения, а не лота: у переприсуждённого лота строк
+                  // несколько (отозванная и действующая), и ключ по лоту давал дубль.
+                  <tr key={r.id} data-testid="sup-results-row"
+                    style={r.cancelled_at ? { opacity: 0.65 } : undefined}>
+                    <td>{r.lot_no ? `#${r.lot_no} ${r.lot_title ?? ''}` : (r.lot_title ?? '—')}</td>
+                    <td>{r.winner_name ?? '—'}{r.won_by_me && <> — <b>{t('results_you')}</b></>}</td>
+                    <td className="num">{fmtMoney(r.winning_total_minor, r.winning_currency ?? ev.evaluation_currency)}</td>
+                    <td>{fmtDateTime(r.awarded_at)}</td>
+                    <td>
+                      {/* Отозванное решение говорит о себе первым: срок возражения против
+                          того, чего больше нет, — не то, что человеку надо прочитать. */}
+                      {r.cancelled_at
+                        ? <b>{t('results_cancelled')}</b>
+                        : r.standstill_waived_reason
+                          ? `${t('results_objection_waived')}: ${r.standstill_waived_reason}`
+                          : until ? (open ? fmtDateTime(r.standstill_until) : t('results_objection_over')) : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {/* Срок без канала — украшение. Канал в продукте один и он тут же ниже. */}
+          {liveResults.some((r: any) => r.standstill_until && !r.standstill_waived_reason
+            && new Date(r.standstill_until).getTime() > nowMs) && (
+            <div className="hint">{t('results_objection_hint')}</div>
+          )}
         </div>
       )}
       <div className="card">

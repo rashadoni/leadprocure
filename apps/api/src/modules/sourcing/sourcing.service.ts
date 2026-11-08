@@ -266,7 +266,49 @@ export class SourcingService {
       const myBid = await this.myBid(eventId);
       // The buyer's own estimate is not for bidders' eyes — publishing it anchors prices.
       const supplierItems = items.map((i: any) => ({ ...i, est_unit_price_minor: null }));
-      return { ...ev, lots, items: supplierItems, my_bid: myBid, amounts_visible: amountsVisible };
+      // Итоги закупки глазами участника.
+      //
+      // Раньше поставщик не узнавал исхода вовсе: его ставка навсегда оставалась «подана»,
+      // а кто выиграл и за сколько — не показывалось нигде. Уведомление о решении без
+      // страницы, на которой это решение видно, посылает человека спрашивать по телефону.
+      //
+      // Политика `awards_participant_select` отдаёт присуждения только тех закупок, где у
+      // организации есть своя ставка; сумму победителя читаем из снимка на самом
+      // присуждении, а не из чужой ставки — доступа к чужим ставкам тут нет и не нужно.
+      const results = await m.query(
+        // Колонки перечислены ПОИМЕННО и это не стиль: политика `awards_participant_select`
+        // отдаёт строку целиком, поэтому `SELECT *` здесь отдал бы поставщику обоснование
+        // покупателя (`justification`), автора решения и ссылку на оценку. Проверка на это
+        // есть в `award-standstill.e2e-spec.ts`.
+        //
+        // `cancelled_at` участнику показывают: ему уже сказали «решение принято, возражения
+        // до такого-то числа», и молча исчезнувшая строка читается как сбой.
+        //
+        // А `cancel_reason` НЕ показывают, и это решение, а не список колонок. Это свободный
+        // текст покупателя о том, почему он отозвал решение, и он бывает про конкретного
+        // поставщика — «нашли нарушение», «не прошёл проверку». Раздать такое дословно всем
+        // конкурентам хуже, чем промолчать: обоснование выбора (`justification`) мы тоже не
+        // отдаём, а причину дисквалификации получает только тот, кого дисквалифицировали.
+        // Участнику нужен ФАКТ отзыва, чтобы не читать исчезновение как поломку; подробности
+        // он спрашивает у заказчика, как и всюду в закупке.
+        //
+        // `a.id` в выборке — ключ строки. Отменённые присуждения видны, и у переприсуждённого
+        // лота строк несколько с одним `lot_id`: ключ по лоту давал дубль, а таблица теперь
+        // перерисовывается сама по истечении срока — ровно тогда дубль и проявляется.
+        `SELECT a.id, a.lot_id, l.lot_no, l.title AS lot_title, a.awarded_at,
+                a.winner_org_id, o.legal_name AS winner_name,
+                a.winning_total_minor, a.winning_currency,
+                a.standstill_until, a.standstill_waived_reason,
+                a.cancelled_at,
+                (a.winner_org_id = $2) AS won_by_me
+           FROM awards a
+           LEFT JOIN event_lots l ON l.id = a.lot_id
+           LEFT JOIN organizations o ON o.id = a.winner_org_id
+          WHERE a.event_id = $1
+          ORDER BY l.lot_no NULLS LAST, a.awarded_at`,
+        [eventId, auth.org_id],
+      );
+      return { ...ev, lots, items: supplierItems, my_bid: myBid, results, amounts_visible: amountsVisible };
     }
 
     // Buyer view: participation always; amounts only once the ceremony opened them.
@@ -477,6 +519,22 @@ export class SourcingService {
     const m = this.rc.manager;
     await m.query(`SELECT id FROM sourcing_events WHERE id=$1 FOR UPDATE`, [eventId]);
     const ev = await this.requireEvent(eventId, ['CLOSED']);
+    // Церемония вскрытия — не для аукциона, и это запрет, а не придирка.
+    //
+    // У аукциона вскрывать нечего: ставки видны по ходу и лежат `OPENED`, а итог приводит в
+    // порядок `auction/finalize` — он же создаёт `bid_items` и переводит закупку в
+    // EVALUATION. Церемония формат не проверяла, находила ноль запечатанных ставок и молча
+    // считала дело сделанным, оставляя закупку БЕЗ `bid_items` вовсе. Дальше присуждение
+    // брало сумму лота из итога всей ставки, и на многолотовом аукционе контракт получался
+    // на цену всего аукциона за один лот — ровно та выдуманная цифра, которую этот круг
+    // правок и взялся прекратить.
+    //
+    // Запрет убирает состояние, а не компенсирует его: про этот путь пришлось рассуждать в
+    // трёх коммитах подряд, и это был сигнал его закрыть, а не описывать снова.
+    if (ev.format === 'REVERSE') {
+      throw new BadRequestException(
+        'A reverse auction has nothing to unseal — finalize it with POST /events/:id/auction/finalize');
+    }
 
     await m.query(`UPDATE sourcing_events SET status='OPENING', updated_at=now() WHERE id=$1`, [eventId]);
 
@@ -655,17 +713,43 @@ export class SourcingService {
     }
 
     const bidRows = await m.query(
-      `SELECT id, state, total_minor FROM bids WHERE id=$1 AND event_id=$2 FOR UPDATE`,
+      `SELECT id, state, total_minor, currency FROM bids WHERE id=$1 AND event_id=$2 FOR UPDATE`,
       [dto.bidId, eventId],
     );
     if (!bidRows.length) throw new NotFoundException('Bid not found on this event');
     if (bidRows[0].state !== 'OPENED') throw new BadRequestException('Only OPENED bids can be awarded');
 
+    // Сумма присуждения по ЛОТУ — и только по лоту.
+    //
+    // Здесь стоял `COALESCE(…, bids.total_minor)` «для аукциона, где позиций по лоту может
+    // не быть». Условия «лот один» в нём не было, и на многолотовом аукционе он давал
+    // контракт на сумму всего аукциона за один лот. Тот же изъян, что убран из бэкфилла
+    // миграции 0047, одной функцией левее.
+    //
+    // Запасной вариант больше не нужен: единственный путь, на котором `bid_items` по лоту
+    // отсутствовали, — вскрытие аукциона церемонией вместо `auction/finalize`, и он теперь
+    // запрещён (см. `openCeremony`). Остальные пути строки гарантируют: в обычной закупке
+    // их требует отбор допустимых ставок, в аукционе их создаёт `finalize`. Если сумма
+    // всё-таки окажется пустой, снимок останется NULL и контракт откажет — честнее, чем
+    // подставить цифру, которой никто не считал.
+    const lotTotal = (await m.query(
+      `SELECT sum(bi.line_total_minor)::bigint AS total_minor
+         FROM bid_items bi JOIN event_items ei ON ei.id = bi.event_item_id
+        WHERE bi.bid_id = $1 AND ei.lot_id = $2`,
+      [dto.bidId, dto.lotId],
+    ))[0];
+
     // Partial unique index (awards_active_lot) makes the award idempotent under concurrency.
     const inserted = await m.query(
-      `INSERT INTO awards(event_id, lot_id, winning_bid_id, awarded_by, evaluation_id, justification)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [eventId, dto.lotId, dto.bidId, auth.sub, evaluationId, justification],
+      `INSERT INTO awards(event_id, lot_id, winning_bid_id, awarded_by, evaluation_id, justification,
+                           standstill_until, winner_org_id, winning_total_minor, winning_currency)
+       VALUES ($1,$2,$3,$4,$5,$6,
+               CASE WHEN $7::int > 0 THEN now() + ($7::int * interval '1 hour') ELSE NULL END,
+               $8,$9,$10)
+       RETURNING id, standstill_until`,
+      [eventId, dto.lotId, dto.bidId, auth.sub, evaluationId, justification,
+       this.cfg.awardStandstillHours,
+       supplier.supplier_org_id, lotTotal?.total_minor ?? null, bidRows[0].currency],
     );
     await m.query(`UPDATE event_lots SET awarded_bid_id=$2 WHERE id=$1`, [dto.lotId, dto.bidId]);
 
@@ -685,13 +769,64 @@ export class SourcingService {
       evaluation_id: evaluationId, top_ranked: isTop, single_bid: singleBid, justification,
       signature: sig, signer: this.signature.kind,
     });
-    // Notify the winning supplier.
-    const winner = await m.query(`SELECT supplier_org_id FROM bids WHERE id = $1`, [dto.bidId]);
-    if (winner.length) {
-      await this.notify.notifyOrg(winner[0].supplier_org_id, 'BID_AWARDED', { event_id: eventId, lot_id: dto.lotId });
-    }
+      // Участников уведомляют ВСЕХ, а не одного победителя.
+      //
+      // Раньше здесь стоял один `notifyOrg` победителю, и проигравший не узнавал о решении
+      // вовсе: его ставка навсегда оставалась «подана». Человек, готовивший предложение,
+      // имеет право узнать, что решение принято, — и узнать ДО того, как присуждение станет
+      // неотменяемым, иначе письмо сообщает о свершившемся. Отсюда и пауза выше: сообщение
+      // без времени на ответ не лучше молчания.
+      //
+      // Организации берутся по лоту; дисквалифицированные исключены — им сказали отдельно
+      // и со своей причиной (`disqualifyBid`).
+      const participants = await this.lotParticipants(eventId, dto.lotId);
+      const winnerOrg = supplier.supplier_org_id;
+      const standstillUntil = inserted[0].standstill_until;
+      for (const orgId of participants) {
+        await this.notify.notifyOrg(
+          orgId,
+          orgId === winnerOrg ? 'BID_AWARDED' : 'BID_NOT_AWARDED',
+          {
+            event_id: eventId,
+            lot_id: dto.lotId,
+            // Срок возражения — часть сообщения, а не справка: без него «вы не выбраны» не
+            // говорит человеку, есть ли ещё смысл что-то предпринимать.
+            ...(standstillUntil ? { standstill_until: standstillUntil } : {}),
+          },
+        );
+      }
     this.rt(eventId, 'event.awarded', { lot_id: dto.lotId });
     return { award: inserted[0], idempotent: false };
+  }
+
+  // Кто участвовал в ЛОТЕ. У `bids` нет колонки лота — участие в лоте выражено строками
+  // `bid_items` по позициям этого лота, ровно так же, как в отборе допустимых ставок при
+  // присуждении.
+  //
+  // Запасная ветка (нет ни одной строки `bid_items` по лоту → участниками считаются все
+  // недисквалифицированные участники закупки) сегодня НЕ достигается ни одним путём:
+  // `finalize` вставляет `bid_items` каждой аукционной ставке, обычная закупка требует их
+  // в отборе допустимых, а вскрытие аукциона церемонией теперь запрещено (`openCeremony`).
+  //
+  // И всё-таки она оставлена — в отличие от недостижимой проверки в `waiveStandstill`,
+  // которую я убрал. Разница в том, что та БРОСАЛА на невозможном состоянии, а эта лишь
+  // выбирает получателей: если такое состояние когда-нибудь возникнет, молчание будет ровно
+  // той поломкой, которую весь этот круг правок и закрывает, а лишнее письмо — нет.
+  private async lotParticipants(eventId: string, lotId: string): Promise<string[]> {
+    const m = this.rc.manager;
+    const scoped = await m.query(
+      `SELECT DISTINCT b.supplier_org_id FROM bids b
+         JOIN bid_items bi ON bi.bid_id = b.id
+         JOIN event_items ei ON ei.id = bi.event_item_id
+        WHERE b.event_id = $1 AND ei.lot_id = $2 AND b.state <> 'DISQUALIFIED'`,
+      [eventId, lotId],
+    );
+    if (scoped.length) return scoped.map((r: any) => r.supplier_org_id);
+    const all = await m.query(
+      `SELECT DISTINCT supplier_org_id FROM bids WHERE event_id = $1 AND state <> 'DISQUALIFIED'`,
+      [eventId],
+    );
+    return all.map((r: any) => r.supplier_org_id);
   }
 
   // Buyer disqualifies an opened bid during evaluation, with a documented reason. A
@@ -711,7 +846,74 @@ export class SourcingService {
     await m.query(`UPDATE bids SET state='DISQUALIFIED', disqualified_reason=$2, updated_at=now() WHERE id=$1`,
       [bidId, reason.trim()]);
     await this.audit.record('BID_DISQUALIFIED', 'bid', bidId, { event_id: eventId, reason: reason.trim() });
+    // Дисквалифицированному говорят отдельно и со своей причиной: при присуждении его уже
+    // не уведомляют (он выбыл), и без этого письма он узнавал бы о снятии ставки ниоткуда.
+    const dq = (await m.query(`SELECT supplier_org_id FROM bids WHERE id=$1`, [bidId]))[0];
+    if (dq) {
+      await this.notify.notifyOrg(dq.supplier_org_id, 'BID_DISQUALIFIED', {
+        event_id: eventId, bid_id: bidId, reason: reason.trim(),
+      });
+    }
     return this.detail(eventId, auth);
+  }
+
+  // Письменный отказ от паузы на возражение.
+  //
+  // Пауза не может быть непреодолимой: закупка бывает срочной, и система, которая не
+  // оставляет человеку выхода, получает выход в обход себя. Продукт уже решает это так же
+  // с блокировкой по бюджету (`BUDGET_BLOCK_OVERRIDDEN`): пройти можно, но под своей
+  // подписью и с написанной причиной. Короткая отписка не принимается — ограничение в БД
+  // требует не меньше десяти знаков, и то же проверяется здесь, чтобы ответ был внятным,
+  // а не 500-й от нарушения CHECK.
+  //
+  // Право на это — только у BUYER_ADMIN: отказ от паузы снимает защиту второй стороны, и
+  // это решение уровня организации, а не того, кто ведёт конкретный лот.
+  async waiveStandstill(eventId: string, lotId: string, reason: string, auth: AccessTokenPayload) {
+    const m = this.rc.manager;
+    const text = (reason ?? '').trim();
+    if (text.length < 10) {
+      throw new BadRequestException('A written reason (at least 10 characters) is required to waive the standstill');
+    }
+    const award = (await m.query(
+      `SELECT * FROM awards WHERE event_id=$1 AND lot_id=$2 AND cancelled_at IS NULL FOR UPDATE`,
+      [eventId, lotId]))[0];
+    if (!award) throw new NotFoundException('No active award for this lot');
+    if (!award.standstill_until) throw new BadRequestException('This award has no standstill period');
+    if (award.standstill_waived_reason) return { award, idempotent: true };
+    // Истёкший срок закрывать нечем: он кончился сам. Без этой проверки запись в журнале и
+    // письмо участникам говорили «срок закрыт досрочно» о решении, которого не было, —
+    // журнал получал событие, а участник на странице вместо «срок истёк» видел «закрыт
+    // досрочно: <причина>». Кнопки на этом состоянии в интерфейсе нет, но ручка была открыта.
+    if (new Date(award.standstill_until).getTime() <= Date.now()) {
+      throw new BadRequestException('The standstill period has already expired — there is nothing to waive');
+    }
+    // Проверки «нет ли уже контракта» здесь НЕТ, и это разобрано, а не забыто. Контракт по
+    // присуждению возможен только тремя путями, и каждый отвечает раньше: паузы не было
+    // (NULL — первый отказ выше), паузу уже сняли (идемпотентный возврат выше, без письма и
+    // без записи в журнал) или срок истёк (отказ строкой выше). Состояния «живая пауза и
+    // контракт» не существует, потому что контракт эту паузу и не прошёл бы. Добавлять
+    // недостижимую проверку — писать код, который нельзя ни проверить, ни опровергнуть.
+    // Если когда-нибудь появится ручка, двигающая `standstill_until` вперёд, это
+    // рассуждение рушится — и тогда проверка нужна.
+    await m.query(
+      `UPDATE awards SET standstill_waived_reason=$2, standstill_waived_by=$3, standstill_waived_at=now()
+        WHERE id=$1`,
+      [award.id, text, auth.sub]);
+    // Причина — в журнале, а не только в колонке: по колонке видно текущее состояние, а по
+    // журналу — что решение принимал человек и когда.
+    await this.audit.record('AWARD_STANDSTILL_WAIVED', 'sourcing_event', eventId, {
+      lot_id: lotId, award_id: award.id, standstill_until: award.standstill_until, reason: text,
+    });
+    // Участникам говорят и об этом: срок, о котором им написали при присуждении, закончился
+    // раньше объявленного, и молчать об этом — значит сделать первое письмо неправдой.
+    const participants = await this.lotParticipants(eventId, lotId);
+    for (const orgId of participants) {
+      await this.notify.notifyOrg(orgId, 'AWARD_STANDSTILL_WAIVED', {
+        event_id: eventId, lot_id: lotId, reason: text,
+      });
+    }
+    const fresh = (await m.query(`SELECT * FROM awards WHERE id=$1`, [award.id]))[0];
+    return { award: fresh, idempotent: false };
   }
 
   // Soft-cancel a lot award (keeps the row for the audit trail) and reopen the lot for a
@@ -736,6 +938,17 @@ export class SourcingService {
     // reopening a lot moves a fully-awarded event back to EVALUATION
     await m.query(`UPDATE sourcing_events SET status='EVALUATION', awarded_at=NULL, updated_at=now() WHERE id=$1 AND status='AWARDED'`, [eventId]);
     await this.audit.record('EVENT_AWARD_CANCELLED', 'sourcing_event', eventId, { lot_id: lotId, award_id: award.id, reason: reason.trim() });
+    // Отмена — тот же случай, что досрочное закрытие срока, только резче: участник получил
+    // «решение принято, возражения до такого-то числа», а потом строка итогов у него
+    // помечается отозванной. Молча это читается как сбой продукта, а не как отозванное
+    // решение. Поэтому говорят всем участникам лота и с причиной.
+    for (const orgId of await this.lotParticipants(eventId, lotId)) {
+      // Без причины: см. выборку итогов в `detail()` — свободный текст покупателя об
+      // отзыве решения всем участникам дословно не раздают.
+      await this.notify.notifyOrg(orgId, 'EVENT_AWARD_CANCELLED', {
+        event_id: eventId, lot_id: lotId,
+      });
+    }
     this.rt(eventId, 'event.status', { status: 'EVALUATION' });
     return this.detail(eventId, auth);
   }
@@ -745,9 +958,8 @@ export class SourcingService {
   async ocdsRelease(eventId: string, auth: AccessTokenPayload) {
     const ev = await this.detail(eventId, auth);
     const awardDetails = ev.amounts_visible ? await this.rc.manager.query(`
-      SELECT a.*, b.supplier_org_id, o.legal_name AS supplier_name, b.currency,
-        (SELECT sum(bi.line_total_minor) FROM bid_items bi JOIN event_items ei ON ei.id=bi.event_item_id
-         WHERE bi.bid_id=a.winning_bid_id AND ei.lot_id=a.lot_id) AS lot_total
+      SELECT a.*, b.supplier_org_id, o.legal_name AS supplier_name, a.winning_currency AS currency,
+             a.winning_total_minor AS lot_total
       FROM awards a JOIN bids b ON b.id=a.winning_bid_id JOIN organizations o ON o.id=b.supplier_org_id
       WHERE a.event_id=$1`,[eventId]) : [];
     const tag = ['tender'];
@@ -784,7 +996,9 @@ export class SourcingService {
           awards: awardDetails.map((a: any) => ({
             id: a.id, status: a.cancelled_at ? 'cancelled' : 'active', date: a.awarded_at,
             suppliers: [{id:a.supplier_org_id,name:a.supplier_name}],
-            value: {amount:Number(a.lot_total ?? 0)/100,currency:a.currency},
+            // Нет снимка суммы — не публикуем ноль: контракт по такой строке отказывает, и
+            // выгрузка не должна утверждать, что присудили на нулевую сумму.
+            value: a.lot_total == null ? undefined : {amount:Number(a.lot_total)/100,currency:a.currency},
           })),
         },
       ],
