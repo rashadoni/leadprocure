@@ -354,6 +354,38 @@ describe('пауза на возражение и итоги для участн
     await db.query(`DELETE FROM awards WHERE id=$1`, [oldAward]);
   });
 
+  it('аукцион нельзя «вскрыть» церемонией — вскрывать там нечего', async () => {
+    // Последнее место, где продукт выдумывал денежную цифру. Церемония вскрытия формат не
+    // проверяла, у аукциона не находила запечатанных ставок и молча считала дело сделанным,
+    // оставляя закупку БЕЗ `bid_items`. Присуждение после этого брало сумму лота из итога
+    // всей ставки, и на многолотовом аукционе контракт выходил на цену всего аукциона за
+    // один лот. Запрет убирает состояние, а не компенсирует его.
+    const req = await http().post('/requests').set(...bearer(buyer)).send({
+      title: `SS auction ${tag}`,
+      items: [{ name: 'Auction item', qty: 10, estUnitPriceMinor: 100_000 }],
+    }).expect(201);
+    await http().post(`/requests/${req.body.id}/submit`).set(...bearer(buyer)).expect(201);
+    await http().post(`/requests/${req.body.id}/approve`).set(...bearer(approver)).expect(201);
+    const auction = await http().post(`/events/reverse/from-request/${req.body.id}`).set(...bearer(buyer))
+      .send({
+        closeAt: new Date(Date.now() + 3600_000).toISOString(), visibility: 'INVITED',
+        startPriceMinor: 10_000_000, minDecrementMinor: 100_000,
+      }).expect(201);
+    await http().post(`/events/${auction.body.id}/invite`).set(...bearer(buyer))
+      .send({ supplierOrgId: s1Org }).expect(201);
+    await http().post(`/events/${auction.body.id}/publish`).set(...bearer(buyer)).expect(201);
+    await db.query(`SELECT set_config('app.org_id',$1,false), set_config('app.role','BUYER_ADMIN',false)`, [buyerOrg]);
+    await db.query(`UPDATE sourcing_events SET close_at = now() - interval '1 second' WHERE id=$1`,
+      [auction.body.id]);
+    await db.query(`SELECT * FROM close_due_events()`);
+
+    const refused = await http().post(`/events/${auction.body.id}/open`).set(...bearer(buyer)).expect(400);
+    expect(String(refused.body.message)).toContain('finalize');
+    // И закупка осталась CLOSED, а не уехала в OPENING «наполовину вскрытой».
+    const st = await db.query(`SELECT status FROM sourcing_events WHERE id=$1`, [auction.body.id]);
+    expect(st.rows[0].status).toBe('CLOSED');
+  });
+
   it('итоги участника не несут внутреннего: ни обоснования, ни автора решения', async () => {
     // Политика `awards_participant_select` отдаёт строку целиком, поэтому единственное, что
     // отделяет обоснование покупателя от конкурента, — список колонок в `detail()`. Эта

@@ -519,6 +519,22 @@ export class SourcingService {
     const m = this.rc.manager;
     await m.query(`SELECT id FROM sourcing_events WHERE id=$1 FOR UPDATE`, [eventId]);
     const ev = await this.requireEvent(eventId, ['CLOSED']);
+    // Церемония вскрытия — не для аукциона, и это запрет, а не придирка.
+    //
+    // У аукциона вскрывать нечего: ставки видны по ходу и лежат `OPENED`, а итог приводит в
+    // порядок `auction/finalize` — он же создаёт `bid_items` и переводит закупку в
+    // EVALUATION. Церемония формат не проверяла, находила ноль запечатанных ставок и молча
+    // считала дело сделанным, оставляя закупку БЕЗ `bid_items` вовсе. Дальше присуждение
+    // брало сумму лота из итога всей ставки, и на многолотовом аукционе контракт получался
+    // на цену всего аукциона за один лот — ровно та выдуманная цифра, которую этот круг
+    // правок и взялся прекратить.
+    //
+    // Запрет убирает состояние, а не компенсирует его: про этот путь пришлось рассуждать в
+    // трёх коммитах подряд, и это был сигнал его закрыть, а не описывать снова.
+    if (ev.format === 'REVERSE') {
+      throw new BadRequestException(
+        'A reverse auction has nothing to unseal — finalize it with POST /events/:id/auction/finalize');
+    }
 
     await m.query(`UPDATE sourcing_events SET status='OPENING', updated_at=now() WHERE id=$1`, [eventId]);
 
@@ -703,14 +719,24 @@ export class SourcingService {
     if (!bidRows.length) throw new NotFoundException('Bid not found on this event');
     if (bidRows[0].state !== 'OPENED') throw new BadRequestException('Only OPENED bids can be awarded');
 
-    // Сумма присуждения по ЛОТУ — та же формула, что в выгрузке OCDS, чтобы две цифры об
-    // одном событии не разошлись. Для аукциона строк `bid_items` по лоту может не быть —
-    // тогда берётся итог самой ставки.
+    // Сумма присуждения по ЛОТУ — и только по лоту.
+    //
+    // Здесь стоял `COALESCE(…, bids.total_minor)` «для аукциона, где позиций по лоту может
+    // не быть». Условия «лот один» в нём не было, и на многолотовом аукционе он давал
+    // контракт на сумму всего аукциона за один лот. Тот же изъян, что убран из бэкфилла
+    // миграции 0047, одной функцией левее.
+    //
+    // Запасной вариант больше не нужен: единственный путь, на котором `bid_items` по лоту
+    // отсутствовали, — вскрытие аукциона церемонией вместо `auction/finalize`, и он теперь
+    // запрещён (см. `openCeremony`). Остальные пути строки гарантируют: в обычной закупке
+    // их требует отбор допустимых ставок, в аукционе их создаёт `finalize`. Если сумма
+    // всё-таки окажется пустой, снимок останется NULL и контракт откажет — честнее, чем
+    // подставить цифру, которой никто не считал.
     const lotTotal = (await m.query(
-      `SELECT COALESCE(sum(bi.line_total_minor), $3::bigint)::bigint AS total_minor
+      `SELECT sum(bi.line_total_minor)::bigint AS total_minor
          FROM bid_items bi JOIN event_items ei ON ei.id = bi.event_item_id
         WHERE bi.bid_id = $1 AND ei.lot_id = $2`,
-      [dto.bidId, dto.lotId, bidRows[0].total_minor],
+      [dto.bidId, dto.lotId],
     ))[0];
 
     // Partial unique index (awards_active_lot) makes the award idempotent under concurrency.
@@ -723,7 +749,7 @@ export class SourcingService {
        RETURNING id, standstill_until`,
       [eventId, dto.lotId, dto.bidId, auth.sub, evaluationId, justification,
        this.cfg.awardStandstillHours,
-       supplier.supplier_org_id, lotTotal?.total_minor ?? bidRows[0].total_minor, bidRows[0].currency],
+       supplier.supplier_org_id, lotTotal?.total_minor ?? null, bidRows[0].currency],
     );
     await m.query(`UPDATE event_lots SET awarded_bid_id=$2 WHERE id=$1`, [dto.lotId, dto.bidId]);
 
@@ -778,14 +804,14 @@ export class SourcingService {
   // присуждении.
   //
   // Запасная ветка (нет ни одной строки `bid_items` по лоту → участниками считаются все
-  // недисквалифицированные участники закупки) на обычных путях НЕ достигается, и прежний
-  // комментарий здесь врал: аукцион её не использует. `auction.service.ts` в `finalize`
-  // вставляет `bid_items` каждой ставке из её последнего принятого тика, лот у аукциона
-  // всегда один и `lot_id` у позиций проставлен, а `finalize` — единственное, что переводит
-  // аукцион в EVALUATION и делает присуждение возможным. Достижимой ветка становится
-  // только на кривом пути «`POST /events/:id/open` вместо `auction/finalize`»: церемония
-  // формат не проверяет и не находит, что вскрывать, потому что аукционные ставки уже
-  // OPENED. Ветка оставлена как страховка — молчание вместо писем хуже лишнего письма.
+  // недисквалифицированные участники закупки) сегодня НЕ достигается ни одним путём:
+  // `finalize` вставляет `bid_items` каждой аукционной ставке, обычная закупка требует их
+  // в отборе допустимых, а вскрытие аукциона церемонией теперь запрещено (`openCeremony`).
+  //
+  // И всё-таки она оставлена — в отличие от недостижимой проверки в `waiveStandstill`,
+  // которую я убрал. Разница в том, что та БРОСАЛА на невозможном состоянии, а эта лишь
+  // выбирает получателей: если такое состояние когда-нибудь возникнет, молчание будет ровно
+  // той поломкой, которую весь этот круг правок и закрывает, а лишнее письмо — нет.
   private async lotParticipants(eventId: string, lotId: string): Promise<string[]> {
     const m = this.rc.manager;
     const scoped = await m.query(
