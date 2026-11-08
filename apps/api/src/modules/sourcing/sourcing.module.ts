@@ -69,6 +69,11 @@ class CancelAwardDto {
   @IsUUID() lotId!: string;
   @IsString() @MinLength(3) reason!: string;
 }
+class WaiveStandstillDto {
+  @IsUUID() lotId!: string;
+  // Не меньше десяти знаков: это объяснение, а не отписка. То же требует CHECK в БД.
+  @IsString() @MinLength(10) reason!: string;
+}
 class CreateAuctionDto {
   @IsOptional() @IsString() title?: string;
   @IsISO8601() closeAt!: string;
@@ -220,6 +225,18 @@ export class SourcingController {
     @CurrentUser() auth: AccessTokenPayload,
   ) {
     return this.sourcing.disqualifyBid(id, bidId, body.reason, auth);
+  }
+
+  // Отказ от паузы — только BUYER_ADMIN: он снимает защиту второй стороны, и это решение
+  // уровня организации, а не того, кто ведёт лот.
+  @Post(':id/waive-standstill')
+  @Roles('BUYER_ADMIN')
+  waiveStandstill(
+    @Param('id') id: string,
+    @Body() body: WaiveStandstillDto,
+    @CurrentUser() auth: AccessTokenPayload,
+  ) {
+    return this.sourcing.waiveStandstill(id, body.lotId, body.reason, auth);
   }
 
   @Post(':id/cancel-award')

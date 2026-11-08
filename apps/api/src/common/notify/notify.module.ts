@@ -15,6 +15,10 @@ const MAIL_SUBJECTS: Record<string, string> = {
   INVOICE_SUBMITTED: 'Поступил счёт · Yeni qaimə',
   INVOICE_STATUS_CHANGED: 'Статус счёта изменён · Qaimə statusu dəyişdi',
   SUPPLIER_INVITED: 'Приглашение в тендер · Tenderə dəvət',
+  BID_AWARDED: 'Вы выбраны победителем · Siz qalib seçildiniz',
+  BID_NOT_AWARDED: 'Решение по тендеру принято · Tender üzrə qərar verilib',
+  BID_DISQUALIFIED: 'Ставка снята с рассмотрения · Təklif baxışdan çıxarıldı',
+  AWARD_STANDSTILL_WAIVED: 'Срок возражения сокращён · Etiraz müddəti qısaldılıb',
   EVENT_PUBLISHED: 'Опубликован тендер · Tender dərc olunub',
   VERIFICATION_OPENED: 'Открыта верификация · Yoxlama açılıb',
   VERIFICATION_DECIDED: 'Решение по верификации · Yoxlama qərarı',
@@ -23,7 +27,13 @@ const MAIL_SUBJECTS: Record<string, string> = {
 };
 // Only these payload fields may appear in an email body — a whitelist, so sealed or
 // internal values can never leak into outbound mail by accident.
-const MAIL_SAFE_KEYS = ['po_no', 'invoice_no', 'status', 'title', 'no', 'budget', 'utilization'] as const;
+// `standstill_until` — срок, до которого участник может возразить против присуждения. Это
+// дата, а не сумма и не чужой текст: без неё письмо «решение принято» не говорит человеку,
+// есть ли ещё смысл что-то предпринимать. Причина (`reason`) в письмо не идёт — свободный
+// текст один на все типы уведомлений, и пускать его в почту целым классом не стоит; её
+// видно в самом продукте.
+const MAIL_SAFE_KEYS = ['po_no', 'invoice_no', 'status', 'title', 'no', 'budget', 'utilization',
+  'standstill_until'] as const;
 
 // Async email fan-out to the ACTIVE users of the recipient org. Runs post-commit on its
 // own connection (DataSource, no request tx). Every failure is swallowed + logged: email

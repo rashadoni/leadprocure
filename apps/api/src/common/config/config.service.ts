@@ -37,6 +37,18 @@ export class AppConfig {
   // treated as a benign race (SPA reload / StrictMode double-mount / concurrent 401s),
   // not theft. Only reuse older than this trips the "revoke the family" breach response.
   readonly refreshReuseLeewayMs = int('JWT_REFRESH_REUSE_LEEWAY_MS', 15000);
+  // Пауза между присуждением и контрактом: столько часов проигравший может возразить, пока
+  // дверь ещё открыта (отмена присуждения после создания контракта уже невозможна).
+  //
+  // По умолчанию НОЛЬ — пауза выключена. Так же поступает блокировка по бюджету
+  // (`budget_policies.block_pct` пуст = не блокирует ничего): новый запрет, который
+  // останавливает закупщика посреди работы, включают осознанно, а не навязывают тем, кто
+  // о нём не просил. Регулируемой закупке ставят 24 (или столько, сколько требует
+  // процедура), и тогда контракт по лоту не создаётся, пока срок не истёк.
+  //
+  // Уведомление участникам и страница итогов работают независимо от этого числа: сказать
+  // проигравшему, что решение принято, нужно всегда, а ждать — не всегда.
+  readonly awardStandstillHours = int('AWARD_STANDSTILL_HOURS', 0);
 
   readonly bidMasterKeyB64 = opt('BID_MASTER_KEY_B64', '');
 

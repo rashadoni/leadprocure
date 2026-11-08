@@ -266,7 +266,29 @@ export class SourcingService {
       const myBid = await this.myBid(eventId);
       // The buyer's own estimate is not for bidders' eyes — publishing it anchors prices.
       const supplierItems = items.map((i: any) => ({ ...i, est_unit_price_minor: null }));
-      return { ...ev, lots, items: supplierItems, my_bid: myBid, amounts_visible: amountsVisible };
+      // Итоги закупки глазами участника.
+      //
+      // Раньше поставщик не узнавал исхода вовсе: его ставка навсегда оставалась «подана»,
+      // а кто выиграл и за сколько — не показывалось нигде. Уведомление о решении без
+      // страницы, на которой это решение видно, посылает человека спрашивать по телефону.
+      //
+      // Политика `awards_participant_select` отдаёт присуждения только тех закупок, где у
+      // организации есть своя ставка; сумму победителя читаем из снимка на самом
+      // присуждении, а не из чужой ставки — доступа к чужим ставкам тут нет и не нужно.
+      const results = await m.query(
+        `SELECT a.lot_id, l.lot_no, l.title AS lot_title, a.awarded_at,
+                a.winner_org_id, o.legal_name AS winner_name,
+                a.winning_total_minor, a.winning_currency,
+                a.standstill_until, a.standstill_waived_reason,
+                (a.winner_org_id = $2) AS won_by_me
+           FROM awards a
+           LEFT JOIN event_lots l ON l.id = a.lot_id
+           LEFT JOIN organizations o ON o.id = a.winner_org_id
+          WHERE a.event_id = $1
+          ORDER BY l.lot_no NULLS LAST`,
+        [eventId, auth.org_id],
+      );
+      return { ...ev, lots, items: supplierItems, my_bid: myBid, results, amounts_visible: amountsVisible };
     }
 
     // Buyer view: participation always; amounts only once the ceremony opened them.
@@ -655,17 +677,33 @@ export class SourcingService {
     }
 
     const bidRows = await m.query(
-      `SELECT id, state, total_minor FROM bids WHERE id=$1 AND event_id=$2 FOR UPDATE`,
+      `SELECT id, state, total_minor, currency FROM bids WHERE id=$1 AND event_id=$2 FOR UPDATE`,
       [dto.bidId, eventId],
     );
     if (!bidRows.length) throw new NotFoundException('Bid not found on this event');
     if (bidRows[0].state !== 'OPENED') throw new BadRequestException('Only OPENED bids can be awarded');
 
+    // Сумма присуждения по ЛОТУ — та же формула, что в выгрузке OCDS, чтобы две цифры об
+    // одном событии не разошлись. Для аукциона строк `bid_items` по лоту может не быть —
+    // тогда берётся итог самой ставки.
+    const lotTotal = (await m.query(
+      `SELECT COALESCE(sum(bi.line_total_minor), $3::bigint)::bigint AS total_minor
+         FROM bid_items bi JOIN event_items ei ON ei.id = bi.event_item_id
+        WHERE bi.bid_id = $1 AND ei.lot_id = $2`,
+      [dto.bidId, dto.lotId, bidRows[0].total_minor],
+    ))[0];
+
     // Partial unique index (awards_active_lot) makes the award idempotent under concurrency.
     const inserted = await m.query(
-      `INSERT INTO awards(event_id, lot_id, winning_bid_id, awarded_by, evaluation_id, justification)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [eventId, dto.lotId, dto.bidId, auth.sub, evaluationId, justification],
+      `INSERT INTO awards(event_id, lot_id, winning_bid_id, awarded_by, evaluation_id, justification,
+                           standstill_until, winner_org_id, winning_total_minor, winning_currency)
+       VALUES ($1,$2,$3,$4,$5,$6,
+               CASE WHEN $7::int > 0 THEN now() + ($7::int * interval '1 hour') ELSE NULL END,
+               $8,$9,$10)
+       RETURNING id, standstill_until`,
+      [eventId, dto.lotId, dto.bidId, auth.sub, evaluationId, justification,
+       this.cfg.awardStandstillHours,
+       supplier.supplier_org_id, lotTotal?.total_minor ?? bidRows[0].total_minor, bidRows[0].currency],
     );
     await m.query(`UPDATE event_lots SET awarded_bid_id=$2 WHERE id=$1`, [dto.lotId, dto.bidId]);
 
@@ -685,13 +723,56 @@ export class SourcingService {
       evaluation_id: evaluationId, top_ranked: isTop, single_bid: singleBid, justification,
       signature: sig, signer: this.signature.kind,
     });
-    // Notify the winning supplier.
-    const winner = await m.query(`SELECT supplier_org_id FROM bids WHERE id = $1`, [dto.bidId]);
-    if (winner.length) {
-      await this.notify.notifyOrg(winner[0].supplier_org_id, 'BID_AWARDED', { event_id: eventId, lot_id: dto.lotId });
-    }
+      // Участников уведомляют ВСЕХ, а не одного победителя.
+      //
+      // Раньше здесь стоял один `notifyOrg` победителю, и проигравший не узнавал о решении
+      // вовсе: его ставка навсегда оставалась «подана». Человек, готовивший предложение,
+      // имеет право узнать, что решение принято, — и узнать ДО того, как присуждение станет
+      // неотменяемым, иначе письмо сообщает о свершившемся. Отсюда и пауза выше: сообщение
+      // без времени на ответ не лучше молчания.
+      //
+      // Организации берутся по лоту; дисквалифицированные исключены — им сказали отдельно
+      // и со своей причиной (`disqualifyBid`).
+      const participants = await this.lotParticipants(eventId, dto.lotId);
+      const winnerOrg = supplier.supplier_org_id;
+      const standstillUntil = inserted[0].standstill_until;
+      for (const orgId of participants) {
+        await this.notify.notifyOrg(
+          orgId,
+          orgId === winnerOrg ? 'BID_AWARDED' : 'BID_NOT_AWARDED',
+          {
+            event_id: eventId,
+            lot_id: dto.lotId,
+            // Срок возражения — часть сообщения, а не справка: без него «вы не выбраны» не
+            // говорит человеку, есть ли ещё смысл что-то предпринимать.
+            ...(standstillUntil ? { standstill_until: standstillUntil } : {}),
+          },
+        );
+      }
     this.rt(eventId, 'event.awarded', { lot_id: dto.lotId });
     return { award: inserted[0], idempotent: false };
+  }
+
+  // Кто участвовал в ЛОТЕ. У `bids` нет колонки лота — участие в лоте выражено строками
+  // `bid_items` по позициям этого лота, ровно так же, как в отборе допустимых ставок при
+  // присуждении. Когда таких строк нет вовсе (аукцион хранит итог на самой ставке),
+  // участниками лота считаются все недисквалифицированные участники закупки: в такой
+  // закупке лот один, и «участники лота» и «участники закупки» — одно и то же множество.
+  private async lotParticipants(eventId: string, lotId: string): Promise<string[]> {
+    const m = this.rc.manager;
+    const scoped = await m.query(
+      `SELECT DISTINCT b.supplier_org_id FROM bids b
+         JOIN bid_items bi ON bi.bid_id = b.id
+         JOIN event_items ei ON ei.id = bi.event_item_id
+        WHERE b.event_id = $1 AND ei.lot_id = $2 AND b.state <> 'DISQUALIFIED'`,
+      [eventId, lotId],
+    );
+    if (scoped.length) return scoped.map((r: any) => r.supplier_org_id);
+    const all = await m.query(
+      `SELECT DISTINCT supplier_org_id FROM bids WHERE event_id = $1 AND state <> 'DISQUALIFIED'`,
+      [eventId],
+    );
+    return all.map((r: any) => r.supplier_org_id);
   }
 
   // Buyer disqualifies an opened bid during evaluation, with a documented reason. A
@@ -711,7 +792,59 @@ export class SourcingService {
     await m.query(`UPDATE bids SET state='DISQUALIFIED', disqualified_reason=$2, updated_at=now() WHERE id=$1`,
       [bidId, reason.trim()]);
     await this.audit.record('BID_DISQUALIFIED', 'bid', bidId, { event_id: eventId, reason: reason.trim() });
+    // Дисквалифицированному говорят отдельно и со своей причиной: при присуждении его уже
+    // не уведомляют (он выбыл), и без этого письма он узнавал бы о снятии ставки ниоткуда.
+    const dq = (await m.query(`SELECT supplier_org_id FROM bids WHERE id=$1`, [bidId]))[0];
+    if (dq) {
+      await this.notify.notifyOrg(dq.supplier_org_id, 'BID_DISQUALIFIED', {
+        event_id: eventId, bid_id: bidId, reason: reason.trim(),
+      });
+    }
     return this.detail(eventId, auth);
+  }
+
+  // Письменный отказ от паузы на возражение.
+  //
+  // Пауза не может быть непреодолимой: закупка бывает срочной, и система, которая не
+  // оставляет человеку выхода, получает выход в обход себя. Продукт уже решает это так же
+  // с блокировкой по бюджету (`BUDGET_BLOCK_OVERRIDDEN`): пройти можно, но под своей
+  // подписью и с написанной причиной. Короткая отписка не принимается — ограничение в БД
+  // требует не меньше десяти знаков, и то же проверяется здесь, чтобы ответ был внятным,
+  // а не 500-й от нарушения CHECK.
+  //
+  // Право на это — только у BUYER_ADMIN: отказ от паузы снимает защиту второй стороны, и
+  // это решение уровня организации, а не того, кто ведёт конкретный лот.
+  async waiveStandstill(eventId: string, lotId: string, reason: string, auth: AccessTokenPayload) {
+    const m = this.rc.manager;
+    const text = (reason ?? '').trim();
+    if (text.length < 10) {
+      throw new BadRequestException('A written reason (at least 10 characters) is required to waive the standstill');
+    }
+    const award = (await m.query(
+      `SELECT * FROM awards WHERE event_id=$1 AND lot_id=$2 AND cancelled_at IS NULL FOR UPDATE`,
+      [eventId, lotId]))[0];
+    if (!award) throw new NotFoundException('No active award for this lot');
+    if (!award.standstill_until) throw new BadRequestException('This award has no standstill period');
+    if (award.standstill_waived_reason) return { award, idempotent: true };
+    await m.query(
+      `UPDATE awards SET standstill_waived_reason=$2, standstill_waived_by=$3, standstill_waived_at=now()
+        WHERE id=$1`,
+      [award.id, text, auth.sub]);
+    // Причина — в журнале, а не только в колонке: по колонке видно текущее состояние, а по
+    // журналу — что решение принимал человек и когда.
+    await this.audit.record('AWARD_STANDSTILL_WAIVED', 'sourcing_event', eventId, {
+      lot_id: lotId, award_id: award.id, standstill_until: award.standstill_until, reason: text,
+    });
+    // Участникам говорят и об этом: срок, о котором им написали при присуждении, закончился
+    // раньше объявленного, и молчать об этом — значит сделать первое письмо неправдой.
+    const participants = await this.lotParticipants(eventId, lotId);
+    for (const orgId of participants) {
+      await this.notify.notifyOrg(orgId, 'AWARD_STANDSTILL_WAIVED', {
+        event_id: eventId, lot_id: lotId, reason: text,
+      });
+    }
+    const fresh = (await m.query(`SELECT * FROM awards WHERE id=$1`, [award.id]))[0];
+    return { award: fresh, idempotent: false };
   }
 
   // Soft-cancel a lot award (keeps the row for the audit trail) and reopen the lot for a

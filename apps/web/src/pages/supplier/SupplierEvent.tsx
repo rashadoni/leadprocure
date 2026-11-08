@@ -65,10 +65,14 @@ export default function SupplierEvent() {
   const total = ev.items.reduce(
     (s: number, i: any) => s + (Number(prices[i.id] || 0) * Number(i.qty)), 0,
   );
+  // Итоги по лотам: кто победил, за сколько и до какого срока можно возразить. Приходят
+  // из `detail()` только участнику — у кого есть своя ставка в этой закупке.
+  const results: any[] = ev.results ?? [];
   // Award outcome for THIS supplier: any lot awarded to my bid = won.
   const won = ev.status === 'AWARDED' && ev.my_bid
     && (ev.lots ?? []).some((l: any) => l.awarded_bid_id === ev.my_bid.id);
   const lost = ev.status === 'AWARDED' && !won && !!ev.my_bid;
+  const nowMs = Date.now();
   const canBid = ['PUBLISHED', 'OPEN'].includes(ev.status);
   // Nothing priced is nothing to send: the server refuses an empty `items` outright, and a
   // button that is live for a refusal is a button that lies. RFI carries no prices at all —
@@ -95,6 +99,46 @@ export default function SupplierEvent() {
         <div className="card">
           <b>{t('you_lost')}</b>
           <div className="hint">{t('you_lost_hint')}</div>
+        </div>
+      )}
+      {/* Итоги закупки.
+          Раньше участник видел только «выбрана другая заявка» — без имени победителя, без
+          суммы и без срока, до которого решение ещё можно оспорить. Это строка, а не итог:
+          возразить по ней нечему, и проверяющему показать нечего. */}
+      {results.length > 0 && (
+        <div className="card" data-testid="sup-results">
+          <h3>{t('results_title')}</h3>
+          <table>
+            <thead><tr>
+              <th>{t('results_lot')}</th><th>{t('results_winner')}</th>
+              <th className="num">{t('results_amount')}</th>
+              <th>{t('results_decided')}</th><th>{t('results_objection_until')}</th>
+            </tr></thead>
+            <tbody>
+              {results.map((r: any) => {
+                const until = r.standstill_until ? new Date(r.standstill_until).getTime() : null;
+                const open = !!until && !r.standstill_waived_reason && until > nowMs;
+                return (
+                  <tr key={r.lot_id ?? 'single'} data-testid="sup-results-row">
+                    <td>{r.lot_no ? `#${r.lot_no} ${r.lot_title ?? ''}` : (r.lot_title ?? '—')}</td>
+                    <td>{r.winner_name ?? '—'}{r.won_by_me && <> — <b>{t('results_you')}</b></>}</td>
+                    <td className="num">{fmtMoney(r.winning_total_minor, r.winning_currency ?? ev.evaluation_currency)}</td>
+                    <td>{fmtDateTime(r.awarded_at)}</td>
+                    <td>
+                      {r.standstill_waived_reason
+                        ? `${t('results_objection_waived')}: ${r.standstill_waived_reason}`
+                        : until ? (open ? fmtDateTime(r.standstill_until) : t('results_objection_over')) : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {/* Срок без канала — украшение. Канал в продукте один и он тут же ниже. */}
+          {results.some((r: any) => r.standstill_until && !r.standstill_waived_reason
+            && new Date(r.standstill_until).getTime() > nowMs) && (
+            <div className="hint">{t('results_objection_hint')}</div>
+          )}
         </div>
       )}
       <div className="card">

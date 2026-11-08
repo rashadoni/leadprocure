@@ -1,0 +1,30 @@
+import { test, expect } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+// Подпись, которой нет в словаре, выводится на экран своим КЛЮЧОМ: `t` возвращает ключ,
+// когда перевода нет. Это не падение и не пустое место — это «results_winner» в шапке
+// таблицы, и увидит его тот, кто читает на одном языке из трёх.
+//
+// Две страницы тендера — самые многословные в продукте и единственные, где одни и те же
+// слова читают обе стороны сделки: покупатель и поставщик. Проверка файловая, без
+// браузера, поэтому не стоит ни входа (их 10 в минуту), ни ожидания стенда.
+const read = (p: string) => readFileSync(resolve(p), 'utf8');
+const I18N = read('src/i18n.tsx');
+const PAGES = ['src/pages/supplier/SupplierEvent.tsx', 'src/pages/buyer/EventDetail.tsx'];
+
+test('каждая подпись на страницах тендера переведена на все три языка', () => {
+  const missing = new Set<string>();
+  for (const page of PAGES) {
+    const src = read(page);
+    // Только настоящие вызовы `t('key')`: без границы слева сюда попадали `act('open')`
+    // и прочие вызовы, кончающиеся на «t».
+    const keys = [...new Set([...src.matchAll(/(?:^|[^\w.])t\('([a-zA-Z0-9_]+)'\)/g)].map((m) => m[1]))];
+    for (const key of keys.sort()) {
+      // Строка словаря бывает и в двойных кавычках — текст с апострофом иначе не записать.
+      const defined = I18N.match(new RegExp(`(?:^|[\\s{])${key}: ['"]`, 'gm')) ?? [];
+      if (defined.length !== 3) missing.add(`${key} (${defined.length}/3)`);
+    }
+  }
+  expect([...missing], 'подпись без перевода — на экране будет её ключ').toEqual([]);
+});

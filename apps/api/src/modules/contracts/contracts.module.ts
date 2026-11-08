@@ -95,7 +95,8 @@ export class ContractsService {
     if (!event) throw new NotFoundException('Award not found');
     await lockEvent(m, event.event_id);
     const rows = await m.query(
-      `SELECT a.id AS award_id, a.event_id, a.winning_bid_id, e.title, e.buyer_org_id,
+      `SELECT a.id AS award_id, a.event_id, a.winning_bid_id, a.standstill_until,
+              a.standstill_waived_reason, e.title, e.buyer_org_id,
               e.evaluation_currency, e.vat_mode, b.currency AS bid_currency, b.supplier_org_id,
               (SELECT sum(bi.line_total_minor) FROM bid_items bi JOIN event_items ei ON ei.id=bi.event_item_id
                WHERE bi.bid_id=a.winning_bid_id AND ei.lot_id=a.lot_id) AS total_minor
@@ -108,6 +109,19 @@ export class ContractsService {
     if (!rows.length) throw new NotFoundException('Award not found');
     const a = rows[0];
     if (a.buyer_org_id !== auth.org_id) throw new NotFoundException('Award not found');
+    // Пауза на возражение. Контракт закрывает дверь: после него присуждение не отменить
+    // (`cancelAward` отказывает при живом контракте), поэтому проигравший обязан успеть
+    // возразить ДО этой точки, а не после. Отказаться от паузы можно — письменно, и это
+    // ровно тот приём, которым продукт обходит блокировку по бюджету: срочную закупку
+    // нельзя остановить намертво, но объяснить, почему не стали ждать, обязан человек.
+    if (a.standstill_until && !a.standstill_waived_reason && new Date(a.standstill_until).getTime() > Date.now()) {
+      throw new BadRequestException({
+        statusCode: 400, error: 'Bad Request', code: 'AWARD_STANDSTILL_ACTIVE',
+        standstill_until: a.standstill_until,
+        message: `Award is in standstill until ${new Date(a.standstill_until).toISOString()}: `
+          + 'losing bidders may still object. Waive it with a written reason to proceed now.',
+      });
+    }
     if (a.bid_currency !== a.evaluation_currency) throw new BadRequestException('Award requires an explicit currency conversion');
     if (a.total_minor == null) throw new BadRequestException('Award has no priced lot snapshot');
 
