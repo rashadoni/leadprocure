@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useDeadlineTick } from '../../hooks/useDeadlineTick';
 import { api, fmtDateTime, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
@@ -21,8 +21,20 @@ export default function SupplierEvent() {
   const [msg, setMsg] = useState('');
 
   const [evFailed, setEvFailed] = useState(false);
+  // «Не найдено» и «не загрузилось» — разные ответы, и путать их дорого. Закупка, в которую
+  // поставщика не приглашали, отвечает 404, а страница показывала «Не удалось загрузить
+  // данные. Повторить» — то есть отказ в доступе выглядел как авария продукта, и человек
+  // жал «Повторить» сколько угодно раз. Теперь отказ говорит о себе и кнопки повтора не
+  // предлагает: повторять нечего.
+  const [evMissing, setEvMissing] = useState(false);
   const load = useCallback(
-    () => { setEvFailed(false); return api.get(`/events/${id}`).then((r) => setEv(r.data)).catch(() => setEvFailed(true)); },
+    () => {
+      setEvFailed(false); setEvMissing(false);
+      return api.get(`/events/${id}`).then((r) => setEv(r.data)).catch((e: any) => {
+        const code = e?.response?.status;
+        if (code === 404 || code === 403) setEvMissing(true); else setEvFailed(true);
+      });
+    },
     [id],
   );
   useEffect(() => { load(); }, [load]);
@@ -66,6 +78,17 @@ export default function SupplierEvent() {
     .filter((r) => !r.cancelled_at && !r.standstill_waived_reason)
     .map((r) => r.standstill_until));
 
+  if (evMissing) {
+    return (
+      <div className="card" data-testid="sup-event-missing">
+        <b>{t('event_not_available')}</b>
+        <div className="hint" style={{ marginTop: 6 }}>{t('event_not_available_hint')}</div>
+        <div style={{ marginTop: 10 }}>
+          <Link className="btn small" to="/supplier/market">{t('to_market')}</Link>
+        </div>
+      </div>
+    );
+  }
   // Until the event is here this page is only a spinner, and a failed load used to
   // leave that spinner on screen for ever instead of saying what happened.
   if (!ev) return <div className="card"><ListState of={{ loading: !evFailed, failed: evFailed, reload: load }} /></div>;
@@ -175,7 +198,14 @@ export default function SupplierEvent() {
                   <th className="num">{t('criterion_score')}</th><th className="num">{t('criterion_weighted')}</th>
                 </tr></thead>
                 <tbody>
-                  {(ev.my_scores ?? []).map((sc: any) => (
+                  {/* По весу, по убыванию — как на карточке закупщика. По алфавиту ключа
+                      получалось «Срок 30 / Цена 70» против «price 70% delivery 30%», а
+                      таблица существует ровно для сравнения. */}
+                  {[...(ev.my_scores ?? [])].sort((a: any, b: any) => {
+                    const w = (k: string) => Number((ev.evaluation_criteria ?? [])
+                      .find((c: any) => c.key === k)?.weight ?? 0);
+                    return w(b.criterion) - w(a.criterion);
+                  }).map((sc: any) => (
                     <tr key={sc.criterion}>
                       <td>{t(`crit_${sc.criterion}`) !== `crit_${sc.criterion}` ? t(`crit_${sc.criterion}`) : sc.criterion}</td>
                       <td className="num">

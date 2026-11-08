@@ -407,6 +407,12 @@ export default function Requests() {
                   {r.status === 'SUBMITTED' && r.steps_total > 0 && (
                     <div className="hint">✔ {r.steps_done}/{r.steps_total} · {r.current_role ? t(`role_${r.current_role}`) : '—'}</div>
                   )}
+                    {/* Цепочки согласования может не быть вовсе — на только что заведённой
+                        организации её и нет. Тогда заявку согласует любой согласующий, и это
+                        надо сказать: пустое место читается как «никто не смотрит». */}
+                    {r.status === 'SUBMITTED' && !r.steps_total && (
+                      <div className="hint">✔ {t('any_approver')}</div>
+                    )}
                 </td>
                 {/* RFQ and DIRECT read as themselves; OPEN_TENDER read as a database
                     code sitting next to a control that now says "open tender" in words. */}

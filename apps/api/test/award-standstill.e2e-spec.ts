@@ -431,7 +431,18 @@ describe('пауза на возражение и итоги для участн
     // «спрятана на экране», а отсутствует в ответе.
     const closed = (await http().get(`/events/${eventId}`).set(...bearer(s2)).expect(200)).body;
     expect(closed.visibility).toBe('INVITED');
-    for (const r of closed.results) expect(r.winning_total_minor).toBeNull();
+    // Чужая сумма закрыта; своя — нет, см. проверку ниже: прятать от человека его
+    // собственную цену бессмысленно.
+    for (const r of closed.results.filter((x: any) => !x.won_by_me)) {
+      expect(r.winning_total_minor).toBeNull();
+    }
+
+    // Но СВОЮ сумму победитель видит и в закрытой: это его собственная цена, он её и
+    // подал. Прятать её от него бессмысленно, а на экране читалось как ошибка продукта.
+    const asWinner2 = (await http().get(`/events/${eventId}`).set(...bearer(s1)).expect(200)).body;
+    const mine = asWinner2.results.find((r: any) => r.won_by_me && !r.cancelled_at);
+    expect(mine).toBeTruthy();
+    expect(Number(mine.winning_total_minor)).toBe(900_000);
 
     // Та же закупка, открытая: сумма появляется. Там её публикуют и госпорталы.
     await db.query(`SELECT set_config('app.org_id',$1,false), set_config('app.role','BUYER_ADMIN',false)`, [buyerOrg]);
@@ -444,6 +455,29 @@ describe('пауза на возражение и итоги для участн
     } finally {
       await db.query(`UPDATE sourcing_events SET visibility='INVITED' WHERE id=$1`, [eventId]);
     }
+  });
+
+  it('кривой идентификатор в адресе — это 400, а не «мы сломались»', async () => {
+    // Опечатка в ссылке уходила в SQL и возвращалась пятисоткой: авария в мониторинге там,
+    // где человек просто оборвал адрес. Фильтр узкий — ловит только 22P02.
+    const bad = await http().get('/events/не-uuid').set(...bearer(buyer)).expect(400);
+    expect(String(bad.body.message)).toMatch(/malformed value/i);
+    await http().get('/events/events').set(...bearer(buyer)).expect(400);
+    // А настоящее «не найдено» осталось 404, а не стало 400.
+    await http().get(`/events/${randomUUID()}`).set(...bearer(buyer)).expect(404);
+  });
+
+  it('любая другая ошибка базы по-прежнему ОТВЕЧАЕТ, а не вешает запрос', async () => {
+    // Первая редакция фильтра делала `throw err` для чужих кодов — и это не передаёт
+    // ошибку дальше: Nest брошенное из фильтра не подхватывает, в сокет не пишется ничего,
+    // запрос висит до таймаута клиента. Пятисоток бы не стало, потому что не стало бы
+    // ответов, и мониторинг на этом замолчал бы — хуже той беды, которую фильтр чинит.
+    //
+    // `?from=abc` это `'abc'::date`, код 22007, а не 22P02. Проверка здесь не про код
+    // ответа, а про то, что ответ ЕСТЬ: таймаут supertest уронил бы её.
+    const res = await http().get('/budgets?from=abc').set(...bearer(buyer)).timeout(8000);
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.body).toBeDefined();
   });
 
   it('аукцион нельзя «вскрыть» церемонией — вскрывать там нечего', async () => {
