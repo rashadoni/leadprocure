@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { DatabaseModule } from './common/db/database.module';
+import { MalformedIdFilter } from './common/http/malformed-id.filter';
 import { TransactionInterceptor } from './common/db/transaction.interceptor';
 import { AuthModule } from './common/auth/auth.module';
 import { JwtAuthGuard } from './common/auth/jwt-auth.guard';
@@ -85,6 +86,9 @@ import { MailModule } from './common/mail/mail.module';
     { provide: APP_GUARD, useClass: FeatureGuard },
     // Runs after guards: opens the per-request RLS transaction.
     { provide: APP_INTERCEPTOR, useClass: TransactionInterceptor },
+    // Опечатка в адресе — это 400, а не «мы сломались». Регистрируется здесь, а не в
+    // `main.ts`, чтобы действовать и в проверках: они поднимают приложение этим модулем.
+    { provide: APP_FILTER, useClass: MalformedIdFilter },
   ],
 })
 export class AppModule {}
