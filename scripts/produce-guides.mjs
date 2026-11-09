@@ -1360,49 +1360,100 @@ async function login(ctx, email) {
     const produced = [];
     for (const key of todo) {
       const sec = SECTIONS[key];
-      const page = await contexts[sec.role].newPage();
-      const t0 = Date.now();
-      try {
-        await page.goto(`${BASE}${sec.path}`);
-        await page.waitForSelector('h1', { timeout: 20000 });
-        await P(1000);
-        await page.screenshot({ path: join(OUT, `${key}.${lang}.png`) }); // clean poster (no cursor)
-        await injectCursor(page);
-        const offsets = [];
-        const LEAD = 650; // narration starts first; the cursor follows so voice never lags behind
-        const h = makeHelpers(page);
-        for (const scene of sec.scenes) {
-          const startMs = Date.now() - t0;        // audio starts at the scene boundary
-          offsets.push(startMs);
-          SCENE = `${key}/${lang} сцена ${offsets.length}`;
-          await P(LEAD);                          // let the voice begin before the cursor moves
-          h.setSceneBudget(scene.sec * 1000);     // anchor holdUntil() to THIS narration
-          try { await scene.do?.(page, lang, h); }
-          catch (e) { console.log(`  (${key}/${lang}: ${e.message.split('\n')[0]})`); }
-          // hold the scene until its narration (plus a small tail) has fully played out
-          const remain = startMs + scene.sec * 1000 + 700 - (Date.now() - t0);
-          // A scene whose actions outlast their narration leaves dead air. Say so here,
-          // by scene number — otherwise it is only found afterwards, as silence in ffmpeg.
-          if (remain < -1500) {
-            console.log(`  ⏱ ${key}/${lang} сцена ${offsets.length}: действия дольше озвучки на ${Math.round(-remain / 1000)}с`);
+      // Сцены раздела идут ПОДРЯД по актёрам: `as` у сцены переключает исполнителя, иначе
+      // играет `role` раздела. Это нужно для сквозной истории — заявку заводит сотрудник, а
+      // утверждает её согласующий, и это один и тот же экран. Одним контекстом так нельзя:
+      // у Playwright видео пишется НА КОНТЕКСТ, а контекст на роль один (переиспользовать
+      // storageState между контекстами нельзя — это воспроизводит оборот refresh-токена и
+      // срабатывает защита от повторного использования, так и задумано). Поэтому каждый
+      // прогон актёра пишется отдельной подзаписью, а потом они склеиваются.
+      const runs = [];
+      for (const scene of sec.scenes) {
+        const actor = scene.as ?? sec.role;
+        if (!runs.length || runs[runs.length - 1].actor !== actor) runs.push({ actor, scenes: [] });
+        runs[runs.length - 1].scenes.push(scene);
+      }
+      const unknown = runs.map((r) => r.actor).filter((a) => !contexts[a]);
+      if (unknown.length) {
+        console.log(`✗ ${key}.${lang} SKIPPED — нет роли: ${[...new Set(unknown)].join(', ')}`);
+        continue;
+      }
+      const parts = [];
+      let ok = true;
+      for (const [runIdx, run] of runs.entries()) {
+        const page = await contexts[run.actor].newPage();
+        const t0 = Date.now();
+        try {
+          await page.goto(`${BASE}${sec.path}`);
+          await page.waitForSelector('h1', { timeout: 20000 });
+          await P(1000);
+          // Постер снимается с ПЕРВОГО прогона: он показывает экран тем, кто начинает главу.
+          if (runIdx === 0) await page.screenshot({ path: join(OUT, `${key}.${lang}.png`) }); // clean poster (no cursor)
+          await injectCursor(page);
+          const offsets = [];
+          const LEAD = 650; // narration starts first; the cursor follows so voice never lags behind
+          const h = makeHelpers(page);
+          for (const scene of run.scenes) {
+            const startMs = Date.now() - t0;      // смещение ВНУТРИ своей подзаписи
+            offsets.push(startMs);
+            SCENE = `${key}/${lang} сцена ${parts.reduce((n, x) => n + x.offsets.length, 0) + offsets.length}`;
+            await P(LEAD);                        // let the voice begin before the cursor moves
+            h.setSceneBudget(scene.sec * 1000);   // anchor holdUntil() to THIS narration
+            try { await scene.do?.(page, lang, h); }
+            catch (e) { console.log(`  (${key}/${lang}: ${e.message.split('\n')[0]})`); }
+            // hold the scene until its narration (plus a small tail) has fully played out
+            const remain = startMs + scene.sec * 1000 + 700 - (Date.now() - t0);
+            // A scene whose actions outlast their narration leaves dead air. Say so here,
+            // by scene number — otherwise it is only found afterwards, as silence in ffmpeg.
+            if (remain < -1500) {
+              console.log(`  ⏱ ${SCENE}: действия дольше озвучки на ${Math.round(-remain / 1000)}с`);
+            }
+            if (remain > 0) await P(remain);
           }
-          if (remain > 0) await P(remain);
+          await P(1200);
+          parts.push({ actor: run.actor, video: page.video(), offsets, scenes: run.scenes.map((s) => ({ audio: s.audio })) });
+          console.log(`  ✓ ${key}.${lang} · ${run.actor} (${Math.round((Date.now() - t0) / 1000)}s)`);
+        } catch (e) {
+          console.log(`✗ ${key}.${lang} SKIPPED — ${e.message.split('\n')[0]}`);
+          ok = false;
+        } finally {
+          await page.close().catch(() => {});
         }
-        await P(1200);
-        produced.push({ key, video: page.video(), offsets, scenes: sec.scenes.map((s) => ({ audio: s.audio })) });
-        console.log(`✓ ${key}.${lang} (${Math.round((Date.now() - t0) / 1000)}s)`);
-      } catch (e) {
-        console.log(`✗ ${key}.${lang} SKIPPED — ${e.message.split('\n')[0]}`);
-      } finally {
-        await page.close().catch(() => {});
+        if (!ok) break;
+      }
+      if (ok && parts.length) {
+        produced.push({ key, parts, actors: runs.map((r) => r.actor) });
+        console.log(`✓ ${key}.${lang} — ${runs.length === 1 ? 'один актёр' : `актёры: ${runs.map((r) => r.actor).join(' → ')}`}`);
       }
     }
     for (const c of Object.values(contexts)) await c.close();
     await browser.close();
 
     // 3) mux voice onto footage at recorded offsets
-    for (const { key, video, offsets, scenes } of produced) {
-      const src = await video.path();
+    for (const { key, parts } of produced) {
+      // Склейка подзаписей и сдвиг смещений. Смещения внутри подзаписи считались от её
+      // собственного начала, поэтому к каждому прибавляется длительность всех предыдущих
+      // подзаписей — иначе голос второго актёра лёг бы на картинку первого. Длительность
+      // берётся у самого файла (`dur`), а не из суммы сцен: у записи есть и хвост после
+      // последней сцены, и он тоже кадры.
+      const paths = [];
+      for (const part of parts) paths.push(await part.video.path());
+      let src = paths[0];
+      if (paths.length > 1) {
+        const list = join(tmp, `${key}.${lang}.concat.txt`);
+        writeFileSync(list, paths.map((f) => `file '${f.replace(/'/g, "'\\''")}'`).join('\n'));
+        src = join(tmp, `${key}.${lang}.joined.webm`);
+        // `-c copy`: подзаписи пишет один и тот же движок Playwright с одинаковыми
+        // настройками, перекодировать их незачем — и это сохраняет исходное качество.
+        execSync(`ffmpeg -y -loglevel error -f concat -safe 0 -i "${list}" -c copy "${src}"`);
+      }
+      const scenes = [];
+      const offsets = [];
+      let shift = 0;
+      for (const [i, part] of parts.entries()) {
+        for (const [j, sc] of part.scenes.entries()) { scenes.push(sc); offsets.push(Math.round(shift + part.offsets[j])); }
+        shift += dur(paths[i]) * 1000;
+      }
       const inputs = scenes.map((s) => `-i "${s.audio}"`).join(' ');
       const delays = scenes.map((_, i) => `[${i + 1}:a]adelay=${offsets[i]}:all=1[a${i}]`).join(';');
       const mix = scenes.map((_, i) => `[a${i}]`).join('') + `amix=inputs=${scenes.length}:normalize=0[a]`;
