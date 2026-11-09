@@ -2780,10 +2780,17 @@ docker run --rm --network none --entrypoint node leadprocure-api:<SHA> -e \
   'console.log(require("/repo/apps/api/dist/common/config/timezone.js").resolveAppTimezone(process.env.APP_TIMEZONE))'
 → Asia/Baku
 
-# 3. и что код передаёт в запрос ЗНАЧЕНИЕ НАСТРОЙКИ, а не литерал
-grep -n 'AT TIME ZONE' /repo/apps/api/dist/modules/invoices/invoices.module.js
+# 3. и что код передаёт в запрос ЗНАЧЕНИЕ НАСТРОЙКИ, а не литерал.
+#    Путь /repo/... живёт ТОЛЬКО внутри контейнера — без префикса эта строка на хосте
+#    отвечает «No such file or directory» и читается как «кода нет».
+docker exec leadprocure-prod-api-1 sh -lc \
+  "grep -n 'AT TIME ZONE' /repo/apps/api/dist/modules/invoices/invoices.module.js"
 → 100: const issueDate = (await m.query(`SELECT (now() AT TIME ZONE $1)::date AS d`, [this.cfg.appTimezone]))[0].d;
 ```
+
+Три команды выше — каждая сама по себе, не в `&&`-цепочке: `grep -c` при нуле совпадений
+выходит с кодом 1, а ноль на шаге 1 — это ожидаемый ответ, а не сбой, так что цепочка
+оборвалась бы именно на успехе.
 
 Только после этих трёх шагов имеет смысл четвёртый — что Postgres с таким `$1` считает:
 
@@ -2811,8 +2818,26 @@ f448579 (выложенный):    INSERT INTO invoices(…, created_by, departm
 
 Колонка после `0051` — `date NOT NULL` без умолчания. Значит «откатить только образы» = первое
 же выставление счёта падает с `null value in column "issue_date" violates not-null
-constraint`, и падает это у поставщика, а не у оператора. Откат — образы плюс
-`pnpm --filter api migration:revert`.
+constraint`, и падает это у поставщика, а не у оператора. Откат — образы плюс откат миграции.
+
+**Откатывать миграцию надо ИЗ КОНТЕЙНЕРА и ДО подмены образов. Порядок обратен тому, который
+напрашивается, и вот почему:** в образе точки отката файла `1720000000051-…` НЕТ (проверено:
+`ls … | grep -c 0051` даёт `0` на `61bb706` и `1` на `f448579`), а `migration:revert` берёт
+класс из исходника. Подменив образы первыми, откатывать станет нечем. В релизном воркитри
+запустить это тоже нельзя — `node_modules` там нет ни в корне, ни в `apps/api`; миграции и
+накатывались внутри контейнера (`docker-entrypoint.sh:7`, в логе `> api@0.0.1 migration:run
+/repo/apps/api`). Проверено, что в контейнере есть всё нужное: `DATABASE_OWNER_URL` задан,
+`pnpm` и `node_modules` на месте.
+
+```bash
+# 1. сначала откатить миграцию, НОВЫМ контейнером (у него есть файл 0051)
+docker exec leadprocure-prod-api-1 sh -lc 'cd /repo && pnpm --filter api migration:revert'
+# 2. и только потом вернуть образы точки отката (шаг 6 с PREV вместо SHA)
+```
+
+И одна ловушка на обратном пути: `docker-entrypoint.sh` гонит `migration:run` **на каждом
+старте**, и в старом образе тоже. Для `0051` это безопасно — её файла там нет, накатывать
+нечего; но если откатить миграцию и перезапустить НОВЫЙ контейнер, она применится снова.
 
 У `down()` своя цена, и знать её надо до, а не во время: это `ALTER TABLE invoices DROP COLUMN
 issue_date`, то есть зафиксированные дни документов стираются. После повторной выкладки
