@@ -1678,29 +1678,77 @@ function courseSeconds() {
 // Объявлены ВСЕ главы, которые оставляют на стенде новую строку, а не только те три, чьи
 // сцены ищут её по названию: заново снятая глава на непустом стенде ломается по-разному,
 // и отказ до съёмки дешевле разбора после.
+const lit = (v) => `'${String(v).replace(/'/g, "''")}'`;
 const CREATES = {
-  'buyer-requests': [['заявка', `SELECT count(*) FROM procurement_requests WHERE title = '${STORY.title}'`]],
-  'buyer-events': [['тендер', `SELECT count(*) FROM sourcing_events WHERE title = '${STORY.title}'`]],
-  'buyer-contracts': [['договор', `SELECT count(*) FROM contracts WHERE title = '${STORY.title}'`],
+  'buyer-requests': [['заявка', `SELECT count(*) FROM procurement_requests WHERE title = ${lit(STORY.title)}`]],
+  'buyer-events': [['тендер', `SELECT count(*) FROM sourcing_events WHERE title = ${lit(STORY.title)}`]],
+  'buyer-contracts': [['договор', `SELECT count(*) FROM contracts WHERE title = ${lit(STORY.title)}`],
                       ['заказ', 'SELECT count(*) FROM purchase_orders']],
   'buyer-catalogs': [['каталог', 'SELECT count(*) FROM catalogs']],
   'sup-invoices': [['счёт', 'SELECT count(*) FROM invoices']],
   'buyer-suppliers': [['дело проверки', 'SELECT count(*) FROM supplier_verification_cases']],
   'sup-verification': [['документ проверки', 'SELECT count(*) FROM supplier_verification_documents']],
-  'sup-auction': [['заявка', `SELECT count(*) FROM procurement_requests WHERE title = '${STORY.title2}'`],
-                  ['аукцион', `SELECT count(*) FROM sourcing_events WHERE title = '${STORY.title2}'`]],
+  'sup-auction': [['заявка', `SELECT count(*) FROM procurement_requests WHERE title = ${lit(STORY.title2)}`],
+                  ['аукцион', `SELECT count(*) FROM sourcing_events WHERE title = ${lit(STORY.title2)}`]],
 };
+
+// На какой главе истории стоит стенд.
+//
+// `CREATES` отвечает на вопрос «не созданы ли уже строки ЭТОЙ главы». Этого мало, и вот
+// чем: глава, которая ничего не создаёт, может сниматься на стенде, ушедшем ВПЕРЁД. Так и
+// вышло — главу про бюджеты пересняли одну, после всего прогона, а она одиннадцатая из
+// двадцати двух. В кадр попали обязательство 60 000 ₼ из заявки на бумагу (глава 22) и
+// каталожный заказ (глава 17), экран показал 78,7% при «Plan üzrə +35,2%» красным, а голос
+// в это время говорил «тридцать восемь процентов, от плана не отстаём». Ни промаха курсора,
+// ни предупреждения: сцена нашла всё, что искала, — просто не те числа.
+//
+// Поэтому стенд ведёт список снятых глав, а глава отказывается сниматься, если на стенде
+// уже сняты ПОЗДНИЕ. Список привязан к поколению стенда (id организации, которую заводит
+// наполнение), поэтому пересев обнуляет его сам собой — помнить об этом не нужно.
+const PROGRESS_DDL = `CREATE TABLE IF NOT EXISTS guides_progress(
+  generation uuid NOT NULL, key text NOT NULL, at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (generation, key))`;
+
+function standGeneration() {
+  const gen = standSql(`SELECT id FROM organizations WHERE legal_name = 'Acme MMC' LIMIT 1;`);
+  if (!gen) throw new Error('на стенде нет организации «Acme MMC» — он не засеян (pnpm --filter api seed)');
+  return gen;
+}
+
+function standProgress() {
+  standSql(`${PROGRESS_DDL};`);
+  const gen = standGeneration();
+  const done = standSql(`SELECT key FROM guides_progress WHERE generation = ${lit(gen)};`);
+  return { gen, done: new Set(done ? done.split('\n').filter(Boolean) : []) };
+}
+
+function markRecorded(gen, key) {
+  standSql(`INSERT INTO guides_progress(generation, key) VALUES (${lit(gen)}, ${lit(key)})
+            ON CONFLICT DO NOTHING;`);
+}
+
+// Отказ — только когда стенд ушёл ВПЕРЁД. Недостающие ранние главы не беда: их данные либо
+// на стенде есть (их снимали в прошлый раз), либо нет — и тогда `must`-сцена скажет об этом
+// своими словами, назвав, чего не хватило на экране.
+function assertStandAtChapter(key, done) {
+  const idx = ORDER.indexOf(key);
+  const ahead = [...done].filter((k) => ORDER.indexOf(k) > idx);
+  if (!ahead.length) return;
+  if (process.env.ALLOW_STALE_STAND) {
+    console.log(`  ⚠ ${key}: стенд ушёл вперёд (${ahead.join(', ')}), но ALLOW_STALE_STAND снял запрет — `
+      + 'числа в кадре могут не совпасть с озвучкой');
+    return;
+  }
+  throw new Error(`Стенд ушёл вперёд истории: на нём уже сняты ${ahead.join(', ')}, а это главы ПОСЛЕ «${key}».\n`
+    + `  Их данные попадут в кадр, а озвучка «${key}» о них не говорит — именно так глава про бюджеты\n`
+    + '  однажды показала 78,7% под слова «тридцать восемь процентов».\n'
+    + '  Пересейте стенд и снимите историю подряд; ALLOW_STALE_STAND=1 снимает запрет для главы,\n'
+    + '  числа которой от положения стенда не зависят.');
+}
 
 function assertStandClean(keys) {
   const wanted = keys.flatMap((k) => CREATES[k] ?? []);
   if (!wanted.length) return;
-  // Проверка, которую нечем выполнить, не считается пройденной — на этом здесь уже
-  // обжигались. Нет доступа к базе стенда — отказ, а не тишина.
-  if (!process.env.GUIDES_PG_CONTAINER || !process.env.GUIDES_DB) {
-    throw new Error('Эти главы создают данные на стенде, и проверить, нет ли их там уже, нечем.\n'
-      + '  Передайте GUIDES_PG_CONTAINER и GUIDES_DB — иначе прогон может снять вторую строку '
-      + 'с тем же названием, и это не будет видно ни в журнале, ни в кадре.');
-  }
   const problems = [];
   for (const [what, sql] of wanted) {
     const n = Number(standSql(`${sql};`));
@@ -1842,6 +1890,19 @@ async function login(ctx, email, attempt = 1) {
 
 (async () => {
   const keys = ONLY.length ? ONLY : ORDER;
+  // Доступ к базе стенда обязателен для ЛЮБОГО прогона, а не только для создающих глав:
+  // без него молчит сторож положения, а молчащий сторож — это сторож, которого нет.
+  if (!process.env.GUIDES_PG_CONTAINER || !process.env.GUIDES_DB) {
+    throw new Error('Нужны GUIDES_PG_CONTAINER и GUIDES_DB — без них нечем проверить, в какой точке\n'
+      + '  истории стоит стенд, и глава может сняться по данным, о которых её озвучка не говорит.');
+  }
+  // История снимается на ОДНОМ стенде и за один язык: второму языку нужен свой пересеянный
+  // стенд со своими данными, иначе он снимет то, что уже наговорил первый.
+  if (LANGS.length > 1) {
+    throw new Error(`Сквозная история снимается по одному языку за прогон (передано ${LANGS.join(',')}).\n`
+      + '  Данные на стенде создаются самими главами, поэтому второй язык пойдёт по чужой истории —\n'
+      + '  пересейте стенд и запустите его отдельно.');
+  }
   // Before the stand is asked anything: these judge the source and the arguments, not the
   // data, and an early `return` added to a guard some day must not carry them off.
   assertSectionShape();
@@ -1872,6 +1933,7 @@ async function login(ctx, email, attempt = 1) {
     // Чистота стенда проверяется ПОСЛЕ пересева: иначе прогон с RESEED=1 отказывал на
     // данных, которые сам же собирался стереть.
     assertStandClean(todo);
+    const progress = standProgress();
 
     // 1) narrate every scene in this language, measure durations
     for (const key of todo) {
@@ -1950,6 +2012,14 @@ async function login(ctx, email, attempt = 1) {
       if (unknown.length) {
         broke = `${key}: нет входа для роли ${[...new Set(unknown)].join(', ')}`;
         console.log(`✗ ${key}.${lang} ОБОРВАНА — ${broke}`);
+        break;
+      }
+      // Стенд обязан стоять НЕ ПОЗЖЕ этой главы, иначе в кадр попадут данные, о которых
+      // озвучка не говорит.
+      try { assertStandAtChapter(key, progress.done); }
+      catch (e) {
+        broke = e.message;
+        console.log(`✗ ${key}.${lang} ОБОРВАНА — ${e.message.split('\n')[0]}`);
         break;
       }
       // Подготовка стенда к главе, если она объявлена. Падение здесь — обрыв истории, а
@@ -2044,6 +2114,8 @@ async function login(ctx, email, attempt = 1) {
         }
       }
       if (ok && parts.length) {
+        markRecorded(progress.gen, key);
+        progress.done.add(key);
         produced.push({ key, parts, actors: runs.map((r) => r.actor) });
         console.log(`✓ ${key}.${lang} — ${runs.length === 1 ? 'один актёр' : `актёры: ${runs.map((r) => r.actor).join(' → ')}`}`);
       }
