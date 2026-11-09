@@ -127,6 +127,9 @@ services:
       CLAMAV_ENABLED: "false"
       # Empty SMTP keeps NotifyEmailer on its console provider — a stand must not send mail.
       SMTP_HOST: ""
+      # Пояс установки: на стенде снимают подсказки, и дата счёта с годом в номере должны
+      # выглядеть так же, как в проде, а не по UTC контейнера.
+      APP_TIMEZONE: Asia/Baku
     ports:
       - "127.0.0.1:3200:3000"
     # Without this, `compose up --wait` waits only for the container to be RUNNING — and

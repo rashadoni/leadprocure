@@ -23,6 +23,8 @@ import { pageFrom, parsePaging, Paging } from '../../common/http/paging';
 import { BudgetsModule, BudgetsService } from '../budgets/budgets.module';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
+import { AppConfig } from '../../common/config/config.service';
+import { nextDocumentNo } from '../../common/procurement/document-no';
 
 class ItemDto {
   @IsString() @MinLength(1) name!: string;
@@ -66,6 +68,7 @@ export class RequestsService {
     private readonly rc: RequestContextService,
     private readonly audit: AuditService,
     private readonly budgets: BudgetsService,
+    private readonly cfg: AppConfig,
   ) {}
 
   async list(q?: string, paging: Paging = parsePaging(), departmentId?: string) {
@@ -135,8 +138,7 @@ export class RequestsService {
 
   async create(dto: UpsertRequestDto, auth: AccessTokenPayload) {
     const m = this.rc.manager;
-    const seq = await m.query(`SELECT next_document_no($1,'REQ') AS n`, [auth.org_id]);
-    const requestNo = `REQ-${new Date().getFullYear()}-${String(Number(seq[0].n)).padStart(4, '0')}`;
+    const requestNo = await nextDocumentNo(m, auth.org_id, 'REQ', this.cfg.appTimezone);
     const total = this.computeTotal(dto.items);
     const departmentId = await this.resolveDepartment(dto.departmentId, auth);
     const req = (
