@@ -5,7 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
-import { addApprover } from './helpers';
+import { addApprover, teardown } from './helpers';
 import { AppConfig } from '../src/common/config/config.service';
 
 // Пауза на возражение и итоги закупки глазами участника.
@@ -69,12 +69,9 @@ describe('пауза на возражение и итоги для участн
   afterAll(async () => {
     if (envBefore === undefined) delete process.env.AWARD_STANDSTILL_HOURS;
     else process.env.AWARD_STANDSTILL_HOURS = envBefore;
-    try {
-      if (buyerOrg) await db.query('DELETE FROM organizations WHERE id = $1', [buyerOrg]);
-      await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`SS %${tag}%`]);
-    } finally {
-      try { await db.end(); } finally { await app.close(); }
-    }
+    // Отдельное удаление покупателя было обходом того же дефекта, что в `multilot`:
+    // `awards.winning_bid_id` без `ON DELETE` блокировал каскад. Снято миграцией 0053.
+    await teardown(db, app, () => db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`SS %${tag}%`]));
   });
 
   it('двухлотовая закупка доходит до оценки: три ставки, одна снята', async () => {
