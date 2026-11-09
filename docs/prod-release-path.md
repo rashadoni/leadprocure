@@ -703,12 +703,15 @@ gh pr list --repo rashadoni/leadprocure --state open --json number,title,files \
 REL=/путь/к/воркитри/на/выложенном/SHA       # git worktree add … "$SHA"
 ENVP=/home/rashad/projects/Leadprocure/.claude/worktrees/budget-by-department-audit-4e2173/infra/.env.prod
 
-# Сначала dry-run — он единственное место, где видно, доехала ли лицензия.
+# Сначала dry-run — он единственное место, где видно, доехали ли лицензия и пояс
+# установки. Шаблон обязан перечислять ОБА: `docker compose config` печатает переменные
+# по алфавиту, поэтому `APP_TIMEZONE` стоит ВЫШЕ первого `license`, а `-A3` показывает
+# строки ПОСЛЕ совпадения — с шаблоном одного `license` пояс не печатается вовсе.
 RELEASE_SHA="$SHA" docker compose -p leadprocure-prod \
   --project-directory "$REL/infra" \
   -f "$REL/infra/docker-compose.prod.yml" \
   -f "$REL/infra/docker-compose.release.yml" \
-  --env-file "$ENVP" config | grep -iE -A3 'license'
+  --env-file "$ENVP" config | grep -iE -A3 'license|app_timezone'
 
 RELEASE_SHA="$SHA" \
 docker compose -p leadprocure-prod \
@@ -721,7 +724,7 @@ docker compose -p leadprocure-prod \
 `-p leadprocure-prod` обязателен — иначе compose создаст новый проект вместо того,
 чтобы заменить работающие контейнеры. `--project-directory` задаёт каталог, от
 которого считаются относительные пути в compose-файле — поэтому `LICENSE_DIR` в
-`.env.prod` и обязан быть абсолютным. В выводе dry-run читать ровно два места, и
+`.env.prod` и обязан быть абсолютным. В выводе dry-run читать ровно три места, и
 читать глазами: команда выходит с нулём в любом случае.
 
 1. `LICENSE_PUBLIC_KEY_B64` у службы api — **непустой**. Пустая строка `""`
@@ -741,7 +744,10 @@ docker compose -p leadprocure-prod \
    IANA**, сегодня `Asia/Baku`; строку-смещение (`+04:00`) приложение отвергнет при старте,
    потому что Postgres читает у неё обратный знак. Пусто здесь быть не может: в compose стоит
    умолчание `${APP_TIMEZONE:-Asia/Baku}`, так что отсутствие переменной в `.env.prod` — норма,
-   а не упущение.
+   а не упущение. **Если сузить шаблон обратно до одного `license`, эта строка пропадёт из
+   вывода, и пункт 3 станет требованием прочитать то, чего там нет** — а самый вероятный
+   вывод у читающего будет «переменная не доехала», то есть обратный правде. Первая редакция
+   этого пункта ровно так и вышла; нашла это сессия, разбиравшая правку.
 
 Пустой ключ или `source:` внутри `$REL` — `up` не запускать, вернуться к условию из
 §1.
