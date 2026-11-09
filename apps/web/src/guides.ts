@@ -124,7 +124,7 @@ export const COURSE: Track[] = [
       { key: 'buyer-settings', titleKey: 'learn_b_settings', to: '/buyer/settings', roles: FINANCE_READ, sec: 238 },
       { key: 'buyer-suppliers', titleKey: 'learn_b_suppliers', to: '/buyer/suppliers', roles: BUYER, sec: 148 },
       { key: 'buyer-verification', titleKey: 'learn_b_verification', to: '/buyer/verification', roles: BUYER, sec: 113 },
-      { key: 'buyer-budgets', titleKey: 'learn_b_budgets', to: '/buyer/budgets', roles: FINANCE_READ, sec: 347 },
+      { key: 'buyer-budgets', titleKey: 'learn_b_budgets', to: '/buyer/budgets', roles: FINANCE_READ, sec: 96 },
       { key: 'buyer-requests', titleKey: 'learn_b_requests', to: '/buyer/requests', roles: FINANCE_READ, sec: 109 },
       { key: 'buyer-events', titleKey: 'learn_b_events', to: '/buyer/events', roles: BUYER, sec: 88 },
       // Вскрытие живёт на /buyer/events/:id — у него нет своего маршрута, как и у
@@ -132,15 +132,15 @@ export const COURSE: Track[] = [
       // достаётся зрителю по имени, из курса. Переход — к списку тендеров: адреса
       // конкретного вскрытия без id события не существует.
       { key: 'buyer-opening', titleKey: 'learn_b_opening', to: '/buyer/events', roles: BUYER, sec: 105 },
-      { key: 'buyer-contracts', titleKey: 'learn_b_contracts', to: '/buyer/contracts', roles: BUYER, sec: 198 },
-      { key: 'buyer-logistics', titleKey: 'learn_b_logistics', to: '/buyer/logistics', roles: BUYER, sec: 111 },
-      { key: 'buyer-invoices', titleKey: 'learn_b_invoices', to: '/buyer/invoices', roles: BUYER, sec: 204 },
+      { key: 'buyer-contracts', titleKey: 'learn_b_contracts', to: '/buyer/contracts', roles: BUYER, sec: 64 },
+      { key: 'buyer-logistics', titleKey: 'learn_b_logistics', to: '/buyer/logistics', roles: BUYER, sec: 52 },
+      { key: 'buyer-invoices', titleKey: 'learn_b_invoices', to: '/buyer/invoices', roles: BUYER, sec: 57 },
       { key: 'buyer-catalogs', titleKey: 'learn_b_catalogs', to: '/buyer/catalogs', roles: BUYER, sec: 145 },
-      { key: 'buyer-analytics', titleKey: 'learn_b_analytics', to: '/buyer/analytics', roles: FINANCE_READ, sec: 253 },
+      { key: 'buyer-analytics', titleKey: 'learn_b_analytics', to: '/buyer/analytics', roles: FINANCE_READ, sec: 85 },
       // Last on purpose, though it is the first page in the rail: a dashboard is a list of
       // what needs attention, and «needs attention» means nothing until you know what the
       // things are. Shown first it reads as noise; shown last it reads as a summary.
-      { key: 'buyer-dashboard', titleKey: 'learn_b_dashboard', to: '/buyer/dashboard', roles: FINANCE_READ, sec: 182 },
+      { key: 'buyer-dashboard', titleKey: 'learn_b_dashboard', to: '/buyer/dashboard', roles: FINANCE_READ, sec: 82 },
     ],
   },
   {
@@ -160,8 +160,8 @@ export const COURSE: Track[] = [
       // Winning is where the supplier's money starts, so the contract comes before the
       // deliveries it pays for — the same place `buyer-contracts` sits in the track above.
       { key: 'sup-contracts', titleKey: 'learn_s_contracts', to: '/supplier/contracts', roles: SUPPLIER, sec: 224 },
-      { key: 'sup-orders', titleKey: 'learn_s_orders', to: '/supplier/orders', roles: SUPPLIER, sec: 171 },
-      { key: 'sup-invoices', titleKey: 'learn_s_invoices', to: '/supplier/invoices', roles: SUPPLIER, sec: 126 },
+      { key: 'sup-orders', titleKey: 'learn_s_orders', to: '/supplier/orders', roles: SUPPLIER, sec: 57 },
+      { key: 'sup-invoices', titleKey: 'learn_s_invoices', to: '/supplier/invoices', roles: SUPPLIER, sec: 44 },
       // And last before the panel, for the reason the buyer's catalogue lesson is late too:
       // it is the route AROUND the tender, and it only makes sense once the tender does.
       { key: 'sup-catalogs', titleKey: 'learn_s_catalogs', to: '/supplier/catalogs', roles: SUPPLIER, sec: 140 },

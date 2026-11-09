@@ -150,11 +150,11 @@ export default function Contracts() {
                 <td>
                   <Actions>
                     {canManage && c.status === 'DRAFT' && (
-                      <button className="btn small" data-tip={t('tip_activate')} onClick={() => act(() => api.post(`/contracts/${c.id}/activate`), () => ({ text: t('note_activated') }))}>{t('activate')}</button>
+                      <button className="btn small" data-testid="contract-activate" data-tip={t('tip_activate')} onClick={() => act(() => api.post(`/contracts/${c.id}/activate`), () => ({ text: t('note_activated') }))}>{t('activate')}</button>
                     )}
                     {canManage && c.status === 'ACTIVE' && (
                       <>
-                        <button className="btn small" data-tip={t('tip_create_po')} onClick={() => act(() => api.post(`/contracts/${c.id}/orders`), (r) => ({ text: `${t('note_po_made')}: ${r.data.po_no}` }))}>{t('create_po')}</button>
+                        <button className="btn small" data-testid="contract-create-po" data-tip={t('tip_create_po')} onClick={() => act(() => api.post(`/contracts/${c.id}/orders`), (r) => ({ text: `${t('note_po_made')}: ${r.data.po_no}` }))}>{t('create_po')}</button>
                         <button className="btn small ghost" data-tip={t('tip_catalog_from')} onClick={() => act(() => api.post(`/catalogs/from-contract/${c.id}`), () => ({ text: t('note_catalog_made'), to: '/buyer/catalogs', toLabel: t('catalogs') }))}>📖 {t('catalogs')}</button>
                       </>
                     )}
@@ -199,7 +199,7 @@ export default function Contracts() {
                         order: until it is issued the supplier has nothing — not the order,
                         not its lines (migration 0045) — so the button says what it does. */}
                     {isBuyerSide && (PO_BUYER_NEXT[p.status] ?? []).filter((n) => !STOP_PO.has(n)).map((next) => (
-                      <button key={next} className="btn small"
+                      <button key={next} className="btn small" data-testid={`po-next-${next}`}
                         data-tip={next === 'ISSUED' ? t('tip_po_issue') : undefined}
                         onClick={() => act(() => api.post(`/orders/${p.id}/status`, { status: next }))}>
                         {t(`po_act_${next}`)}
@@ -210,7 +210,7 @@ export default function Contracts() {
                         «Qəbul et» — one accepting the ORDER, one booking in the GOODS.
                         ru and en always differed (Принять/Приёмка, Accept/Receive). */}
                     {canReceive && ['SHIPPED', 'DELIVERED'].includes(p.status) && (
-                      <button className="btn small" data-tip={t('tip_receive')} onClick={() => receiveAll(p.id)}>📥 {t('receive')}</button>
+                      <button className="btn small" data-testid="po-receive" data-tip={t('tip_receive')} onClick={() => receiveAll(p.id)}>📥 {t('receive')}</button>
                     )}
                     <RowMenu>
                       {canManage && ['ISSUED', 'CONFIRMED'].includes(p.status) && (
@@ -218,7 +218,7 @@ export default function Contracts() {
                       )}
                       {isBuyerSide && (PO_BUYER_NEXT[p.status] ?? []).filter((n) => STOP_PO.has(n)).length > 0 && <MenuSep />}
                       {isBuyerSide && (PO_BUYER_NEXT[p.status] ?? []).filter((n) => STOP_PO.has(n)).map((next) => (
-                        <button key={next} className="btn small ghost danger"
+                        <button key={next} className="btn small ghost danger" data-testid={`po-next-${next}`}
                           onClick={() => act(() => api.post(`/orders/${p.id}/status`, { status: next }))}>
                           {t(`po_act_${next}`)}
                         </button>

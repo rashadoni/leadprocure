@@ -117,10 +117,16 @@ async function main(): Promise<void> {
   ) => {
     const id = (
       await db.query(
+        // В СИЛЕ, а не черновик. Колонка `status` по умолчанию DRAFT, а деньги держат
+        // только APPROVED и CLOSED (packages/shared), поэтому засеянные планы ничего не
+        // ловили: `/budgets/rollup` на свежем стенде отвечал пустым списком, и главный
+        // экран финансиста открывался пустым — ровно то, против чего эти строки здесь и
+        // написаны. Утверждающий и время утверждения проставлены, иначе план «в силе» без
+        // следа о том, кто его ввёл.
         `INSERT INTO budgets(buyer_org_id, name, category, department_id, period_type,
-           period_start, period_end, amount_minor, currency)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'AZN') RETURNING id`,
-        [acme, name, category, departmentId, type, start, end, amountMinor],
+           period_start, period_end, amount_minor, currency, status, approved_by, approved_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'AZN','APPROVED',$9,now()) RETURNING id`,
+        [acme, name, category, departmentId, type, start, end, amountMinor, admin],
       )
     ).rows[0].id as string;
     // the ledger starts with the opening plan, same as it would through the API
