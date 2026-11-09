@@ -5,7 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
-import { addApprover } from './helpers';
+import { addApprover, teardown } from './helpers';
 
 // Shipment tracking had no suite of its own. The timeline is the supplier's own claim and
 // the buyer's board reads it, so the two things that matter are that it cannot be walked
@@ -60,12 +60,12 @@ describe('logistics (API e2e)', () => {
   });
 
   afterAll(async () => {
-    await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Lg %${tag}%`]);
-    // organization_users is global and no org delete reaches it; the tag keeps this to
-    // this suite's three accounts (lgb-, lgs-, apprv-).
-    await db.query(`DELETE FROM organization_users WHERE email LIKE $1`, [`%${tag}@t.test`]);
-    await db.end();
-    await app.close();
+    await teardown(db, app, async () => {
+      await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Lg %${tag}%`]);
+      // organization_users is global and no org delete reaches it; the tag keeps this to
+      // this suite's three accounts (lgb-, lgs-, apprv-).
+      await db.query(`DELETE FROM organization_users WHERE email LIKE $1`, [`%${tag}@t.test`]);
+    });
   });
 
   it('only the supplier ships, and a milestone carries the order forward', async () => {

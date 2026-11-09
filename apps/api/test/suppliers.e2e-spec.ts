@@ -5,6 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
+import { teardown } from './helpers';
 
 // Supplier scorecards are not a note: reliability carries 30% of the weighted total the
 // award recommendation ranks by (SCORING_WEIGHTS in common/ai/ai-scorer.ts). Nothing here
@@ -65,10 +66,10 @@ describe('supplier scorecards (API e2e)', () => {
   });
 
   afterAll(async () => {
-    await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Sup %${tag}%`]);
-    await db.query(`DELETE FROM organization_users WHERE email LIKE $1`, [`sup-%${tag}@t.test`]);
-    await db.end();
-    await app.close();
+    await teardown(db, app, async () => {
+      await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Sup %${tag}%`]);
+      await db.query(`DELETE FROM organization_users WHERE email LIKE $1`, [`sup-%${tag}@t.test`]);
+    });
   });
 
   it('a plain member cannot move the ranking a rating feeds', async () => {

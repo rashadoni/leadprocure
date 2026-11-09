@@ -5,7 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
-import { addApprover } from './helpers';
+import { addApprover, teardown } from './helpers';
 
 // Procurement-integrity controls (audit remediation). Proves: segregation of duties,
 // evaluation criteria locked before opening, award tied to evaluation with a justification
@@ -42,9 +42,7 @@ describe('procurement integrity controls (API e2e)', () => {
   });
 
   afterAll(async () => {
-    await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Intg %${tag}%`]);
-    await db.end();
-    await app.close();
+    await teardown(db, app, () => db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Intg %${tag}%`]));
   });
 
   it('SoD: the creator cannot approve their own request (403); a different approver can', async () => {

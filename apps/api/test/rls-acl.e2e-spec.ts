@@ -1,5 +1,6 @@
 import { Client } from 'pg';
 import { randomUUID } from 'crypto';
+import { teardown } from './helpers';
 
 /**
  * Hostile isolation tests for the RLS/ACL policies — run directly against Postgres
@@ -101,10 +102,9 @@ beforeAll(async () => {
 afterAll(async () => {
   await as(null, null);
   // cascade wipes fixture data; audit_events rows are append-only and stay (by design)
-  await db.query(`DELETE FROM organizations WHERE id = ANY($1::uuid[])`, [
+  await teardown(db, undefined, () => db.query(`DELETE FROM organizations WHERE id = ANY($1::uuid[])`, [
     [buyerA, buyerB, supplierS, supplierS2],
-  ]);
-  await db.end();
+  ]));
 });
 
 describe('private buyer tables (RLS by owner org)', () => {

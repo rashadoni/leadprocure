@@ -5,7 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
-import { addApprover } from './helpers';
+import { addApprover, teardown } from './helpers';
 
 // Spend analytics: "spend" = ACCEPTED POs only; the monthly series is zero-filled over
 // 12 months; top suppliers rank by accepted volume; everything is RLS-scoped per buyer.
@@ -65,9 +65,7 @@ describe('spend analytics (API e2e)', () => {
   });
 
   afterAll(async () => {
-    await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Ana %${tag}%`]);
-    await db.end();
-    await app.close();
+    await teardown(db, app, () => db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Ana %${tag}%`]));
   });
 
   it('suppliers cannot access buyer analytics (403)', async () => {

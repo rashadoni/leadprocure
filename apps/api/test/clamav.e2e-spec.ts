@@ -7,6 +7,7 @@ import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
 import { AvScanWorker } from '../src/common/storage/documents.module';
 import { ClamavService } from '../src/common/storage/clamav.service';
+import { teardown } from './helpers';
 
 // Real antivirus pipeline against a live clamd (infra/docker-compose.yml `clamav`):
 // presigned upload → PENDING → worker streams to clamd → CLEAN / INFECTED verdict →
@@ -64,9 +65,7 @@ describe('antivirus scanning (clamd e2e)', () => {
 
   afterAll(async () => {
     delete process.env.CLAMAV_ENABLED;
-    await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Av %${tag}%`]);
-    await db.end();
-    await app.close();
+    await teardown(db, app, () => db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Av %${tag}%`]));
   });
 
   it('uploads land as PENDING while AV is enabled', async () => {

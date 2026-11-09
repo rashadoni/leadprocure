@@ -5,7 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
-import { addApprover } from './helpers';
+import { addApprover, teardown } from './helpers';
 
 // Budgets & commitment control: APPROVED requests commit against a matching budget
 // (category + calendar year + currency). Utilization is derived; over-budget approvals
@@ -97,9 +97,7 @@ describe('budgets & commitment control (API e2e)', () => {
   });
 
   afterAll(async () => {
-    await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Bgt %${tag}%`]);
-    await db.end();
-    await app.close();
+    await teardown(db, app, () => db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Bgt %${tag}%`]));
   });
 
   it('with no matching budget, approval succeeds and returns empty budgetWarnings', async () => {

@@ -5,6 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
+import { teardown } from './helpers';
 
 // Departments (cost centres): the "who spends" dimension budgets attach to. Private to
 // the buyer (RLS), admin-only writes, and a department that already carries spend can be
@@ -38,9 +39,7 @@ describe('departments (API e2e)', () => {
   });
 
   afterAll(async () => {
-    await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Dep %${tag}%`]);
-    await db.end();
-    await app.close();
+    await teardown(db, app, () => db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Dep %${tag}%`]));
   });
 
   // The product ships in Azerbaijani; a code validator that only accepts ASCII makes the

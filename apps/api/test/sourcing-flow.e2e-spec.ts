@@ -5,7 +5,7 @@ import request from 'supertest';
 import { randomUUID, createHash } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
-import { addApprover } from './helpers';
+import { addApprover, teardown } from './helpers';
 
 /**
  * Full sealed-RFQ lifecycle over the real API:
@@ -61,9 +61,7 @@ describe('sealed RFQ end-to-end flow', () => {
   });
 
   afterAll(async () => {
-    await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Flow %${tag}%`]);
-    await db.end();
-    await app.close();
+    await teardown(db, app, () => db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Flow %${tag}%`]));
   });
 
   it('buyer configures method policy (over 50k AZN → RFQ)', async () => {

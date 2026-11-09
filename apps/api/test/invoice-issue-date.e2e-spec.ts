@@ -91,12 +91,13 @@ describe('дата выставления счёта (API e2e)', () => {
   });
 
   afterAll(async () => {
-    if (db) {
-      await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`IssueDate %${tag}%`]);
-      await db.end();
+    try {
+      if (db) await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`IssueDate %${tag}%`]);
+    } finally {
+      try { if (db) await db.end(); } finally {
+        try { if (owner) await owner.end(); } finally { if (app) await app.close(); }
+      }
     }
-    if (owner) await owner.end();
-    if (app) await app.close();
     // Набор один процесс на все файлы под --runInBand: оставить пояс сдвинутым значило бы
     // тихо переназначить день каждому следующему набору.
     if (originalZone === undefined) delete process.env.APP_TIMEZONE;

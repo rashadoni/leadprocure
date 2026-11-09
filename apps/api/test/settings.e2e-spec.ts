@@ -5,6 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
+import { teardown } from './helpers';
 
 // Organization members: the module had no suite of its own, and all three holes below were
 // reachable with ordinary clicks from the Settings page.
@@ -39,10 +40,10 @@ describe('organization members (API e2e)', () => {
   });
 
   afterAll(async () => {
-    await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Mem %${tag}%`]);
-    await db.query(`DELETE FROM organization_users WHERE email LIKE $1`, [`mem-%${tag}@t.test`]);
-    await db.end();
-    await app.close();
+    await teardown(db, app, async () => {
+      await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Mem %${tag}%`]);
+      await db.query(`DELETE FROM organization_users WHERE email LIKE $1`, [`mem-%${tag}@t.test`]);
+    });
   });
 
   it('refuses a role that does not belong to this kind of organization', async () => {

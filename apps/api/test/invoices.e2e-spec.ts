@@ -5,7 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
-import { addApprover } from './helpers';
+import { addApprover, teardown } from './helpers';
 
 // P2P: supplier invoices a received PO; the 3-way match (invoice ↔ PO ↔ receipt) drives
 // MATCHED/DISPUTED; the buyer approves and pays.
@@ -62,9 +62,7 @@ describe('invoices + 3-way match', () => {
   });
 
   afterAll(async () => {
-    await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Inv %${tag}%`]);
-    await db.end();
-    await app.close();
+    await teardown(db, app, () => db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Inv %${tag}%`]));
   });
 
   it('an invoice at PO price for received qty is MATCHED', async () => {

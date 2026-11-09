@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
+import { teardown } from './helpers';
 
 // A `date` column is a DAY. Read as a Date it lands on the host's LOCAL midnight, and the
 // next `toISOString()` carries it to UTC — onto the previous day anywhere east of
@@ -41,11 +42,7 @@ describe('date columns are days, not instants (API e2e)', () => {
   });
 
   afterAll(async () => {
-    if (db) {
-      await db.query('DELETE FROM organizations WHERE legal_name LIKE $1', [`Dates %${tag}`]);
-      await db.end();
-    }
-    if (app) await app.close();
+    await teardown(db, app, () => db.query('DELETE FROM organizations WHERE legal_name LIKE $1', [`Dates %${tag}`]));
   });
 
   // The guard that cannot drift with the clock: a day is text. Remove the type parser and

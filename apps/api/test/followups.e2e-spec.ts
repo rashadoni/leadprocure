@@ -13,7 +13,7 @@ import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
 import { FollowupsScheduler } from '../src/modules/followups/followups.module';
-import { addApprover } from './helpers';
+import { addApprover, teardown } from './helpers';
 
 // Outreach follow-up chains: enroll invited suppliers → the ticker advances steps and
 // logs sends → the chain stops the moment the supplier bids / the event closes.
@@ -88,9 +88,7 @@ describe('outreach follow-ups (API e2e)', () => {
   });
 
   afterAll(async () => {
-    await owner.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`FU %${tag}%`]);
-    await owner.end();
-    await app.close();
+    await teardown(owner, app, () => owner.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`FU %${tag}%`]));
   });
 
   it('org plan: default is returned until the buyer saves one; steps are validated', async () => {

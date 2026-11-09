@@ -104,9 +104,10 @@ describe('год в номере документа (API e2e)', () => {
   });
 
   afterAll(async () => {
-    if (db) {
-      await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`DocNo %${tag}%`]);
-      await db.end();
+    try {
+      if (db) await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`DocNo %${tag}%`]);
+    } finally {
+      if (db) await db.end();
     }
     // Рассылка уходит в пост-коммитную очередь и читает получателей на своём соединении
     // уже после ответа: закрыть приложение сразу значит оборвать её и получить

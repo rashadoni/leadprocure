@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { PAID_BASES } from '@leadprocure/shared';
 import { AppModule } from '../src/app.module';
-import { addApprover } from './helpers';
+import { addApprover, teardown } from './helpers';
 
 // Two endpoints report settled invoices and deliberately report DIFFERENT numbers.
 // PAID_BASES in @leadprocure/shared states both definitions; this suite pins them against
@@ -163,11 +163,7 @@ describe('paid: the invoice ledger and plan settlement are different measures', 
   }, 60000);
 
   afterAll(async () => {
-    if (db) {
-      await db.query('DELETE FROM organizations WHERE legal_name LIKE $1', [`Basis %${tag}`]);
-      await db.end();
-    }
-    if (app) await app.close();
+    await teardown(db, app, () => db.query('DELETE FROM organizations WHERE legal_name LIKE $1', [`Basis %${tag}`]));
   });
 
   it('declares which settlement measure each endpoint reports', async () => {
