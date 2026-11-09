@@ -21,7 +21,7 @@ describe('удаление организации: каскад не упира�
   const ids = () => ({
     buyer: randomUUID(), supplier: randomUUID(),
     buyerUser: randomUUID(), supplierUser: randomUUID(),
-    event: randomUUID(), bid: randomUUID(), award: randomUUID(),
+    event: randomUUID(), bid: randomUUID(), award: randomUUID(), contract: randomUUID(),
   });
 
   // Минимальная форма присуждения: покупатель, поставщик, событие, ставка, решение.
@@ -46,6 +46,14 @@ describe('удаление организации: каскад не упира�
     await db.query(
       `INSERT INTO awards(id,event_id,winning_bid_id,winner_org_id,awarded_by) VALUES ($1,$2,$3,$4,$5)`,
       [o.award, o.event, o.bid, o.supplier, o.buyerUser],
+    );
+    // Договор — единственная строка схемы, которая ссылается на `awards`, и именно эта
+    // правка впервые делает удаление присуждения со стороны ПОСТАВЩИКА достижимым. Без него
+    // в форме не было бы того, на что правка влияет сильнее всего.
+    await db.query(
+      `INSERT INTO contracts(id,award_id,buyer_org_id,supplier_org_id,contract_no,title,total_minor,currency,created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,0,'AZN',$7)`,
+      [o.contract, o.award, o.buyer, o.supplier, `CTR-${tag}`, `Casc contract ${tag}`, o.buyerUser],
     );
   };
 
@@ -79,6 +87,11 @@ describe('удаление организации: каскад не упира�
     // Покупатель и его событие на месте: удаляли поставщика, а не тендер.
     expect((await db.query(`SELECT 1 FROM organizations WHERE id=$1`, [o.buyer])).rowCount).toBe(1);
     expect((await db.query(`SELECT 1 FROM sourcing_events WHERE id=$1`, [o.event])).rowCount).toBe(1);
+    // Договор уходит вместе с поставщиком — по своей же связи `contracts.supplier_org_id`,
+    // а не по `award_id` (та `SET NULL` по nullable-колонке). Закреплено здесь потому, что
+    // путь стал достижим только с этой миграцией: если кто-нибудь сделает `award_id`
+    // `NOT NULL`, удаление поставщика снова начнёт падать — другой ошибкой и в другом месте.
+    expect((await db.query(`SELECT 1 FROM contracts WHERE id=$1`, [o.contract])).rowCount).toBe(0);
   });
 
   // Случай, который работал и до правки, — он здесь, чтобы правка его не сломала: обе
