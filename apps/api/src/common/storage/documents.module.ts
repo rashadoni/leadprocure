@@ -104,6 +104,11 @@ export class DocumentsService {
   }
 
   assertDownloadable(status: string) {
+    // MISSING — отдельный ответ нарочно: файла в хранилище нет, и «ждём вердикта» было бы
+    // ложью, по которой пользователь стал бы ждать. Ссылку на такой документ выдавать нельзя
+    // в любом случае — подписанный URL привёл бы в пустоту.
+    if (status === 'MISSING')
+      throw new BadRequestException('Document file is no longer in storage');
     if (status !== 'CLEAN' && !(status === 'SKIPPED' && !this.cfg.clamavEnabled))
       throw new BadRequestException('Document is awaiting a clean antivirus verdict');
   }
@@ -219,6 +224,40 @@ export class DocumentsService {
   }
 }
 
+// «Объекта нет» от S3-совместимого хранилища — ТОЛЬКО по имени ошибки, и это решение,
+// оплаченное измерением.
+//
+// Первая редакция считала терминальным ещё и любой ответ со статусом 404, «на случай прокси,
+// который потерял имя». Замерено тем самым SDK (`@aws-sdk/client-s3` 3.1079.0) против MinIO:
+//
+//     ключа нет (корзина есть)    name=NoSuchKey      http=404
+//     КОРЗИНЫ нет (имя валидно)   name=NoSuchBucket   http=404
+//
+// То есть «корзины нет» неотличимо по статусу от «ключа нет». А последствие несимметрично:
+// опечатка в `S3_BUCKET`, пересоздание корзины или сброс тома MinIO помечали бы MISSING по
+// пять строк каждые 30 секунд, НЕОБРАТИМО — сид двигает только строки из PENDING, а `down()`
+// миграции строки MISSING намеренно не трогает. Полчаса неверной корзины = сотня целых
+// документов, про которые записано «файла больше нет», и скачивание отказывает навсегда.
+//
+// Поэтому гипотетический прокси не покрывается: за него платили бы необратимым состоянием на
+// догадку. Такой случай оставит строку в очереди и даст прежний, меньший дефект — вечный
+// повтор, видимый в логе. Текст сообщения не проверяется в любом случае: он у разных
+// реализаций разный (на проде было `The specified key does not exist.`).
+//
+// Признак РОВНО один — `NoSuchKey`. `NotFound` из первой редакции убран: это ответ
+// `HeadObject`, а здесь `HeadObject` не вызывается нигде (в модуле только `GetObjectCommand` и
+// `PutObjectCommand`, во всём `apps/api` ни одного `HeadObjectCommand`), то есть ветка была
+// недостижима — и при этом несла ту же неоднозначность, из-за которой убран безымянный 404:
+// `NotFound` у разных реализаций приходит и на отсутствующую корзину. Недостижимая ветка с
+// такой ценой ошибки — чистый риск без выгоды. Если когда-нибудь появится `HeadObject`,
+// добавлять признак надо вместе с замером, а не заранее «на всякий случай».
+//
+// `Code` читается вторым: у ошибок старых сборок SDK имя лежало там.
+function isMissingObject(e: any): boolean {
+  const code = e?.name ?? e?.Code;
+  return code === 'NoSuchKey';
+}
+
 // Async AV pipeline: uploads are presigned (the API never touches the bytes), so a cron
 // worker pulls PENDING files from storage and streams them to clamd. Runs outside any
 // request context → goes through the SECURITY DEFINER seams (documents_pending_scan /
@@ -266,6 +305,16 @@ export class AvScanWorker {
           ]);
         }
       } catch (e: any) {
+        // Повтор имеет смысл, только если попытка когда-нибудь может удаться: clamd подняли,
+        // сеть вернулась. «Объекта нет в хранилище» не удастся НИКОГДА, а `documents_pending_scan`
+        // отдаёт PENDING снова и снова — значит такая строка ходила по кругу вечно и занимала
+        // слот в партии из пяти (`ORDER BY created_at LIMIT 5`), то есть пять таких строк
+        // останавливали проверку новых загрузок молча. Поэтому исход терминальный.
+        if (isMissingObject(e)) {
+          await this.ds.query(`SELECT document_set_av_status($1,$2,'MISSING')`, [r.src, r.id]);
+          this.log.warn(`object gone, marked MISSING: ${r.filename} (${r.src} ${r.id})`);
+          continue;
+        }
         this.log.warn(`scan failed for ${r.filename}: ${e.message} — will retry`);
       }
     }
