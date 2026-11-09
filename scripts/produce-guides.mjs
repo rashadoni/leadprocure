@@ -1256,6 +1256,23 @@ async function assertStandHolds(keys) {
   }
 }
 
+// Кто играет роль. До этого актёров было два — администратор и поставщик, — и история
+// «как новый сотрудник начинает работать» снять ими было нельзя: заявку в продукте заводит
+// BUYER_USER, утверждает BUYER_APPROVER, а бюджеты и сверку счетов видит BUYER_FINANCE, и у
+// каждого свой набор ручек и своё меню. Снимать их админом значило бы показывать не то, что
+// увидит зритель на своём месте.
+//
+// Учётки берутся из демо-наполнения (`apps/api/src/seed.ts`), пароль у всех один и тот же.
+// `finance@acme.test` там появился вместе с этой работой: роль в продукте была, а записи под
+// неё не существовало.
+const ROLE_EMAIL = {
+  buyer: 'admin@acme.test',         // закупщик: публикует тендер, вскрывает, присуждает
+  requester: 'user@acme.test',      // новый сотрудник: заводит заявку (сидит в отделе OPS)
+  approver: 'approver@acme.test',   // согласующий: утверждает заявку, владеет бюджетом IT
+  finance: 'finance@acme.test',     // финансист: бюджеты, сверка и оплата счетов
+  sup: 'seller@supply-one.test',    // поставщик: ставка, подтверждение заказа, счёт
+};
+
 async function login(ctx, email) {
   const page = await ctx.newPage();
   await page.goto(`${BASE}/login`);
@@ -1312,7 +1329,7 @@ async function login(ctx, email) {
     // 2) record with the UI in THIS language, holding each scene for its narration
     const browser = await chromium.launch();
     const contexts = {};
-    for (const role of ['buyer', 'sup']) {
+    for (const role of Object.keys(ROLE_EMAIL)) {
       if (!todo.some((k) => SECTIONS[k].role === role)) continue;
       const ctx = await browser.newContext({
         // 1280 is above the narrow-layout breakpoint (NARROW = max-width 1100px, see
@@ -1336,7 +1353,7 @@ async function login(ctx, email) {
         if (document.head) apply();
         else document.addEventListener('DOMContentLoaded', apply);
       });
-      await login(ctx, role === 'buyer' ? 'admin@acme.test' : 'seller@supply-one.test');
+      await login(ctx, ROLE_EMAIL[role]);
       contexts[role] = ctx;
     }
 
