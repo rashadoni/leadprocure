@@ -707,11 +707,21 @@ ENVP=/home/rashad/projects/Leadprocure/.claude/worktrees/budget-by-department-au
 # установки. Шаблон обязан перечислять ОБА: `docker compose config` печатает переменные
 # по алфавиту, поэтому `APP_TIMEZONE` стоит ВЫШЕ первого `license`, а `-A3` показывает
 # строки ПОСЛЕ совпадения — с шаблоном одного `license` пояс не печатается вовсе.
+#
+# И обязателен второй фильтр, отсеивающий секреты. Причина та же алфавитная: сразу за
+# `APP_TIMEZONE` идёт `BID_MASTER_KEY_B64`, и `-A3` втягивает его в вывод. Этот вывод
+# здесь принято цитировать в запись шага 9, репозиторий ПУБЛИЧНЫЙ, а ключ — тот, которым
+# обёрнуты пер-событийные ключи запечатанных ставок: лечение после утечки это ротация и
+# переобёртка всех payload'ов в `bid_sealed_payloads`. Замерено (только имена): шаблон
+# `license` даёт LICENSE_FILE, LICENSE_PUBLIC_KEY_B64, MAIL_FROM, NODE_ENV,
+# REFRESH_COOKIE_SECURE; `license|app_timezone` добавляет BID_MASTER_KEY_B64; с фильтром
+# ниже он исчезает, а все три места чтения остаются целыми.
 RELEASE_SHA="$SHA" docker compose -p leadprocure-prod \
   --project-directory "$REL/infra" \
   -f "$REL/infra/docker-compose.prod.yml" \
   -f "$REL/infra/docker-compose.release.yml" \
-  --env-file "$ENVP" config | grep -iE -A3 'license|app_timezone'
+  --env-file "$ENVP" config | grep -iE -A3 'license|app_timezone' \
+  | grep -viE 'MASTER_KEY|JWT_|PASSWORD|_SECRET'
 
 RELEASE_SHA="$SHA" \
 docker compose -p leadprocure-prod \
@@ -748,6 +758,12 @@ docker compose -p leadprocure-prod \
    вывода, и пункт 3 станет требованием прочитать то, чего там нет** — а самый вероятный
    вывод у читающего будет «переменная не доехала», то есть обратный правде. Первая редакция
    этого пункта ровно так и вышла; нашла это сессия, разбиравшая правку.
+
+   **И не вставлять этот вывод в запись целиком.** Порядок алфавитный, так что рядом с любым
+   читаемым местом однажды окажется новая переменная, которой там быть не должно: именно так
+   расширение шаблона втянуло `BID_MASTER_KEY_B64`. Фильтр секретов в конвейере — страховка,
+   а не разрешение: в запись идут ТОЛЬКО сами три факта (имя зоны; что ключ лицензии непустой;
+   что монтирование абсолютное и `read_only`), и ключ лицензии — обрезанным.
 
 Пустой ключ или `source:` внутри `$REL` — `up` не запускать, вернуться к условию из
 §1.
