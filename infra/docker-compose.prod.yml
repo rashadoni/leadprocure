@@ -96,6 +96,15 @@ services:
     environment:
       NODE_ENV: production
       API_PORT: 3000
+      # Пояс установки решает, какой ДЕНЬ встанет в налоговый документ (дата счёта,
+      # `<cbc:IssueDate>` в УБЛ-выгрузке для e-qaimə) и какой ГОД — в номер документа
+      # (`INV-`, `PO-`, `CTR-`, `REQ-`). Без этой строки настройкой он не управлялся
+      # вообще: у api здесь явный `environment:` без `env_file`, то есть переменная из
+      # `.env.prod` сама в контейнер не попадает, и код брал своё умолчание.
+      # Только ИМЯ зоны IANA: строку-смещение Postgres читает с ОБРАТНЫМ знаком
+      # (`AT TIME ZONE '+04:00'` это UTC−4), поэтому приложение её отвергает при старте —
+      # см. common/config/timezone.ts и docs/invoice-issue-date-decision.md.
+      APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Baku}
       DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-cloud_multi_tenant}
       LICENSE_PUBLIC_KEY_B64: ${LICENSE_PUBLIC_KEY_B64:-}
       LICENSE_FILE: /run/leadprocure-license/leadprocure.license

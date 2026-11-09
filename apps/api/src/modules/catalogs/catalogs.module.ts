@@ -17,12 +17,15 @@ import { Type } from 'class-transformer';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
+import { AppConfig } from '../../common/config/config.service';
+import { nextDocumentNo } from '../../common/procurement/document-no';
 
 @Injectable()
 export class CatalogsService {
   constructor(
     private readonly rc: RequestContextService,
     private readonly audit: AuditService,
+    private readonly cfg: AppConfig,
   ) {}
 
   async create(dto: { supplierOrgId: string; title: string; currency?: string }, auth: AccessTokenPayload) {
@@ -177,8 +180,7 @@ export class CatalogsService {
       )[0]?.department_id ?? null;
     }
 
-    const n = await m.query(`SELECT next_document_no($1,'PO') AS n`, [auth.org_id]);
-    const poNo = `PO-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
+    const poNo = await nextDocumentNo(m, auth.org_id, 'PO', this.cfg.appTimezone);
     const po = (
       await m.query(
         `INSERT INTO purchase_orders(contract_id, buyer_org_id, supplier_org_id, po_no, status, total_minor,

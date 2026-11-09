@@ -20,6 +20,7 @@ import { RequestContextService } from '../../common/context/request-context.serv
 import { AuditService } from '../../common/audit/audit.service';
 import { NotifyService } from '../../common/notify/notify.module';
 import { AppConfig } from '../../common/config/config.service';
+import { nextDocumentNoForDay } from '../../common/procurement/document-no';
 
 const VAT_RATE_BP = 1800; // 18% ƏDV
 
@@ -108,13 +109,13 @@ export class InvoicesService {
     const issueDate: string = (
       await m.query(`SELECT (now() AT TIME ZONE $1)::date AS d`, [this.cfg.appTimezone])
     )[0].d;
-    const n = await m.query(`SELECT next_document_no($1,'INV') AS n`, [auth.org_id]);
-    // Год номера — из того же дня, а не из `new Date().getFullYear()` (это год по поясу
-    // ПРОЦЕССА). Иначе счёт, выписанный 1 января в 02:00 по Баку, получал бы номер
-    // прошлого года при дате этого: номер и дата в одном документе называли бы разные годы,
-    // и разбираться с этим пришлось бы бухгалтеру. Счётчик `next_document_no` сквозной по
-    // организации и от года не зависит, поэтому смена основания не может дать коллизию.
-    const invoiceNo = `INV-${issueDate.slice(0, 4)}-${String(Number(n[0].n)).padStart(4, '0')}`;
+    // Год номера — из того же дня, что записан в `issue_date`, а не из
+    // `new Date().getFullYear()` (это год по поясу ПРОЦЕССА). Иначе счёт, выписанный
+    // 1 января в 02:00 по Баку, получал бы номер прошлого года при дате этого: номер и
+    // дата в одном документе называли бы разные годы, и разбираться с этим пришлось бы
+    // бухгалтеру. Выпуск номеров — `common/procurement/document-no.ts`, там же про
+    // счётчик и про то, почему у заказа и договора год берётся иначе.
+    const invoiceNo = await nextDocumentNoForDay(m, auth.org_id, 'INV', issueDate);
     const inv = (
       await m.query(
         `INSERT INTO invoices(buyer_org_id, supplier_org_id, po_id, invoice_no, currency, net_minor, vat_minor, gross_minor, status, match, due_date, created_by, department_id, issue_date)

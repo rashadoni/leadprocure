@@ -21,6 +21,8 @@ import { CurrentUser, Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
 import { NotifyService } from '../../common/notify/notify.module';
+import { AppConfig } from '../../common/config/config.service';
+import { nextDocumentNo } from '../../common/procurement/document-no';
 
 @Injectable()
 export class ContractsService {
@@ -28,6 +30,7 @@ export class ContractsService {
     private readonly rc: RequestContextService,
     private readonly audit: AuditService,
     private readonly notify: NotifyService,
+    private readonly cfg: AppConfig,
   ) {}
 
   // DIRECT purchase: a below-threshold approved request goes straight to a PO — no
@@ -61,8 +64,7 @@ export class ContractsService {
       (it as any).line_total_minor = storedLineMoney(Number(it.qty), Number(it.est_unit_price_minor));
     }
     const total = safeMoney(items.reduce((s: number, it: any) => s + Number(it.line_total_minor), 0));
-    const n = await m.query(`SELECT next_document_no($1,'PO') AS n`, [auth.org_id]);
-    const poNo = `PO-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
+    const poNo = await nextDocumentNo(m, auth.org_id, 'PO', this.cfg.appTimezone);
     const po = (
       await m.query(
         `INSERT INTO purchase_orders(contract_id, buyer_org_id, supplier_org_id, po_no, status, total_minor,
@@ -134,8 +136,7 @@ export class ContractsService {
     await assertSupplierAllowed(m, auth.org_id, a.supplier_org_id);
 
     safeMoney(Number(a.total_minor ?? 0));
-    const n = await m.query(`SELECT next_document_no($1,'CTR') AS n`, [auth.org_id]);
-    const contractNo = `CTR-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
+    const contractNo = await nextDocumentNo(m, auth.org_id, 'CTR', this.cfg.appTimezone);
     const c = (
       await m.query(
         `INSERT INTO contracts(buyer_org_id, supplier_org_id, event_id, award_id, contract_no,
@@ -231,8 +232,7 @@ export class ContractsService {
     const overByMinor = drawn + total - Number(c.total_minor);
 
     safeMoney(total);
-    const n = await m.query(`SELECT next_document_no($1,'PO') AS n`, [auth.org_id]);
-    const poNo = `PO-${new Date().getFullYear()}-${String(Number(n[0].n)).padStart(4, '0')}`;
+    const poNo = await nextDocumentNo(m, auth.org_id, 'PO', this.cfg.appTimezone);
     // Carry the originating request (award → event → request) onto the PO so budgets can
     // swap this call-off's actual in for the request's commitment.
     const origin = (

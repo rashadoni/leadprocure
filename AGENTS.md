@@ -130,9 +130,20 @@ All functional roadmap blocks are built and green (**143 e2e, 17 suites**):
   тот же дефект через пояс сессии Postgres). **В `APP_TIMEZONE` только ИМЯ зоны:** Node и
   Postgres читают строку-смещение с обратными знаками (`AT TIME ZONE '+04:00'` в Postgres это
   UTC−4), поэтому `common/config/timezone.ts` отвергает смещения и сверяет имя с
-  `pg_timezone_names` при старте. Год в номере счёта берётся из того же дня; у номеров
-  `PO-`/`CTR-`/`REQ-` это ещё НЕ сделано. Решение владельца и что НЕ закрыто —
-  `docs/invoice-issue-date-decision.md`.
+  `pg_timezone_names` при старте. Год в номере счёта берётся из того же дня.
+  **Выпуск номеров живёт в одном месте — `common/procurement/document-no.ts`** (и больше
+  нигде: это утверждение закреплено проверкой строения в `document-no-year.e2e-spec.ts`).
+  Год в номере считает БАЗА, тем же оператором, что выдаёт счётчик
+  (`to_char(now() AT TIME ZONE $3, 'YYYY')`), — у `PO-`, `CTR-`, `REQ-` он брался из
+  `new Date().getFullYear()`, то есть по поясу процесса, и 1 января в 02:00 по Баку заказ
+  назывался `PO-2025-…` при дате счёта `2026-01-01`, в одном УБЛ-документе. У счёта путь
+  другой нарочно: его год берётся из зафиксированного `issue_date`
+  (`nextDocumentNoForDay`), чтобы номер и дата не могли назвать разные годы. Дня в
+  `purchase_orders`/`contracts`/`procurement_requests` НЕ денормализовали: у них нет даты
+  документа, колонка появилась бы только ради префикса. **`APP_TIMEZONE` теперь доходит до
+  контейнера** (`infra/docker-compose.prod.yml`, `.env.prod.example`): до этого у api был
+  явный `environment:` без `env_file` и настройка не управлялась вообще. Решения и что НЕ
+  закрыто — `docs/invoice-issue-date-decision.md`.
 - Cross-org notifications via `app_notify` DEFINER (0010); DIRECT purchase→PO.
 - **Procurement-integrity controls** (0020, audit remediation): evaluation criteria are
   LOCKED on `sourcing_events.evaluation_criteria` at creation (never re-weighted after
