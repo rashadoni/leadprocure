@@ -2830,14 +2830,50 @@ constraint`, и падает это у поставщика, а не у опер
 `pnpm` и `node_modules` на месте.
 
 ```bash
-# 1. сначала откатить миграцию, НОВЫМ контейнером (у него есть файл 0051)
-docker exec leadprocure-prod-api-1 sh -lc 'cd /repo && pnpm --filter api migration:revert'
-# 2. и только потом вернуть образы точки отката (шаг 6 с PREV вместо SHA)
+# 1. ОСТАНОВИТЬ api — иначе зазор между откатом и подменой образов отдаёт негодный документ
+RELEASE_SHA="$SHA" docker compose -p leadprocure-prod --project-directory "$REL/infra" \
+  -f "$REL/infra/docker-compose.prod.yml" -f "$REL/infra/docker-compose.release.yml" \
+  --env-file "$ENVP" stop api
+
+# 2. откатить миграцию — одноразовым контейнером НОВОГО образа (у него есть файл 0051).
+#    `--entrypoint sh` обязателен: без него `run` прогонит docker-entrypoint.sh и накатит
+#    0051 обратно сразу после отката. `--no-deps`, чтобы не трогать postgres и minio.
+RELEASE_SHA="$SHA" docker compose -p leadprocure-prod --project-directory "$REL/infra" \
+  -f "$REL/infra/docker-compose.prod.yml" -f "$REL/infra/docker-compose.release.yml" \
+  --env-file "$ENVP" run --rm --no-deps --entrypoint sh api \
+  -lc 'cd /repo && pnpm --filter api migration:revert'
+
+# 3. и только потом вернуть образы точки отката (шаг 6 с PREV вместо SHA)
 ```
 
-И одна ловушка на обратном пути: `docker-entrypoint.sh` гонит `migration:run` **на каждом
-старте**, и в старом образе тоже. Для `0051` это безопасно — её файла там нет, накатывать
-нечего; но если откатить миграцию и перезапустить НОВЫЙ контейнер, она применится снова.
+**Почему api останавливают, а не оставляют работать на зазор.** Выложенный код читает
+`issue_date` в трёх местах, и после `DROP COLUMN` они ведут себя по-разному — замерено на
+одноразовом `postgres:16`:
+
+| путь | после `DROP COLUMN` |
+|---|---|
+| `INSERT INTO invoices(…, issue_date)` — выставление счёта | `ERROR: column "issue_date" … does not exist` → 500 |
+| `SELECT i.invoice_no, i.issue_date, …` — реестр для 1С | `ERROR: column i.issue_date does not exist` → 500 |
+| `SELECT i.*, ob.legal_name …` — УБЛ-выгрузка (`:173`) | **проходит**: колонки просто нет в результате |
+
+Третий — тот, который уходит наружу. Он отдаст `HTTP 200` и
+`<cbc:IssueDate>undefined</cbc:IssueDate>`: выгрузка скачается, нигде ничего не упадёт, а
+налоговый документ будет негодным. Из трёх путей два кричат, один молчит — и молчит ровно тот,
+чья ошибка уезжает к бухгалтеру. Поэтому короткая остановка api на время отката лучше, чем
+работающий продукт, который в эти минуты печатает `undefined` в e-qaimə. Нашла это сессия,
+разбиравшая запись; в первой редакции рецепта шаг 1 оставлял api на зазор.
+
+И ловушка обратного пути: `docker-entrypoint.sh` гонит `migration:run` **на каждом старте**, и
+в старом образе тоже. Для `0051` это безопасно — её файла там нет, накатывать нечего; но
+перезапуск НОВОГО контейнера после отката применит её снова, и именно поэтому шаг 2 идёт
+одноразовым `run --entrypoint sh`, а не `exec` по работающему контейнеру.
+
+Отказ, если порядок всё-таки перепутан, назван в самом typeorm (`MigrationExecutor.js:311`):
+`No migration <name> was found in the source code`. Страховки же от обратного — лишней строки
+в таблице `migrations` при старом образе — нет вовсе: список ожидающих считается фильтром
+исходника по применённым, лишние строки не проверяются, так что старый образ поднялся бы
+ЧИСТО, с `No migrations are pending`, и поломка вышла бы только у поставщика при выставлении
+счёта.
 
 У `down()` своя цена, и знать её надо до, а не во время: это `ALTER TABLE invoices DROP COLUMN
 issue_date`, то есть зафиксированные дни документов стираются. После повторной выкладки
