@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { randomUUID, createHash } from 'crypto';
 import { Client } from 'pg';
-import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { AppModule } from '../src/app.module';
 import { AvScanWorker } from '../src/common/storage/documents.module';
 
@@ -118,31 +118,64 @@ describe('antivirus: объекта нет — повтор прекращает
     expect(JSON.stringify(res.body)).toContain('no longer in storage');
   });
 
-  // Страховка от ложного терминала: неудача, которая МОЖЕТ пройти в другой раз, обязана
-  // оставить строку в очереди. Иначе лежащий полчаса clamd пометил бы здоровые файлы
-  // непроверяемыми, и это было бы хуже исходного дефекта.
-  it('временная неудача по-прежнему оставляет документ в очереди', async () => {
-    const content = `временная ${tag}`;
+  // Страховка от ложного терминала. Неудача, которая МОЖЕТ пройти в другой раз, обязана
+  // оставить строку в очереди: иначе лежащий полчаса clamd или опечатка в имени корзины
+  // помечали бы здоровые файлы потерянными — необратимо, и это хуже исходного дефекта.
+  //
+  // Два случая, и ВТОРОЙ здесь главный. Сетевой отказ — лёгкая семья: у него нет ни имени
+  // ошибки S3, ни статуса, так что его не опознал бы никакой разбор. Опасна семья «ошибка S3
+  // со статусом 404, но НЕ „ключа нет“»: замерено, что `NoSuchBucket` приходит ровно с 404,
+  // то есть неотличимо по статусу от пропавшего ключа. Первая редакция правки считала
+  // терминальным любой 404 и на этом случае помечала MISSING всю очередь.
+  const failingUpload = async (filename: string) => {
+    const content = `${filename} ${tag}`;
     const pre = await http().post('/documents/presign').set(...bearer(buyer))
-      .send({ filename: 'temp.txt', mime: 'text/plain' }).expect(201);
+      .send({ filename, mime: 'text/plain' }).expect(201);
     await fetch(pre.body.uploadUrl, { method: 'PUT', body: content, headers: { 'Content-Type': 'text/plain' } });
-    const conf = await http().post('/documents/confirm').set(...bearer(buyer)).send({
-      storageKey: pre.body.storageKey, filename: 'temp.txt', mime: 'text/plain',
+    return (await http().post('/documents/confirm').set(...bearer(buyer)).send({
+      storageKey: pre.body.storageKey, filename, mime: 'text/plain',
       sizeBytes: Buffer.byteLength(content), sha256: createHash('sha256').update(content).digest('hex'),
       entityType: 'request',
-    }).expect(201);
+    }).expect(201)).body.id as string;
+  };
 
+  // Подменяем только добычу байтов, остальной путь воркера настоящий.
+  const scanWith = async (fail: () => Promise<never>) => {
     const worker = app.get(AvScanWorker) as any;
     const docs = worker.docs;
     const real = docs.getObjectBuffer.bind(docs);
-    docs.getObjectBuffer = async () => { throw new Error('ECONNREFUSED 127.0.0.1:3310'); };
-    try {
-      await worker.scanOnce(50);
-    } finally {
-      docs.getObjectBuffer = real;
-    }
-    expect(await avStatus(conf.body.id)).toBe('PENDING');
-    const queued = await db.query(`SELECT id FROM documents_pending_scan(50) WHERE id = $1`, [conf.body.id]);
+    docs.getObjectBuffer = fail;
+    try { await worker.scanOnce(50); } finally { docs.getObjectBuffer = real; }
+  };
+
+  const stillQueued = async (id: string) => {
+    expect(await avStatus(id)).toBe('PENDING');
+    const queued = await db.query(`SELECT id FROM documents_pending_scan(50) WHERE id = $1`, [id]);
     expect(queued.rowCount).toBe(1);
+  };
+
+  it('хранилище недоступно — документ остаётся в очереди', async () => {
+    const id = await failingUpload('netfail.txt');
+    await scanWith(async () => { throw new Error('ECONNREFUSED 127.0.0.1:9'); });
+    await stillQueued(id);
+  });
+
+  // Ошибка не придумана: её бросает тот же SDK, настоящим запросом к несуществующей корзине.
+  // Сочинённый объект проверял бы мою догадку о форме ошибки, а не форму саму.
+  it('корзины нет — это НЕ «объекта нет», документ остаётся в очереди', async () => {
+    const id = await failingUpload('nobucket.txt');
+    const absent = `no-such-bucket-${Date.now()}`;
+    let measured: any;
+    await scanWith(async () => {
+      try {
+        await s3.send(new GetObjectCommand({ Bucket: absent, Key: 'k' }));
+      } catch (e) { measured = e; throw e; }
+      throw new Error('корзины быть не должно');
+    });
+    // Сама предпосылка проверки: ошибка обязана быть именно 404 с чужим именем, иначе
+    // проверка стережёт не тот случай и проходила бы по случайности.
+    expect(measured?.name).toBe('NoSuchBucket');
+    expect(measured?.$metadata?.httpStatusCode).toBe(404);
+    await stillQueued(id);
   });
 });
