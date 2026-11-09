@@ -125,8 +125,13 @@ export const COURSE: Track[] = [
       { key: 'buyer-suppliers', titleKey: 'learn_b_suppliers', to: '/buyer/suppliers', roles: BUYER, sec: 148 },
       { key: 'buyer-verification', titleKey: 'learn_b_verification', to: '/buyer/verification', roles: BUYER, sec: 113 },
       { key: 'buyer-budgets', titleKey: 'learn_b_budgets', to: '/buyer/budgets', roles: FINANCE_READ, sec: 347 },
-      { key: 'buyer-requests', titleKey: 'learn_b_requests', to: '/buyer/requests', roles: FINANCE_READ, sec: 298 },
-      { key: 'buyer-events', titleKey: 'learn_b_events', to: '/buyer/events', roles: BUYER, sec: 328 },
+      { key: 'buyer-requests', titleKey: 'learn_b_requests', to: '/buyer/requests', roles: FINANCE_READ, sec: 109 },
+      { key: 'buyer-events', titleKey: 'learn_b_events', to: '/buyer/events', roles: BUYER, sec: 88 },
+      // Вскрытие живёт на /buyer/events/:id — у него нет своего маршрута, как и у
+      // `sup-auction`, поэтому карта выше ведёт туда `buyer-events`, а эта глава
+      // достаётся зрителю по имени, из курса. Переход — к списку тендеров: адреса
+      // конкретного вскрытия без id события не существует.
+      { key: 'buyer-opening', titleKey: 'learn_b_opening', to: '/buyer/events', roles: BUYER, sec: 105 },
       { key: 'buyer-contracts', titleKey: 'learn_b_contracts', to: '/buyer/contracts', roles: BUYER, sec: 198 },
       { key: 'buyer-logistics', titleKey: 'learn_b_logistics', to: '/buyer/logistics', roles: BUYER, sec: 111 },
       { key: 'buyer-invoices', titleKey: 'learn_b_invoices', to: '/buyer/invoices', roles: BUYER, sec: 204 },
@@ -143,7 +148,8 @@ export const COURSE: Track[] = [
     titleKey: 'learn_track_supplier',
     lessons: [
       { key: 'sup-verification', titleKey: 'learn_s_verification', to: '/supplier/verification', roles: SUPPLIER, sec: 88 },
-      { key: 'sup-market', titleKey: 'learn_s_market', to: '/supplier/market', roles: SUPPLIER, sec: 190 },
+      { key: 'sup-market', titleKey: 'learn_s_market', to: '/supplier/market', roles: SUPPLIER, sec: 55 },
+      { key: 'sup-bid', titleKey: 'learn_s_bid', to: '/supplier/market', roles: SUPPLIER, sec: 58 },
       // The one recording the product could not show until now. A reverse auction has no
       // route of its own — it lives on /supplier/events/:id, the same path as a sealed
       // tender — so the per-section bar on that page always played `sup-market` and this

@@ -435,10 +435,10 @@ export default function Requests() {
                     {/* One decision, one control: the procedure is picked inside the dialog
                         this button opens, where each one is explained. */}
                     {r.status === 'APPROVED' && r.method_resolved !== 'DIRECT' && canApprove && (
-                      <button className="btn small" data-tip={t('tip_announce')} onClick={() => announce(r)}>{t('announce')}</button>
+                      <button className="btn small" data-testid="req-announce" data-tip={t('tip_announce')} onClick={() => announce(r)}>{t('announce')}</button>
                     )}
                     {r.status === 'APPROVED' && r.method_resolved === 'DIRECT' && canApprove && (
-                      <button className="btn small" data-tip={t('tip_direct')} onClick={() => placeDirect(r)}>📦 {t('direct_order')}</button>
+                      <button className="btn small" data-testid="req-direct" data-tip={t('tip_direct')} onClick={() => placeDirect(r)}>📦 {t('direct_order')}</button>
                     )}
                     {/* Cancelling an approved request is the one destructive thing here and
                         the one nobody does by default: it belongs behind the named button,

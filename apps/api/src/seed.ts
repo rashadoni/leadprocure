@@ -133,9 +133,18 @@ async function main(): Promise<void> {
   };
   // No two budgets may cover the same (department, category, period) — the scopes below are
   // deliberately disjoint: an org-wide ceiling, IT for the year, OPS for this quarter.
-  await budget('Ümumi büdcə', null, '*', 'YEAR', `${year}-01-01`, `${year}-12-31`, 50_000_00);
-  await budget('IT büdcəsi', it, 'IT', 'YEAR', `${year}-01-01`, `${year}-12-31`, 20_000_00);
-  await budget('OPS rüblük', ops, 'OFFICE', 'QUARTER', iso(qStart), iso(qEnd), 6_000_00);
+  //
+  // The AMOUNTS are chosen so that a purchase big enough to become a TENDER still fits the
+  // plan it is charged to. The previous numbers could not: the method policy above turns
+  // anything over 50 000 ₼ into a sealed RFQ, while the largest plan was exactly 50 000 ₼
+  // for the whole organization and the departmental ones were 20 000 and 6 000. So on a demo
+  // stand every tender was, by construction, several times its own department's plan — the
+  // budget screens read as a department overspending by 800%, which is a property of the
+  // seed and not of the product. A walkthrough that carries one purchase from a request to
+  // payment hits this in its first chapter, which is how it was found.
+  await budget('Ümumi büdcə', null, '*', 'YEAR', `${year}-01-01`, `${year}-12-31`, 1_200_000_00);
+  await budget('IT büdcəsi', it, 'IT', 'YEAR', `${year}-01-01`, `${year}-12-31`, 400_000_00);
+  await budget('OPS rüblük', ops, 'OFFICE', 'QUARTER', iso(qStart), iso(qEnd), 150_000_00);
   await db.query(
     `INSERT INTO budget_policies(buyer_org_id, warn_pct, block_pct) VALUES ($1, 80, NULL)`,
     [acme],

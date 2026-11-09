@@ -298,13 +298,13 @@ export default function SupplierEvent() {
             {/* no buyer estimate here — publishing it to bidders anchors their prices */}
             <thead><tr><th>{t('name')}</th><th className="num">{t('qty')}</th><th className="num">{t('unit_price')} ({ev.evaluation_currency})</th></tr></thead>
             <tbody>
-              {ev.items.map((i: any) => (
+              {ev.items.map((i: any, idx: number) => (
                 <tr key={i.id}>
                   <td>{i.name}</td>
                   <td className="num">{Number(i.qty)}</td>
                   <td className="num">
                     {canBid ? (
-                      <input style={{ width: 130 }} type="number" step="0.01" min="0" value={prices[i.id] ?? ''}
+                      <input style={{ width: 130 }} data-testid={`bid-price-${idx}`} type="number" step="0.01" min="0" value={prices[i.id] ?? ''}
                         disabled={ev.status !== 'OPEN'}
                         onChange={(e) => setPrices({ ...prices, [i.id]: e.target.value })} />
                     ) : (
@@ -334,12 +334,12 @@ export default function SupplierEvent() {
             <>
               <div>
                 <label>{t('delivery_days')}</label>
-                <input type="number" min={1} value={deliveryDays} disabled={ev.status !== 'OPEN'}
+                <input type="number" data-testid="bid-days" min={1} value={deliveryDays} disabled={ev.status !== 'OPEN'}
                   onChange={(e) => setDeliveryDays(e.target.value)} />
               </div>
               <div>
                 <label>{t('total')}</label>
-                <div style={{ padding: '8px 0', fontWeight: 700 }}>{fmtMoney(Math.round(total * 100), ev.evaluation_currency)}</div>
+                <div data-testid="bid-total" style={{ padding: '8px 0', fontWeight: 700 }}>{fmtMoney(Math.round(total * 100), ev.evaluation_currency)}</div>
               </div>
             </>
           )}
@@ -347,7 +347,7 @@ export default function SupplierEvent() {
               invited a press the server then refused — in English, on an Azerbaijani screen.
               It is now shut until there is something to send, and says why, the way
               «Параметры» already shuts its Save with «изменений нет». */}
-          <button className="btn" data-tip={blocked ? t('tip_bid_needs_price') : undefined}
+          <button className="btn" data-testid="bid-submit" data-tip={blocked ? t('tip_bid_needs_price') : undefined}
             disabled={blocked} onClick={submit}>
             {ev.format === 'REVERSE' ? `⚡ ${t('place_bid')}` : `🔒 ${ev.type === 'RFI' ? t('send') : t('bid')}`}
           </button>

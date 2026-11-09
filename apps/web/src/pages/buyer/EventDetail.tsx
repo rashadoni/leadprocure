@@ -70,7 +70,12 @@ export default function EventDetail() {
   }, [id, load]);
 
   const act = async (action: string, body?: any) => {
-    try { await api.post(`/events/${id}/${action}`, body ?? {}); load(); }
+    // Перечитываем и напоминания тоже. Их список грузится один раз при монтировании, и
+    // приглашение его не трогало: пригласив двух поставщиков, закупщик видел карточку
+    // «никто не приглашён» — ровно там, где он только что пригласил. Поймано съёмкой
+    // сквозного ролика: сцена требовала показать приглашённых и не нашла их на экране,
+    // хотя в базе они были.
+    try { await api.post(`/events/${id}/${action}`, body ?? {}); load(); loadFups(); }
     catch (e: any) { notifyError(e); }
   };
 
@@ -223,9 +228,9 @@ export default function EventDetail() {
           </div>
         </div>
         <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {ev.status === 'DRAFT' && <button className="btn" data-tip={t('tip_publish')} onClick={() => act('publish')}>{t('publish')}</button>}
+          {ev.status === 'DRAFT' && <button className="btn" data-testid="ev-publish" data-tip={t('tip_publish')} onClick={() => act('publish')}>{t('publish')}</button>}
           {ev.status === 'CLOSED' && ev.format === 'SEALED' && (
-            <button className="btn" data-tip={t('tip_open_bids')} onClick={() => act('open')}>{t('open_bids')}</button>
+            <button className="btn" data-testid="ev-open-bids" data-tip={t('tip_open_bids')} onClick={() => act('open')}>{t('open_bids')}</button>
           )}
           {ev.status === 'CLOSED' && ev.format === 'REVERSE' && (
             <button className="btn" data-tip={t('tip_finalize')} onClick={() => act('auction/finalize')}>{t('finalize')}</button>
@@ -241,7 +246,7 @@ export default function EventDetail() {
               {' — '}{t('standstill_until')} {fmtDateTime(a.standstill_until)}
             </button>
           ) : (
-            <button key={a.id} className="btn" data-tip={t('tip_make_contract')} onClick={async () => {
+            <button key={a.id} className="btn" data-testid="ev-make-contract" data-tip={t('tip_make_contract')} onClick={async () => {
               try {
                 const c = await api.post(`/contracts/from-award/${a.id}`);
                 await api.post(`/contracts/${c.data.id}/activate`);
@@ -258,12 +263,12 @@ export default function EventDetail() {
           <div className="row" style={{ marginTop: 12, maxWidth: 480 }}>
             <div>
               <label>{t('invite')}</label>
-              <select value={inviteOrg} onChange={(e) => setInviteOrg(e.target.value)}>
+              <select data-testid="ev-invite-select" value={inviteOrg} onChange={(e) => setInviteOrg(e.target.value)}>
                 <option value="">—</option>
                 {suppliers.map((s) => <option key={s.id} value={s.id}>{s.legal_name}</option>)}
               </select>
             </div>
-            <button className="btn" disabled={!inviteOrg} data-tip={t('tip_supplier_invite')} onClick={() => act('invite', { supplierOrgId: inviteOrg })}>{t('invite')}</button>
+            <button className="btn" data-testid="ev-invite" disabled={!inviteOrg} data-tip={t('tip_supplier_invite')} onClick={() => act('invite', { supplierOrgId: inviteOrg })}>{t('invite')}</button>
           </div>
         )}
       </div>
@@ -618,7 +623,7 @@ export default function EventDetail() {
                           value={scores[b.id]?.[c.key] ?? ''}
                           onChange={e => setScores({...scores,[b.id]:{...scores[b.id],[c.key]:e.target.value === '' ? NaN : Number(e.target.value)}})} />
                       </label>)}
-                      {!winningBidIds.has(b.id) && <button className="btn small ghost danger" data-tip={t('disqualify_prompt')} onClick={() => disqualify(b.id)}>⛔ {t('disqualify')}</button>}
+                      {!winningBidIds.has(b.id) && <button className="btn small ghost danger" data-testid="ev-disqualify" data-tip={t('disqualify_prompt')} onClick={() => disqualify(b.id)}>⛔ {t('disqualify')}</button>}
                     </span>
                   )}
                   {b.state === 'DISQUALIFIED' && b.disqualified_reason && (
@@ -632,7 +637,7 @@ export default function EventDetail() {
         </table>
         {ev.status === 'EVALUATION' && !activeAwards.length && !isReverse && !isRfi && (ev.bids ?? []).some((b: any) => b.state === 'OPENED') && (
           <div style={{ marginTop: 12 }}>
-            <button className="btn ghost" aria-label={t('score')} data-tip={t('tip_score')} onClick={doEvaluate}>{t('score')}</button>
+            <button className="btn ghost" data-testid="ev-score" aria-label={t('score')} data-tip={t('tip_score')} onClick={doEvaluate}>{t('score')}</button>
           </div>
         )}
       </div>
@@ -654,7 +659,7 @@ export default function EventDetail() {
                 </div>
               )}
               {/* ↻ alone was the whole label once a ranking had been fetched. */}
-              <button className="btn small" data-tip={t('tip_ai')} onClick={askAi}>{ai ? `↻ ${t('ai_run')}` : t('ai_run')}</button>
+              <button className="btn small" data-testid="ev-ai-run" data-tip={t('tip_ai')} onClick={askAi}>{ai ? `↻ ${t('ai_run')}` : t('ai_run')}</button>
             </div>
           </div>
           {/* A whole card for one button, and nothing on it said what pressing the button
@@ -687,7 +692,7 @@ export default function EventDetail() {
                       <td className="num"><b>{r.weightedTotal}</b></td>
                       <td>
                         {ev.status === 'EVALUATION' && !aiLotAwarded && selectedAiLotId && (
-                          <button className="btn small" data-tip={t('tip_award_bid')} onClick={() => awardBid(selectedAiLotId, r.bidId)}>{t('award')}</button>
+                          <button className="btn small" data-testid="ev-award" data-tip={t('tip_award_bid')} onClick={() => awardBid(selectedAiLotId, r.bidId)}>{t('award')}</button>
                         )}
                       </td>
                     </tr>
