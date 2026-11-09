@@ -577,9 +577,18 @@ export default function Budgets() {
                         {b.status === 'PENDING' && (
                           <button className="btn small" data-tip={t('bud_approve_tip')} onClick={() => act(b.id, 'approve')}>{t('approve')}</button>
                         )}
-                        {b.status === 'APPROVED' && (
-                          <button className="btn small ghost" data-tip={t('bud_revise_tip')} onClick={() => edit(b)}>✎ {t('bud_revise')}</button>
-                        )}
+                        {/* У утверждённого плана видимого действия НЕТ, и это следует из
+                            правила выше: в строке стоит то, чего состояние ЖДЁТ. Черновик
+                            ждёт отправки, отправленный — решения, закрытый — переоткрытия,
+                            а утверждённый не ждёт ничего: он просто действует. Пересмотр
+                            суммы переехал в меню.
+
+                            Повод был измеримый: на 1280 страница бюджетов уезжала вбок на
+                            43 px, как только план оказывался утверждён (колонка действий
+                            становилась 159 px). Раньше этого никто не видел, потому что в
+                            демо-наполнении планы лежали ЧЕРНОВИКАМИ, и приёмка меряла
+                            строку с одной кнопкой «Отправить». Настоящая установка живёт в
+                            утверждённом состоянии почти всегда. */}
                         {b.status === 'CLOSED' && (
                           <button className="btn small ghost" data-tip={t('bud_reopen_tip')} onClick={() => withReason(b.id, 'reopen', 'bud_reopen_prompt')}>🔓 {t('bud_reopen')}</button>
                         )}
@@ -594,7 +603,10 @@ export default function Budgets() {
                             </>
                           )}
                           {b.status === 'APPROVED' && (
-                            <button className="btn small ghost" data-tip={t('bud_close_tip')} onClick={() => act(b.id, 'close')}>🔒 {t('bud_close')}</button>
+                            <>
+                              <button className="btn small ghost" data-tip={t('bud_revise_tip')} onClick={() => edit(b)}>✎ {t('bud_revise')}</button>
+                              <button className="btn small ghost" data-tip={t('bud_close_tip')} onClick={() => act(b.id, 'close')}>🔒 {t('bud_close')}</button>
+                            </>
                           )}
                           <button className="btn small ghost" data-tip={t('bud_history')} onClick={() => toggleHistory(b.id)}>🕘 {t('bud_history_label')}</button>
                           <button className="btn small ghost" data-tip={t('bud_phasing_tip')} onClick={() => togglePhasing(b.id)}>📅 {t('bud_phasing')}</button>
