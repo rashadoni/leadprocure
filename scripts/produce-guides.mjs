@@ -1358,7 +1358,16 @@ const SECTIONS = {
       must: true,
       do: async (p, l, h) => {
         await h.needClick(`${PO_ROW_SUP} [data-testid=sup-po-invoice]`, '«Hesab-faktura» düyməsi', 1500);
-        const due = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+        // Тридцать дней ОТ ТОГО ЖЕ ДНЯ, который продукт запишет в дату выставления.
+        // Первая редакция брала `Date.now() + 30 дней` и `toISOString()`, то есть день по
+        // Гринвичу, а `invoices.issue_date` пишется по `APP_TIMEZONE` (Asia/Baku) — колонка,
+        // которую и завели против этой самой ошибки. Съёмка поздним вечером по UTC давала
+        // счёт, выписанный 10-го со сроком 9 декабря: двадцать девять дней под слова «отуз
+        // гюн». Днём совпадало, вечером нет — то есть дефект, который видно через раз.
+        const tz = process.env.APP_TIMEZONE ?? 'Asia/Baku';
+        const day = new Date(`${new Date().toLocaleDateString('en-CA', { timeZone: tz })}T00:00:00Z`);
+        day.setUTCDate(day.getUTCDate() + 30);
+        const due = day.toISOString().slice(0, 10);
         await h.setDate('[data-testid=dialog-input]', due, 'ödəniş müddəti');
         await h.holdUntil(0.6);
         await h.needClick('[data-testid=dialog-confirm]', 'təsdiq düyməsi', 2500);
