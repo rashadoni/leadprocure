@@ -244,11 +244,18 @@ export class DocumentsService {
 // повтор, видимый в логе. Текст сообщения не проверяется в любом случае: он у разных
 // реализаций разный (на проде было `The specified key does not exist.`).
 //
-// `NotFound` — это ответ `HeadObject` в SDK v3; `Code` читается вторым, потому что у ошибок
-// старых сборок имя лежало там.
+// Признак РОВНО один — `NoSuchKey`. `NotFound` из первой редакции убран: это ответ
+// `HeadObject`, а здесь `HeadObject` не вызывается нигде (в модуле только `GetObjectCommand` и
+// `PutObjectCommand`, во всём `apps/api` ни одного `HeadObjectCommand`), то есть ветка была
+// недостижима — и при этом несла ту же неоднозначность, из-за которой убран безымянный 404:
+// `NotFound` у разных реализаций приходит и на отсутствующую корзину. Недостижимая ветка с
+// такой ценой ошибки — чистый риск без выгоды. Если когда-нибудь появится `HeadObject`,
+// добавлять признак надо вместе с замером, а не заранее «на всякий случай».
+//
+// `Code` читается вторым: у ошибок старых сборок SDK имя лежало там.
 function isMissingObject(e: any): boolean {
   const code = e?.name ?? e?.Code;
-  return code === 'NoSuchKey' || code === 'NotFound';
+  return code === 'NoSuchKey';
 }
 
 // Async AV pipeline: uploads are presigned (the API never touches the bytes), so a cron
