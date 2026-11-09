@@ -499,6 +499,12 @@ const STORY = {
   ],                                                         // смета: 64 000 ₼ → RFQ
   bid: ['1650', '1250'],                                     // ставка Supply One: 58 000 ₼
   bid2: ['1700', '1350'],                                    // ставка Baku Metal: 61 000 ₼
+  // Вторая покупка: нужна главе про живые торги. Товар нарочно простой и биржевой —
+  // именно на таком аукцион уместен, а на мебели с требованиями к качеству нет.
+  // 500 × 120 ₼ = 60 000 ₼, снова выше порога прямого заказа; шаг торга 1% = 600 ₼.
+  title2: 'Ofis kağızı A4',
+  item2: { name: 'A4 kağız, 500 vərəq', qty: '500', price: '120' },
+  auction: ['115', '112', '109'],                            // 57 500 → 56 000 → 54 500 ₼
   deliveryDays: '14',
   buyer: 'Acme',
   supplier: 'Supply One',
@@ -511,6 +517,7 @@ const ROW = `tbody tr:has-text("${STORY.title}")`;
 // база, поэтому у покупателя он ищется по поставщику, у поставщика по покупателю.
 const PO_ROW_BUYER = `tbody tr:has-text("${STORY.supplier}")`;
 const PO_ROW_SUP = `tbody tr:has-text("${STORY.buyer}")`;
+const ROW2 = `tbody tr:has-text("${STORY.title2}")`;
 
 const API_URL = process.env.DEMO_API ?? 'http://localhost:3000';
 
@@ -905,36 +912,57 @@ const SECTIONS = {
         await h.moveTo(`${PO_ROW_BUYER} .badge`); await h.holdUntil(0.95);
       } },
   ]},
-  'buyer-catalogs': { role: 'buyer', path: '/buyer/catalogs', scenes: [
-    { az: 'Kataloqlar bölməsi. Kataloq — təchizatçı ilə razılaşdırılmış qiymət cədvəlidir. Təkrarlanan xırda alışlar üçün hər dəfə tender keçirmək mənasızdır, ona görə qiymətlər bir dəfə razılaşdırılır və sonra sadəcə sifariş verilir.',
-      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.45); await h.moveTo('table'); await h.holdUntil(0.9); } },
-    { az: 'Cədvəldə kataloqun adı, təchizatçı, status və mövqelərin sayı var. Say sütununun öz izahı var, çünki rəqəm tək başına nəyin sayı olduğunu demir. Kataloq müqavilədən yaradılanda qiymətlər qalib təklifdən avtomatik köçürülür.',
-      do: async (p, l, h) => { const th = p.locator('thead th'); await h.moveTo(th.nth(0)); await h.holdUntil(0.35); await h.moveTo(th.nth(1)); await h.holdUntil(0.62); await h.hover(th.nth(3), 1300); await h.holdUntil(0.93); } },
-    { az: 'Status yalnız aktiv olanda sifariş vermək mümkündür. Qaralama kataloq hazırlıq mərhələsidir: mövqeləri yoxlayırsınız, sonra «Aktivləşdir» düyməsi ilə işə salırsınız. Təchizatçı eyni cədvəli görür, amma onda bu düymələr yoxdur.',
-      do: async (p, l, h) => { await h.hover(p.locator('.badge').first(), 1300); await h.holdUntil(0.55); const a = p.locator('button:text-is("Aktivləşdir")').first(); if (await a.count()) await h.hover(a, 1200); await h.holdUntil(0.92); } },
-    { az: 'Adına klikləyəndə kataloqun içi açılır. Gəlin baxaq.',
-      do: async (p, l, h) => { await h.click(p.locator('tbody tr a').first(), 1500); await h.holdUntil(0.9); } },
-    { az: 'Burada mövqelər var: ad, minimum sifariş həcmi və razılaşdırılmış vahid qiymət. Minimum həcm təchizatçının şərtidir — ondan az sifariş sistem qəbul etmir, və sütunun izahı da bunu deyir.',
-      do: async (p, l, h) => { await h.scrollTo(p.locator('table').last()); await h.holdUntil(0.3); await h.hover(p.locator('th:has-text("Minimum sifariş")').first(), 1400); await h.holdUntil(0.65); await h.moveTo(p.locator('table').last().locator('tbody tr').first()); await h.holdUntil(0.93); } },
-    { az: 'Sağda say sahəsi var. Lazım olan miqdarı yazırsınız — qiyməti sistem özü vurur. Qiyməti dəyişmək olmur, çünki o, razılaşdırılıb. Elə buna görə kataloq sifarişi danışıq tələb etmir.',
-      do: async (p, l, h) => { const inp = p.locator('table').last().locator('input[type=number]').first(); if (await inp.count()) { await h.fill(inp, '5'); } else { await h.moveTo(p.locator('table').last()); } await h.holdUntil(0.93); } },
-    { az: 'Sifariş verməzdən əvvəl şöbəni seçirsiniz. Bu vacibdir: kataloq sifarişinin arxasında sorğu yoxdur, ona görə şöbəni yalnız burada göstərmək olar. Boş buraxsanız, sistem sizin öz şöbənizi qoyur.',
-      // The department select is the LAST one on the page (the open catalogue's card).
-      // selectByPrefix takes a CSS string and would need a selector that resolves to one
-      // element; a locator is cheaper and cannot pick the wrong card.
-      do: async (p, l, h) => { const sel = p.locator('.card select').last(); if (await sel.count()) { await h.moveTo(sel); await h.holdUntil(0.5); const opt = sel.locator('option').filter({ hasText: 'OPS' }).first(); if (await opt.count()) await sel.selectOption(await opt.getAttribute('value')).catch(() => {}); } await h.holdUntil(0.92); } },
-    { az: 'Sonra «Sifariş» düyməsi kataloqdan birbaşa sifariş yaradır — tendersiz, müqavilə danışıqlarısız. Bu, kataloqun bütün mənasıdır: iki klik və sifariş hazırdır. Biz onu indi basmırıq.',
-      do: async (p, l, h) => { const b = p.locator('button:has-text("Sifariş")').last(); if (await b.count()) { await h.hover(b, 1600); } else { await h.moveTo(p.locator('.badge').first()); } await h.holdUntil(0.92); } },
-    { az: 'Belə sifariş də büdcədən keçir, amma onun kateqoriyası yoxdur. Ona görə onu yalnız kateqoriyasız büdcə tuta bilər — şöbə səviyyəsində və ya bütün təşkilat üzrə. «IT» büdcəsi kataloq sifarişini səssizcə udmur, çünki o xərci heç kim təsnifləməyib.',
-      do: async (p, l, h) => { await h.scrollTo('h1'); await h.holdUntil(0.4); await h.moveTo('table'); await h.holdUntil(0.92); } },
-    { az: 'Şöbə də göstərilməyibsə, xərc «büdcədən kənar» hesabatına düşür və orada görünür. Yekunda: kataloq təkrarlanan alışları prosedurdan azad edir, amma nəzarəti saxlayır — qiymət razılaşdırılıb, minimum həcm qorunur, xərc isə düzgün büdcəyə yazılır.',
-      do: async (p, l, h) => { await h.moveTo(p.locator('.badge').first()); await h.holdUntil(0.4); await h.moveTo('h1'); await h.holdUntil(0.7); await h.moveTo('table'); await h.holdUntil(0.92); } },
+  // ГЛАВА «устройство»: каталог из договора и заказ по согласованной цене.
+  // Начинается на договорах: каталог рождается из договора, кнопкой в его строке.
+  'buyer-catalogs': { role: 'buyer', path: '/buyer/contracts', scenes: [
+    { az: 'Tender qiyməti razılaşdırdı. Eyni mal növbəti dəfə lazım olanda yenidən tender keçirmək lazım deyil: müqavilədən kataloq düzəlir, və sonrakı sifarişlər oradan gedir.',
+      must: true,
+      do: async (p, l, h) => {
+        await h.need(PO_ROW_BUYER, 'müqavilənin sətri');
+        await h.moveTo('h1'); await h.holdUntil(0.35);
+        await h.hover(`${PO_ROW_BUYER} button:has-text("📖")`, 1300); await h.holdUntil(0.95);
+      } },
+    { az: 'Basıram — kataloq yaranır. Adı, təchizatçısı və mövqeləri müqavilədən gəlir.',
+      must: true,
+      do: async (p, l, h) => {
+        await h.needClick(`${PO_ROW_BUYER} button:has-text("📖")`, '«Kataloq» düyməsi', 2500);
+        await h.needClick('a[href="/buyer/catalogs"]', 'yan paneldə «Kataloqlar»', 2000);
+        await h.need(`tbody tr:has-text("${STORY.supplier}")`, 'kataloqun sətri');
+        await h.moveTo(`tbody tr:has-text("${STORY.supplier}")`); await h.holdUntil(0.95);
+      } },
+    { az: 'Kataloq qaralamadır: qiymətlər yerindədir, amma sifariş vermək hələ olmur. Aktivləşdirirəm — bu, «bu qiymətlərlə işləyirik» deməkdir.',
+      must: true,
+      do: async (p, l, h) => {
+        await h.needClick('[data-testid=catalog-activate]', '«Aktivləşdir» düyməsi', 2200);
+        await h.need(`tbody tr:has-text("${STORY.supplier}") .badge.ACTIVE`, 'aktiv kataloq');
+        await h.moveTo(`tbody tr:has-text("${STORY.supplier}") .badge`); await h.holdUntil(0.95);
+      } },
+    { az: 'İçində razılaşdırılmış qiymət və minimal sifariş həcmi var. Qiyməti burada dəyişmək mümkün deyil: o müqavilədən gəlir, və kataloq onu təkrar danışıqlara açmır.',
+      must: true,
+      do: async (p, l, h) => {
+        await h.needClick(`tbody tr:has-text("${STORY.supplier}") a, tbody tr:has-text("${STORY.supplier}") td:first-child`, 'kataloqun adı', 1500);
+        const items = await h.need('.card:has(h3) tbody tr', 'kataloqun mövqeləri');
+        await h.scrollTo(items); await h.holdUntil(0.6);
+        await h.moveTo('thead th:nth-child(2)'); await h.holdUntil(0.95);
+      } },
+    { az: 'Say yazıram və sifariş verirəm. Bu, tendersiz sifarişdir — qiymət artıq razılaşdırılıb, ona görə yenidən rəqabət aparmağa səbəb yoxdur.',
+      must: true,
+      do: async (p, l, h) => {
+        const q = p.locator('[data-testid^="catalog-qty-"]').first();
+        await h.needFill(q, '4', 'say');
+        await h.holdUntil(0.6);
+        await h.needClick('[data-testid=catalog-order]', '«Sifariş ver» düyməsi', 2500);
+        await p.waitForURL(/\/buyer\/contracts/, { timeout: 15000 });
+        await h.holdUntil(0.95);
+      } },
+    { az: 'Sifariş müqavilələr bölməsində göründü. Diqqət edin: o, müqavilənin tavanından yeyir, və tavan artıq tam götürüldüyü üçün sistem qırmızı ilə xəbərdarlıq edir — sifariş keçir, amma izsiz keçmir.',
+      must: true,
+      do: async (p, l, h) => {
+        await h.need(`${PO_ROW_BUYER} .badge.DRAFT`, 'yeni sifariş');
+        await h.moveTo(`${PO_ROW_BUYER} td:nth-child(6)`); await h.holdUntil(0.6);
+        await h.scrollTo(`${PO_ROW_BUYER} .badge.DRAFT`); await h.moveTo(`${PO_ROW_BUYER} .badge.DRAFT`); await h.holdUntil(0.95);
+      } },
   ]},
-  // Budgets: the section finance runs the company from. Both tables carry a data-testid
-  // (budget-rollup, budget-list) — preferred here over a heading's text, because the
-  // browser specs hold those ids and will move them together with the markup.
-  // ГЛАВА 11 истории: как эта покупка легла в план отдела. Снимает ФИНАНСИСТ — это его
-  // экран, и у него своя видимость (BUYER_USER видит только свой отдел).
   'buyer-budgets': { role: 'finance', path: '/buyer/budgets', scenes: [
     { az: 'Mən maliyyəçiyəm. Büdcələr bölməsi bir sualla açılır: plan harada dayanıb. Yuxarıdakı cədvəl şöbələr üzrədir — plan, öhdəlik, faktiki xərc və qalıq.',
       must: true,
@@ -1023,117 +1051,172 @@ const SECTIONS = {
         await h.moveTo(`${PO_ROW_BUYER} .badge.ACCEPTED`); await h.holdUntil(0.95);
       } },
   ]},
+  // ГЛАВА «устройство»: реестр поставщиков. Снимается ПОСЛЕ сквозной части и работает с её
+  // данными: Supply One выиграл тендер, Baku Metal в нём участвовал, но в реестре его нет.
   'buyer-suppliers': { role: 'buyer', path: '/buyer/suppliers', scenes: [
-    { az: 'Təchizatçılar bölməsi. Burada iki cədvəl var və onlar bir-birinə oxşayır, ona görə hər birinin altında nə olduğu bir sətirlə yazılıb. Yuxarıdakı — reyestr: sizin işlədiyiniz təchizatçılar.',
-      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.35); await h.moveTo('h3:text-is("Reyestr")'); await h.holdUntil(0.65); await h.moveTo('.card:has(h3:text-is("Reyestr")) .hint'); await h.holdUntil(0.95); } },
-    { az: 'Sütunlar: şirkət, VÖEN və status. VÖEN on rəqəmdən ibarət olmalıdır — sistem bunu yoxlayır, çünki səhv vergi nömrəsi müqaviləni və qaiməni etibarsız edir.',
-      do: async (p, l, h) => { const th = p.locator('.card:has(h3:text-is("Reyestr")) thead th'); await h.moveTo(th.nth(0)); await h.holdUntil(0.35); await h.moveTo(th.nth(1)); await h.holdUntil(0.68); await h.moveTo(p.locator('.card:has(h3:text-is("Reyestr")) tbody tr').first().locator('td').nth(1)); await h.holdUntil(0.95); } },
-    { az: 'Status təchizatçının sizdəki vəziyyətidir: dəvət olunub, təsdiqlənib, yaxud bloklanıb. Təsdiqlənmiş təchizatçıya tendersiz birbaşa sifariş vermək və onun kataloqundan almaq olar — ona görə bu, sadəcə nişan deyil, icazədir.',
-      do: async (p, l, h) => { const rows = p.locator('.card:has(h3:text-is("Reyestr")) tbody tr'); await h.hover(rows.nth(0).locator('.badge'), 1400); await h.holdUntil(0.55); const ap = p.locator('button:text-is("Təsdiqlə")').first(); if (await ap.count()) { await h.hover(ap, 1300); } else { await h.hover(rows.nth(1).locator('.badge'), 1300); } await h.holdUntil(0.95); } },
-    { az: 'Yoxlama düyməsi KYC işi açır: təchizatçı sənədlərini yükləyir, siz baxıb qərar verirsiniz. Əvvəl bu düymədə yalnız qalxan nişanı vardı və nə etdiyini demirdi — indi yanında sözü də var.',
-      do: async (p, l, h) => { const v = p.locator('button:has-text("Yoxlama")').first(); if (await v.count()) { await h.hover(v, 1800); } else { await h.moveTo(p.locator('.card:has(h3:text-is("Reyestr")) tbody tr').first()); } await h.holdUntil(0.95); } },
-    { az: 'Reytinq düyməsi çatdırılma qiymətləndirməsini açır: sıfırdan yüzə qədər — vaxtında və tam çatdırılan sifarişlərin payı. Satınalmada bu göstərici OTIF adlanır, və izahda da belə yazılıb.',
-      // Opened and then CANCELLED on purpose. Scoring a supplier would change a figure the
-      // AI-recommendation card reads, on the same stand every other recording uses — and
-      // the dialog is the result worth showing anyway.
-      do: async (p, l, h) => { const r = p.locator('button:has-text("Reytinq")').first(); if (!(await r.count())) { await h.moveTo('table'); await h.holdUntil(0.95); return; } await h.moveTo(r); await h.holdUntil(0.3); await h.click(r, 1200); await h.holdUntil(0.55); const dlg = p.locator('[role=dialog]'); if (await dlg.count()) { await h.moveTo('[data-testid=dialog-input]'); await h.holdUntil(0.75); await h.moveTo(dlg.locator('.hint').first()); await h.holdUntil(0.9); await h.click('[data-testid=dialog-cancel]', 700); } await h.holdUntil(0.95); } },
-    { az: 'Rəqəm təkcə bəzək deyil: süni intellekt tövsiyəsi təchizatçının etibarlılığını məhz bu qiymətləndirmələrdən götürür. Yəni bir dəfə qoyulmuş qiymət növbəti tenderin müqayisəsində işləyir.',
-      do: async (p, l, h) => { await h.moveTo(p.locator('.card:has(h3:text-is("Reyestr")) tbody tr').first()); await h.holdUntil(0.5); await h.moveTo(p.locator('.card:has(h3:text-is("Reyestr")) tbody tr').last()); await h.holdUntil(0.95); } },
-    { az: 'Bloklama isə dağıdıcı əməliyyatdır: bloklanmış təchizatçı bundan sonra heç bir tenderə və sifarişə düşmür. Ona görə o, sətrin sonunda, ayırıcıdan sonra durur — əvvəl «Təsdiqlə» düyməsinin yanında idi, yan-yana.',
-      do: async (p, l, h) => { const b = p.locator('button:has-text("Blokla")').first(); if (await b.count()) { await h.hover(b, 1800); } else { await h.moveTo(p.locator('.actions').first()); } await h.holdUntil(0.95); } },
-    { az: 'Aşağıdakı cədvəl isə soraq kitabıdır: sistemdəki bütün təchizatçılar. Bu, sizin siyahınız deyil — buradan reyestrə dəvət edirsiniz. Əvvəl bu cədvəl də «Kataloq» adlanırdı — kataloqlar bölməsi ilə eyni sözlə, ona görə adı dəyişdirildi. Sütunlar da fərqlidir: statusun yerinə kateqoriyalar durur.',
-      do: async (p, l, h) => { await h.scrollTo('h3:text-is("Soraq kitabı")'); await h.holdUntil(0.4); await h.moveTo('.card:has(h3:text-is("Soraq kitabı")) .hint'); await h.holdUntil(0.7); await h.moveTo(p.locator('.card:has(h3:text-is("Soraq kitabı")) thead th').nth(2)); await h.holdUntil(0.95); } },
-    { az: 'Kateqoriyalar təchizatçının öz profilindən gəlir — nə satdığını özü göstərir. Reyestrdə artıq olan şirkətin yanında dəvət düyməsi görünmür, çünki onu ikinci dəfə dəvət etmək mənasızdır.',
-      do: async (p, l, h) => { const inv = p.locator('.card:has(h3:text-is("Soraq kitabı")) button:text-is("Dəvət et")').first(); if (await inv.count()) { await h.hover(inv, 1600); } else { await h.moveTo('.card:has(h3:text-is("Soraq kitabı")) table'); } await h.holdUntil(0.95); } },
-    { az: 'Yekunda: kataloqda təchizatçını tapırsınız, reyestrə dəvət edirsiniz, sənədlərini yoxlayırsınız, təsdiqləyirsiniz — və ondan sonra o, tenderlərə dəvət oluna və birbaşa sifariş ala bilər.',
-      do: async (p, l, h) => { await h.scrollTo('h1'); await h.holdUntil(0.4); await h.moveTo('.card:has(h3:text-is("Reyestr")) table'); await h.holdUntil(0.95); } },
+    { az: 'Təchizatçılar ekranı iki siyahıdan ibarətdir. Birincisi reyestrdir: kiminlə artıq işləyirik və hansı halda.',
+      must: true,
+      do: async (p, l, h) => {
+        const reg = await h.need('[data-testid=registry-card]', 'reyestr');
+        await h.moveTo('h1'); await h.holdUntil(0.35);
+        await h.moveTo(reg.locator('h3')); await h.holdUntil(0.65);
+        await h.moveTo(`[data-testid=registry-card] tbody tr:has-text("${STORY.supplier}")`); await h.holdUntil(0.95);
+      } },
+    { az: 'Supply One təsdiqlənmişdir — mebel tenderini məhz o uddu. Reyestrdə olmaq hüquq deyil, haldır: təsdiqlənmiş, gözləyən və ya bloklanmış.',
+      do: async (p, l, h) => { await h.moveTo(`[data-testid=registry-card] tbody tr:has-text("${STORY.supplier}") .badge`); await h.holdUntil(0.55); await h.moveTo('[data-testid=registry-card] thead th:nth-child(2)'); await h.holdUntil(0.95); } },
+    { az: 'İkinci siyahı şəbəkənin kataloqudur: sistemdə qeydiyyatdan keçmiş bütün təchizatçılar. Bakı Metal tenderimizdə iştirak etdi, amma reyestrimizdə yoxdur — dəvət reyestr tələb etmir, iş isə tələb edir.',
+      must: true,
+      do: async (p, l, h) => {
+        const dir = await h.need('[data-testid=directory-card]', 'şəbəkə kataloqu');
+        await h.scrollTo(dir); await h.holdUntil(0.45);
+        await h.need(`[data-testid=directory-card] tbody tr:has-text("${STORY.supplier2}") [data-testid=dir-invite]`, `${STORY.supplier2} sətri`);
+        await h.moveTo(`[data-testid=directory-card] tbody tr:has-text("${STORY.supplier2}")`); await h.holdUntil(0.95);
+      } },
+    { az: 'Reyestrə əlavə edirəm. İndi o da bizim siyahımızdadır və onun haqqında qiymətləndirmə, yoxlama və tarixçə saxlanılır.',
+      must: true,
+      do: async (p, l, h) => {
+        await h.needClick(`[data-testid=directory-card] tbody tr:has-text("${STORY.supplier2}") [data-testid=dir-invite]`, '«Dəvət et» düyməsi', 2000);
+        await h.need(`[data-testid=registry-card] tbody tr:has-text("${STORY.supplier2}")`, 'reyestrdə yeni sətir');
+        await h.scrollTo('[data-testid=registry-card]'); await h.holdUntil(0.6);
+        await h.moveTo(`[data-testid=registry-card] tbody tr:has-text("${STORY.supplier2}") .badge`); await h.holdUntil(0.95);
+      } },
+    { az: 'Qiymətləndirmə: ulduza basıb təchizatçıya vaxtında və tam çatdırılma üzrə bal yazıram. Doxsan.',
+      must: true,
+      do: async (p, l, h) => {
+        await h.needClick(`[data-testid=registry-card] tbody tr:has-text("${STORY.supplier}") [data-testid=sup-score]`, '«Qiymətləndirmə» düyməsi', 1200);
+        await h.need('[data-testid=dialog-input]', 'bal sahəsi');
+        await h.holdUntil(0.55);
+        await h.needClick('[data-testid=dialog-confirm]', 'təsdiq düyməsi', 1800);
+        await h.holdUntil(0.95);
+      } },
+    { az: 'Bal sətirdə görünür və orada qalmır: süni zəka tövsiyəsində o, etibarlılıq göstəricisinə çevrilir. Yəni bu günkü icra növbəti tenderin sıralamasına təsir edir.',
+      do: async (p, l, h) => { await h.moveTo(`[data-testid=registry-card] tbody tr:has-text("${STORY.supplier}") .hint`); await h.holdUntil(0.95); } },
+    { az: 'Bloklama təchizatçını gələcək bütün prosedurlardan kəsir, ona görə o, «Daha çox» menyusunun içindədir — təsdiqin yanında yox. Bu, bu ekranda yeganə dağıdıcı əməliyyatdır.',
+      do: async (p, l, h) => {
+        const more = await openRowMenu(p, `[data-testid=registry-card] tbody tr:has-text("${STORY.supplier2}")`, '', h);
+        if (more) { await h.holdUntil(0.6); await h.moveTo(more); }
+        await closeRowMenu(p); await h.holdUntil(0.95);
+      } },
+    { az: 'Qalxan düyməsi yoxlama işi açır: təchizatçıdan sənəd istənilir. Supply One üçün onu indi açıram — növbəti bölmə məhz bu işin davamıdır.',
+      must: true,
+      do: async (p, l, h) => {
+        await h.needClick(`[data-testid=registry-card] tbody tr:has-text("${STORY.supplier}") [data-testid=sup-verify]`, '«Yoxlama» düyməsi', 1800);
+        await h.need('[data-testid=toast]', 'yoxlama işinin açıldığı barədə bildiriş');
+        await h.moveTo('[data-testid=toast]'); await h.holdUntil(0.95);
+      } },
   ]},
+  // ГЛАВА «устройство»: проверка поставщика глазами покупателя. Идёт ПОСЛЕ `sup-verification`:
+  // дело открыто в главе про реестр, документы в него кладёт поставщик.
   'buyer-verification': { role: 'buyer', path: '/buyer/verification', scenes: [
-    { az: 'Yoxlama bölməsi. Burada təchizatçıların sənəd işləri var. Məqsəd sadədir: sənədləri yoxlanmış təchizatçıya tender gözləmədən birbaşa sifariş vermək olur, ona görə bu, formal prosedur deyil, icazə mexanizmidir.',
-      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.4); await h.moveTo('table'); await h.holdUntil(0.95); } },
-    { az: 'Cədvəldə təchizatçı, işin statusu və əlavələrin sayı var. Sayın öz izahı var — bu işə nə qədər fayl yüklənib. Altdaki sətir isə necə davam edəcəyinizi deyir: sənədləri görmək üçün şirkətin adına klikləmək lazımdır.',
-      do: async (p, l, h) => { const th = p.locator('thead th'); await h.moveTo(th.nth(1)); await h.holdUntil(0.35); await h.hover(th.nth(2), 1400); await h.holdUntil(0.68); await h.moveTo(p.locator('.hint').first()); await h.holdUntil(0.95); } },
-    { az: 'Status zənciri qısadır: yeni iş — sənəd gözlənilir, yoxlanılır — sənədlər gəlib, qərar sizdədir, sonra təsdiq və ya rədd. Qərar verilməyibsə, top təchizatçıdadır ya sizdə — bunu məhz status deyir.',
-      do: async (p, l, h) => { const rows = p.locator('tbody tr'); await h.hover(rows.nth(0).locator('.badge'), 1500); await h.holdUntil(0.6); const n = await rows.count(); if (n > 1) await h.hover(rows.nth(1).locator('.badge'), 1300); await h.holdUntil(0.95); } },
-    { az: 'İşi açırıq — şirkətin adına klikləyirik.',
-      do: async (p, l, h) => { await h.click(p.locator('tbody tr a').first(), 1500); await h.holdUntil(0.95); } },
-    { az: 'Aşağıda yüklənmiş sənədlər sıralanır: hər birinin növü, faylın adı və qısa kod. Növ vacibdir — VÖEN şəhadətnaməsi, lisenziya, bank arayışı, sığorta — çünki sənədləri məhz növünə görə axtarırsınız.',
-      do: async (p, l, h) => { await h.scrollTo(p.locator('.card').last()); await h.holdUntil(0.4); await h.moveTo(p.locator('.card').last().locator('.badge').first()); await h.holdUntil(0.95); } },
-    { az: 'Yanındaki qısa kod faylın məzmununun barmaq izidir. İzahı da bunu deyir: sənəd sonradan dəyişdirilibsə, iz uyğun gəlməyəcək. Bu, həm sizin, həm təchizatçının xeyrinədir — heç kim «mən başqa sənəd göndərmişdim» deyə bilməz.',
-      do: async (p, l, h) => { const mono = p.locator('.card').last().locator('.hint[data-tip]').first(); if (await mono.count()) { await h.hover(mono, 1800); } else { await h.moveTo(p.locator('.card').last()); } await h.holdUntil(0.95); } },
-    { az: 'Hər fayl yüklənəndə antivirusdan keçir. Yoluxmuş fayl bloklanır və bu barədə bildiriş gedir — fayl isə sistemə düşmür. Yükləmə özü təchizatçının işidir, siz isə burada nəticəsini görürsünüz.',
-      do: async (p, l, h) => { await h.moveTo(p.locator('.card').last()); await h.holdUntil(0.5); await h.moveTo(p.locator('.card').last().locator('.hint').first()); await h.holdUntil(0.95); } },
-    { az: 'Qərar iki düymədədir: təsdiq və ya rədd. Hər birinin izahı nəticəni deyir — təsdiq birbaşa sifarişləri açır. Təchizatçı qərarı öz panelində dərhal görür, və təsdiq alan kimi onun yoxlama sətri yaşıla dönür.',
-      do: async (p, l, h) => { const a = p.locator('button:text-is("Təsdiqlə")').first(); if (await a.count()) { await h.hover(a, 1700); await h.holdUntil(0.6); await h.hover(p.locator('button:text-is("Rədd et")').first(), 1300); } else { await h.moveTo('table'); } await h.holdUntil(0.95); } },
+    { az: 'Yoxlama işləri: təchizatçı, işin statusu və əlavə olunmuş sənədlərin sayı. İş reyestrdəki qalxan düyməsi ilə açılır, sənədləri isə təchizatçının özü qoyur.',
+      must: true,
+      do: async (p, l, h) => {
+        const row = await h.need(`tbody tr:has-text("${STORY.supplier}")`, 'yoxlama işi');
+        await h.moveTo('h1'); await h.holdUntil(0.35);
+        await h.moveTo(row); await h.holdUntil(0.7);
+        await h.moveTo('thead th:nth-child(3)'); await h.holdUntil(0.95);
+      } },
+    { az: 'Açıram. Hər sənədin növü, adı və barmaq izi var. İz qəsdən görünür: auditor «bu, yüklənmiş faylın özüdürmü?» soruşur, və cavab ekranda olmalıdır, sütunda gizlənmiş halda yox.',
+      must: true,
+      do: async (p, l, h) => {
+        await h.needClick(`tbody tr:has-text("${STORY.supplier}") [data-testid=verif-open]`, '«Aç» düyməsi', 1500);
+        const hash = await h.need('.card .hint[data-tip]', 'sənədin barmaq izi');
+        await h.scrollTo(hash); await h.holdUntil(0.6);
+        await h.moveTo(hash); await h.holdUntil(0.95);
+      } },
+    { az: 'Fayl adının üstünə basanda sənəd yüklənir. Yükləmə ayrıca ünvan üzərindən gedir və hər dəfə yenidən icazə tələb edir — sənəd açıq linkdə qalmır.',
+      do: async (p, l, h) => { await h.moveTo('.card a[href="#"]'); await h.holdUntil(0.95); } },
+    { az: 'Sənədlər yerindədir — təsdiq edirəm. Təchizatçı yoxlanılmış sayılır, və bu hal onun kartında görünür.',
+      must: true,
+      do: async (p, l, h) => {
+        await h.needClick('[data-testid=verif-approve]', '«Təsdiqlə» düyməsi', 2200);
+        await h.need(`tbody tr:has-text("${STORY.supplier}") .badge.APPROVED`, 'təsdiqlənmiş yoxlama');
+        await h.moveTo(`tbody tr:has-text("${STORY.supplier}") .badge`); await h.holdUntil(0.95);
+      } },
+    { az: 'Yoxlama bir dəfəlik deyil: lisenziyanın və arayışların müddəti bitir, ona görə iş yenidən açıla bilər və köhnə sənədlər tarixçədə qalır.',
+      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.5); await h.moveTo('tbody tr'); await h.holdUntil(0.95); } },
   ]},
-  // Settings: eight sections one under another. The pass put an anchor list at the top,
-  // because the only way to the last one used to be the scrollbar.
+  // ГЛАВА «устройство»: правила, по которым всё предыдущее произошло.
+  // Разделы адресуются своими id (#set-users, #set-method…), а не подписями: id в разметке
+  // стоят именно для ссылок и от языка не зависят.
   'buyer-settings': { role: 'buyer', path: '/buyer/settings', scenes: [
-    { az: 'Parametrlər bölməsi. Burada səkkiz ayrı hissə var, ona görə ən yuxarıda keçid sətri durur: istifadəçilər, kateqoriyalar, şöbələr, büdcə hədləri, metod siyasəti, kanallar, inteqrasiyalar və təsdiq zənciri. Əvvəl sonuncuya yalnız sürüşdürmə ilə çatmaq olurdu.',
-      // The jump IS the result: the row exists because the last section used to be
-      // reachable only by the scrollbar, and a hover cannot show that.
-      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.3); await h.moveTo(p.locator('.hint a').first()); await h.holdUntil(0.5); const last = p.locator('.hint a').last(); await h.moveTo(last); await h.holdUntil(0.68); await h.click(last, 1200); await h.holdUntil(0.88); await h.moveTo('h3#set-approval'); await h.holdUntil(0.95); } },
-    { az: 'İstifadəçilər. Cədvəldə e-poçt, ad, rol və şöbə var. Şöbə sütunu sadəcə məlumat deyil: o, həmin adamın yeni sorğularında standart şöbə olur və onun büdcələrə girişini müəyyən edir.',
-      do: async (p, l, h) => { await h.moveTo('h3#set-users'); await h.holdUntil(0.4); await h.moveTo(p.locator('.card:has(h3#set-users) thead th').nth(2)); await h.holdUntil(0.7); await h.moveTo(p.locator('.card:has(h3#set-users) thead th').nth(3)); await h.holdUntil(0.95); } },
-    { az: 'Rollar beşdir: administrator, təsdiqləyən, istifadəçi, maliyyəçi və təchizatçı. Öz rolunuzu dəyişmək mümkün deyil — sistem bunu açıq imtina ilə deyir. Rol dəyişəndə həmin adamın bütün sessiyaları bağlanır, yəni yeni hüquq dərhal işə düşür.',
-      do: async (p, l, h) => { const sel = p.locator('.card:has(h3#set-users) tbody select').first(); if (await sel.count()) { await h.moveTo(sel); } await h.holdUntil(0.55); await h.moveTo(p.locator('.card:has(h3#set-users) form').first()); await h.holdUntil(0.95); } },
-    { az: 'Kateqoriya kataloqu. Bu, vahid siyahıdır, və məqsədi birdir: «IT», «it» və «AyTi» üç ayrı kateqoriyaya çevrilməsin. Çünki kateqoriya həm metod siyasətini, həm büdcəni, həm analitikanı idarə edir — üç yerdə birdən dağılır.',
-      do: async (p, l, h) => { await h.scrollTo('h3#set-categories'); await h.holdUntil(0.35); await h.moveTo('.card:has(h3#set-categories) .hint'); await h.holdUntil(0.6); const chips = p.locator('.card:has(h3#set-categories) .badge'); if (await chips.count()) { await h.moveTo(chips.first()); await h.holdUntil(0.8); await h.moveTo(chips.last()); } await h.holdUntil(0.95); } },
-    { az: 'Şöbələr — məsrəf mərkəzləri. Sütunlar: kod, ad, yuxarı şöbə, sorğuların sayı və status. Yuxarı şöbə ağac qurur, ona görə büdcə hesabatında ana şöbənin rəqəmlərinə tabe bölmələr də daxil olur.',
-      do: async (p, l, h) => { await h.scrollTo('h3#set-departments'); await h.holdUntil(0.4); const th = p.locator('.card:has(h3#set-departments) thead th'); await h.moveTo(th.nth(2)); await h.holdUntil(0.7); await h.moveTo(th.nth(3)); await h.holdUntil(0.95); } },
-    { az: 'Sorğuları olan şöbə silinmir — silmə düyməsi işləmir və bunun səbəbi yazılır. Əvəzinə onu arxivə göndərirsiniz: tarixi sorğular öz şöbəsində qalır, yeni sorğuda isə həmin şöbə artıq seçilmir. Bu, məlumatı itirmədən bağlamağın yoludur.',
-      do: async (p, l, h) => { const c = p.locator('.card:has(h3#set-departments)'); const del = c.locator('button.danger').first(); if (await del.count()) { await h.hover(del, 1600); await h.holdUntil(0.6); } const arc = c.locator('button:has-text("Arxiv")').first(); if (await arc.count()) await h.hover(arc, 1400); await h.holdUntil(0.95); } },
-    { az: 'Büdcə hədləri. Xəbərdarlıq faizi — mənimsənilmə bu paya çatanda bildiriş gedir, özü də şöbənin sahibinə, bütün təşkilata deyil. Qırx nəfərə göndərilən büdcə xəbərdarlığı heç kimin əməl etmədiyi xəbərdarlıqdır.',
-      do: async (p, l, h) => { const th = p.locator('h3#set-thresholds'); if (await th.count()) { await h.scrollTo(th); await h.holdUntil(0.4); await h.moveTo('#bud-warn'); await h.holdUntil(0.7); await h.moveTo('.card:has(h3#set-thresholds) .hint'); } else { await h.scrollTo('h3#set-method'); } await h.holdUntil(0.95); } },
-    { az: 'Blok faizi isə təsdiqi dayandırır — amma standart olaraq boşdur, yəni heç nə bloklanmır. Altdaki qeyd administratorun yazılı əsaslandırma ilə keçməsinə icazə verir. Bu, açıq seçimdir: ya qayda sərtdir, ya istisna var, və istisna həmişə imzalı olur.',
-      do: async (p, l, h) => { const b = p.locator('#bud-block'); if (await b.count()) { await h.moveTo(b); await h.holdUntil(0.5); await h.moveTo('#bud-override'); } else { await h.moveTo('h1'); } await h.holdUntil(0.95); } },
-    { az: 'Metod siyasəti — ekranın ən vacib hissəsi. Burada yazılır, hansı məbləğə qədər birbaşa sifariş, hansından tender. Sorğunu yaradan adam metodu seçmir: sorğu təsdiqlənən kimi metod bu cədvəldən avtomatik təyin olunur.',
-      do: async (p, l, h) => { await h.scrollTo('h3#set-method'); await h.holdUntil(0.4); await h.moveTo('.card:has(h3#set-method) .hint'); await h.holdUntil(0.75); await h.moveTo('.mp-scale'); await h.holdUntil(0.95); } },
-    { az: 'Siyasət rəngli şkala kimi göstərilir, hər kateqoriya üçün ayrıca: bir baxışda görünür, hansı aralıq hansı metoda gedir. Aralıqları «Dəyiş» düyməsi ilə qurursunuz — məbləğ sərhədi və metod.',
-      // Opened and closed: saving would rewrite the org's own bands, and the policy decides
-      // which procedure every approved request gets — on the stand every other recording
-      // reads. The editor itself is the result worth seeing.
-      do: async (p, l, h) => { const card = p.locator('.card:has(h3#set-method)'); const bands = p.locator('.mp-band'); await h.moveTo(bands.first()); await h.holdUntil(0.3); const n = await bands.count(); await h.moveTo(bands.nth(Math.min(1, n - 1))); await h.holdUntil(0.5); const e = card.locator('button:has-text("Dəyiş")').first(); if (await e.count()) { await h.click(e, 1300); await h.holdUntil(0.75); await h.moveTo(card.locator('table').first()); await h.holdUntil(0.9); const cancel = card.locator('button:has-text("Ləğv et")').first(); if (await cancel.count()) await h.click(cancel, 600); } await h.holdUntil(0.95); } },
-    { az: 'Göndərmə kanalları: öz e-poçtunuz və WhatsApp. Bunlar avtomatik xatırlatmalar üçündür. Qoşulmayıbsa, sistemin ümumi konfiqi işlədilir, ona görə kanal qoşmaq məcburi deyil — sadəcə məktublar sizin adınızdan getsin deyə.',
-      do: async (p, l, h) => { await h.scrollTo('#set-channels'); await h.holdUntil(0.4); await h.moveTo(p.locator('#set-channels .hint').first()); await h.holdUntil(0.7); await h.moveTo(p.locator('#set-channels .badge, #set-channels button').first()); await h.holdUntil(0.95); } },
-    { az: 'İnteqrasiyalar. Burada bir düymə var: qaimələri mühasibat üçün fayla çıxarmaq. Yanında isə standart ixracların siyahısı — OCDS tenderin kartında, elektron qaimə üçün UBL isə qaimənin özündə. Yəni məlumat sistemdə qapanıb qalmır.',
-      do: async (p, l, h) => { await h.scrollTo('h3#set-integrations'); await h.holdUntil(0.4); await h.moveTo('.card:has(h3#set-integrations) .hint'); await h.holdUntil(0.7); await h.hover(p.locator('.card:has(h3#set-integrations) button').first(), 1300); await h.holdUntil(0.95); } },
-    { az: 'Təsdiq zənciri — kim hansı məbləği təsdiqləyir. Aralıq, sonra addımlar: hər addımda bir rol. Altda ayrıca yazılıb ki, bir nəfər eyni sorğunun iki addımını bağlaya bilməz, müəllif isə öz sorğusunu heç vaxt təsdiqləyə bilməz.',
-      do: async (p, l, h) => { await h.scrollTo('h3#set-approval'); await h.holdUntil(0.4); await h.moveTo('.card:has(h3#set-approval) .hint'); await h.holdUntil(0.65); await h.moveTo(p.locator('.card:has(h3#set-approval) .badge').first()); await h.holdUntil(0.95); } },
-    { az: 'Zənciri sıfırdan qurmaq lazım deyil: aşağıda hazır sxemlər var və işləyən sxem ayrıca işarələnib. Birini seçmək kifayətdir. Kiçik komanda üçün zəncirsiz variant da var — istənilən təsdiqləyən bir kliklə təsdiqləyir.',
-      do: async (p, l, h) => { const pr = p.locator('.card:has(h3#set-approval) [role=button]'); if (await pr.count()) { await h.moveTo(pr.first()); await h.holdUntil(0.5); await h.moveTo(pr.last()); } else { await h.moveTo('.card:has(h3#set-approval)'); } await h.holdUntil(0.95); } },
+    { az: 'Parametrlər — bütün əvvəlki bölmələrin qaydaları burada yazılır. Buradakı bir sətir sabah sorğunun hansı yolla gedəcəyini dəyişir, ona görə bu ekran axırda deyil, əvvəldə öyrənilməlidir.',
+      must: true,
+      do: async (p, l, h) => {
+        await h.need('#set-users', 'istifadəçilər bölməsi');
+        await h.moveTo('h1'); await h.holdUntil(0.45);
+        await h.moveTo('#set-users'); await h.holdUntil(0.95);
+      } },
+    { az: 'İstifadəçilər və rollar: kim sorğu yazır, kim təsdiqləyir, kim tender aparır, kim pulu görür. Öz rolunu dəyişmək olmur — yoxsa istənilən istifadəçi bir kliklə administratora çevrilərdi.',
+      do: async (p, l, h) => { await h.scrollTo('#set-users'); await h.holdUntil(0.4); await h.moveTo('#set-users + * tbody tr, #set-users ~ table tbody tr'); await h.holdUntil(0.95); } },
+    { az: 'Kateqoriyalar vahid siyahıdır. Sorğudakı «OFFICE» məhz buradan gəldi: belə olmasa, «IT» və «it» ayrı kateqoriyaya çevrilər, və analitikadakı bölgü mənasını itirərdi.',
+      must: true,
+      do: async (p, l, h) => {
+        const cat = await h.need('#set-categories', 'kateqoriyalar bölməsi');
+        await h.scrollTo(cat); await h.holdUntil(0.5);
+        await h.moveTo(cat); await h.holdUntil(0.95);
+      } },
+    { az: 'Şöbələr: kim xərcləyir. Hər şöbənin sahibi var, və büdcə xəbərdarlığı məhz ona gedir — qırx nəfərə göndərilən həyəcan siqnalı heç kimin işi olmur.',
+      must: true,
+      do: async (p, l, h) => {
+        const dep = await h.need('#set-departments', 'şöbələr bölməsi');
+        await h.scrollTo(dep); await h.holdUntil(0.5);
+        await h.moveTo(dep); await h.holdUntil(0.95);
+      } },
+    { az: 'Büdcə həddləri: səksən faizdə xəbərdarlıq gedir, bağlama isə sönülüdür. Qoşulsa, həddi aşan təsdiq elə təsdiq anında dayanır və geri qaytarılır — sorğu göndərilmiş halda qalır.',
+      must: true,
+      do: async (p, l, h) => {
+        const th = await h.need('#set-thresholds', 'həddlər bölməsi');
+        await h.scrollTo(th); await h.holdUntil(0.55);
+        await h.moveTo(th); await h.holdUntil(0.95);
+      } },
+    { az: 'Etiraz müddəti: qalib elan olunandan müqaviləyə qədər gözləmə. Bizim tenderimizdə o sıfır idi, ona görə müqavilə dərhal yarandı; qoşulsa, kart müddətin nə vaxt bitdiyini göstərər.',
+      must: true,
+      do: async (p, l, h) => {
+        const st = await h.need('[data-testid=set-standstill]', 'etiraz müddəti bölməsi');
+        await h.scrollTo(st); await h.holdUntil(0.55);
+        await h.moveTo(st); await h.holdUntil(0.95);
+      } },
+    { az: 'Metod siyasəti — bütün hekayənin açarı. Əlli min manata qədər birbaşa sifariş, yuxarısı qapalı tender. Altmış dörd min manatlıq sorğu tenderə məhz buna görə getdi, və bunu insan seçmədi: zolağı qayda seçdi.',
+      must: true,
+      do: async (p, l, h) => {
+        const m = await h.need('#set-method', 'metod siyasəti');
+        await h.scrollTo(m); await h.holdUntil(0.4);
+        await h.moveTo(m); await h.holdUntil(0.7);
+        await h.moveTo('#set-method ~ table tbody tr, #set-method + * tbody tr'); await h.holdUntil(0.95);
+      } },
+    { az: 'Təsdiq zənciri: hansı məbləğdən sonra kim təsdiqləyir. Bir addım da ola bilər, üç də — böyük məbləğ daha çox gözə görünsün deyə. Zəncir boş olanda sorğunu istənilən təsdiqləyən təsdiqləyir, və bunu siyahı açıq yazır.',
+      must: true,
+      do: async (p, l, h) => {
+        const ap = await h.need('#set-approval', 'təsdiq zənciri');
+        await h.scrollTo(ap); await h.holdUntil(0.55);
+        await h.moveTo(ap); await h.holdUntil(0.95);
+      } },
   ]},
-  // Supplier panel. The pass moved verification OUT of the figure grid: it answers a
-  // question that comes before any count — can I be invited at all — and every tile now
-  // carries its own explanation, which the supplier's side used to lack entirely.
+  // ГЛАВА «устройство»: панель поставщика в конце истории — она уже не пустая.
   'sup-dashboard': { role: 'sup', path: '/supplier/dashboard', scenes: [
-    { az: 'Təchizatçının idarə paneli. Ən yuxarıda yoxlama sətri durur, və bu, təsadüf deyil: o, saylardan əvvəl gələn suala cavab verir — sizi ümumiyyətlə tenderə dəvət edə bilərlərmi.',
-      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.35); await h.moveTo('[data-testid=sup-verification]'); await h.holdUntil(0.95); } },
-    { az: 'Sətir statusu və onun sizin üçün nə demək olduğunu yazır. Sənədlər sifarişçidədirsə, cavabı gözləməlisiniz — təkrar göndərmək lazım deyil. Heç nə göndərilməyibsə, bu da ayrıca yazılır, çünki «başlanmayıb» ilə «yoxlanılır» iki fərqli vəziyyətdir. Sağdaki düymə yoxlama bölməsini açır.',
-      do: async (p, l, h) => { const v = p.locator('[data-testid=sup-verification]'); await h.moveTo(v.locator('.badge').first()); await h.holdUntil(0.4); await h.moveTo(v.locator('.hint')); await h.holdUntil(0.72); await h.hover(v.locator('a.btn'), 1200); await h.holdUntil(0.95); } },
-    { az: 'Altda beş göstərici var: açıq tenderlər, mənim təkliflərim, müqavilələr, işdə olan sifarişlər və qaimələr. Hər birinin üzərinə gətirin — nəyin sayıldığı yazılır. «Müqavilələr: üç» qaralamaları və bitmişləri də sayır, və bunu bilmədən rəqəm yanıldır.',
-      do: async (p, l, h) => { await h.scrollTo('[data-testid=sup-kpi]'); await h.holdUntil(0.3); const c = p.locator('[data-testid=sup-kpi] .card'); await h.hover(c.nth(0), 1400); await h.holdUntil(0.62); await h.hover(c.nth(2), 1400); await h.holdUntil(0.95); } },
-    { az: 'Açıq tenderlər yalnız hələ təklif qəbul edənləri sayır — bağlananlar və hələ elan olunmayanlar yox. Mənim təkliflərim isə həm möhürlü, həm açılmış təkliflərdir; gecikənlər və kənarlaşdırılanlar sayılmır.',
-      do: async (p, l, h) => { const c = p.locator('[data-testid=sup-kpi] .card'); await h.hover(c.nth(0), 1300); await h.holdUntil(0.5); await h.hover(c.nth(1), 1400); await h.holdUntil(0.95); } },
-    { az: 'Sonra tapşırıqlar. Sistem sizin üçün növbəti addımı özü tapır: təklif ver, sifarişi irəli apar, qaimə göndər. Sətrin sonundaki «Aç» düyməsi düz lazım olan ekrana aparır — əvvəl orada yalnız ox vardı.',
-      do: async (p, l, h) => { await h.scrollTo('h3:text-is("Tapşırıqlar")'); await h.holdUntil(0.4); const r = p.locator('.card:has(h3:text-is("Tapşırıqlar")) tbody tr').first(); await h.moveTo(r.locator('.badge')); await h.holdUntil(0.7); await h.hover(r.locator('a.btn'), 1200); await h.holdUntil(0.95); } },
-    { az: 'Aşağıda bildirişlər, sifariş üzrə qruplaşdırılmış: bir sifarişin bütün hadisələri bir blokda durur. Burada da oxunmuş kimi işarələmək olar — əvvəl bu imkan yalnız sifarişçinin panelində idi, halbuki ehtiyac hər iki tərəfdə eynidir.',
-      do: async (p, l, h) => { await h.scrollTo('h3:text-is("Bildirişlər")'); await h.holdUntil(0.4); await h.moveTo('.card:has(h3:text-is("Bildirişlər")) table'); await h.holdUntil(0.72); const b = p.locator('.card:has(h3:text-is("Bildirişlər")) button.btn').first(); if (await b.count()) await h.hover(b, 1200); await h.holdUntil(0.95); } },
-    // Also ends on a real press, and for the same reason as the buyer's panel: a
-    // navigation changes nothing on the stand, while clearing notifications would empty
-    // this panel for every other recording.
-    { az: 'Beləliklə iş qaydası sadədir: panelə baxırsınız, tapşırıqları bağlayırsınız. Göstərək: yoxlama sətrindəki «Aç» düyməsini basırıq — və sistem bizi öz sənədlərimizə aparır. Yoxlama bitəndən sonra isə sizə tender gözləmədən sifariş verə bilərlər.',
-      do: async (p, l, h) => { await h.scrollTo('h1'); await h.holdUntil(0.25); const v = p.locator('[data-testid=sup-verification] a.btn').first(); if (await v.count()) { await h.moveTo(v); await h.holdUntil(0.45); await h.click(v, 2000); await p.waitForSelector('h1', { timeout: 15000 }); await h.holdUntil(0.8); await h.moveTo('h1'); } else { await h.moveTo('[data-testid=sup-kpi]'); } await h.holdUntil(0.95); } },
+    { az: 'Təchizatçının paneli. Yuxarıda yoxlama halı, sonra göstəricilər, aşağıda isə tapşırıqlar — məndən addım gözləyən işlər.',
+      must: true,
+      do: async (p, l, h) => {
+        await h.need('[data-testid=sup-kpi]', 'göstəricilər');
+        await h.moveTo('h1'); await h.holdUntil(0.4);
+        await h.moveTo('[data-testid=sup-verification]'); await h.holdUntil(0.95);
+      } },
+    { az: 'Yoxlama kartı yaşıldır: sənədlərim təsdiqlənib. Təsdiqlənməmiş yoxlama bəzi alıcılar üçün maneədir, ona görə o, panelin başındadır — siyahının dərinliyində yox.',
+      do: async (p, l, h) => { await h.moveTo('[data-testid=sup-verification]'); await h.holdUntil(0.5); await h.hover('[data-testid=sup-verification]', 1200); await h.holdUntil(0.95); } },
+    { az: 'Göstəricilər: mənə açıq tenderlər, verdiyim təkliflər, işdəki sifarişlər və ödənilməmiş hesablar. Hər rəqəmin öz izahı var.',
+      must: true,
+      do: async (p, l, h) => {
+        const k = await h.need('[data-testid=sup-kpi]', 'göstəricilər');
+        await h.scrollTo(k); await h.holdUntil(0.35);
+        await h.hover(k.locator('.card').first(), 1200); await h.holdUntil(0.7);
+        await h.moveTo(k.locator('.card').last()); await h.holdUntil(0.95);
+      } },
+    { az: 'Tapşırıqlar: sistem bütün bölmələri özü gəzir və növbəsi məndə olan işləri bir siyahıya yığır — təklif ver, sifarişi təsdiqlə, hesab çıxar.',
+      do: async (p, l, h) => { await h.scrollTo('h3'); await h.holdUntil(0.5); await h.moveTo('h3'); await h.holdUntil(0.95); } },
+    { az: 'Günü buradan başlamaq rahatdır: boş siyahı hər şeyin öz vaxtında getdiyini bildirir, dolu siyahı isə nəyi itirdiyimi.',
+      do: async (p, l, h) => { await h.moveTo('.card'); await h.holdUntil(0.6); await h.moveTo('h1'); await h.holdUntil(0.95); } },
   ]},
-  // Supplier market → a real sealed bid on a live tender. The market list gained the
-  // procedure column in PR #79: before it, a closed tender, a live auction and a request
-  // for information looked identical until the row was opened.
-  // Third section holding the same auction's state, and the most deliberate of the
-  // three: scene 5 parks the cursor ON its status badge for 1.3s while the narration
-  // explains that the deadline is absolute. The row survives closing — GET /events
-  // does not filter by status — so nothing misses and nothing is empty; what breaks is
-  // the set, which would show one auction open in one guide and closed in another.
-  // ГЛАВА 3 истории: поставщик видит приглашение и смотрит, что именно закупают.
   'sup-market': { role: 'sup', path: '/supplier/market', scenes: [
     { az: 'Mən Supply One-da satış meneceriyəm. Vitrin mənə açıq olan bütün tenderləri göstərir. Qapalı tenderə yalnız dəvət olunanlar düşür — bu sətir burada ona görədir ki, alıcı məni dəvət edib.',
       do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.35); await h.need(ROW, 'dəvət olunduğum tender'); await h.moveTo(`${ROW} td:nth-child(1)`); await h.holdUntil(0.95); } },
@@ -1279,98 +1362,213 @@ const SECTIONS = {
     { az: 'Mənim tərəfimdən iş bitdi. Növbəti addım alıcıdadır: tutuşdurma, təsdiq və ödəniş.',
       do: async (p, l, h) => { await h.moveTo(`${PO_ROW_SUP} td.num`); await h.holdUntil(0.5); await h.moveTo('h1'); await h.holdUntil(0.95); } },
   ]},
-  'sup-auction': { role: 'sup', path: '/supplier/market', requires: { eventOpen: 'Auksion: ofis kağızı' }, scenes: [
-    { az: 'Ayrıca prosedur növü — revers auksion. Siyahıda onu şimşək nişanı ilə tanıyırsınız. Adi tenderdən fərqi budur: burada qiymətlər gizli deyil və real vaxtda aşağı düşür. Ofis kağızı üzrə auksionu açırıq.',
-      do: async (p, l, h) => { await h.moveTo('table'); await h.holdUntil(0.35); const chip = p.locator('tbody tr:has-text("Auksion: ofis kağızı") .chip').first(); if (await chip.count()) await h.hover(chip, 1200); await h.holdUntil(0.6); await h.click('tbody tr:has-text("Auksion: ofis kağızı") a', 1800); await p.waitForSelector('h1', { timeout: 15000 }); await h.holdUntil(0.95); } },
-    { az: 'Yuxarıdaki panel auksionun bütün vəziyyətidir. Başlanğıc qiymət — sifarişçinin elan etdiyi tavan. Ondan yuxarı təklif ümumiyyətlə qəbul olunmur.',
-      do: async (p, l, h) => { await h.scrollTo('.card:has(h3:has-text("Auksion"))'); await h.holdUntil(0.4); await h.moveTo(p.locator('.card:has(h3:has-text("Auksion")) b').nth(0)); await h.holdUntil(0.95); } },
-    { az: 'Yanında cari ən yaxşı qiymət var — kimin verdiyi göstərilmir, yalnız rəqəm. Növbəti sütun isə ən vacibidir: sizdən qəbul olunacaq maksimum. O, həmişə ən yaxşıdan bir addım aşağıdır.',
-      do: async (p, l, h) => { const b = p.locator('.card:has(h3:has-text("Auksion")) b'); await h.moveTo(b.nth(1)); await h.holdUntil(0.45); await h.moveTo(b.nth(2)); await h.holdUntil(0.95); } },
-    { az: 'Addım təsadüfi deyil, sifarişçi tərəfindən əvvəlcədən təyin olunub. Bu, qiymətin bir qəpiklik fərqlərlə saatlarla döyülməsinin qarşısını alır — hər təklif real endirim olur.',
-      do: async (p, l, h) => { const b = p.locator('.card:has(h3:has-text("Auksion")) b'); await h.moveTo(b.nth(2)); await h.holdUntil(0.35); await h.moveTo(b.nth(0)); await h.holdUntil(0.65); await h.moveTo(b.nth(1)); await h.holdUntil(0.95); } },
-    { az: 'Panel həm də iştirakçıların sayını və uzadılmaların sayını göstərir. Rəqəmlər köhnəlsə — yəni son yeniləmə alınmasa — panel bunu özü deyir, köhnə rəqəmi təzə kimi göstərmir.',
-      do: async (p, l, h) => { const c = p.locator('.card:has(h3:has-text("Auksion"))'); await h.moveTo(c.locator('b').nth(3)); await h.holdUntil(0.35); await h.moveTo(c.locator('b').nth(4)); await h.holdUntil(0.62); await h.moveTo(c.locator('.hint').last()); await h.holdUntil(0.95); } },
-    { az: 'Təklifi aşağıdaki formadan veririk: vahid qiyməti göstərib düyməni basırıq. Düymənin özündə şimşək var, qıfıl yox — çünki burada gizlədiləcək heç nə yoxdur. Sistem dərhal yoxlayır ki, rəqəm icazə verilən maksimumdan aşağıdırmı.',
-      do: async (p, l, h) => { await h.scrollTo('.card:has(h3:has-text("Mövqelər"))'); await h.holdUntil(0.35); await h.fill(p.locator('.card:has(h3:has-text("Mövqelər")) input[step="0.01"]').first(), '5.75'); await h.holdUntil(0.7); await h.moveTo('.card:has(h3:has-text("Mövqelər")) button.btn'); await h.holdUntil(0.95); } },
-    { az: 'Və son qayda: kimsə lap son saniyələrdə qiyməti sındırsa, son tarix avtomatik uzanır və uzadılmaların sayı panelə yazılır. Bu, «son anda vurub qaçmaq» taktikasını mənasız edir — hamının cavab vermək imkanı qalır.',
-      do: async (p, l, h) => { await h.scrollTo('.card:has(h3:has-text("Auksion"))'); await h.holdUntil(0.4); await h.moveTo(p.locator('.card:has(h3:has-text("Auksion")) b').nth(4)); await h.holdUntil(0.7); await h.moveTo(p.locator('.card:has(h3:has-text("Auksion")) .hint').last()); await h.holdUntil(0.95); } },
+  // ГЛАВА «устройство»: живые торги — вторая покупка, от заявки до последнего шага цены.
+  //
+  // Четыре актёра и своя, вторая история: аукциону нужен СВОЙ предмет. Мебель для него не
+  // годится — там важны качество и срок, а торг уместен там, где требование стандартное, а
+  // цена биржевая. Поэтому вторая покупка — бумага.
+  'sup-auction': { role: 'requester', path: '/buyer/requests', scenes: [
+    { az: 'İkinci alış: ofis üçün A4 kağız. Tələb standartdır, qiymət isə bazarda bəllidir — belə alışda canlı hərrac qapalı tenderdən yaxşı işləyir.',
+      must: true,
+      do: async (p, l, h) => {
+        await h.needClick('[data-testid=req-new]', '«Yeni sorğu» düyməsi', 700);
+        await h.needFill('[data-testid=req-title]', STORY.title2, 'Başlıq');
+        await h.needFill('[data-testid=req-category]', STORY.category, 'Kateqoriya');
+        await h.holdUntil(0.95);
+      } },
+    { az: 'Beş yüz paket, hər biri yüz iyirmi manat — altmış min. Yaradıram və təsdiqə göndərirəm.',
+      must: true,
+      do: async (p, l, h) => {
+        await h.needFill('[data-testid=item-name-0]', STORY.item2.name, 'mövqenin adı');
+        await h.needFill('[data-testid=item-qty-0]', STORY.item2.qty, 'say');
+        await h.needFill('[data-testid=item-price-0]', STORY.item2.price, 'qiymət');
+        await h.holdUntil(0.5);
+        await h.needClick('form button.btn:not(.ghost):not([type=button])', '«Yarat» düyməsi', 1500);
+        await h.needClick(`${ROW2} [data-testid=req-submit]`, '«Göndər» düyməsi', 1500);
+        await h.need(`${ROW2} .badge.SUBMITTED`, 'göndərilmiş sorğu');
+        await h.holdUntil(0.95);
+      } },
+    { as: 'approver',
+      az: 'Təsdiqləyən yenə içini açır və təsdiq edir: eyni iki klik, eyni büdcə yoxlaması.',
+      must: true,
+      do: async (p, l, h) => {
+        await h.needClick(`${ROW2} [data-testid=req-approve]`, '«Təsdiqlə» düyməsi', 1500);
+        await h.holdUntil(0.5);
+        await h.needClick(`${ROW2} [data-testid=req-approve]`, '«Təsdiqi təsdiq et» düyməsi', 1800);
+        await h.need(`${ROW2} .badge.APPROVED`, 'təsdiqlənmiş sorğu');
+        await h.moveTo(`${ROW2} .badge`); await h.holdUntil(0.95);
+      } },
+    { as: 'buyer',
+      az: 'Bu dəfə prosedur başqadır. Siyahıda hərracın iki variantı var: dəvətlə və hamıya açıq. Dəvətlə olanı seçirəm.',
+      must: true,
+      do: async (p, l, h) => {
+        await h.needClick(`${ROW2} [data-testid=req-announce]`, '«Elan et» düyməsi', 1200);
+        await h.need('[role=dialog] [data-testid=dialog-input]', 'prosedur seçimi');
+        await h.moveTo('.pick:has(input[value="AUCTION"])'); await h.holdUntil(0.6);
+        await h.moveTo('.pick:has(input[value="AUCTION_OPEN"])'); await h.holdUntil(0.95);
+      } },
+    { as: 'buyer',
+      az: 'Hərracda başlanğıc qiymət smetadır, addım isə onun bir faizi — altı yüz manat. Yəni hər yeni təklif əvvəlkindən ən azı bu qədər aşağı olmalıdır, yoxsa torq saniyədə bir manatla sürünərdi.',
+      must: true,
+      do: async (p, l, h) => {
+        await h.needClick('.pick:has(input[value="AUCTION"])', 'dəvətlə hərrac', 700);
+        await h.needClick('[data-testid=dialog-confirm]', 'təsdiq düyməsi', 1500);
+        await p.waitForURL(/\/buyer\/events\/[0-9a-f-]{36}/, { timeout: 15000 });
+        await h.need(`h1:has-text("${STORY.title2}")`, 'hərracın kartı');
+        await h.moveTo('h1'); await h.holdUntil(0.95);
+      } },
+    { as: 'buyer',
+      az: 'Hər iki təchizatçını dəvət edirəm və elan edirəm — saat işləməyə başladı.',
+      must: true,
+      do: async (p, l, h) => {
+        await h.scrollTo('[data-testid=ev-invite-select]');
+        if (!await selectByPrefix(p, '[data-testid=ev-invite-select]', STORY.supplier)) throw new Error(`нет «${STORY.supplier}» в списке приглашения`);
+        await h.needClick('[data-testid=ev-invite]', '«Dəvət et» düyməsi', 900);
+        if (!await selectByPrefix(p, '[data-testid=ev-invite-select]', STORY.supplier2)) throw new Error(`нет «${STORY.supplier2}» в списке приглашения`);
+        await h.needClick('[data-testid=ev-invite]', '«Dəvət et» düyməsi', 900);
+        await h.needClick('[data-testid=ev-publish]', '«Elan et» düyməsi', 1800);
+        await h.need('h1 .badge.OPEN', 'açıq hərrac');
+        await h.holdUntil(0.95);
+      } },
+    { as: 'sup',
+      az: 'Mən iştirakçıyam. Panel ən yaxşı qiyməti göstərir, amma kiminki olduğunu yox: hərracda görünən qiymətdir, ad deyil. Öz qiymətimi verirəm — yüz on beş manat.',
+      must: true,
+      do: async (p, l, h) => {
+        // Раздел открывается на странице заявок покупателя, а поставщика туда не пускают:
+        // его прогон начинается с перенаправления, и куда именно — решает роутер, а не
+        // сценарий. Поэтому витрина открывается явно.
+        await p.goto(`${BASE}/supplier/market`);
+        await h.needClick(`${ROW2} a`, 'hərracın başlığı', 1500);
+        await p.waitForURL(/\/supplier\/events\/[0-9a-f-]{36}/, { timeout: 15000 });
+        await h.need('.card:has-text("REVERSE")', 'hərrac paneli');
+        await h.scrollTo('[data-testid=bid-price-0]');
+        await h.needFill('[data-testid=bid-price-0]', STORY.auction[0], 'qiymət');
+        await h.needClick('[data-testid=bid-submit]', '«Təklif ver» düyməsi', 2000);
+        await h.holdUntil(0.95);
+      } },
+    { as: 'sup2',
+      az: 'İkinci iştirakçı qiyməti aşağı salır: yüz on iki. Son saniyədə atılan təklif saatı uzadır — başqalarına cavab şansı qalsın deyə, yoxsa hərracı sürət udardı, qiymət yox.',
+      must: true,
+      do: async (p, l, h) => {
+        // Раздел открывается на странице заявок покупателя, а поставщика туда не пускают:
+        // его прогон начинается с перенаправления, и куда именно — решает роутер, а не
+        // сценарий. Поэтому витрина открывается явно.
+        await p.goto(`${BASE}/supplier/market`);
+        await h.needClick(`${ROW2} a`, 'hərracın başlığı', 1500);
+        await p.waitForURL(/\/supplier\/events\/[0-9a-f-]{36}/, { timeout: 15000 });
+        await h.scrollTo('[data-testid=bid-price-0]');
+        await h.needFill('[data-testid=bid-price-0]', STORY.auction[1], 'qiymət');
+        await h.needClick('[data-testid=bid-submit]', '«Təklif ver» düyməsi', 2000);
+        await h.scrollTo('h1'); await h.holdUntil(0.95);
+      } },
+    { as: 'sup',
+      az: 'Cavab verirəm: yüz doqquz. Hərracın bütün mahiyyəti budur — qiymət danışıqda deyil, rəqabətdə formalaşır, və hər addım jurnalda qalır.',
+      must: true,
+      do: async (p, l, h) => {
+        // Раздел открывается на странице заявок покупателя, а поставщика туда не пускают:
+        // его прогон начинается с перенаправления, и куда именно — решает роутер, а не
+        // сценарий. Поэтому витрина открывается явно.
+        await p.goto(`${BASE}/supplier/market`);
+        await h.needClick(`${ROW2} a`, 'hərracın başlığı', 1500);
+        await p.waitForURL(/\/supplier\/events\/[0-9a-f-]{36}/, { timeout: 15000 });
+        await h.scrollTo('[data-testid=bid-price-0]');
+        await h.needFill('[data-testid=bid-price-0]', STORY.auction[2], 'qiymət');
+        await h.needClick('[data-testid=bid-submit]', '«Təklif ver» düyməsi', 2200);
+        await h.scrollTo('h1'); await h.holdUntil(0.6);
+        await h.moveTo('.card:has-text("REVERSE")'); await h.holdUntil(0.95);
+      } },
+    { as: 'sup',
+      az: 'Vaxt bitəndə ən yaxşı qiymət qalib olur. Alıcı onu ayrıca bal vermədən təsdiqləyir, çünki qiymət rəqabəti elə qiymətləndirmənin özüdür — və buna görə hərracı yalnız tələbi standart olan alışda seçmək lazımdır.',
+      do: async (p, l, h) => { await h.moveTo('.card:has-text("REVERSE") b'); await h.holdUntil(0.6); await h.moveTo('h1'); await h.holdUntil(0.95); } },
   ]},
-  // Supplier verification: the dossier from the side that assembles it.
+  // ГЛАВА «устройство»: поставщик кладёт документы в дело, открытое покупателем.
   'sup-verification': { role: 'sup', path: '/supplier/verification', scenes: [
-    { az: 'Yoxlama bölməsi. Burada sifarişçinin sizin haqqınızda açdığı iş var. Məqsəd sadədir: sənədləriniz təsdiqlənəndən sonra sizə tender gözləmədən birbaşa sifariş vermək olur.',
-      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.4); await h.moveTo('table'); await h.holdUntil(0.95); } },
-    { az: 'Siyahıda sifarişçi şirkət, işin statusu və yüklədiyiniz sənədlərin sayı görünür. Altdaki sətir nə edəcəyinizi deyir: sənədləri görmək və yenisini əlavə etmək üçün şirkətin adına klikləmək lazımdır.',
-      do: async (p, l, h) => { const r = p.locator('tbody tr').first(); await h.moveTo(r.locator('td').nth(0)); await h.holdUntil(0.35); await h.hover(r.locator('.badge'), 1300); await h.holdUntil(0.68); await h.moveTo(p.locator('.hint').first()); await h.holdUntil(0.95); } },
-    { az: 'İşi açırıq. Aşağıda artıq yüklənmiş sənədlər sıralanır: hər birinin növü, faylın adı və qısa kod.',
-      do: async (p, l, h) => { await h.click(p.locator('tbody tr a').first(), 1600); await h.scrollTo(p.locator('.card').last()); await h.holdUntil(0.95); } },
-    { az: 'Yeni sənəd əlavə etmək üçün əvvəlcə növü seçirsiniz — VÖEN şəhadətnaməsi, lisenziya, bank arayışı, sığorta — sonra faylı göstərirsiniz. Növ vacibdir: sifarişçi sənədləri məhz növünə görə axtarır.',
-      do: async (p, l, h) => { const sel = p.locator('.card').last().locator('select').first(); if (await sel.count()) { await h.moveTo(sel); await h.holdUntil(0.55); await h.moveTo(p.locator('input[type=file]').first()); } await h.holdUntil(0.95); } },
-    { az: 'Yüklənən hər fayl üçün sistem məzmunun barmaq izini saxlayır — izahı da bunu deyir. Bu, sizin də xeyrinizədir: sonradan heç kim iddia edə bilməz ki, siz başqa sənəd göndərmisiniz. Fayl həm də antivirusdan keçir, yoluxmuş fayl sistemə düşmür.',
-      do: async (p, l, h) => { const mono = p.locator('.card').last().locator('.hint[data-tip]').first(); if (await mono.count()) { await h.hover(mono, 1800); } else { await h.moveTo(p.locator('.card').last()); } await h.holdUntil(0.95); } },
-    { az: 'Sonra qərar sifarişçinin tərəfindədir. Təsdiq alan kimi idarə panelinizdəki yoxlama sətri yaşıla dönür və birbaşa sifarişlər açılır — bu, sizin üçün əlavə satış kanalıdır. Nə qədər ki qərar verilməyib, sətir nə gözlənildiyini deyir.',
-      do: async (p, l, h) => { await h.scrollTo('h1'); await h.holdUntil(0.3); await h.moveTo(p.locator('tbody tr').first().locator('.badge')); await h.holdUntil(0.7); await h.moveTo('table'); await h.holdUntil(0.95); } },
+    { az: 'Alıcı mənə yoxlama işi açıb. Siyahıda onun adı, işin statusu və sənədlərin sayı var — hələ sıfır.',
+      must: true,
+      do: async (p, l, h) => {
+        const row = await h.need(`tbody tr:has-text("${STORY.buyer}")`, 'yoxlama işi');
+        await h.moveTo('h1'); await h.holdUntil(0.4);
+        await h.moveTo(row); await h.holdUntil(0.95);
+      } },
+    { az: 'Açıram və sənədin növünü seçirəm: VÖEN çıxarışı. Növ siyahıdan gəlir, ona görə alıcı nəyi aldığını bilir — fayl adına baxmaqla yox.',
+      must: true,
+      do: async (p, l, h) => {
+        await h.needClick(`tbody tr:has-text("${STORY.buyer}") [data-testid=verif-open]`, '«Aç» düyməsi', 1500);
+        const sel = await h.need('[data-testid=verif-doctype]', 'sənəd növü');
+        await sel.selectOption('VOEN');
+        await h.moveTo(sel); await h.holdUntil(0.95);
+      } },
+    { az: 'Faylı əlavə edirəm. Sistem onun barmaq izini özü hesablayır və saxlayır: sonradan dəyişdirilmiş fayl eyni iz verməz, və bunu yoxlamaq üçün heç kimə inanmaq lazım deyil.',
+      must: true,
+      do: async (p, l, h) => {
+        await p.locator('[data-testid=verif-file]').setInputFiles({
+          name: 'voen-supply-one.txt', mimeType: 'text/plain',
+          buffer: Buffer.from('VÖEN 2345678901 — Supply One MMC\nQeydiyyat çıxarışı (nümunə sənəd).\n'),
+        });
+        const doc = await h.need('.card .badge.is-info', 'əlavə olunmuş sənəd');
+        await h.scrollTo(doc); await h.holdUntil(0.6);
+        await h.moveTo('.card .hint[data-tip]'); await h.holdUntil(0.95);
+      } },
+    { az: 'İkinci sənəd — bank arayışı. Növünü dəyişirəm və faylı qoyuram; siyahı belə yığılır.',
+      must: true,
+      do: async (p, l, h) => {
+        const sel = await h.need('[data-testid=verif-doctype]', 'sənəd növü');
+        await sel.selectOption('BANK');
+        await h.moveTo(sel); await h.holdUntil(0.4);
+        await p.locator('[data-testid=verif-file]').setInputFiles({
+          name: 'bank-arayisi.txt', mimeType: 'text/plain',
+          buffer: Buffer.from('Bank: Kapital Bank\nIBAN: AZ00KAPB00000000000000000000\n'),
+        });
+        await h.need('.card .badge.is-info >> nth=1', 'ikinci sənəd');
+        await h.holdUntil(0.95);
+      } },
+    { az: 'Mənim tərəfimdən hamısı budur. Qərar alıcınındır, və onu gözləyərkən tenderlərdə iştirak etməyə heç nə mane olmur.',
+      do: async (p, l, h) => { await h.moveTo(`tbody tr:has-text("${STORY.buyer}") .badge`); await h.holdUntil(0.5); await h.moveTo('h1'); await h.holdUntil(0.95); } },
   ]},
-  // Supplier catalogs — the first of the two sections that had no recording at all, and the
-  // reason they could not borrow the buyer's: this page renders the SAME component as
-  // /buyer/catalogs with `isBuyer` false, so the activate button, the quantity field, the
-  // department select and the «Sifariş» button are not merely disabled, they are not drawn.
-  // Pointing a supplier at `buyer-catalogs` would have walked him through four controls he
-  // does not have. What he DOES do here is read: whose catalogue it is, whether it is live,
-  // and at which agreed prices his own goods may now be called off without a tender.
-  // Nothing on the page can be pressed, so the scenes read and the one action is an
-  // expand — a GET that leaves the stand exactly as the other recordings need it.
+  // ГЛАВА «устройство»: тот же каталог со стороны поставщика — без кнопок покупателя.
   'sup-catalogs': { role: 'sup', path: '/supplier/catalogs', scenes: [
-    { az: 'Kataloqlar bölməsi. Burada sifarişçinin sizinlə razılaşdırdığı qiymət cədvəli durur. Kataloq tender deyil: qiymətlər bir dəfə razılaşdırılır, sonra sifarişçi təkrarlanan xırda alışları hər dəfə prosedur keçirmədən verir.',
-      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.45); await h.moveTo('table'); await h.holdUntil(0.92); } },
-    { az: 'Cədvəldə dörd sütun var: kataloqun adı, sifarişçi, status və mövqelərin sayı. İkinci sütuna diqqət edin — orada sifarişçi yazılıb, çünki bu, sizin ekranınızdır. Eyni cədvəl sifarişçinin özündə təchizatçının adını göstərir.',
-      do: async (p, l, h) => { const th = p.locator('thead th'); await h.moveTo(th.nth(0)); await h.holdUntil(0.3); await h.moveTo(th.nth(1)); await h.holdUntil(0.6); await h.moveTo(p.locator('tbody tr').first().locator('td').nth(1)); await h.holdUntil(0.92); } },
-    { az: 'Mövqelərin sayının öz izahı var — rəqəm tək başına nəyin sayı olduğunu demir. Kataloqu sifarişçi müqavilədən yaradır, qiymətlər isə sizin udmuş təklifinizdən köçürülür. Yəni buradaki rəqəmləri heç kim əl ilə yazmır.',
-      do: async (p, l, h) => { await h.hover(p.locator('thead th').nth(3), 1600); await h.holdUntil(0.6); await h.moveTo(p.locator('tbody tr').first().locator('td').nth(3)); await h.holdUntil(0.92); } },
-    { az: 'Status iki şeyi deyir. Aktiv kataloq üzrə sifariş vermək mümkündür; qaralama hələ hazırlıq mərhələsidir. Sifarişçidə burada «Aktivləşdir» düyməsi olur — sizdə o düymə yoxdur, və bu qəsdəndir: kataloqu işə salmaq onun qərarıdır, siz nəticəsini görürsünüz.',
-      do: async (p, l, h) => { await h.hover(p.locator('tbody .badge').first(), 1600); await h.holdUntil(0.6); await h.moveTo(p.locator('thead th').nth(2)); await h.holdUntil(0.92); } },
-    { az: 'Kataloqun adına klikləyirik — içindəki mövqelər açılır.',
-      do: async (p, l, h) => { await h.moveTo(p.locator('tbody tr a').first()); await h.holdUntil(0.45); await h.click(p.locator('tbody tr a').first(), 1600); await h.holdUntil(0.95); } },
-    { az: 'Üç sütun: mövqenin adı, minimum sifariş həcmi və razılaşdırılmış vahid qiymət. Minimum həcm sizin şərtinizdir — ondan az sifariş sistem qəbul etmir, və sütunun izahı da bunu deyir. Qiymət isə razılaşdırılmış qiymətdir, siyahı qiyməti deyil.',
-      do: async (p, l, h) => { const card = p.locator('.card').last(); await h.scrollTo(card); await h.holdUntil(0.3); await h.hover(card.locator('thead th').nth(1), 1600); await h.holdUntil(0.65); await h.moveTo(card.locator('thead th').nth(2)); await h.holdUntil(0.93); } },
-    { az: 'Mövqelər sətir-sətir durur, hər birinin öz minimumu və öz qiyməti var. Bu səhifədə sizin üçün bir düymə də yoxdur, və bu çatışmazlıq deyil: qiymət razılaşdırılıb, ona görə onu buradan dəyişmək mümkün olmamalıdır. Kataloqda qiymətin redaktəsi ümumiyyətlə yoxdur — dəyişiklik lazımdırsa, bu, müqavilə səviyyəsində həll olunur.',
-      do: async (p, l, h) => { const card = p.locator('.card').last(); const rows = card.locator('tbody tr'); await h.moveTo(rows.nth(0)); await h.holdUntil(0.35); await h.moveTo(rows.nth(1).locator('td').nth(1)); await h.holdUntil(0.65); await h.moveTo(rows.nth(2).locator('td').nth(2)); await h.holdUntil(0.93); } },
-    { az: 'Sifarişçi kataloqdan sifariş verəndə o, tendersiz və danışıqsız dərhal yaranır — əvvəlcə qaralama kimi, sonra sifarişçi onu verir və sifariş sizin «İşdə olan sifarişlər» ekranınızda adi sifariş kimi işə düşür: təsdiq, qablaşdırma, göndərmə, çatdırılma, qaimə. Yəni bu cədvəl sizin daimi təklifinizdir: qiymət bir dəfə razılaşdırılıb durur, sifariş isə özü gəlir.',
-      do: async (p, l, h) => { await h.scrollTo('h1'); await h.holdUntil(0.3); await h.moveTo(p.locator('tbody tr').first().locator('.badge')); await h.holdUntil(0.6); await h.moveTo('table'); await h.holdUntil(0.93); } },
+    { az: 'Kataloqlar mənim tərəfimdən. Bu, alıcının mənim müqaviləmdən düzəltdiyi kataloqdur: ad, alıcı, status və mövqelərin sayı.',
+      must: true,
+      do: async (p, l, h) => {
+        const row = await h.need(`tbody tr:has-text("${STORY.buyer}")`, 'kataloqun sətri');
+        await h.moveTo('h1'); await h.holdUntil(0.4);
+        await h.moveTo(row); await h.holdUntil(0.95);
+      } },
+    { az: 'Açıram: razılaşdırılmış qiymətlər və minimal həcm. Burada düymə yoxdur — kataloqu alıcı idarə edir, mən isə nəyin hansı qiymətlə sifariş oluna biləcəyini görürəm.',
+      must: true,
+      do: async (p, l, h) => {
+        // Именно по ССЫЛКЕ, а не по ячейке: обработчик висит на `<a>`, а клик по широкой
+        // ячейке попадает в её середину — мимо текста ссылки, и ничего не раскрывается.
+        await h.needClick(`tbody tr:has-text("${STORY.buyer}") td:first-child a`, 'kataloqun adı', 1500);
+        const items = await h.need('.card:has(h3) tbody tr', 'mövqelər');
+        await h.scrollTo(items); await h.holdUntil(0.6);
+        await h.moveTo(items); await h.holdUntil(0.95);
+      } },
+    { az: 'Bu siyahıdan verilən sifariş birbaşa «Sifarişlər» bölməmdə görünür — tender də, danışıq da olmadan. Qiymət artıq razılaşdırılıb, ona görə addım bir dənədir: hazırla və göndər.',
+      do: async (p, l, h) => { await h.moveTo('a[href="/supplier/orders"]'); await h.holdUntil(0.6); await h.moveTo('h1'); await h.holdUntil(0.95); } },
   ]},
-  // Supplier contracts — the second missing one, and read from the side that has to DELIVER
-  // against the ceiling rather than set it. Same component as /buyer/contracts with
-  // `isBuyerSide` false: neither table draws an actions column at all (there is a browser
-  // spec for exactly that), so the buyer's recording would have spent half its length on
-  // «Aktivləşdir», «Sifariş yarat», «Mal qəbulu» and «Dəyişdir» — four controls a supplier
-  // never sees. The ONE press here is a navigation into the order's own card, which changes
-  // nothing on the stand; the forward steps live in `sup-orders` and stay there.
+  // ГЛАВА «устройство»: договор глазами поставщика — тот же экран без кнопок покупателя.
   'sup-contracts': { role: 'sup', path: '/supplier/contracts', scenes: [
-    { az: 'Müqavilələr bölməsi. Müqavilə sizin udmuş təklifinizdən doğulur: tenderdə qalib seçiləndən sonra sistem təklifin şərtlərini müqaviləyə köçürür. Ona görə buradaki rəqəmlər sonrakı danışıqdan yox, sizin öz təklifinizdən gəlir.',
-      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.45); await h.moveTo(p.locator('.card').first().locator('table')); await h.holdUntil(0.92); } },
-    { az: 'Sütunlar: müqavilənin nömrəsi, başlıq, sifarişçi, qüvvədə olma müddəti, ümumi məbləğ, istifadə olunmuş hissə, status və bu müqavilə üzrə verilmiş sifarişlərin sayı. Ümumi məbləğ müqavilənin tavanıdır — birdəfəlik ödəniş deyil.',
-      do: async (p, l, h) => { const th = p.locator('.card').first().locator('thead th'); await h.moveTo(th.nth(0)); await h.holdUntil(0.28); await h.moveTo(th.nth(3)); await h.holdUntil(0.55); await h.moveTo(th.nth(4)); await h.holdUntil(0.8); await h.moveTo(th.nth(7)); await h.holdUntil(0.93); } },
-    { az: 'İstifadə olunub sütunu tavandan nə qədərinin sifarişlərə çevrildiyini göstərir, və onun izahı var: ləğv edilmiş və rədd edilmiş sifarişlər bu cəmə düşmür. Bu rəqəm təchizatçıya da lazımdır — çərçivə müqaviləsi bir neçə sifarişə bölünür, və burada hər iki rəqəm bərabərdir, yəni müqavilə tam istifadə olunub.',
-      do: async (p, l, h) => { await h.hover(p.locator('thead th:has-text("İstifadə olunub")').first(), 1700); await h.holdUntil(0.6); const row = p.locator('tbody tr:has-text("CTR-2026-0001")').first(); await h.moveTo(row.locator('td').nth(4)); await h.holdUntil(0.78); await h.moveTo(row.locator('td').nth(5)); await h.holdUntil(0.93); } },
-    { az: 'Status yalnız aktiv müqavilənin sifariş buraxa bildiyini deyir. Müqaviləni aktivləşdirmək sifarişçinin addımıdır, ona görə bu cədvəldə sizin üçün əməliyyatlar sütunu ümumiyyətlə çəkilmir — boş sütun da yerini tutur və «burada nəsə etmək lazımdır» deyə oxunur.',
-      do: async (p, l, h) => { const row = p.locator('tbody tr:has-text("CTR-2026-0001")').first(); await h.hover(row.locator('.badge').first(), 1600); await h.holdUntil(0.6); await h.moveTo(p.locator('.card').first().locator('thead th').last()); await h.holdUntil(0.93); } },
-    { az: 'Aşağıda satınalma sifarişləri — bu müqavilə üzrə və ondan kənarda verilmiş bütün sifarişlər bir siyahıda. Burada onlar yalnız oxunur: nömrə, sifarişçi, tarix, məbləğ və status. İşin özü — təsdiq, qablaşdırma, göndəriş, qaimə — «İşdə olan sifarişlər» bölməsindədir. Yəni bu səhifə hesabatdır, o səhifə iş yeridir.',
-      do: async (p, l, h) => { await h.scrollTo('h3:text-is("Satınalma sifarişləri")'); await h.holdUntil(0.4); const card = p.locator('.card:has(h3:text-is("Satınalma sifarişləri"))'); await h.moveTo(card.locator('table')); await h.holdUntil(0.72); await h.moveTo(card.locator('thead th').nth(2)); await h.holdUntil(0.93); } },
-    { az: 'Status sütunu sifarişin harada olduğunu deyir: verilib, təchizatçı təsdiqləyib, göndərilib, çatdırılıb, qəbul edilib. Qaralama statuslu sətir də görünür — o, hələ verilməmiş, sifarişçinin hazırladığı sifarişdir; nişanın üzərinə gətirsəniz, hər statusun izahı açılır.',
-      do: async (p, l, h) => { const card = p.locator('.card:has(h3:text-is("Satınalma sifarişləri"))'); await h.hover(card.locator('tbody tr').first().locator('.badge'), 1500); await h.holdUntil(0.45); await h.hover(card.locator('tbody tr:has-text("PO-2026-0004") .badge').first(), 1400); await h.holdUntil(0.72); await h.hover(card.locator('tbody tr:has-text("PO-2026-0001") .badge').first(), 1400); await h.holdUntil(0.93); } },
-    { az: 'Sifarişin nömrəsi onun öz səhifəsinə aparır. Müqavilə üzrə verilmiş sifarişi açırıq.',
-      do: async (p, l, h) => { const link = p.locator('tbody tr:has-text("PO-2026-0001") a').first(); await h.moveTo(link); await h.holdUntil(0.4); await h.click(link, 1800); await p.waitForSelector('h1', { timeout: 15000 }); await h.holdUntil(0.95); } },
-    { az: 'Başlıqda nömrə və status. Altda sifarişçi, məbləğ və iki tarix: sifariş nə vaxt yaradılıb və nə vaxt sizə verilib. Onlar eyni gün də ola bilər, fərqlənə də — sifariş əvvəlcə qaralama kimi yaranır, verilmə isə onu sizə göndərən andır.',
-      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.35); await h.moveTo(p.locator('.fact').nth(0)); await h.holdUntil(0.6); await h.moveTo(p.locator('.fact').nth(2)); await h.holdUntil(0.78); await h.moveTo(p.locator('.fact').nth(3)); await h.holdUntil(0.93); } },
-    { az: 'Sonra səhifənin ən faydalı sətri: bu sifariş hansı müqaviləyə əsaslanır və hansı tenderdən gəlir. Tenderin yanında keçid var, yəni öz udduğunuz prosedura geri qayıdıb şərtləri oxuya bilirsiniz. Sifarişçinin daxili sorğusu burada görünmür — o, onun öz sənədidir, və bunu gizlədən əlavə şərt deyil, bazanın öz qaydasıdır.',
-      do: async (p, l, h) => { const chain = p.locator('.fact-row').nth(1); await h.moveTo(chain.locator('.fact').nth(0)); await h.holdUntil(0.45); await h.moveTo(chain.locator('.fact').nth(0).locator('.fact-v')); await h.holdUntil(0.7); await h.hover(chain.locator('a').first(), 1500); await h.holdUntil(0.93); } },
-    { az: 'Sifarişin sətirləri üç miqdarı üz-üzə qoyur: nə sifariş edilib, faktiki nə qəbul edilib və qaiməyə nə qalıb. Üçüncü rəqəm sizin üçün ən vacibidir — qaimə məhz ondan doldurulur. Burada sıfırdır, çünki qəbul edilmiş miqdarın hamısına qaimə artıq verilib.',
-      do: async (p, l, h) => { const card = p.locator('.card:has(h3:text-is("Sifarişin sətirləri"))'); await h.scrollTo(card); await h.holdUntil(0.3); const th = card.locator('thead th'); await h.moveTo(th.nth(2)); await h.holdUntil(0.5); await h.moveTo(th.nth(3)); await h.holdUntil(0.7); await h.moveTo(th.nth(4)); await h.holdUntil(0.85); await h.moveTo(card.locator('tbody tr').first().locator('td').nth(4)); await h.holdUntil(0.95); } },
-    { az: 'Aşağıda tarixçə: hər status dəyişikliyi vaxtı və səbəbi ilə. Bu, mübahisədə ən sadə dəlildir — nə vaxt göndərdiyinizi və nə vaxt qəbul edildiyini yadda saxlamaq lazım gəlmir.',
-      do: async (p, l, h) => { const card = p.locator('.card:has(h3:text-is("Tarixçə"))'); await h.scrollTo(card); await h.holdUntil(0.4); await h.moveTo(card.locator('tbody tr').first()); await h.holdUntil(0.68); await h.moveTo(card.locator('tbody tr').last()); await h.holdUntil(0.93); } },
-    { az: 'Ən sonda logistika: daşıyıcı, izləmə nömrəsi və göndərişin cari vəziyyəti. Hadisələri siz özünüz «İşdə olan sifarişlər» bölməsində əlavə edirsiniz, burada isə onların yekunu görünür. Beləliklə bir səhifədə üç sual bağlanır: nə razılaşdırılıb, nə sifariş edilib və nə baş verib.',
-      do: async (p, l, h) => { const card = p.locator('.card:has(h3:has-text("Logistika"))'); await h.scrollTo(card); await h.holdUntil(0.4); await h.moveTo(card.locator('.fact').nth(0)); await h.holdUntil(0.62); await h.moveTo(card.locator('.fact').nth(1)); await h.holdUntil(0.78); await h.moveTo(card.locator('.fact').nth(2)); await h.holdUntil(0.93); } },
+    { az: 'Müqavilələr mənim tərəfimdən: hansı alıcı ilə, hansı müddətə, tavan məbləğ və ondan nə qədərinin artıq götürüldüyü.',
+      must: true,
+      do: async (p, l, h) => {
+        const row = await h.need(`tbody tr:has-text("${STORY.buyer}")`, 'müqavilənin sətri');
+        await h.moveTo('h1'); await h.holdUntil(0.35);
+        await h.moveTo(row.locator('td').nth(3)); await h.holdUntil(0.65);
+        await h.moveTo(row.locator('td.num').first()); await h.holdUntil(0.95);
+      } },
+    { az: 'Tavan vəd deyil, həddir: onun içində alıcı istədiyi qədər sifariş verə bilər, və hər sifarişin qiyməti müqavilədən gəlir — hər dəfə yenidən razılaşmaq lazım deyil.',
+      do: async (p, l, h) => { await h.moveTo(`tbody tr:has-text("${STORY.buyer}") td:nth-child(6)`); await h.holdUntil(0.6); await h.moveTo('thead th:nth-child(6)'); await h.holdUntil(0.95); } },
+    { az: 'Aşağıda bu müqavilə üzrə sifarişlər: nömrə, tarix, məbləğ və status. Burada düymə yoxdur — sifarişlə iş «Sifarişlər» bölməsindədir, bu ekran isə mənzərəni göstərir.',
+      must: true,
+      do: async (p, l, h) => {
+        const orders = await h.need('.card:nth-of-type(2) tbody tr, .card h3 + .hint + * tbody tr', 'sifarişlərin cədvəli');
+        await h.scrollTo(orders); await h.holdUntil(0.55);
+        await h.moveTo(orders); await h.holdUntil(0.95);
+      } },
+    { az: 'Kataloqdan verilmiş sifariş də burada görünür. Mənim üçün fərq yoxdur: mənbəyi eyni müqavilədir, qiyməti də ondan.',
+      do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.5); await h.moveTo('a[href="/supplier/orders"]'); await h.holdUntil(0.95); } },
   ]},
-
 };
 
 // How far a finished file may stand from the length the course promises, in seconds.

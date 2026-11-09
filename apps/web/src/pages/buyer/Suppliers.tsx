@@ -59,7 +59,7 @@ export default function Suppliers() {
   return (
     <>
       <h1>{t('suppliers')}</h1>
-      <div className="card">
+      <div className="card" data-testid="registry-card">
         <h3>{t('registry')}</h3>
         <div className="hint">{t('registry_hint')}</div>
         <ListState of={registry} empty={!registry.data.length} emptyKey="empty_registry" />
@@ -78,7 +78,7 @@ export default function Suppliers() {
                       measured at 1280 it was already one line before any of this work. */}
                   <Actions
                     danger={canManage && r.status !== 'BLOCKED' && (
-                      <button className="btn small ghost danger" data-tip={t('tip_supplier_block')} onClick={() => setStatus(r.id, 'BLOCKED')}>{t('block')}</button>
+                      <button className="btn small ghost danger" data-testid="sup-block" data-tip={t('tip_supplier_block')} onClick={() => setStatus(r.id, 'BLOCKED')}>{t('block')}</button>
                     )}
                   >
                   {scores[r.supplier_org_id] && (
@@ -87,13 +87,13 @@ export default function Suppliers() {
                     </span>
                   )}
                   {canManage && <>
-                    {r.status !== 'APPROVED' && <button className="btn small" data-tip={t('tip_supplier_approve')} onClick={() => setStatus(r.id, 'APPROVED')}>{t('approve')}</button>}
+                    {r.status !== 'APPROVED' && <button className="btn small" data-testid="sup-approve" data-tip={t('tip_supplier_approve')} onClick={() => setStatus(r.id, 'APPROVED')}>{t('approve')}</button>}
                     {/* was a bare 🛡 */}
-                    <button className="btn small ghost" data-tip={t('tip_verify_open')} onClick={() => openVerification(r.supplier_org_id)}>🛡 {t('verification')}</button>
+                    <button className="btn small ghost" data-testid="sup-verify" data-tip={t('tip_verify_open')} onClick={() => openVerification(r.supplier_org_id)}>🛡 {t('verification')}</button>
                   </>}
                   {/* Rating is an approver's call, but the figures are everyone's to read —
                       and they only ever appeared as a side effect of rating someone. */}
-                  <button className="btn small ghost" data-tip={t('tip_scorecard')}
+                  <button className="btn small ghost" data-testid="sup-score" data-tip={t('tip_scorecard')}
                     onClick={() => (canManage ? rate(r.supplier_org_id) : loadScore(r.supplier_org_id))}>
                     ★ {t('scorecard')}
                   </button>
@@ -104,7 +104,7 @@ export default function Suppliers() {
           </tbody>
         </table>
       </div>
-      <div className="card">
+      <div className="card" data-testid="directory-card">
         <h3>{t('directory')}</h3>
         <div className="hint">{t('directory_hint')}</div>
         <ListState of={directory} empty={!directory.data.length} emptyKey="empty_directory" />
@@ -117,7 +117,7 @@ export default function Suppliers() {
                 <td>{s.voen ?? '—'}</td>
                 <td>{(s.categories ?? []).join(', ')}</td>
                 <td className="acts"><Actions>
-                  {canManage && !inRegistry.has(s.id) && <button className="btn small" data-tip={t('tip_supplier_invite')} onClick={() => invite(s.id)}>{t('invite')}</button>}
+                  {canManage && !inRegistry.has(s.id) && <button className="btn small" data-testid="dir-invite" data-tip={t('tip_supplier_invite')} onClick={() => invite(s.id)}>{t('invite')}</button>}
                 </Actions></td>
               </tr>
             ))}
