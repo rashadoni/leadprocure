@@ -273,7 +273,9 @@ test.describe('buyer panel', () => {
     // `roles` is the same array the router guards its `to` with (asserted in
     // learn-course.spec.ts), so the door is drawn and the route behind it opens.
     await page.getByTestId('learn-goto').click();
-    await expect(page).toHaveURL(new RegExp(`${first.to}$`));
+    // Путь уходит в регулярку, поэтому экранируется: сегодня в нём только буквы и косые,
+    // но «/buyer/events/:id» или точка в сегменте сделали бы проверку шире, чем она читается.
+    await expect(page).toHaveURL(new RegExp(`${first.to!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
     await expect(page.getByTestId('learn-video')).toHaveCount(0);
   });
 

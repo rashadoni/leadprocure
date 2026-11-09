@@ -1673,11 +1673,22 @@ function courseSeconds() {
 //
 // Проверяется обратное: если глава создаёт строку с таким названием, её на стенде быть не
 // должно.
+// Пара «как назвать» + «чем посчитать». Запрос пишется целиком, потому что считать
+// приходится разное: строку с этим названием, договор по этому тендеру, любой каталог.
+// Объявлены ВСЕ главы, которые оставляют на стенде новую строку, а не только те три, чьи
+// сцены ищут её по названию: заново снятая глава на непустом стенде ломается по-разному,
+// и отказ до съёмки дешевле разбора после.
 const CREATES = {
-  'buyer-requests': [['заявка', 'procurement_requests', STORY.title]],
-  'buyer-events': [['тендер', 'sourcing_events', STORY.title]],
-  'sup-auction': [['заявка', 'procurement_requests', STORY.title2],
-                  ['аукцион', 'sourcing_events', STORY.title2]],
+  'buyer-requests': [['заявка', `SELECT count(*) FROM procurement_requests WHERE title = '${STORY.title}'`]],
+  'buyer-events': [['тендер', `SELECT count(*) FROM sourcing_events WHERE title = '${STORY.title}'`]],
+  'buyer-contracts': [['договор', `SELECT count(*) FROM contracts WHERE title = '${STORY.title}'`],
+                      ['заказ', 'SELECT count(*) FROM purchase_orders']],
+  'buyer-catalogs': [['каталог', 'SELECT count(*) FROM catalogs']],
+  'sup-invoices': [['счёт', 'SELECT count(*) FROM invoices']],
+  'buyer-suppliers': [['дело проверки', 'SELECT count(*) FROM supplier_verification_cases']],
+  'sup-verification': [['документ проверки', 'SELECT count(*) FROM supplier_verification_documents']],
+  'sup-auction': [['заявка', `SELECT count(*) FROM procurement_requests WHERE title = '${STORY.title2}'`],
+                  ['аукцион', `SELECT count(*) FROM sourcing_events WHERE title = '${STORY.title2}'`]],
 };
 
 function assertStandClean(keys) {
@@ -1691,9 +1702,9 @@ function assertStandClean(keys) {
       + 'с тем же названием, и это не будет видно ни в журнале, ни в кадре.');
   }
   const problems = [];
-  for (const [what, table, title] of wanted) {
-    const n = Number(standSql(`SELECT count(*) FROM ${table} WHERE title = '${title.replace(/'/g, "''")}';`));
-    if (n > 0) problems.push(`${what} «${title}»: на стенде уже ${n} — глава создаст ещё одну, а сцены ищут строку по названию`);
+  for (const [what, sql] of wanted) {
+    const n = Number(standSql(`${sql};`));
+    if (n > 0) problems.push(`${what}: на стенде уже ${n} — глава создаст ещё, а сцены ищут строку по названию и берут первую`);
   }
   if (problems.length) {
     throw new Error(`Стенд не пуст для этих глав:\n  ${problems.join('\n  ')}\n`
@@ -1836,7 +1847,6 @@ async function login(ctx, email, attempt = 1) {
   assertSectionShape();
   assertOrderCoversSections();
   assertKeysExist(keys);
-  assertStandClean(keys);
   // Read before anything is recorded: a stale parse should stop the run at the start, not
   // after the footage and the narration have been paid for.
   const declaredSec = courseSeconds();
@@ -1859,6 +1869,10 @@ async function login(ctx, email, attempt = 1) {
         });
       } catch { throw new Error('Disposable demo reseed failed; recording stopped'); }
     }
+    // Чистота стенда проверяется ПОСЛЕ пересева: иначе прогон с RESEED=1 отказывал на
+    // данных, которые сам же собирался стереть.
+    assertStandClean(todo);
+
     // 1) narrate every scene in this language, measure durations
     for (const key of todo) {
       for (let i = 0; i < SECTIONS[key].scenes.length; i++) {
@@ -2021,7 +2035,13 @@ async function login(ctx, email, attempt = 1) {
           broke = `${key}: постер со своего экрана (${sec.poster}) не снялся — ${e.message.split('\n')[0]}`;
           console.log(`✗ ${key}.${lang} ОБОРВАНА — ${broke}`);
           ok = false;
-        } finally { await pg.close().catch(() => {}); }
+        } finally {
+          // Страница постера живёт в контексте с записью видео и оставляет в tmp ещё один
+          // файл, который никому не нужен.
+          const extra = pg.video();
+          await pg.close().catch(() => {});
+          await extra?.delete().catch(() => {});
+        }
       }
       if (ok && parts.length) {
         produced.push({ key, parts, actors: runs.map((r) => r.actor) });
