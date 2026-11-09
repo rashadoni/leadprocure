@@ -5,6 +5,7 @@ import request from 'supertest';
 import { randomUUID, createHash } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
+import { teardown } from './helpers';
 
 // Supplier verification (KYC): buyer opens a case, supplier uploads a doc (cross-org),
 // buyer reviews and approves → the supplier is promoted to APPROVED in the registry.
@@ -36,9 +37,7 @@ describe('supplier verification (KYC)', () => {
   });
 
   afterAll(async () => {
-    await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`KYC %${tag}%`]);
-    await db.end();
-    await app.close();
+    await teardown(db, app, () => db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`KYC %${tag}%`]));
   });
 
   it('buyer opens a case; supplier uploads a document', async () => {

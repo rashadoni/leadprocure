@@ -1,1 +1,1 @@
-{"extends":"../tsconfig.json","compilerOptions":{"baseUrl":"..","paths":{"@leadprocure/shared":["../../packages/shared/src/index.ts"]},"incremental":false},"include":["../src/**/*.ts","./**/*.ts"]}
+{"extends":"../tsconfig.json","compilerOptions":{"baseUrl":"..","paths":{"@leadprocure/shared":["../../packages/shared/src/index.ts"]},"incremental":false},"include":["../src/**/*.ts","./**/*.ts"],"exclude":["node_modules","dist"]}

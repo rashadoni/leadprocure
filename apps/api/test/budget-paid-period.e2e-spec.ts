@@ -5,7 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
-import { addApprover } from './helpers';
+import { addApprover, teardown } from './helpers';
 
 // Real authenticated procurement -> receipt -> invoice -> recorded settlement.
 // Only historical obligation timestamps are changed through the fixture owner connection.
@@ -132,11 +132,7 @@ describe('budget rollup: settled obligation periods and department isolation', (
   }, 60000);
 
   afterAll(async () => {
-    if (db) {
-      await db.query('DELETE FROM organizations WHERE legal_name LIKE $1', [`Paid %${tag}`]);
-      await db.end();
-    }
-    if (app) await app.close();
+    await teardown(db, app, () => db.query('DELETE FROM organizations WHERE legal_name LIKE $1', [`Paid %${tag}`]));
   });
 
   it('limits annual settlement by obligation year and currency without inflating spend', async () => {
@@ -365,11 +361,7 @@ describe('budget rollup: settlement of the org-wide plan', () => {
   }, 60000);
 
   afterAll(async () => {
-    if (db) {
-      await db.query('DELETE FROM organizations WHERE legal_name LIKE $1', [`Org %${tag}`]);
-      await db.end();
-    }
-    if (app) await app.close();
+    await teardown(db, app, () => db.query('DELETE FROM organizations WHERE legal_name LIKE $1', [`Org %${tag}`]));
   });
 
   it('reports settlement on the plan that carried the commitment, not only on an ancestor', async () => {

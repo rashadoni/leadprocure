@@ -5,6 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
+import { teardown } from './helpers';
 
 // Catalogs: buyer keeps agreed prices, re-orders instantly (→ PO), MOQ enforced,
 // cross-org visible to the supplier, isolated from other buyers.
@@ -36,9 +37,7 @@ describe('catalogs + instant re-order', () => {
   });
 
   afterAll(async () => {
-    await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Cat %${tag}%`]);
-    await db.end();
-    await app.close();
+    await teardown(db, app, () => db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Cat %${tag}%`]));
   });
 
   it('buyer creates a catalog with a MOQ item and activates it', async () => {

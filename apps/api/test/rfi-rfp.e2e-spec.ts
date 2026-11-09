@@ -5,7 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
-import { addApprover } from './helpers';
+import { addApprover, teardown } from './helpers';
 
 // RFI/RFP event types on the sealed core. RFP = prices + technical proposal sealed
 // together, revealed only at opening, then normal evaluate/award. RFI = response text
@@ -59,9 +59,7 @@ describe('RFI / RFP events (API e2e)', () => {
   });
 
   afterAll(async () => {
-    await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Rfx %${tag}%`]);
-    await db.end();
-    await app.close();
+    await teardown(db, app, () => db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Rfx %${tag}%`]));
   });
 
   it('RFQ stays the default type', async () => {

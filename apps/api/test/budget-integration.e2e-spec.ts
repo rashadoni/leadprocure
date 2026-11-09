@@ -5,7 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
-import { addApprover } from './helpers';
+import { addApprover, teardown } from './helpers';
 
 describe('runtime budget and procurement audit integration', () => {
   let app: INestApplication, owner: Client;
@@ -37,8 +37,11 @@ describe('runtime budget and procurement audit integration', () => {
     await http().put('/requests/method-policies').set(...auth(buyer)).send({ policies: [{ category: '*', minAmountMinor: 0, maxAmountMinor: null, method: 'DIRECT' }] }).expect(200);
   });
   afterAll(async () => {
-    if (owner) { await owner.query('ROLLBACK'); await owner.query('DELETE FROM organizations WHERE id=$1', [org]); await owner.end(); }
-    if (app) await app.close();
+    await teardown(owner, app, async () => {
+      if (!owner) return;
+      await owner.query('ROLLBACK');
+      await owner.query('DELETE FROM organizations WHERE id=$1', [org]);
+    });
   });
   const draftBudget = async (name: string, category: string, amountMinor: number, departmentId?: string) =>
     (await http().post('/budgets').set(...auth(buyer)).send({ name: `${name}-${tag}`, category, amountMinor, periodYear: year, ...(departmentId ? { departmentId } : {}) }).expect(201)).body.id;

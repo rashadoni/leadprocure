@@ -5,7 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
-import { addApprover } from './helpers';
+import { addApprover, teardown } from './helpers';
 
 /**
  * Reverse auction: descending price with min-decrement, anti-sniping extension,
@@ -58,9 +58,7 @@ describe('reverse auction + Q&A flow', () => {
   });
 
   afterAll(async () => {
-    await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Auc %${tag}%`]);
-    await db.end();
-    await app.close();
+    await teardown(db, app, () => db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Auc %${tag}%`]));
   });
 
   it('buyer creates and publishes a reverse auction', async () => {

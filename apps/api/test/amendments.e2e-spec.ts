@@ -5,7 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
-import { addApprover } from './helpers';
+import { addApprover, teardown } from './helpers';
 
 // PO amendments (change orders): buyer proposes per-line qty/price changes on an
 // ISSUED/CONFIRMED PO; supplier accepts (lines + total update atomically via the
@@ -61,9 +61,7 @@ describe('PO amendments (API e2e)', () => {
   });
 
   afterAll(async () => {
-    await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Am %${tag}%`]);
-    await db.end();
-    await app.close();
+    await teardown(db, app, () => db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Am %${tag}%`]));
   });
 
   it('supplier cannot propose an amendment (403)', async () => {

@@ -5,6 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
+import { teardown } from './helpers';
 
 // Multi-step approval: a large request needs approver → admin; each step is role-gated
 // and the request is only APPROVED once every step has approved.
@@ -53,9 +54,7 @@ describe('multi-step approval workflow', () => {
   });
 
   afterAll(async () => {
-    await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Appr %${tag}%`]);
-    await db.end();
-    await app.close();
+    await teardown(db, app, () => db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Appr %${tag}%`]));
   });
 
   it('a large request materializes a 2-step chain on submit', async () => {

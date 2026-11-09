@@ -5,6 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
+import { teardown } from './helpers';
 
 // Server-side offset pagination on the growth lists (requests/events/contracts/orders):
 // the API returns a { items, total, page, pageSize } envelope, honours ?page/?pageSize,
@@ -39,9 +40,7 @@ describe('list pagination (API e2e)', () => {
   });
 
   afterAll(async () => {
-    await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Pg %${tag}%`]);
-    await db.end();
-    await app.close();
+    await teardown(db, app, () => db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Pg %${tag}%`]));
   });
 
   it('returns a { items, total, page, pageSize } envelope', async () => {

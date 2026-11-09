@@ -5,7 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
-import { addApprover } from './helpers';
+import { addApprover, teardown } from './helpers';
 import { MailProvider, Mail } from '../src/common/mail/mail.module';
 
 // Email loop: in-app notifications fan out to the recipient org's ACTIVE users by email,
@@ -60,9 +60,7 @@ describe('email notifications (API e2e)', () => {
   });
 
   afterAll(async () => {
-    await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Ml %${tag}%`]);
-    await db.end();
-    await app.close();
+    await teardown(db, app, () => db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`Ml %${tag}%`]));
   });
 
   it('a direct order emails the supplier org users (post-commit fan-out)', async () => {
