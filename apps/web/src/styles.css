@@ -524,6 +524,9 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 .learn-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px; align-items: start; }
 .learn-track { margin-bottom: 0; }
+/* Трек сквозной истории занимает обе колонки. Без этого сетка из двух колонок на три
+   карточки давала историю рядом с четырьмя уроками и пустую половину во второй строке. */
+.learn-track-wide { grid-column: 1 / -1; }
 .learn-track-title { margin: 0; }
 .learn-track-sub { font-size: 12px; margin-bottom: 6px; }
 .learn-list { list-style: none; margin: 0; padding: 0; }

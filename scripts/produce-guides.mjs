@@ -676,7 +676,7 @@ const SECTIONS = {
   // Приглашаются ДВА поставщика: с одной ставкой тендер не показывает ни сравнения, ни
   // экономии, а присуждение единственной ставке продукт требует обосновывать письменно —
   // то есть одна ставка сняла бы совсем другую сцену.
-  'buyer-events': { role: 'buyer', path: '/buyer/requests', scenes: [
+  'buyer-events': { role: 'buyer', path: '/buyer/requests', poster: '/buyer/events', scenes: [
     { az: 'Təsdiqlənmiş sorğu indi satınalma mütəxəssisindədir. Mənim işim onu tenderə çevirməkdir, və bu, sətirdəki «Elan et» düyməsindən başlayır.',
       do: async (p, l, h) => { await h.moveTo('h1'); await h.holdUntil(0.3); await h.moveTo(`${ROW} td:nth-child(2)`); await h.holdUntil(0.6); await h.hover(`${ROW} [data-testid=req-announce]`, 1300); await h.holdUntil(0.95); } },
     { az: 'Düymə prosedur seçimini açır: altı variant, hər biri öz izahı ilə. Siyasət altmış dörd min manat üçün qapalı tenderi seçib, ona görə o əvvəlcədən işarələnib.',
@@ -753,10 +753,21 @@ const SECTIONS = {
   // сутки в записи не ждут, но и статус руками не ставят.
   'buyer-opening': { role: 'buyer', path: '/buyer/events',
     before: async () => {
+      // Сначала читаем состояние и говорим о НЁМ. Первая редакция сразу пыталась закрыть
+      // «OPEN» и при повторной съёмке падала с «close_due_events() не вернула ни одной
+      // строки» — обвиняя функцию расписания там, где тендер уже был закрыт.
+      const status = standSql(`SELECT status FROM sourcing_events WHERE title = '${STORY.title}';`);
+      if (!status) throw new Error(`тендера «${STORY.title}» на стенде нет, а глава снимает его вскрытие`);
+      if (status.includes('\n')) throw new Error(`тендеров «${STORY.title}» на стенде несколько (${status.split('\n').join(', ')})`);
+      if (['CLOSED', 'OPENING', 'EVALUATION', 'AWARDED'].includes(status)) {
+        throw new Error(`тендер уже в состоянии ${status}: глава начинается с ОТКРЫТОГО тендера, `
+          + 'и переснимать её можно только на пересеянном стенде');
+      }
+      if (status !== 'OPEN') throw new Error(`тендер в состоянии ${status}, а должен быть OPEN`);
       standSql(`UPDATE sourcing_events SET close_at = now() - interval '2 minutes'
                  WHERE title = '${STORY.title}' AND status = 'OPEN';`);
       const closed = standSql('SELECT count(*) FROM close_due_events();');
-      if (closed === '0') throw new Error('тендер не закрылся: close_due_events() не вернула ни одной строки');
+      if (closed === '0') throw new Error('срок переведён в прошлое, но close_due_events() не закрыла ни одного события');
     },
     scenes: [
     { az: 'Son tarix keçdi, və tenderi vaxt bağladı, adam yox: siyahıda status artıq «Bağlanıb»dır. Sondan sonra gələn təklif gec sayılır və qiymətləndirməyə düşmür.',
@@ -830,7 +841,7 @@ const SECTIONS = {
   ]},
   // ГЛАВА 6 истории: договор из присуждения и заказ по договору.
   // Начинается на карточке тендера: договор рождается там, кнопкой «Müqavilə yarat».
-  'buyer-contracts': { role: 'buyer', path: '/buyer/events', scenes: [
+  'buyer-contracts': { role: 'buyer', path: '/buyer/events', poster: '/buyer/contracts', scenes: [
     { az: 'Qalib seçilib, indi müqavilə. Onu tenderin kartındakı düymə yaradır: şərtlər, məbləğ və tərəflər oradan özü köçür — heç nə yenidən yazılmır.',
       must: true,
       do: async (p, l, h) => {
@@ -856,15 +867,15 @@ const SECTIONS = {
     { az: 'Sifariş yarat — müqavilədən sifariş çıxır. Sətirləri və məbləği müqavilə verir, ona görə sifarişdə səhv qiymət yaranmır.',
       must: true,
       do: async (p, l, h) => {
-        await h.needClick('[data-testid=contract-create-po]', '«Sifariş yarat» düyməsi', 2200);
+        await h.needClick(`${PO_ROW_BUYER} [data-testid=contract-create-po]`, '«Sifariş yarat» düyməsi', 2200);
         await h.need(`${PO_ROW_BUYER} .badge.DRAFT`, 'yeni sifarişin sətri');
         await h.scrollTo(`${PO_ROW_BUYER} .badge.DRAFT`); await h.holdUntil(0.95);
       } },
     { az: 'Sifariş qaralamadır, və bu o deməkdir ki, təchizatçı onu hələ görmür — nə özünü, nə sətirlərini. «Göndər» görünməni dəyişən yeganə addımdır.',
       must: true,
       do: async (p, l, h) => {
-        await h.hover('[data-testid=po-next-ISSUED]', 1300); await h.holdUntil(0.55);
-        await h.needClick('[data-testid=po-next-ISSUED]', '«Göndər» düyməsi', 2000);
+        await h.hover(`${PO_ROW_BUYER} [data-testid=po-next-ISSUED]`, 1300); await h.holdUntil(0.55);
+        await h.needClick(`${PO_ROW_BUYER} [data-testid=po-next-ISSUED]`, '«Göndər» düyməsi', 2000);
         await h.need(`${PO_ROW_BUYER} .badge.ISSUED`, 'göndərilmiş sifariş');
         await h.moveTo(`${PO_ROW_BUYER} .badge.ISSUED`); await h.holdUntil(0.95);
       } },
@@ -914,7 +925,7 @@ const SECTIONS = {
   ]},
   // ГЛАВА «устройство»: каталог из договора и заказ по согласованной цене.
   // Начинается на договорах: каталог рождается из договора, кнопкой в его строке.
-  'buyer-catalogs': { role: 'buyer', path: '/buyer/contracts', scenes: [
+  'buyer-catalogs': { role: 'buyer', path: '/buyer/contracts', poster: '/buyer/catalogs', scenes: [
     { az: 'Tender qiyməti razılaşdırdı. Eyni mal növbəti dəfə lazım olanda yenidən tender keçirmək lazım deyil: müqavilədən kataloq düzəlir, və sonrakı sifarişlər oradan gedir.',
       must: true,
       do: async (p, l, h) => {
@@ -933,7 +944,7 @@ const SECTIONS = {
     { az: 'Kataloq qaralamadır: qiymətlər yerindədir, amma sifariş vermək hələ olmur. Aktivləşdirirəm — bu, «bu qiymətlərlə işləyirik» deməkdir.',
       must: true,
       do: async (p, l, h) => {
-        await h.needClick('[data-testid=catalog-activate]', '«Aktivləşdir» düyməsi', 2200);
+        await h.needClick(`tbody tr:has-text("${STORY.supplier}") [data-testid=catalog-activate]`, '«Aktivləşdir» düyməsi', 2200);
         await h.need(`tbody tr:has-text("${STORY.supplier}") .badge.ACTIVE`, 'aktiv kataloq');
         await h.moveTo(`tbody tr:has-text("${STORY.supplier}") .badge`); await h.holdUntil(0.95);
       } },
@@ -1041,12 +1052,12 @@ const SECTIONS = {
         await h.needClick('a[href="/buyer/contracts"]', 'yan paneldə «Müqavilələr»', 1800);
         await h.need(`${PO_ROW_BUYER} .badge.DELIVERED`, 'çatdırılmış sifariş');
         await h.scrollTo(`${PO_ROW_BUYER} .badge.DELIVERED`); await h.holdUntil(0.6);
-        await h.hover('[data-testid=po-receive]', 1300); await h.holdUntil(0.95);
+        await h.hover(`${PO_ROW_BUYER} [data-testid=po-receive]`, 1300); await h.holdUntil(0.95);
       } },
     { az: 'Basıram — sistem sifarişin bütün mövqelərini qəbul edir və qəbul aktını yazır. Qismən gələndə say əl ilə göstərilir, və sifariş hamısı gələnə qədər bağlanmır.',
       must: true,
       do: async (p, l, h) => {
-        await h.needClick('[data-testid=po-receive]', '«Qəbul» düyməsi', 2500);
+        await h.needClick(`${PO_ROW_BUYER} [data-testid=po-receive]`, '«Qəbul» düyməsi', 2500);
         await h.need(`${PO_ROW_BUYER} .badge.ACCEPTED`, 'qəbul edilmiş sifariş');
         await h.moveTo(`${PO_ROW_BUYER} .badge.ACCEPTED`); await h.holdUntil(0.95);
       } },
@@ -1129,7 +1140,7 @@ const SECTIONS = {
     { az: 'Sənədlər yerindədir — təsdiq edirəm. Təchizatçı yoxlanılmış sayılır, və bu hal onun kartında görünür.',
       must: true,
       do: async (p, l, h) => {
-        await h.needClick('[data-testid=verif-approve]', '«Təsdiqlə» düyməsi', 2200);
+        await h.needClick('.card:has(.badge.is-info) [data-testid=verif-approve]', '«Təsdiqlə» düyməsi', 2200);
         await h.need(`tbody tr:has-text("${STORY.supplier}") .badge.APPROVED`, 'təsdiqlənmiş yoxlama');
         await h.moveTo(`tbody tr:has-text("${STORY.supplier}") .badge`); await h.holdUntil(0.95);
       } },
@@ -1183,7 +1194,10 @@ const SECTIONS = {
         const m = await h.need('#set-method', 'metod siyasəti');
         await h.scrollTo(m); await h.holdUntil(0.4);
         await h.moveTo(m); await h.holdUntil(0.7);
-        await h.moveTo('#set-method ~ table tbody tr, #set-method + * tbody tr'); await h.holdUntil(0.95);
+        // Политика метода нарисована не таблицей, а цветной шкалой полос (`.mp-scale`):
+        // первая редакция искала здесь `table tbody tr` и промахивалась — сцена доигрывала
+        // по неподвижному экрану, и это был единственный промах за весь прогон.
+        await h.moveTo('.mp-scale .mp-band'); await h.holdUntil(0.95);
       } },
     { az: 'Təsdiq zənciri: hansı məbləğdən sonra kim təsdiqləyir. Bir addım da ola bilər, üç də — böyük məbləğ daha çox gözə görünsün deyə. Zəncir boş olanda sorğunu istənilən təsdiqləyən təsdiqləyir, və bunu siyahı açıq yazır.',
       must: true,
@@ -1332,7 +1346,7 @@ const SECTIONS = {
       } },
   ]},
   // ГЛАВА 9 истории: поставщик выставляет счёт на принятое.
-  'sup-invoices': { role: 'sup', path: '/supplier/orders', scenes: [
+  'sup-invoices': { role: 'sup', path: '/supplier/orders', poster: '/supplier/invoices', scenes: [
     { az: 'Mal qəbul olundu — indi hesab-faktura. Düymə sifarişin öz sətrindədir, çünki hesab sifarişdən doğur: sistem nəyin faktiki qəbul edildiyini bilir, ona görə məbləği mən yazmıram.',
       must: true,
       do: async (p, l, h) => {
@@ -1367,8 +1381,9 @@ const SECTIONS = {
   // Четыре актёра и своя, вторая история: аукциону нужен СВОЙ предмет. Мебель для него не
   // годится — там важны качество и срок, а торг уместен там, где требование стандартное, а
   // цена биржевая. Поэтому вторая покупка — бумага.
-  'sup-auction': { role: 'requester', path: '/buyer/requests', scenes: [
-    { az: 'İkinci alış: ofis üçün A4 kağız. Tələb standartdır, qiymət isə bazarda bəllidir — belə alışda canlı hərrac qapalı tenderdən yaxşı işləyir.',
+  'sup-auction': { role: 'sup', path: '/buyer/requests', poster: '/supplier/market', scenes: [
+    { as: 'requester',
+      az: 'İkinci alış: ofis üçün A4 kağız. Tələb standartdır, qiymət isə bazarda bəllidir — belə alışda canlı hərrac qapalı tenderdən yaxşı işləyir.',
       must: true,
       do: async (p, l, h) => {
         await h.needClick('[data-testid=req-new]', '«Yeni sorğu» düyməsi', 700);
@@ -1376,7 +1391,8 @@ const SECTIONS = {
         await h.needFill('[data-testid=req-category]', STORY.category, 'Kateqoriya');
         await h.holdUntil(0.95);
       } },
-    { az: 'Beş yüz paket, hər biri yüz iyirmi manat — altmış min. Yaradıram və təsdiqə göndərirəm.',
+    { as: 'requester',
+      az: 'Beş yüz paket, hər biri yüz iyirmi manat — altmış min. Yaradıram və təsdiqə göndərirəm.',
       must: true,
       do: async (p, l, h) => {
         await h.needFill('[data-testid=item-name-0]', STORY.item2.name, 'mövqenin adı');
@@ -1645,31 +1661,47 @@ function courseSeconds() {
   return map;
 }
 
-// What the stand must actually HOLD for a section to film what it narrates.
+// Что глава СОЗДАЁТ на стенде — и чего поэтому на нём быть не должно.
 //
-// The cursor-miss counter only sees scenes that aim at something. A scene that merely
-// looks at a panel films an empty page without a single miss, so the counter cannot be
-// the only guard. This is not hypothetical: `Auksion: ofis kağızı` closed by itself four
-// days after the stand was filled (demo-fill sets close_at relative to fill time, so a
-// fresh stand is fine and only a long-lived one rots), the «Mövqelər» card went with it,
-// and the bid scene played over a dead screen.
+// Здесь стоял сторож обратного смысла: он требовал, чтобы на стенде УЖЕ лежало открытое
+// событие с таким-то названием, потому что экскурсия снимала заранее залитые данные.
+// История создаёт их сама, требование сняли со всех разделов — и сторож стал выходить на
+// первой же строке (`if (!wanted.length) return`), продолжая утверждать комментарием, что
+// он работает. Вместе с ним замолчала проверка ДУБЛЕЙ по названию, а она как раз стала
+// нужнее: сцена ищет свою строку как `tr:has-text("<название>")` и берёт первую, поэтому
+// второй тендер с тем же именем снимается молча и не тот.
 //
-// Asked of the database before any browser opens, and asked THROUGH assertDemoTarget so
-// this cannot become a second route to a non-disposable stack. A run that cannot ask is
-// refused rather than quietly filmed: a check that passes when it fails to run is the
-// one thing worse than no check.
-// The declarations above are read BY NAME, and a name read by hand is a name that can be
-// misspelled. `requires: { eventOpenn: … }` or `require: { eventOpen: … }` both leave the
-// guard's list short — and if every declaration is misspelled, empty, so it returns at once
-// and the run proceeds as if the stand had been checked. That is the very blindness the
-// guard exists to prevent, one level up: it would green on its own failure to read.
-//
-// So the shape is checked instead of trusted. A section carries exactly these fields and a
-// `requires` exactly these predicates; anything else stops the run and is named. Checked for
-// EVERY section, not only the ones being filmed: a typo in a section nobody films today is
-// still a requirement that will not be enforced tomorrow, and it costs one line to fix now.
-const SECTION_FIELDS = new Set(['role', 'path', 'requires', 'before', 'scenes']);
-const REQUIRE_PREDICATES = new Set(['eventOpen']);
+// Проверяется обратное: если глава создаёт строку с таким названием, её на стенде быть не
+// должно.
+const CREATES = {
+  'buyer-requests': [['заявка', 'procurement_requests', STORY.title]],
+  'buyer-events': [['тендер', 'sourcing_events', STORY.title]],
+  'sup-auction': [['заявка', 'procurement_requests', STORY.title2],
+                  ['аукцион', 'sourcing_events', STORY.title2]],
+};
+
+function assertStandClean(keys) {
+  const wanted = keys.flatMap((k) => CREATES[k] ?? []);
+  if (!wanted.length) return;
+  // Проверка, которую нечем выполнить, не считается пройденной — на этом здесь уже
+  // обжигались. Нет доступа к базе стенда — отказ, а не тишина.
+  if (!process.env.GUIDES_PG_CONTAINER || !process.env.GUIDES_DB) {
+    throw new Error('Эти главы создают данные на стенде, и проверить, нет ли их там уже, нечем.\n'
+      + '  Передайте GUIDES_PG_CONTAINER и GUIDES_DB — иначе прогон может снять вторую строку '
+      + 'с тем же названием, и это не будет видно ни в журнале, ни в кадре.');
+  }
+  const problems = [];
+  for (const [what, table, title] of wanted) {
+    const n = Number(standSql(`SELECT count(*) FROM ${table} WHERE title = '${title.replace(/'/g, "''")}';`));
+    if (n > 0) problems.push(`${what} «${title}»: на стенде уже ${n} — глава создаст ещё одну, а сцены ищут строку по названию`);
+  }
+  if (problems.length) {
+    throw new Error(`Стенд не пуст для этих глав:\n  ${problems.join('\n  ')}\n`
+      + '  Пересейте стенд целиком и снимайте историю подряд, либо удалите то, что глава создаёт.');
+  }
+}
+
+const SECTION_FIELDS = new Set(['role', 'path', 'poster', 'before', 'scenes']);
 // A scene is narration per language plus the camera move. `do` is the dangerous name here:
 // it is called as `scene.do?.(…)`, so a scene whose `do` is misspelled performs NO action,
 // raises nothing, counts no miss — and the run ends by printing «промахов курсора: 0» over a
@@ -1690,9 +1722,6 @@ function assertSectionShape() {
     for (const field of Object.keys(section)) {
       if (!SECTION_FIELDS.has(field)) bad.push(`${key}: неизвестное поле «${field}» — опечатка? Допустимы: ${[...SECTION_FIELDS].join(', ')}`);
     }
-    for (const predicate of Object.keys(section.requires ?? {})) {
-      if (!REQUIRE_PREDICATES.has(predicate)) bad.push(`${key}.requires: неизвестное требование «${predicate}» — опечатка? Допустимы: ${[...REQUIRE_PREDICATES].join(', ')}`);
-    }
     (section.scenes ?? []).forEach((scene, i) => {
       for (const field of Object.keys(scene)) {
         if (!SCENE_FIELDS.has(field)) bad.push(`${key}, сцена ${i + 1}: неизвестное поле «${field}» — опечатка? Допустимы: ${[...SCENE_FIELDS].join(', ')}`);
@@ -1708,62 +1737,47 @@ function assertSectionShape() {
 // The key an operator typed. `sup-catalogz` passes every check above — it is not a section at
 // all — so the stand guard requires nothing for it and the run dies much later on a bare
 // «Cannot read properties of undefined», naming neither the key nor the typo.
+// В КАКОМ ПОРЯДКЕ снимать. Порядок ключей в объекте выше — порядок, в котором разделы
+// исторически складывались; порядок съёмки — это порядок СОБЫТИЙ, и он объявлен здесь.
+// Прогон без ключей идёт по нему.
+//
+// Пока порядком по умолчанию был `Object.keys(SECTIONS)`, прогон без ключей снимал первой
+// панель, чья озвучка говорит «расход 58 000, экономия 6 000», по пустому экрану: сцена там
+// просит только `.card`, поэтому ничего бы не оборвалось, — и умирал позже, на главе,
+// которой нужен созданный тендер.
+const ORDER = [
+  // сквозная часть: одна закупка от заявки до оплаты
+  'buyer-requests', 'buyer-events', 'sup-market', 'sup-bid', 'buyer-opening',
+  'buyer-contracts', 'sup-orders', 'buyer-logistics', 'sup-invoices', 'buyer-invoices',
+  'buyer-budgets', 'buyer-analytics', 'buyer-dashboard',
+  // разделы «про устройство» — после неё и на её данных
+  'buyer-suppliers', 'sup-verification', 'buyer-verification',
+  'buyer-catalogs', 'sup-catalogs', 'sup-contracts', 'sup-dashboard', 'buyer-settings',
+  // вторая, короткая история целиком
+  'sup-auction',
+];
+
+// Список выше и объект разделов обязаны совпадать до ключа: разойдясь, они молча уронили бы
+// главу из прогона без ключей (её данные потом не нашла бы следующая) или назвали бы
+// несуществующую.
+function assertOrderCoversSections() {
+  const declared = new Set(Object.keys(SECTIONS));
+  const missing = [...declared].filter((k) => !ORDER.includes(k));
+  const extra = ORDER.filter((k) => !declared.has(k));
+  const dupes = ORDER.filter((k, i) => ORDER.indexOf(k) !== i);
+  if (missing.length || extra.length || dupes.length) {
+    throw new Error('Порядок съёмки (ORDER) разошёлся с объявленными разделами:'
+      + (missing.length ? `\n  нет в порядке: ${missing.join(', ')}` : '')
+      + (extra.length ? `\n  нет такого раздела: ${extra.join(', ')}` : '')
+      + (dupes.length ? `\n  повторяются: ${dupes.join(', ')}` : ''));
+  }
+}
+
 function assertKeysExist(keys) {
   const unknown = keys.filter((k) => !SECTIONS[k]);
   if (unknown.length) {
     throw new Error(`Таких разделов нет: ${unknown.map((k) => `«${k}»`).join(', ')}.\n`
       + `  Есть: ${Object.keys(SECTIONS).join(', ')}`);
-  }
-}
-
-async function assertStandHolds(keys) {
-  const wanted = [...new Set(keys.flatMap((k) => SECTIONS[k]?.requires?.eventOpen ?? []))];
-  if (!wanted.length) return;
-  let pg, dbName;
-  try {
-    ({ pg, dbName } = assertDemoTarget(process.env, API_URL));
-  } catch (e) {
-    throw new Error(`Нечем проверить состояние стенда (${e.message}). Эти разделы требуют живого события, `
-      + `поэтому прогон остановлен: передайте DEMO_ISOLATED=1, DEMO_PG_CONTAINER, DEMO_API_CONTAINER и DEMO_API.`);
-  }
-  const problems = [];
-  for (const title of wanted) {
-    // -U matches POSTGRES_USER in infra/docker-compose.demo.yml. The query goes in over
-    // STDIN, not -c: psql interpolates :'title' only in a script it lexes itself, and with
-    // -c the string is handed to the server verbatim — which fails on the colon. Feeding it
-    // in keeps the title quoted by psql instead of by us.
-    const found = execFileSync('docker', ['exec', '-i', pg, 'psql', '-U', 'leadprocure_owner', '-d', dbName, '-At',
-      '-v', `title=${title}`, '-f', '-'],
-      { encoding: 'utf8', input: "SELECT status, close_at > now(), to_char(close_at,'YYYY-MM-DD HH24:MI')"
-        + " FROM sourcing_events WHERE title = :'title';" }).trim();
-    // EVERY row, not the first one: the query cannot promise a single match and `-At`
-    // separates rows by a newline, so reading the output as one record made
-    // «OPEN|t|…\nCLOSED|f|…» pass as open — the guard waving through the very state it
-    // exists to catch. A stand filled twice really does hold two events of one name:
-    // demo-fill clears the old story only under DEMO_RESET.
-    //
-    // ANY duplicate is refused, including two open ones. The scenes reach their event by
-    // title and click `.first()`, so with two matches the recording films whichever row
-    // Postgres happened to return — a different event between one run and the next, with
-    // its own lots, bids and best price, while the narration describes figures as if there
-    // were one. Both being open only hides that: the scene plays, and the footage is still
-    // not the event anybody chose. A stand holding two events of one name is broken, and
-    // this says so instead of filming it.
-    const rows = found.split('\n').filter(Boolean).map((r) => r.split('|'));
-    if (!rows.length) { problems.push(`«${title}»: события нет на стенде`); continue; }
-    if (rows.length > 1) {
-      problems.push(`«${title}»: событий с этим названием ${rows.length} (${rows.map(([st]) => st).join(', ')}) — `
-        + `стенд залит дважды без DEMO_RESET; какое из них попадёт в кадр, решает Postgres, а не сценарий`);
-      continue;
-    }
-    const [status, live, closes] = rows[0];
-    if (status !== 'OPEN' || live !== 't') problems.push(`«${title}»: статус ${status}, срок ${closes} — приём закрыт`);
-    else console.log(`  стенд: «${title}» принимает ставки до ${closes}`);
-  }
-  if (problems.length) {
-    throw new Error(`Стенд не в том состоянии, которое снимают эти разделы:\n  ${problems.join('\n  ')}\n`
-      + `Пересейте стенд (RESEED=1) или продлите срок события — снимать закрытое событие нельзя, `
-      + `сцена отыграет по пустому экрану и промаха не будет.`);
   }
 }
 
@@ -1785,23 +1799,44 @@ const ROLE_EMAIL = {
   sup2: 'seller@baku-metal.test',   // второй поставщик: без второй ставки тендеру не с чем сравнивать
 };
 
-async function login(ctx, email) {
+// Вход шести актёров подряд, и это ровно та граница, о которой предупреждает AGENTS.md:
+// `/auth/login` ограничен десятью попытками в минуту (защита от перебора и от нагрузки
+// argon2). Шесть входов съёмщика плюс пара проверок руками — и очередной вход получает 429,
+// а на экране остаётся форма. Прежняя редакция ждала перехода и падала по таймауту
+// «waitForURL: Timeout 20000ms», то есть называла ожидание причиной. Теперь читается ответ
+// сервера: 429 — подождать и повторить ОДИН раз, любой другой отказ — назвать его кодом.
+async function login(ctx, email, attempt = 1) {
   const page = await ctx.newPage();
-  await page.goto(`${BASE}/login`);
-  await page.fill('input[type=email]', email);
-  await page.fill('input[type=password]', 'Passw0rd!');
-  await page.click('form button.btn:not(.ghost):not([type=button])');
-  await page.waitForURL(/\/(buyer|supplier)\//, { timeout: 20000 });
-  await page.close();
+  try {
+    await page.goto(`${BASE}/login`);
+    await page.fill('input[type=email]', email);
+    await page.fill('input[type=password]', 'Passw0rd!');
+    const answer = page.waitForResponse(
+      (r) => r.url().includes('/auth/login') && r.request().method() === 'POST', { timeout: 20000 });
+    await page.click('form button.btn:not(.ghost):not([type=button])');
+    const status = (await answer).status();
+    if (status === 429) {
+      if (attempt > 1) throw new Error(`вход ${email}: сервер отвечает 429 и после паузы — ограничение 10 входов в минуту`);
+      console.log(`  вход ${email}: 429, ждём минуту (ограничение 10 входов в минуту) и пробуем ещё раз`);
+      await page.close();
+      await P(62000);
+      return login(ctx, email, attempt + 1);
+    }
+    if (status >= 400) throw new Error(`вход ${email}: сервер ответил ${status}`);
+    await page.waitForURL(/\/(buyer|supplier)\//, { timeout: 20000 });
+  } finally {
+    await page.close().catch(() => {});
+  }
 }
 
 (async () => {
-  const keys = ONLY.length ? ONLY : Object.keys(SECTIONS);
+  const keys = ONLY.length ? ONLY : ORDER;
   // Before the stand is asked anything: these judge the source and the arguments, not the
-  // data, and an early `return` added to assertStandHolds some day must not carry them off.
+  // data, and an early `return` added to a guard some day must not carry them off.
   assertSectionShape();
+  assertOrderCoversSections();
   assertKeysExist(keys);
-  await assertStandHolds(keys);
+  assertStandClean(keys);
   // Read before anything is recorded: a stale parse should stop the run at the start, not
   // after the footage and the narration have been paid for.
   const declaredSec = courseSeconds();
@@ -1899,8 +1934,9 @@ async function login(ctx, email) {
       }
       const unknown = runs.map((r) => r.actor).filter((a) => !contexts[a]);
       if (unknown.length) {
-        console.log(`✗ ${key}.${lang} SKIPPED — нет роли: ${[...new Set(unknown)].join(', ')}`);
-        continue;
+        broke = `${key}: нет входа для роли ${[...new Set(unknown)].join(', ')}`;
+        console.log(`✗ ${key}.${lang} ОБОРВАНА — ${broke}`);
+        break;
       }
       // Подготовка стенда к главе, если она объявлена. Падение здесь — обрыв истории, а
       // не пропуск главы: следующая глава снимала бы не то состояние.
@@ -1920,9 +1956,17 @@ async function login(ctx, email) {
         try {
           await page.goto(`${BASE}${sec.path}`);
           await page.waitForSelector('h1', { timeout: 20000 });
-          await P(1000);
-          // Постер снимается с ПЕРВОГО прогона: он показывает экран тем, кто начинает главу.
-          if (runIdx === 0) await page.screenshot({ path: join(OUT, `${key}.${lang}.png`) }); // clean poster (no cursor)
+          // Пауза после загрузки нужна первому прогону (зритель видит экран), а на шве между
+          // актёрами она — тишина в середине главы. Швы и так дорогие: смена актёра значит
+          // новую страницу и новую загрузку, и в главе про аукцион пять швов съедали пятую
+          // часть её длины.
+          await P(runIdx === 0 ? 1000 : 350);
+          // Постер снимается с ПЕРВОГО прогона — если глава начинается на СВОЁМ экране.
+          // Там, где она начинается на чужом (тендер рождается на заявках, каталог — на
+          // договорах), постер снимается отдельно, после съёмки: иначе в строке подсказки
+          // «Каталоги» висела миниатюра «Договоров», и ни одна проверка этого не видела —
+          // приёмка смотрит у постера только то, что он вообще картинка.
+          if (runIdx === 0 && !sec.poster) await page.screenshot({ path: join(OUT, `${key}.${lang}.png`) }); // clean poster (no cursor)
           await injectCursor(page);
           const offsets = [];
           const LEAD = 650; // narration starts first; the cursor follows so voice never lags behind
@@ -1949,17 +1993,35 @@ async function login(ctx, email) {
             }
             if (remain > 0) await P(remain);
           }
-          await P(1200);
+          await P(runIdx === runs.length - 1 ? 1200 : 400);
           parts.push({ actor: run.actor, video: page.video(), offsets, scenes: run.scenes.map((s) => ({ audio: s.audio })) });
           console.log(`  ✓ ${key}.${lang} · ${run.actor} (${Math.round((Date.now() - t0) / 1000)}s)`);
         } catch (e) {
-          if (e.fatal) { broke = e.message; console.log(`✗ ${key}.${lang} ОБОРВАНА — ${e.message}`); }
-          else console.log(`✗ ${key}.${lang} SKIPPED — ${e.message.split('\n')[0]}`);
+          // Пропуск главы — это тот же обрыв. Раньше не открывшаяся страница или ненайденная
+          // роль печатались как SKIPPED, и цикл шёл дальше: следующая глава снимала
+          // состояние, которого пропущенная не создала, и обрыв случался позже, называя НЕ ТУ
+          // главу. В сквозной истории пропускать нечего.
+          broke = e.fatal ? e.message : `${key}: ${e.message.split('\n')[0]}`;
+          console.log(`✗ ${key}.${lang} ОБОРВАНА — ${broke}`);
           ok = false;
         } finally {
           await page.close().catch(() => {});
         }
         if (!ok) break;
+      }
+      // Постер со своего экрана — для глав, которые начинаются на чужом.
+      if (ok && parts.length && sec.poster) {
+        const pg = await contexts[sec.role].newPage();
+        try {
+          await pg.goto(`${BASE}${sec.poster}`);
+          await pg.waitForSelector('h1', { timeout: 20000 });
+          await P(1200);
+          await pg.screenshot({ path: join(OUT, `${key}.${lang}.png`) });
+        } catch (e) {
+          broke = `${key}: постер со своего экрана (${sec.poster}) не снялся — ${e.message.split('\n')[0]}`;
+          console.log(`✗ ${key}.${lang} ОБОРВАНА — ${broke}`);
+          ok = false;
+        } finally { await pg.close().catch(() => {}); }
       }
       if (ok && parts.length) {
         produced.push({ key, parts, actors: runs.map((r) => r.actor) });

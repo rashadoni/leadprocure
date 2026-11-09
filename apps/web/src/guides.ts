@@ -130,10 +130,10 @@ export const COURSE: Track[] = [
     id: 'STORY',
     titleKey: 'learn_track_story',
     lessons: [
-      { key: 'buyer-requests', titleKey: 'learn_b_requests', to: '/buyer/requests', roles: FINANCE_READ, sec: 109 },
+      { key: 'buyer-requests', titleKey: 'learn_b_requests', to: '/buyer/requests', roles: FINANCE_READ, sec: 105 },
       { key: 'buyer-events', titleKey: 'learn_b_events', to: '/buyer/events', roles: BUYER, sec: 88 },
       { key: 'sup-market', titleKey: 'learn_s_market', to: '/supplier/market', roles: SUPPLIER, sec: 55 },
-      { key: 'sup-bid', titleKey: 'learn_s_bid', to: '/supplier/market', roles: SUPPLIER, sec: 58 },
+      { key: 'sup-bid', titleKey: 'learn_s_bid', to: '/supplier/market', roles: SUPPLIER, sec: 56 },
       // Вскрытие живёт на /buyer/events/:id — своего маршрута у него нет, как и у
       // `sup-auction`, поэтому карта маршрутов ведёт туда `buyer-events`, а эта глава
       // достаётся зрителю по имени, отсюда. Переход — к списку тендеров: адреса
@@ -178,7 +178,7 @@ export const COURSE: Track[] = [
       // Живые торги — вторая, короткая история: своя заявка, своё утверждение, своя
       // процедура. Она стоит последней, потому что аукцион понятен только тому, кто уже
       // видел обычный тендер и знает, чем они отличаются.
-      { key: 'sup-auction', titleKey: 'learn_s_auction', to: '/supplier/market', roles: SUPPLIER, sec: 129 },
+      { key: 'sup-auction', titleKey: 'learn_s_auction', to: '/supplier/market', roles: SUPPLIER, sec: 120 },
     ],
   },
 ];
