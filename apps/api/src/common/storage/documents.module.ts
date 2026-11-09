@@ -104,6 +104,11 @@ export class DocumentsService {
   }
 
   assertDownloadable(status: string) {
+    // MISSING — отдельный ответ нарочно: файла в хранилище нет, и «ждём вердикта» было бы
+    // ложью, по которой пользователь стал бы ждать. Ссылку на такой документ выдавать нельзя
+    // в любом случае — подписанный URL привёл бы в пустоту.
+    if (status === 'MISSING')
+      throw new BadRequestException('Document file is no longer in storage');
     if (status !== 'CLEAN' && !(status === 'SKIPPED' && !this.cfg.clamavEnabled))
       throw new BadRequestException('Document is awaiting a clean antivirus verdict');
   }
@@ -219,6 +224,18 @@ export class DocumentsService {
   }
 }
 
+// «Объекта нет» от S3-совместимого хранилища. Проверяется по ДВУМ признакам, потому что
+// ни один из них не универсален: MinIO и S3 дают `NoSuchKey`, но за прокси или на другой
+// реализации тот же случай приходит просто как 404. Текст сообщения не проверяется намеренно
+// — он локализуемый и у разных реализаций разный (на проде это было
+// `The specified key does not exist.`), а состояние документа становится терминальным, то
+// есть ошибка распознавания здесь дороже лишнего повтора.
+function isMissingObject(e: any): boolean {
+  return e?.name === 'NoSuchKey'
+    || e?.Code === 'NoSuchKey'
+    || e?.$metadata?.httpStatusCode === 404;
+}
+
 // Async AV pipeline: uploads are presigned (the API never touches the bytes), so a cron
 // worker pulls PENDING files from storage and streams them to clamd. Runs outside any
 // request context → goes through the SECURITY DEFINER seams (documents_pending_scan /
@@ -266,6 +283,16 @@ export class AvScanWorker {
           ]);
         }
       } catch (e: any) {
+        // Повтор имеет смысл, только если попытка когда-нибудь может удаться: clamd подняли,
+        // сеть вернулась. «Объекта нет в хранилище» не удастся НИКОГДА, а `documents_pending_scan`
+        // отдаёт PENDING снова и снова — значит такая строка ходила по кругу вечно и занимала
+        // слот в партии из пяти (`ORDER BY created_at LIMIT 5`), то есть пять таких строк
+        // останавливали проверку новых загрузок молча. Поэтому исход терминальный.
+        if (isMissingObject(e)) {
+          await this.ds.query(`SELECT document_set_av_status($1,$2,'MISSING')`, [r.src, r.id]);
+          this.log.warn(`object gone, marked MISSING: ${r.filename} (${r.src} ${r.id})`);
+          continue;
+        }
         this.log.warn(`scan failed for ${r.filename}: ${e.message} — will retry`);
       }
     }
