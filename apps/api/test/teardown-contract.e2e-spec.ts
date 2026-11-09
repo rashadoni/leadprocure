@@ -51,4 +51,23 @@ describe('договор чистки за набором', () => {
     await teardown(f.db, undefined);
     expect(f.calls).toEqual(['db.end']);
   });
+
+  // Последний шаг — восстановление переменной окружения, сдвинутой набором. Под
+  // `--runInBand` все файлы идут одним процессом, поэтому забытое восстановление не падает,
+  // а молча переназначает день и год каждому следующему набору. Первая редакция правки
+  // оставляла этот шаг вне защиты; нашла это сессия, разбиравшая её.
+  it('последний шаг выполняется даже при упавшем удалении', async () => {
+    const f = fakes({ cleanupThrows: true });
+    const finalize = () => { f.calls.push('finalize'); };
+    await expect(teardown(f.db, f.app, f.cleanup, finalize)).rejects.toThrow('удаление организаций упало');
+    expect(f.calls).toEqual(['cleanup', 'db.end', 'app.close', 'finalize']);
+  });
+
+  it('последний шаг выполняется и при упавшем закрытии приложения', async () => {
+    const f = fakes();
+    const app = { close: async () => { f.calls.push('app.close'); throw new Error('close упал'); } };
+    const finalize = () => { f.calls.push('finalize'); };
+    await expect(teardown(f.db, app, f.cleanup, finalize)).rejects.toThrow('close упал');
+    expect(f.calls).toEqual(['cleanup', 'db.end', 'app.close', 'finalize']);
+  });
 });

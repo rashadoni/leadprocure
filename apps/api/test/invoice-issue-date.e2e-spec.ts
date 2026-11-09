@@ -8,7 +8,7 @@ import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
 import { AppConfig } from '../src/common/config/config.service';
 import { assertZoneKnownToPostgres, resolveAppTimezone } from '../src/common/config/timezone';
-import { addApprover } from './helpers';
+import { addApprover, teardown } from './helpers';
 
 // День счёта — не момент счёта.
 //
@@ -91,17 +91,18 @@ describe('дата выставления счёта (API e2e)', () => {
   });
 
   afterAll(async () => {
-    try {
-      if (db) await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`IssueDate %${tag}%`]);
-    } finally {
-      try { if (db) await db.end(); } finally {
-        try { if (owner) await owner.end(); } finally { if (app) await app.close(); }
-      }
-    }
-    // Набор один процесс на все файлы под --runInBand: оставить пояс сдвинутым значило бы
-    // тихо переназначить день каждому следующему набору.
-    if (originalZone === undefined) delete process.env.APP_TIMEZONE;
-    else process.env.APP_TIMEZONE = originalZone;
+    await teardown(
+      db,
+      // Второе соединение закрывается здесь же, одним гарантированным шагом с приложением.
+      { close: async () => { if (owner) await owner.end(); if (app) await app.close(); } },
+      () => db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`IssueDate %${tag}%`]),
+      // Набор один процесс на все файлы под --runInBand: оставить пояс сдвинутым значило бы
+      // тихо переназначить день каждому следующему набору.
+      () => {
+        if (originalZone === undefined) delete process.env.APP_TIMEZONE;
+        else process.env.APP_TIMEZONE = originalZone;
+      },
+    );
   });
 
   // Утверждение, которое держится в любой час: сохранённый день — это день сохранённого

@@ -30,16 +30,30 @@ export async function addApprover(app: INestApplication, buyerToken: string, tag
 // замаскировал бы и тот случай, на котором этот репозиторий уже обжигался — тик планировщика,
 // доживший до `app.close()` и уронивший прогон при 374 зелёных тестах (см. `DISABLE_SCHEDULERS`
 // в `setup-env.ts`). Симптом там был бы спрятан, а не вылечен.
+// `finalize` — шаг, который обязан пройти ПОСЛЕДНИМ и всегда: восстановление переменной
+// окружения, сдвинутой набором. Под `--runInBand` все файлы идут одним процессом, поэтому
+// оставленный сдвинутым `APP_TIMEZONE` или `TZ` тихо переназначает день и год КАЖДОМУ
+// следующему набору — то есть забытое восстановление не падает, а молча врёт. Первая
+// редакция этой правки оставляла такой шаг за пределами защиты в `document-no-year` и
+// `invoice-issue-date`: упавшая чистка съедала и его, и `app.close()`. Нашла это сессия,
+// разбиравшая правку.
+//
+// Паузу перед закрытием приложения (пост-коммитная рассылка дочитывает получателей на своём
+// соединении уже после ответа) передавайте ВНУТРИ `app`, а не до вызова:
+// `{ close: async () => { await sleep(500); await app.close(); } }` — тогда она тоже
+// защищена.
 export async function teardown(
   db: { end(): Promise<void> } | undefined,
   app: { close(): Promise<unknown> } | undefined,
   cleanup?: () => Promise<unknown>,
+  finalize?: () => unknown | Promise<unknown>,
 ): Promise<void> {
   const failures: unknown[] = [];
   for (const step of [
     async () => { if (cleanup) await cleanup(); },   // пока соединение ещё живо
     async () => { if (db) await db.end(); },
     async () => { if (app) await app.close(); },
+    async () => { if (finalize) await finalize(); },
   ]) {
     try { await step(); } catch (e) { failures.push(e); }
   }

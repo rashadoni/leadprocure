@@ -8,7 +8,7 @@ import { join, relative, sep } from 'path';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
 import { nextDocumentNo, nextDocumentNoForDay } from '../src/common/procurement/document-no';
-import { addApprover } from './helpers';
+import { addApprover, teardown } from './helpers';
 
 // Год в номере документа — не год процесса.
 //
@@ -104,20 +104,20 @@ describe('год в номере документа (API e2e)', () => {
   });
 
   afterAll(async () => {
-    try {
-      if (db) await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`DocNo %${tag}%`]);
-    } finally {
-      if (db) await db.end();
-    }
-    // Рассылка уходит в пост-коммитную очередь и читает получателей на своём соединении
-    // уже после ответа: закрыть приложение сразу значит оборвать её и получить
-    // `Connection terminated` в журнале после teardown.
-    await new Promise((r) => setTimeout(r, 500));
-    if (app) await app.close();
-    // Набор идёт одним процессом на все файлы (--runInBand): оставить пояс сдвинутым
-    // значило бы тихо переназначить день и год каждому следующему набору.
-    if (originalZone === undefined) delete process.env.APP_TIMEZONE;
-    else process.env.APP_TIMEZONE = originalZone;
+    await teardown(
+      db,
+      // Пауза ВНУТРИ шага закрытия: рассылка уходит в пост-коммитную очередь и читает
+      // получателей на своём соединении уже после ответа — закрыть приложение сразу значит
+      // оборвать её и получить `Connection terminated` в журнале после teardown.
+      { close: async () => { await new Promise((r) => setTimeout(r, 500)); if (app) await app.close(); } },
+      () => db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`DocNo %${tag}%`]),
+      // Набор идёт одним процессом на все файлы (--runInBand): оставить пояс сдвинутым
+      // значило бы тихо переназначить день и год каждому следующему набору.
+      () => {
+        if (originalZone === undefined) delete process.env.APP_TIMEZONE;
+        else process.env.APP_TIMEZONE = originalZone;
+      },
+    );
   });
 
   it('подмена часов процесса действительно действует и снимается', async () => {
