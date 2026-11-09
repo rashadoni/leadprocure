@@ -87,6 +87,11 @@ describe('antivirus: объекта нет — повтор прекращает
       await db.end();
     }
     if (app) await app.close();
+    // Клиент S3 закрываем ЯВНО. Без этого прогон в CI висел 27 минут и был снят по таймауту:
+    // `Jest did not exit one second after the test run has completed` — SDK держит сокеты
+    // своего агента, и один неудачный запрос (проверка «корзины нет») оставляет их живыми.
+    // Локально это не воспроизводилось: там набор шёл один и процесс всё равно завершался.
+    if (s3) s3.destroy();
     delete process.env.CLAMAV_ENABLED;
   });
 
