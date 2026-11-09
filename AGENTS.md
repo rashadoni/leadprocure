@@ -122,6 +122,17 @@ All functional roadmap blocks are built and green (**143 e2e, 17 suites**):
 - **Group 3**: supplier verification/KYC (0015), feature `suppliers.verification`.
 - **Group 4**: P2P invoices + 3-way match + pay (0016, DEFINER `invoice_set_status`),
   feature `p2p.invoicing`.
+  **Дата выставления счёта — отдельная колонка `invoices.issue_date`** (0051), записываемая в
+  момент выставления по `APP_TIMEZONE` (умолчание `Asia/Baku`), и при чтении НЕ
+  пересчитываемая: `issued_at` это момент, а день из момента получается только с поясом, и
+  `toISOString()` давал его в UTC — в Баку счёт, выписанный между 00:00 и 04:00, уносил в
+  e-qaimə предыдущую дату. У колонки нарочно нет умолчания (`DEFAULT CURRENT_DATE` вернул бы
+  тот же дефект через пояс сессии Postgres). **В `APP_TIMEZONE` только ИМЯ зоны:** Node и
+  Postgres читают строку-смещение с обратными знаками (`AT TIME ZONE '+04:00'` в Postgres это
+  UTC−4), поэтому `common/config/timezone.ts` отвергает смещения и сверяет имя с
+  `pg_timezone_names` при старте. Год в номере счёта берётся из того же дня; у номеров
+  `PO-`/`CTR-`/`REQ-` это ещё НЕ сделано. Решение владельца и что НЕ закрыто —
+  `docs/invoice-issue-date-decision.md`.
 - Cross-org notifications via `app_notify` DEFINER (0010); DIRECT purchase→PO.
 - **Procurement-integrity controls** (0020, audit remediation): evaluation criteria are
   LOCKED on `sourcing_events.evaluation_criteria` at creation (never re-weighted after

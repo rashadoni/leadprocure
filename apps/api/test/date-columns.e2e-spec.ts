@@ -82,6 +82,7 @@ describe('date columns are days, not instants (API e2e)', () => {
       'contracts.valid_to',
       'fx_rates.as_of',
       'invoices.due_date',
+      'invoices.issue_date',
       'shipments.eta',
     ]);
   });

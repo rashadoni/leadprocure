@@ -138,7 +138,12 @@ export default function Invoices() {
                 <td><a href="#" onClick={(e) => { e.preventDefault(); expand(i.id); }}>{i.invoice_no}</a></td>
                 <td className="nowrap"><Link to={orderHref(isBuyer, i.po_id)}>{i.po_no}</Link></td>
                 <td>{isBuyer ? i.supplier_name : i.buyer_name}</td>
-                <td className="hint nowrap">{fmtDate(i.issued_at ?? i.created_at)}</td>
+                {/* Тот же день, что уйдёт в УБЛ/e-qaimə и в реестр для 1С: он зафиксирован
+                    при выставлении (миграция 0051). Раньше здесь печатался `issued_at` —
+                    момент, который браузер переводил в СВОЙ пояс, — и экран с документом
+                    могли называть разные числа: в Баку счёт, выписанный в 02:00, на экране
+                    был сегодняшним, а в выгрузке вчерашним. */}
+                <td className="hint nowrap">{fmtDate(i.issue_date)}</td>
                 {/* The column was removed while nothing in the product ever filled it: the
                     supplier's invoice action was a single button with no form, so it was a
                     dash on every row in every org. The supplier names the term now, so the
