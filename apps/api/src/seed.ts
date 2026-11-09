@@ -48,9 +48,15 @@ async function main(): Promise<void> {
   const admin = await user('admin@acme.test', 'Acme Admin');
   const approver = await user('approver@acme.test', 'Acme Approver');
   const buyerUser = await user('user@acme.test', 'Acme User');
+  // Финансист. Роль `BUYER_FINANCE` существует в продукте и именно она открывает бюджеты
+  // (25 ручек в `budgets.module.ts`) и сверку счетов — а в демо-наполнении её не было, то
+  // есть ни один стенд ни разу не показывал того, что видит финансист. Для записи подсказок
+  // это дыра: роль нельзя снять, не имея под неё учётной записи.
+  const finance = await user('finance@acme.test', 'Acme Finance');
   await member(admin, acme, 'BUYER_ADMIN');
   await member(approver, acme, 'BUYER_APPROVER');
   await member(buyerUser, acme, 'BUYER_USER');
+  await member(finance, acme, 'BUYER_FINANCE');
   await as(acme, 'BUYER_ADMIN');
   await db.query(`INSERT INTO buyer_profiles(org_id, default_currency) VALUES ($1,'AZN')`, [acme]);
   // 0–50k AZN direct, above → sealed RFQ (etender.gov.az reference threshold)
@@ -146,6 +152,7 @@ async function main(): Promise<void> {
   console.log('  admin@acme.test / ' + password + '  (BUYER_ADMIN)');
   console.log('  approver@acme.test / ' + password + '  (BUYER_APPROVER)');
   console.log('  user@acme.test / ' + password + '  (BUYER_USER)');
+  console.log('  finance@acme.test / ' + password + '  (BUYER_FINANCE — бюджеты и сверка счетов)');
   console.log('Departments: IT (owner: approver), OPS (owner: admin) — user@acme.test sits in OPS');
   console.log(`Budgets    : org-wide ${year} · IT ${year} · OPS ${year} Q${quarter}; warn at 80%, block off`);
   console.log('Suppliers  :');
