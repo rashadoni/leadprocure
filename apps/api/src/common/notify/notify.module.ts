@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { AppConfig } from '../config/config.service';
 import { MailProvider } from '../mail/mail.module';
 import { RequestContextService } from '../context/request-context.service';
+import { AuditService } from '../audit/audit.service';
 
 // Human subject lines (ru · az) for outbound email; unknown types fall back to the key.
 const MAIL_SUBJECTS: Record<string, string> = {
@@ -58,14 +59,29 @@ export class NotifyEmailer {
     userId?: string | null,
   ): Promise<void> {
     try {
-      const users: Array<{ email: string; full_name: string }> = await this.ds.query(
-        `SELECT u.email, u.full_name FROM organization_users u
-         JOIN memberships m ON m.user_id = u.id
-         WHERE m.org_id = $1 AND u.status = 'ACTIVE'
-           AND ($2::uuid IS NULL OR u.id = $2)
-         ORDER BY u.created_at LIMIT 50`,
-        [orgId, userId ?? null],
-      );
+      const recipients = (addressee: string | null): Promise<Array<{ email: string; full_name: string }>> =>
+        this.ds.query(
+          `SELECT u.email, u.full_name FROM organization_users u
+           JOIN memberships m ON m.user_id = u.id
+           WHERE m.org_id = $1 AND u.status = 'ACTIVE'
+             AND ($2::uuid IS NULL OR u.id = $2)
+           ORDER BY u.created_at LIMIT 50`,
+          [orgId, addressee],
+        );
+      let users = await recipients(userId ?? null);
+      // An addressed fan-out that matches nobody must WIDEN, not fall silent. The two
+      // filters above are ANDed, so a named recipient who has been deactivated — or who is
+      // no longer a member — empties the list, and returning here meant the notice reached
+      // NO ONE, while "nobody is named" reached everybody. A budget alarm went nowhere and
+      // nothing said so. NotifyService resolves the recipient before calling this, and
+      // records the widening in the audit trail; this guard keeps the invariant of the
+      // fan-out itself, for any caller, and says so in the log.
+      if (!users.length && userId) {
+        this.logger.warn(
+          `fan-out ${type} → org ${orgId}: addressed user ${userId} has no active mailbox here; widening to the organization`,
+        );
+        users = await recipients(null);
+      }
       if (!users.length) return;
       const subject = `Leadprocure — ${MAIL_SUBJECTS[type] ?? type}`;
       const details = MAIL_SAFE_KEYS
@@ -88,9 +104,11 @@ export class NotifyEmailer {
 // for in-app delivery). RLS restricts reads to the recipient org.
 @Injectable()
 export class NotifyService {
+  private readonly logger = new Logger(NotifyService.name);
   constructor(
     private readonly rc: RequestContextService,
     private readonly emailer: NotifyEmailer,
+    private readonly audit: AuditService,
   ) {}
 
   async notifyOwnOrg(type: string, payload: Record<string, unknown>): Promise<void> {
@@ -123,16 +141,51 @@ export class NotifyService {
     payload: Record<string, unknown>,
   ): Promise<void> {
     try {
+      const recipient = await this.reachableRecipient(orgId, userId, type);
       await this.rc.manager.query(`SELECT app_notify($1, $2, $3, $4::jsonb)`, [
         orgId,
-        userId,
+        recipient,
         type,
         JSON.stringify(payload),
       ]);
-      this.rc.onCommit(() => this.emailer.fanOut(orgId, type, payload, userId));
+      this.rc.onCommit(() => this.emailer.fanOut(orgId, type, payload, recipient));
     } catch {
       /* best-effort */
     }
+  }
+
+  // An addressed notice is NARROWER than an unaddressed one, so a named recipient who
+  // cannot receive it has to widen back to the whole organisation — the same fallback as
+  // "nobody is named" — instead of silencing it. Two ways that happens: the person is
+  // deactivated (they cannot sign in, so the in-app row would never be read, and the mail
+  // fan-out skips them), or the id is stale because they are no longer a member at all.
+  // Nothing kept the department column in step with either event.
+  //
+  // The widening is AUDITED, in the transaction that caused it, because afterwards
+  // "everybody was told" and "nobody was told" are the same silence. A log line alone would
+  // not do: whoever asks why forty people received a budget alarm — or why the one person
+  // answerable for it did not — should find the answer beside the approval that raised it.
+  private async reachableRecipient(
+    orgId: string,
+    userId: string | null,
+    type: string,
+  ): Promise<string | null> {
+    if (!userId) return null;
+    const live = await this.rc.manager.query(
+      `SELECT 1 FROM memberships m JOIN organization_users u ON u.id = m.user_id
+        WHERE m.org_id = $1 AND m.user_id = $2 AND u.status = 'ACTIVE'`,
+      [orgId, userId],
+    );
+    if (live.length) return userId;
+    const reason = 'addressed recipient is not an active member of the recipient organization';
+    this.logger.warn(`${type} → org ${orgId}: ${reason} (user ${userId}); notifying the organization instead`);
+    await this.audit.record('NOTIFICATION_WIDENED_TO_ORG', 'notification', null, {
+      type,
+      recipient_org_id: orgId,
+      intended_user_id: userId,
+      reason,
+    });
+    return null;
   }
 }
 

@@ -1,6 +1,7 @@
 import { returnedRows } from '../../common/procurement/invariants';
 import {
-  Body, ConflictException, Controller, Delete, Get, Injectable, Module, NotFoundException, Param, Post, Put,
+  BadRequestException, Body, ConflictException, Controller, Delete, Get, Injectable, Module,
+  NotFoundException, Param, Post, Put,
 } from '@nestjs/common';
 import { IsBoolean, IsOptional, IsString, IsUUID, Matches } from 'class-validator';
 import type { AccessTokenPayload } from '@leadprocure/shared';
@@ -49,8 +50,43 @@ export class DepartmentsService {
     );
   }
 
+  // The owner is who a budget warning is ADDRESSED to — `departments.owner_user_id` reaches
+  // `notify.notifyUser` in modules/budgets — so the column has to hold somebody who can act
+  // on it: a member of THIS organisation, not switched off. Nothing checked it. The picker
+  // on screen stopped offering anybody else, but a picker is not a check: the id arrives in
+  // the request body, and `PUT` took any well-formed uuid, including a stranger's.
+  //
+  // `current` is admitted whatever their state, deliberately. People are deactivated long
+  // after they were named; the row then legitimately goes on pointing at them (the screen
+  // marks it «deaktiv», and NotifyService widens the warning to the organisation and records
+  // that it did). `PUT /departments/:id` replaces the WHOLE row, so every unrelated edit
+  // resends the owner as it stands — refusing it would make renaming or retiring such a
+  // department impossible until somebody also picked a new owner, which is how a rule gets
+  // worked around instead of obeyed. Clearing the owner stays free.
+  private async assertOwnerCanBeNamed(
+    ownerUserId: string | null,
+    current: string | null,
+    orgId: string,
+  ): Promise<void> {
+    if (!ownerUserId || ownerUserId === current) return;
+    const rows = await this.rc.manager.query(
+      `SELECT u.status, u.full_name FROM memberships m JOIN organization_users u ON u.id = m.user_id
+        WHERE m.org_id = $1 AND m.user_id = $2`,
+      [orgId, ownerUserId],
+    );
+    // Nothing about the stranger is echoed back: outside this organisation, their very
+    // existence is not this caller's business.
+    if (!rows.length) throw new BadRequestException('The owner must be a member of your organization');
+    if (rows[0].status !== 'ACTIVE') {
+      throw new BadRequestException(
+        `${rows[0].full_name} is deactivated and cannot be made owner of a department — a budget warning addressed to them would reach the whole organization instead`,
+      );
+    }
+  }
+
   async create(dto: UpsertDepartmentDto, auth: AccessTokenPayload) {
     const code = dto.code.trim();
+    await this.assertOwnerCanBeNamed(dto.ownerUserId ?? null, null, auth.org_id);
     let id: string;
     try {
       id = (
@@ -68,12 +104,19 @@ export class DepartmentsService {
     return this.getOne(id);
   }
 
-  async update(id: string, dto: UpsertDepartmentDto) {
+  async update(id: string, dto: UpsertDepartmentDto, auth: AccessTokenPayload) {
     const code = dto.code.trim();
     // A department cannot be its own parent — the tree walk in reporting would never end.
     if (dto.parentId && dto.parentId === id) {
       throw new ConflictException('A department cannot be its own parent');
     }
+    // The owner it already has decides whether the submitted one is a change at all. RLS
+    // scopes this read, so another organisation's department is simply not found.
+    const existing = (
+      await this.rc.manager.query(`SELECT owner_user_id FROM departments WHERE id = $1`, [id])
+    )[0] as { owner_user_id: string | null } | undefined;
+    if (!existing) throw new NotFoundException('Department not found');
+    await this.assertOwnerCanBeNamed(dto.ownerUserId ?? null, existing.owner_user_id, auth.org_id);
     let res: Array<{ id: string }>;
     try {
       res = returnedRows(await this.rc.manager.query(
@@ -144,8 +187,12 @@ export class DepartmentsController {
 
   @Put(':id')
   @Roles('BUYER_ADMIN')
-  update(@Param('id') id: string, @Body() dto: UpsertDepartmentDto) {
-    return this.departments.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpsertDepartmentDto,
+    @CurrentUser() auth: AccessTokenPayload,
+  ) {
+    return this.departments.update(id, dto, auth);
   }
 
   @Delete(':id')
