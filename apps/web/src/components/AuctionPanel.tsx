@@ -48,10 +48,22 @@ export function AuctionPanel({ eventId, onChanged }: { eventId: string; onChange
     <div className="card" style={{ borderColor: 'var(--accent2)' }}>
       <h3>⚡ {t('auction')} — REVERSE</h3>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-        <div><div className="hint">{t('auction_start')}</div><b>{fmtMoney(state.start_price_minor, state.currency)}</b></div>
+        <div data-testid="auction-start"><div className="hint">{t('auction_start')}</div><b>{fmtMoney(state.start_price_minor, state.currency)}</b></div>
+        {/* The step — the minimum a new bid must undercut the best by — was the one rule of
+            the auction the panel did not say out loud. It is a real field of the event
+            (`sourcing_events.auction_min_decrement_minor`, set to 1% of the start price when
+            the auction is announced) and this endpoint has always returned it; nothing read
+            it. Without it the screen showed a start price and a ceiling and left the bidder
+            to work out from two numbers why their offer was refused. `Növbəti maks.` is the
+            ceiling AFTER the step is applied, so it answers «how low now», not «by how much
+            at a time» — and on an auction with no bids yet the two are the same number,
+            which is exactly when the rule is least visible. The tooltip states the rule,
+            because the figure alone does not say which direction it binds in. */}
+        <div data-testid="auction-step" data-tip={t('auction_step_tip')}>
+          <div className="hint">{t('auction_step')}</div><b>{fmtMoney(state.min_decrement_minor, state.currency)}</b></div>
         <div><div className="hint">{t('best_price')}</div>
           <b style={{ color: 'var(--ok)' }}>{state.best_total_minor != null ? fmtMoney(state.best_total_minor, state.currency) : '—'}</b></div>
-        <div><div className="hint">{t('next_max')}</div><b>{fmtMoney(state.next_max_total_minor, state.currency)}</b></div>
+        <div data-testid="auction-next-max"><div className="hint">{t('next_max')}</div><b>{fmtMoney(state.next_max_total_minor, state.currency)}</b></div>
         <div><div className="hint">{t('bidders')}</div><b>{state.distinct_bidders}</b></div>
         <div><div className="hint">{t('extensions')}</div><b>{state.extension_count}</b></div>
         {state.my_best_total_minor != null && (

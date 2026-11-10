@@ -24,7 +24,7 @@ export default function Settings() {
   const [cats, setCats] = useState<any[]>([]);
   const [newCat, setNewCat] = useState({ code: '', name: '' });
   const [deps, setDeps] = useState<any[]>([]);
-  const [newDep, setNewDep] = useState({ code: '', name: '', parentId: '' });
+  const [newDep, setNewDep] = useState({ code: '', name: '', parentId: '', ownerUserId: '' });
   const [nu, setNu] = useState({ email: '', fullName: '', password: '', role: 'BUYER_USER' });
   // Budget thresholds are an organisation-wide RULE about approvals, which is what this
   // page is for — they used to sit on the Budgets screen, in the way of the numbers.
@@ -87,6 +87,25 @@ export default function Settings() {
     isActive: d.is_active,
     ...patch,
   }));
+
+  // Who may be made the owner of a department, and what the row says about the one it has.
+  // The budget warning is addressed to this person ALONE (`departments.owner_user_id` →
+  // notify.notifyUser), and `NotifyEmailer.fanOut` mails only ACTIVE users — with a userId
+  // that filter does not fall back to the organisation, it empties the recipient list. So
+  // naming a deactivated person does not widen the alarm, it silences it, while the column
+  // goes on looking filled in. `/settings/users` answers with every membership regardless
+  // of status, because the users table above is where a person is read and their role
+  // changed; it is only this picker that must not offer them.
+  //
+  // The one already named is KEPT in the list even when deactivated, and marked. A <select>
+  // whose value matches no option falls back to its first one, so dropping the option would
+  // make a department that HAS an owner read «No owner» — wrong in the other direction, and
+  // the natural fix for it (pick somebody) changes who gets told without anyone seeing that
+  // the row had been pointed at a switched-off person all along.
+  const activeUsers = users.filter((u) => u.status === 'ACTIVE');
+  const ownerStatus = (d: any) => users.find((u) => u.id === d.owner_user_id)?.status ?? d.owner_status ?? null;
+  const ownerLabel = (name: string, status: string | null) =>
+    (status === 'ACTIVE' ? name : `${name} (${t('dep_owner_off')})`);
 
   // Human-readable role name; falls back to the raw code if no translation exists.
   const roleLabel = (r: string) => { const l = t(`role_${r}`); return l === `role_${r}` ? r : l; };
@@ -307,10 +326,13 @@ export default function Settings() {
                     <select value={d.owner_user_id ?? ''}
                       onChange={(e) => depPut(d, { ownerUserId: e.target.value || null })}>
                       <option value="">{t('dep_owner_none')}</option>
-                      {users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                      {activeUsers.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                      {d.owner_user_id && ownerStatus(d) !== 'ACTIVE' && (
+                        <option value={d.owner_user_id}>{ownerLabel(d.owner_name || '—', ownerStatus(d))}</option>
+                      )}
                     </select>
                   ) : d.owner_name ? (
-                    <span>{d.owner_name}</span>
+                    <span>{ownerLabel(d.owner_name, ownerStatus(d))}</span>
                   ) : (
                     <span className="hint">{t('dep_owner_none')}</span>
                   )}
@@ -347,7 +369,8 @@ export default function Settings() {
                 code: newDep.code.trim(),
                 ...(newDep.name.trim() ? { name: newDep.name.trim() } : {}),
                 ...(newDep.parentId ? { parentId: newDep.parentId } : {}),
-              })).then(() => setNewDep({ code: '', name: '', parentId: '' }));
+                ...(newDep.ownerUserId ? { ownerUserId: newDep.ownerUserId } : {}),
+              })).then(() => setNewDep({ code: '', name: '', parentId: '', ownerUserId: '' }));
             }}>
             <div><label>{t('dep_code')}</label><input value={newDep.code} onChange={(e) => setNewDep({ ...newDep, code: e.target.value })} placeholder="IT" /></div>
             <div><label>{t('name')}</label><input value={newDep.name} onChange={(e) => setNewDep({ ...newDep, name: e.target.value })} /></div>
@@ -355,6 +378,20 @@ export default function Settings() {
               <select value={newDep.parentId} onChange={(e) => setNewDep({ ...newDep, parentId: e.target.value })}>
                 <option value="">—</option>
                 {deps.map((d) => <option key={d.id} value={d.id}>{d.code}</option>)}
+              </select></div>
+            {/* The owner, asked for at birth. `POST /departments` has always taken
+                `ownerUserId`; this form sent code, name and parent only, so every department
+                created in the product came into the world unowned and its budget alarm went
+                to the whole organisation. The column above could then be filled in, one row
+                at a time, by somebody who knew to — and the one screen that decides who gets
+                told was the screen that did not ask. Optional on purpose: a department with
+                nobody answerable for it is a real state, and the table says so in words
+                rather than leaving the cell blank. */}
+            <div><label>{t('dep_owner')}</label>
+              <select data-testid="dep-new-owner" value={newDep.ownerUserId}
+                onChange={(e) => setNewDep({ ...newDep, ownerUserId: e.target.value })}>
+                <option value="">{t('dep_owner_none')}</option>
+                {activeUsers.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
               </select></div>
             <button className="btn" style={{ flex: 'none' }}>+ {t('add')}</button>
           </form>

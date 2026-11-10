@@ -566,12 +566,32 @@ test.describe('buyer panel', () => {
     const code = 'PW-SMOKE';
     await page.goto('/buyer/settings');
     const dep = page.locator(`td:text-is("${code}")`);
+    let justCreated = false;
     if (!(await dep.count())) {
       const depForm = page.locator('.card', { hasText: /Отделы|Departments|Şöbələr/ }).locator('form');
       await depForm.locator('input').first().fill(code);
+      // The owner, chosen at creation. `POST /departments` has always accepted
+      // `ownerUserId`; this form sent code, name and parent only, so every department born
+      // in the product came out unowned — and the budget warning that belongs to one named
+      // person went to the whole organisation instead. Option 1, because option 0 is the
+      // empty «No owner»: picking it is therefore also the proof that the picker lists
+      // people at all and is not an empty select.
+      const picker = depForm.getByTestId('dep-new-owner');
+      await expect(picker.locator('option')).not.toHaveCount(1);
+      await picker.selectOption({ index: 1 });
       await depForm.locator('button.btn').click();
+      justCreated = true;
     }
     await expect(dep).toBeVisible({ timeout: 10_000 });
+    // …and it came back owned. This is the round trip the form could not make before: the
+    // value is the owner's id as the API returned it, so an empty one would mean the field
+    // was collected on screen and dropped on the way. Asserted only for a department this
+    // run created — on a stand where PW-SMOKE was left behind by an older run it predates
+    // the field and is legitimately unowned.
+    if (justCreated) {
+      const depRow = page.locator('tr').filter({ has: page.locator(`td:text-is("${code}")`) });
+      await expect(depRow.getByTestId('dep-owner').locator('select')).not.toHaveValue('');
+    }
 
     await page.goto('/buyer/requests');
     // The form is behind a button now: the list of requests is what this screen opens on.
@@ -624,17 +644,22 @@ test.describe('buyer panel', () => {
     // Read across ALL rows, not just the first — but the claim asserted here is the one
     // this stand can keep. «Every department has an owner» is true of the COURSE's stand
     // and is guarded there, by the recorder, which refuses a run if any row is unowned.
-    // Here it is false by construction: the draft-request test above creates PW-SMOKE
-    // through the form, and the form does not ask for an owner, so the stand grows an
-    // unowned department every run. What matters on this screen is therefore the other
-    // half: a named owner is shown as a person, and one that is missing says so IN WORDS,
-    // because an empty cell reads as «failed to load» — the opposite of what it means.
+    // Here it cannot be asserted: a department with nobody answerable for it is a real
+    // state the product allows, and the form now offers the owner rather than requiring
+    // one. What matters on this screen is therefore the other half: a named owner is shown
+    // as a person, and one that is missing says so IN WORDS, because an empty cell reads as
+    // «failed to load» — the opposite of what it means. The empty option's own label is
+    // asserted unconditionally below, so the words are checked even on a stand where every
+    // department happens to be owned and the loop has no case to look at.
     const owners = page.getByTestId('dep-owner').locator('select');
     const ownerRows = await owners.count();
     expect(ownerRows, 'the departments table shows no owner field at all').toBeGreaterThan(0);
     const ownerValues = await owners.evaluateAll((els) => els.map((e) => (e as HTMLSelectElement).value));
     expect(ownerValues.filter(Boolean).length, 'not one department names an owner').toBeGreaterThan(0);
     await expect(owners.first().locator('option[value=""]')).toHaveText(/no owner/i);
+    // Who the picker may offer is not assertable on this stand — every seeded member is
+    // active — so it is asserted in department-owner-reachable.spec.ts, which deactivates
+    // one on purpose.
     for (const [i, value] of ownerValues.entries()) {
       if (value) continue;
       await expect(owners.nth(i).locator('option:checked'),
