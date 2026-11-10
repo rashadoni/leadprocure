@@ -79,7 +79,9 @@ test('a switched-off department owner is never offered, never silently dropped, 
   //    replaces the whole row and reads an omitted field as «cleared», so the retire button
   //    sends every other field back as it stands — including an owner who is no longer in
   //    the list of people this screen offers.
-  await row().getByRole('button', { name: /Retire/ }).click();
+  // «Archive», not «Retire»: the button's own text is `⏸ dep_retire`, and `dep_deactivate`
+  // («Retire») is its tooltip. The two are different keys and only one is the accessible name.
+  await row().getByRole('button', { name: /Archive/ }).click();
   await expect(row().locator('.badge')).toHaveText('Retired');
   await expect(rowOwner(), 'retiring the department cleared its owner').toHaveValue(leaver.id);
   await expect(rowOwner().locator('option:checked')).toHaveText('Leaving Head (deactivated)');
