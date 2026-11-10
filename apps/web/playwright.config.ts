@@ -5,6 +5,10 @@ import { defineConfig } from '@playwright/test';
 //   pnpm --filter api start:dev   &   pnpm --filter web dev
 // BASE_URL points the same suite at a deployed stand instead:
 //   BASE_URL=http://<host>:<port> npx playwright test
+// Стенд одноразовый, пока никто не увёл набор на другой адрес. `PLAYWRIGHT_TRACE=1` — явное
+// «да, я знаю, что в трассе окажутся настоящие учётные данные».
+const DISPOSABLE_STAND = !process.env.BASE_URL || process.env.PLAYWRIGHT_TRACE === '1';
+
 export default defineConfig({
   testDir: './tests',
   // Generous: the Vite dev server compiles each route on first visit, so a run that
@@ -23,10 +27,19 @@ export default defineConfig({
     // `error-context.md`, то есть снимок доступности страницы: по нему видно, что браузер
     // стоит на форме входа, и ничего о том, почему. Четыре падения приёмки 10 ноября 2026
     // перезапустили именно поэтому. Трасса несёт каждый запрос с кодом ответа — ровно то
-    // свидетельство, которого не хватало; снимок и видео читаются без инструментов.
-    trace: 'retain-on-failure',
+    // свидетельство, которого не хватало.
+    //
+    // Снимок экрана — всегда: пароль на нём скрыт полем, а артефакт весит килобайты.
+    // Трасса и видео — ТОЛЬКО на одноразовом стенде (замечание из разбора PR #182). Трасса
+    // записывает запросы ЦЕЛИКОМ: тело `POST /auth/login` с почтой и паролем, заголовки с
+    // cookie. На стенде приёмки это фикстуры (`@audit.invalid`, фикстурный пароль), и терять
+    // там нечего; но `BASE_URL` уводит этот же набор на живой стенд, а артефакт прогона лежит
+    // в публичном репозитории — и тогда та же настройка положила бы туда настоящие учётные
+    // данные. Поэтому признак одноразовости — отсутствие `BASE_URL`; на живом стенде трассу
+    // надо попросить осознанно, `PLAYWRIGHT_TRACE=1`.
+    trace: DISPOSABLE_STAND ? 'retain-on-failure' : 'off',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    video: DISPOSABLE_STAND ? 'retain-on-failure' : 'off',
   },
   webServer: undefined, // servers are managed externally (see header comment)
 });
