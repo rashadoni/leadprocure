@@ -70,12 +70,19 @@ test('a switched-off department owner is never offered, never silently dropped, 
   await expect(rowOwner()).toHaveValue(leaver.id);
   await expect(rowOwner().locator('option:checked')).toHaveText('Leaving Head');
 
+  // The product asks «is this person ACTIVE», an allowlist — so the test must not pin one
+  // particular other value. `organization_users.status` is plain text with no CHECK, so the
+  // set of non-ACTIVE values is open, and a filter loosened to `!== 'DISABLED'` would keep
+  // this test green while letting every other status back into the picker. Two unrelated
+  // values, asserted the same way, say «anything that is not ACTIVE» instead of «DISABLED».
   const { Client } = apiRequire('pg');
-  const db = new Client({ connectionString: process.env.DATABASE_OWNER_URL });
-  await db.connect();
-  try {
-    await db.query(`UPDATE organization_users SET status = 'DISABLED' WHERE id = $1`, [leaver.id]);
-  } finally { await db.end(); }
+  const setStatus = async (status: string) => {
+    const db = new Client({ connectionString: process.env.DATABASE_OWNER_URL });
+    await db.connect();
+    try { await db.query(`UPDATE organization_users SET status = $2 WHERE id = $1`, [leaver.id, status]); }
+    finally { await db.end(); }
+  };
+  await setStatus('DISABLED');
 
   await open();
   // 1. Not offered any more — neither for a new department nor for one that has none. The
@@ -101,5 +108,14 @@ test('a switched-off department owner is never offered, never silently dropped, 
   await row().getByRole('button', { name: /Archive/ }).click();
   await expect(row().locator('.badge')).toHaveText('Retired');
   await expect(rowOwner(), 'retiring the department cleared its owner').toHaveValue(leaver.id);
+  await expect(rowOwner().locator('option:checked')).toHaveText('Leaving Head (deactivated)');
+
+  // 5. A second, unrelated non-ACTIVE value, to say the rule is «ACTIVE or not» rather than
+  //    «the one word this test happened to write».
+  await setStatus('SUSPENDED');
+  await open();
+  await expect(newOwner().locator('option', { hasText: 'Leaving Head' }),
+    'the picker reads one particular status instead of asking for ACTIVE').toHaveCount(0);
+  await expect(rowOwner()).toHaveValue(leaver.id);
   await expect(rowOwner().locator('option:checked')).toHaveText('Leaving Head (deactivated)');
 });

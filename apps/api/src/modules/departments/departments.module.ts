@@ -49,11 +49,23 @@ export class DepartmentsService {
                   AND EXISTS (SELECT 1 FROM memberships m
                                 WHERE m.user_id = u.id AND m.org_id = d.buyer_org_id)) AS owner_name,
               -- The owner's own state travels with the name, because a filled-in owner alone
-              -- cannot say whether the budget warning addressed to them still reaches that
-              -- person. It no longer goes nowhere — NotifyService widens it to the whole
-              -- organisation and records that it did — but «the one person answerable for
-              -- this budget» and «everybody» are different things, and the screen is where
-              -- that difference is noticed in time to name somebody new.
+              -- cannot say whether the budget warning addressed to them still reaches the
+              -- person answerable for it.
+              --
+              -- What it used to mean, and no longer does: mail was the channel that went
+              -- quiet. NotifyEmailer.fanOut filters u.status='ACTIVE' and ANDs that with the
+              -- addressed user, so a deactivated owner emptied the recipient list and
+              -- an empty recipient list sent nothing at all. The in-app row was never
+              -- the problem — notifications_rls filters by recipient_org_id alone and
+              -- GET /notifications has no recipient clause, so the whole organisation could
+              -- always see it.
+              --
+              -- Now neither channel goes silent: NotifyService widens an unreachable
+              -- recipient back to the organisation, records the widening in the audit trail
+              -- and writes recipient_user_id NULL. But «the one person answerable for this
+              -- budget» and «everybody» are still different things — a warning forty people
+              -- receive is one nobody acts on — and this screen is where that difference is
+              -- noticed in time to name somebody new.
               (SELECT u.status FROM organization_users u
                 WHERE u.id = d.owner_user_id
                   AND EXISTS (SELECT 1 FROM memberships m
