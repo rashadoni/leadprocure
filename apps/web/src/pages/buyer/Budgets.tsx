@@ -66,12 +66,22 @@ export default function Budgets() {
   // Поле раньше не подсказывало вовсе — человек должен был помнить, как категория пишется,
   // а ошибка в написании заводит ВТОРУЮ категорию и тихо делит по ней расход.
   const [cats, setCats] = useState<Array<{ code: string; auto_created?: boolean }>>([]);
-  useEffect(() => { api.get('/categories').then((r) => setCats(r.data)).catch(() => {}); }, []);
+  // Загрузился ли справочник — отдельный вопрос от того, что в нём. Пустой массив значит
+  // «ещё не пришло» ровно так же, как «никто не курировал», и пока их не различали, форма
+  // в первые миллисекунды (и навсегда, если запрос упал) обещала «создать» в организации,
+  // где сервер это отвергает. То же расхождение экрана и сервера, только с другим знаком:
+  // неизвестность читалась как самый разрешительный режим.
+  const [catsLoaded, setCatsLoaded] = useState(false);
+  useEffect(() => {
+    api.get('/categories').then((r) => { setCats(r.data); setCatsLoaded(true); }).catch(() => {});
+  }, []);
   // Можно ли ввести в бюджете НОВУЮ категорию, решает не форма, а сервер: пока справочник
   // никто не вёл руками, он принимает любой код и заводит его; как только появилась первая
   // ручная запись — принимает только существующие. Экран обязан обещать ровно это, иначе
   // строка «+ создать» снова начнёт звать туда, где ответят отказом.
-  const curatedCats = cats.some((c) => !c.auto_created);
+  // Пока неизвестно — не обещаем: «создать» предлагается, только если справочник
+  // действительно пришёл и в нём нет ни одной ручной записи.
+  const mayCreateCat = catsLoaded && !cats.some((c) => !c.auto_created);
   // The plan form used to stand open above the table, eight fields wide, on every visit —
   // so the page opened on a form instead of on the plans. Same shape as Requests: a named
   // button, and the card appears when it is asked for.
@@ -344,8 +354,8 @@ export default function Budgets() {
                   экрана и поведения, ради которого всё это и делалось. Категории
                   появляются из заявок, то есть оттуда, где деньги действительно просят. */}
               <Suggest testid="bud-category" value={form.category} onChange={(v) => setForm({ ...form, category: v })}
-                placeholder="*" tip={t('bud_category_tip')} allowNew={!curatedCats}
-                emptyHint={curatedCats ? t('bud_cat_empty') : undefined}
+                placeholder="*" tip={t('bud_category_tip')} allowNew={mayCreateCat}
+                emptyHint={mayCreateCat ? undefined : t('bud_cat_empty')}
                 options={[
                   { value: '*', label: `${t('suggest_any_category')} (*)`, hint: t('bud_any_hint') },
                   ...cats.map((c) => ({ value: c.code, hint: c.auto_created ? t('suggest_from_list') : t('suggest_curated') })),
