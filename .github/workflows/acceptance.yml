@@ -140,7 +140,20 @@ jobs:
         run: |
           python3 -m pip install lxml jsonschema
           python3 scripts/acceptance/validate_exports.py "$AUDIT_EXPORT_DIR"
+      # `NODE_ENV: production` именно на этом шаге, а не у джобы: `NODE_ENV: test` у джобы
+      # требует `assert-isolated.cjs` и на нём держится изоляция всего прогона. Но до этого
+      # значение доходило и до `vite build`, а он подставляет в бандл то `NODE_ENV`, которое
+      # видит, — и React на всём, кроме `production`, берёт сборку РАЗРАБОТКИ, где
+      # `<React.StrictMode>` вызывает каждый эффект дважды. Браузерный шаг ниже поднимает
+      # `vite preview`, то есть «прод-сборку», и мерил при этом дев-сборку: на прогоне
+      # 42879226779 `/auth/me` зван по два раза в 168 загрузках из 168 (336 вызовов), и так же
+      # удваивались `/categories`, `/departments`, `/notifications` и остальные — то есть все
+      # цифры сводки шага были завышены примерно вдвое. Прод этим не болел:
+      # `apps/web/Dockerfile` собирает без `NODE_ENV`, и vite сам ставит там `production`.
+      # Забыть это снова нельзя: `apps/web/vite.config.ts` роняет сборку, которая не продовая.
       - run: pnpm build
+        env:
+          NODE_ENV: production
       - name: Seed disposable browser fixtures
         timeout-minutes: 2
         run: pnpm --filter api seed
