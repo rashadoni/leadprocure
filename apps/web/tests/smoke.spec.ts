@@ -30,8 +30,10 @@ async function login(page: Page, email: string): Promise<void> {
 // supplier's session mid-walk and finishing on the login page: the supplier's pages are the
 // lightest in the product, so its loads come fast enough to cut their own bootstrap off.
 // Waiting for the network to settle after each navigation lets the rotation land before the
-// next one starts. It costs about half a second per page and removes a failure that reads
-// as a broken layout.
+// next one starts. It removes a failure that reads as a broken layout. The cost is MEASURED,
+// not guessed: 35 more `settle` calls took the suite from 1.7 to 1.8 minutes, so about 0.2 s
+// per navigation — this used to say «about half a second», which was the `networkidle`
+// window read as a price rather than a measurement (second review of PR #183).
 //
 // THIS CURES THE RUN, NOT THE PRODUCT, and the difference is worth stating here rather than
 // leaving the next reader to assume otherwise. The same race is available to a person:

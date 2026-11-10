@@ -35,7 +35,10 @@ const ROUTE_LIMITS = {
   'POST /auth/forgot-password': 5,
   'POST /auth/reset-password': 10,
 };
-const limitOf = (handler) => ROUTE_LIMITS[handler] ?? DEFAULT_LIMIT;
+// Слэш на конце снимается: express 4 с `strict: false` отдаёт `/auth/login/` тому же
+// обработчику и тому же ведру, а точное совпадение ключа увело бы такую строку на умолчание
+// 300 — то есть снова назвало бы спокойным маршрут на пределе.
+const limitOf = (handler) => ROUTE_LIMITS[handler.replace(/\/+$/, '')] ?? DEFAULT_LIMIT;
 const file = process.argv[2];
 if (!file) { console.log('api-log-summary: не передан файл лога'); process.exit(0); }
 
