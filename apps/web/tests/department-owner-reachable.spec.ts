@@ -22,9 +22,28 @@ test('a switched-off department owner is never offered, never silently dropped, 
   };
 
   // Its own organisation, so nothing here depends on, or disturbs, the seeded stand.
+  //
+  // Registered through the PAGE's request context, not the `request` fixture, and that is
+  // what spares this test a login: `/auth/register/*` sets the very same httpOnly refresh
+  // cookie as `/auth/login` (both end in `IdentityController.finish`), so the cookie lands
+  // in the browser this test drives and the cold `goto` bootstraps from it through
+  // `/auth/refresh`. Still a real credential flow — nothing is injected.
+  //
+  // Why it matters beyond this file: `/auth/login` is throttled to 10 per minute per IP
+  // (brute-force + argon2-DoS guard), and the whole browser suite runs in about 90 seconds,
+  // so every login in it competes for ONE window. While this test signed in too, the suite
+  // asked for ELEVEN — analytics 1, budget-approval 1, this file 1, evaluation 2, finance 1,
+  // languages 3 (one per language), smoke 2 — and the eleventh, the supplier panel's login
+  // in `smoke.spec.ts` (last by file order), came back `ThrottlerException: Too Many
+  // Requests`, while the failure read as a 15-second navigation timeout. Whether a run went
+  // green depended on where the minute boundary fell. Ten is the ceiling, and the suite now
+  // sits exactly on it: anything added that signs in must either register in the page
+  // context like this, or take a login back out.
   const adminEmail = `dep-owner-admin-${tag}@audit.invalid`;
-  const buyer = await call('/auth/register/buyer',
-    { legalName: `Dept owner ${tag}`, fullName: 'Owning Admin', email: adminEmail, password });
+  const reg = await page.request.post(base + '/auth/register/buyer',
+    { data: { legalName: `Dept owner ${tag}`, fullName: 'Owning Admin', email: adminEmail, password } });
+  expect(reg.ok(), await reg.text()).toBe(true);
+  const buyer = await reg.json();
   const leaverEmail = `dep-owner-leaver-${tag}@audit.invalid`;
   await call('/settings/users',
     { email: leaverEmail, fullName: 'Leaving Head', password, role: 'BUYER_APPROVER' }, buyer.accessToken);
@@ -35,8 +54,6 @@ test('a switched-off department owner is never offered, never silently dropped, 
   await call('/departments', { code, name: 'Has an owner', ownerUserId: leaver.id }, buyer.accessToken);
 
   await page.addInitScript(() => localStorage.setItem('lp_lang', 'en'));
-  const login = await page.request.post(base + '/auth/login', { data: { email: adminEmail, password } });
-  expect(login.ok(), await login.text()).toBe(true);
 
   const newOwner = () => page.getByTestId('dep-new-owner');
   const row = () => page.locator('tr').filter({ has: page.locator(`td:text-is("${code}")`) });
