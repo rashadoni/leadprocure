@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import * as argon2 from 'argon2';
@@ -40,6 +41,13 @@ export interface AuthResult {
 
 @Injectable()
 export class IdentityService {
+  // Отказ в обновлении сессии — это то, из-за чего человек (и браузерный набор приёмки)
+  // оказывается на форме входа БЕЗ единого сообщения: `AuthProvider` глотает любую ошибку
+  // начальной загрузки как «не вошёл». Причину отказа не знал никто: в логе api её не было,
+  // в журнале — тоже, а снимок страницы показывает только форму. Теперь причина называется
+  // здесь. Без токенов: только идентификаторы и то, по какой ветке ушёл отказ.
+  private readonly log = new Logger('Identity');
+
   constructor(
     private readonly rc: RequestContextService,
     private readonly tokens: TokenService,
@@ -194,7 +202,13 @@ export class IdentityService {
        WHERE s.user_id = $1 AND s.org_id = $2 AND s.refresh_hash = $3`,
       [payload.sub, payload.org_id, hash],
     );
-    if (!sessions.length) throw new UnauthorizedException('Invalid refresh token');
+    if (!sessions.length) {
+      // Cookie предъявлена, подпись верна, а такой сессии нет: её строку уже заменили
+      // ротацией, которую этот браузер не сохранил, либо организацию удалили. Отличается от
+      // «нет cookie вовсе» — там выше падает verifyRefresh.
+      this.log.warn(`refresh отказан: сессии с такой cookie нет (user=${payload.sub} org=${payload.org_id})`);
+      throw new UnauthorizedException('Invalid refresh token');
+    }
     const s = sessions[0];
     const benignReplay =
       s.revoked &&
@@ -216,9 +230,27 @@ export class IdentityService {
       // back when we throw below, which would otherwise undo the revoke and make the
       // breach response a no-op.
       await this.ds.query(`UPDATE sessions SET revoked = true, revoked_at = NULL WHERE family_id = $1`, [s.family_id]);
+      // Сработавшая защита от кражи, не оставляющая следа, неотличима от поломки: до этой
+      // строки жёсткий отзыв цепочки не писал НИЧЕГО — ни в лог, ни в журнал (запись
+      // журнала откатилась бы вместе с транзакцией запроса, которую мы сейчас уроняем).
+      // Два случая здесь нарочно названы по-разному: `revoked_at` со временем — это
+      // просроченный повтор ротации (гонка, которую может создать и сам продукт), а
+      // `revoked_at IS NULL` — цепочка, уже отозванная жёстко (выход, сброс пароля или
+      // предыдущая такая же сработка).
+      const since = s.revoked_at
+        ? `ротация была ${new Date(s.revoked_at).toISOString()}, допуск ${this.cfg.refreshReuseLeewayMs} мс`
+        : 'цепочка уже была отозвана жёстко (выход, сброс пароля или прошлая сработка)';
+      this.log.warn(
+        `refresh отказан: ПОВТОР ОТОЗВАННОГО ТОКЕНА — цепочка ${s.family_id} отозвана жёстко `
+        + `(user=${payload.sub}); ${since}`,
+      );
       throw new UnauthorizedException('Refresh token reuse detected');
     }
     if (s.token_version !== payload.token_version || s.status !== 'ACTIVE' || new Date(s.expires_at).getTime() <= Date.now()) {
+      const why = s.token_version !== payload.token_version ? 'token_version сменился (смена пароля, роли или выход везде)'
+        : s.status !== 'ACTIVE' ? `учётная запись в состоянии ${s.status}`
+          : `срок сессии истёк ${new Date(s.expires_at).toISOString()}`;
+      this.log.warn(`refresh отказан: ${why} (user=${payload.sub})`);
       throw new UnauthorizedException('Session expired');
     }
     const membership: MembershipRow[] = await m.query(
@@ -226,7 +258,10 @@ export class IdentityService {
        JOIN organizations o ON o.id = mem.org_id WHERE mem.user_id = $1 AND mem.org_id = $2`,
       [payload.sub, payload.org_id],
     );
-    if (!membership.length) throw new UnauthorizedException('Membership revoked');
+    if (!membership.length) {
+      this.log.warn(`refresh отказан: членство в организации снято (user=${payload.sub} org=${payload.org_id})`);
+      throw new UnauthorizedException('Membership revoked');
+    }
 
     // Rotate out the presented token (skip if a benign replay already revoked it).
     if (!benignReplay) {
