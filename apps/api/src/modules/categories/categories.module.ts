@@ -21,6 +21,23 @@ export class CategoriesService {
 
   async create(dto: UpsertCategoryDto, auth: AccessTokenPayload) {
     const code = dto.code.trim();
+    // Пара «IT» и «it» рождается именно здесь, и единое правило её не покрывало: заявка
+    // потом молча приведётся к одному написанию, а бюджет на второе ответит «отличается
+    // только регистром» — то есть справочник сам создаёт положение, в котором половина
+    // продукта ругается, а половина молчит. Поэтому сверка без учёта регистра стоит и
+    // на ручном заведении: уникальный индекс её не ловит, он по точному значению.
+    const twin = (
+      await this.rc.manager.query(
+        `SELECT code FROM procurement_categories WHERE lower(code) = lower($1)`,
+        [code],
+      )
+    )[0];
+    if (twin) {
+      throw new ConflictException(
+        `Category "${twin.code}" already exists — "${code}" differs only in case, `
+        + 'and two spellings would split the same spend in two',
+      );
+    }
     try {
       const row = (
         await this.rc.manager.query(

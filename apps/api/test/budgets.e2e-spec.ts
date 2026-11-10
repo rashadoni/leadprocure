@@ -869,8 +869,20 @@ describe('budgets & commitment control (API e2e)', () => {
   it('a budget in a category the buyer never curated is refused', async () => {
     // buyer A has a category directory by now only if one was created — make it explicit
     await http().post('/categories').set(...bearer(buyerA)).send({ code: `CUR-${tag}` }).expect(201);
+    // Отличается только РЕГИСТРОМ от курируемой.
     await http().post('/budgets').set(...bearer(buyerA))
       .send({ name: `Typo ${tag}`, category: `cur-${tag}`, periodYear: YEAR, amountMinor: 1000 }).expect(400);
+    // И отдельно — просто НЕЗНАКОМАЯ, похожая на код. Этого тест не проверял, хотя назван
+    // именно так: «cur-<tag>» выше падает в ветку про регистр, а опечатка в букве
+    // («OFFCIE» вместо «OFFICE») — тот же молчаливый ноль, только другой дорогой. Нашла
+    // это сессия, разбиравшая правку: без этой строки бюджет принимал незнакомый код и
+    // сам заводил его в справочнике.
+    await http().post('/budgets').set(...bearer(buyerA))
+      .send({ name: `Never ${tag}`, category: `NEVERCURATED${tag}`, periodYear: YEAR, amountMinor: 1000 }).expect(400);
+    const dir = (await http().get('/categories').set(...bearer(buyerA)).expect(200)).body.map((c: any) => c.code);
+    // Отвергнутый бюджет не должен заводить категорию (в jest у expect нет второго
+    // аргумента-сообщения — это vitest; поэтому пояснение комментарием).
+    expect(dir).not.toContain(`NEVERCURATED${tag}`);
     // the curated code itself is fine
     await mkBudget({ name: `Curated ${tag}`, category: `CUR-${tag}`, periodYear: YEAR, amountMinor: 1000 });
   });

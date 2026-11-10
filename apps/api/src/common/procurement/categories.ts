@@ -40,8 +40,8 @@ export async function resolveCategory(
   const code = (raw ?? '').trim();
   if (!code || code === '*') return { code: '*', createdId: null };
 
-  const known: Array<{ id: string; code: string }> = await m.query(
-    `SELECT id, code FROM procurement_categories`,
+  const known: Array<{ id: string; code: string; auto_created: boolean }> = await m.query(
+    `SELECT id, code, auto_created FROM procurement_categories`,
   );
   const exact = known.find((c) => c.code === code);
   if (exact) return { code: exact.code, createdId: null };
@@ -62,21 +62,43 @@ export async function resolveCategory(
     );
   }
 
+  // Незнакомое. Дальше заявка и бюджет расходятся во второй и последний раз, и это тоже
+  // нарочно: СПРАВОЧНИК ПОПОЛНЯЕТСЯ ОТТУДА, ГДЕ КАТЕГОРИЮ ДЕЙСТВИТЕЛЬНО ТРАТЯТ.
+  //  · заявка — это спрос: новая категория заводится, а фраза с пробелами остаётся на
+  //    заявке текстом, как было всегда;
+  //  · бюджет — это план, и незнакомая категория в нём почти всегда опечатка. «OFFCIE»
+  //    вместо «OFFICE» — тот же молчаливый ноль, что и разный регистр, только по букве:
+  //    план не поймает ни одной заявки и будет стоять на нуле, ничего об этом не сказав.
+  //    Поэтому бюджет отвергает незнакомое и НЕ заводит его сам.
+  // Строгость у бюджета включает не «справочник непуст», а «справочник кто-то ВЁЛ»:
+  // хотя бы одна запись, заведённая рукой в «Параметрах». Орг, который справочник не
+  // трогал, работает со свободным текстом — ровно как до 10.11.2026. Иначе первая же
+  // категория, заведённая заявкой, молча сделала бы строгими бюджеты у всех, а форма
+  // бюджета в это время предлагала бы «создать» то, на что сервер отвечает отказом.
+  const curated = known.some((c) => !c.auto_created);
+  if (strict && curated) {
+    throw new BadRequestException(
+      `Unknown category "${code}". Known: ${known.map((c) => c.code).join(', ')}. `
+      + 'Add it in Settings, or leave the field empty for all categories.',
+    );
+  }
   if (!CATEGORY_CODE.test(code)) {
-    // Заявка этим не ограничена: там категория — свободный текст, и так было всегда.
-    // Бюджет — ограничен: он СЧИТАЕТ по категории, и фраза с пробелами, не попавшая в
-    // справочник, дала бы бюджет, который ничего не ловит и стоит на нуле.
+    // Фраза с пробелами кодом не станет. На заявке она остаётся текстом, как было всегда;
+    // у бюджета это отказ, потому что бюджет по категории СЧИТАЕТ, и план на фразу, которой
+    // нет в справочнике, не поймает ни одной заявки и будет молча стоять на нуле.
     if (!strict) return { code, createdId: null };
     throw new BadRequestException(
       `Category "${code}" is not a code: 1–40 letters, digits, "-" or "_". `
-      + (known.length ? `Known: ${known.map((c) => c.code).join(', ')}. ` : '')
       + 'Leave it empty for all categories.',
     );
   }
 
+  // Заведённая так категория помечена автоматической: она подсказывается наравне с
+  // остальными и годится бюджету, но сама строгий режим не включает — его включает только
+  // рука человека в «Параметрах».
   const row = (
     await m.query(
-      `INSERT INTO procurement_categories(buyer_org_id, code) VALUES ($1,$2)
+      `INSERT INTO procurement_categories(buyer_org_id, code, auto_created) VALUES ($1,$2,true)
        ON CONFLICT DO NOTHING RETURNING id`,
       [orgId, code],
     )

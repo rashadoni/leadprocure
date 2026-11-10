@@ -142,55 +142,50 @@ export class RequestsService {
     const requestNo = await nextDocumentNo(m, auth.org_id, 'REQ', this.cfg.appTimezone);
     const total = this.computeTotal(dto.items);
     const departmentId = await this.resolveDepartment(dto.departmentId, auth);
+    // Категория решается ДО вставки, и в заявку идёт ПРИВЕДЁННОЕ значение. Первая
+    // редакция звала `rememberCategory` после вставки и выбрасывала её ответ: в заявке
+    // оставалось набранное «it», а сопоставление с бюджетом — точное равенство строк
+    // (`b.category = pr.category`), так что бюджет «IT» эту заявку не ловил и стоял на
+    // нуле. Комментарий при этом уверял, что приведение происходит. Нашла это сессия,
+    // разбиравшая правку.
+    const { code: category, createdId } = await resolveCategory(m, auth.org_id, dto.category, { strict: false });
     const req = (
       await m.query(
         `INSERT INTO procurement_requests(owner_org_id, request_no, title, category, department_id, vat_mode,
            estimated_total_minor, created_by)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-        [auth.org_id, requestNo, dto.title, dto.category ?? '*', departmentId, dto.vatMode ?? 'EXCLUSIVE', total, auth.sub],
+        [auth.org_id, requestNo, dto.title, category, departmentId, dto.vatMode ?? 'EXCLUSIVE', total, auth.sub],
       )
     )[0];
     await this.insertItems(req.id, auth.org_id, dto.items);
-    await this.rememberCategory(dto.category, auth.org_id, req.id);
+    // Журнал — только о ПЕРВОМ появлении категории: запись на каждой заявке была бы шумом,
+    // в котором не видно, когда категория завелась.
+    if (createdId) await this.audit.record('CATEGORY_CREATED', 'category', createdId, { code: category, from_request: req.id });
     return this.get(req.id);
-  }
-
-  // «Нет в списке — заводится само» (решение владельца 10.11.2026: «заказы могут быть
-  // разными»). Заводится на сервере, а не на странице: POST /categories открыт только
-  // администратору, а заявки пишет обычный сотрудник — страница получила бы 403 и
-  // промолчала, то есть «само» не работало бы ровно у того, кто категории и печатает.
-  //
-  // Само правило — общее для заявок и бюджетов (common/procurement/categories.ts): пока оно
-  // жило в каждом своём месте, заявки принимали что угодно, а бюджеты отказывали всему, чего
-  // нет в справочнике, — и первая же заведённая заявкой категория молча переводила бюджеты
-  // в строгий режим. `strict: false` здесь значит: фраза с пробелами остаётся на заявке
-  // текстом, как было всегда, просто в справочник она не попадает.
-  private async rememberCategory(code: string | undefined, orgId: string, requestId: string) {
-    const { createdId, code: resolved } = await resolveCategory(this.rc.manager, orgId, code, { strict: false });
-    // Запись в журнал — только когда категория ДЕЙСТВИТЕЛЬНО завелась: на каждой заявке с
-    // уже известной категорией запись была бы шумом, в котором не видно первого появления.
-    if (createdId) await this.audit.record('CATEGORY_CREATED', 'category', createdId, { code: resolved, from_request: requestId });
-    return resolved;
   }
 
   async update(id: string, dto: UpsertRequestDto, auth: AccessTokenPayload) {
     const m = this.rc.manager;
     const req = await this.requireStatus(id, ['DRAFT']);
     const total = this.computeTotal(dto.items);
+    // Как и в create: приведённая категория идёт В ЗАПИСЬ, а не выбрасывается.
+    const { code: category, createdId } = dto.category === undefined
+      ? { code: req.category as string, createdId: null }
+      : await resolveCategory(m, auth.org_id, dto.category, { strict: false });
     await m.query(
       `UPDATE procurement_requests
        SET title=$2, category=$3, department_id=$4, vat_mode=$5, estimated_total_minor=$6,
            version=version+1, updated_at=now()
        WHERE id=$1`,
       [
-        id, dto.title, dto.category ?? req.category,
+        id, dto.title, category,
         dto.departmentId ?? req.department_id,
         dto.vatMode ?? req.vat_mode, total,
       ],
     );
     await m.query(`DELETE FROM request_items WHERE request_id = $1`, [id]);
     await this.insertItems(id, auth.org_id, dto.items);
-    await this.rememberCategory(dto.category, auth.org_id, id);
+    if (createdId) await this.audit.record('CATEGORY_CREATED', 'category', createdId, { code: category, from_request: id });
     return this.get(id);
   }
 

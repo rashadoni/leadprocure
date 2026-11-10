@@ -333,8 +333,14 @@ export default function Budgets() {
                   пустое поле после щелчка читается как «ничего не произошло» — ровно та
                   немота, на которую владелец и указал. Отправка и так считает пустое за
                   `*`, так что значение от этого не меняется. */}
+              {/* `allowNew={false}` — не мелочь, а соответствие серверу: бюджет НЕ заводит
+                  категорий, он отвергает незнакомые. Строка «+ создать "AZNCAT"» здесь
+                  обещала бы то, на что сервер отвечает отказом, — ровно то расхождение
+                  экрана и поведения, ради которого всё это и делалось. Категории
+                  появляются из заявок, то есть оттуда, где деньги действительно просят. */}
               <Suggest testid="bud-category" value={form.category} onChange={(v) => setForm({ ...form, category: v })}
-                placeholder="*" tip={t('bud_category_tip')}
+                placeholder="*" tip={t('bud_category_tip')} allowNew={false}
+                emptyHint={t('bud_cat_empty')}
                 options={[
                   { value: '*', label: `${t('suggest_any_category')} (*)`, hint: t('bud_any_hint') },
                   ...cats.map((c) => ({ value: c, hint: t('suggest_curated') })),

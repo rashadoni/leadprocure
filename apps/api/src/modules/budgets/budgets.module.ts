@@ -951,7 +951,14 @@ export class BudgetsService {
     await this.assertBudgetAccess(id, true);
     safeMoney(dto.amountMinor);
     const period = resolveBudgetPeriod(dto);
-    const category = await this.resolveBudgetCategory(dto.category, auth);
+    // Категория проверяется, только если её МЕНЯЮТ. Иначе правка суммы у бюджета, который
+    // завели во времена свободного текста, отвечала бы 400 на значение, которое человек
+    // в этот раз и не трогал, — правило о будущих значениях не должно запирать прошлые.
+    const current = (await this.rc.manager.query(`SELECT category FROM budgets WHERE id=$1`, [id]))[0];
+    const asked = (dto.category ?? '').trim() || '*';
+    const category = asked === current?.category
+      ? asked
+      : await this.resolveBudgetCategory(dto.category, auth);
     await this.assertMayWrite(auth, dto.departmentId ?? null);
     // The amount is money, not a field: changing it writes a revision so "the plan was
     // 500k until March" stays answerable.

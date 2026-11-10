@@ -89,6 +89,30 @@ describe('procurement categories (API e2e)', () => {
     expect(await codes()).not.toContain('Ofis mebeli');
   });
 
+  // Приведение к написанию из справочника — обещание, которое легко потерять: правило
+  // возвращало приведённый код, а вызывающий его выбрасывал, и в заявке оставалось «it».
+  // Бюджет сопоставляется с заявкой точным равенством строк, так что бюджет «IT» такую
+  // заявку не ловит и молча стоит на нуле.
+  it('a request filed as «it» is stored as the curated «IT»', async () => {
+    await http().post('/categories').set(...bearer(buyerA)).send({ code: `CASE${tag}` }).expect(201);
+    const tok = (await http().post('/auth/login').send({ email: `cr-${tag}@t.test`, password: 'password123' }).expect(201)).body.accessToken;
+    const req = await http().post('/requests').set(...bearer(tok))
+      .send({ title: `Case ${tag}`, category: `case${tag}`.toLowerCase(), items: [{ name: 'X', qty: 1, estUnitPriceMinor: 100 }] })
+      .expect(201);
+    expect(req.body.category).toBe(`CASE${tag}`);
+    // И дубля в справочнике при этом не завелось.
+    const dir = (await http().get('/categories').set(...bearer(buyerA)).expect(200)).body.map((c: any) => c.code);
+    expect(dir.filter((c: string) => c.toLowerCase() === `case${tag}`.toLowerCase())).toHaveLength(1);
+  });
+
+  // Пара «IT» и «it» рождается при ручном заведении, и уникальный индекс её не ловит:
+  // он по точному значению.
+  it('an admin cannot create a twin that differs only in case', async () => {
+    await http().post('/categories').set(...bearer(buyerA)).send({ code: `TWIN${tag}` }).expect(201);
+    const res = await http().post('/categories').set(...bearer(buyerA)).send({ code: `twin${tag}` }).expect(409);
+    expect(res.body.message).toContain(`TWIN${tag}`);
+  });
+
   it('only an admin can create/delete (BUYER_USER is refused)', async () => {
     // add a BUYER_USER under buyer A, then try to create a category as them
     await http().post('/settings/users').set(...bearer(buyerA))
