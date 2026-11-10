@@ -342,6 +342,10 @@ test.describe('buyer panel', () => {
   test('the rollup adds itself up, and the two spend tiles no longer share a word', async () => {
     await page.goto('/buyer/budgets');
     await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+    // The thresholds line says WHO the warning reaches, not only at what percentage. The
+    // course says it out loud on this screen, and until now the line carried percentages
+    // alone — the same divergence between voice and frame this branch closes in Settings.
+    await expect(page.getByTestId('bud-warn-owner')).toContainText(/owner/i);
     const rollup = page.getByTestId('budget-rollup');
     const money = (text: string) => Number(text.replace(/[^\d.-]/g, '')) || 0;
     // Top-level rows only, read the way the component decides it: a parent's figures already
@@ -620,7 +624,15 @@ test.describe('buyer panel', () => {
     // A value, not a placeholder: the seed names an owner for both departments, and the
     // empty option reads «no owner» in words precisely so that an unassigned one cannot be
     // mistaken for a cell that failed to load.
-    await expect(page.getByTestId('dep-owner').first().locator('select')).not.toHaveValue('');
+    // And EVERY row, not just the first: the sentence is «every department has an owner»,
+    // both rows are in frame, and a check of row one would let a department without an
+    // owner through — the recorder's own guard had the same gap and is fixed with it.
+    const owners = page.getByTestId('dep-owner').locator('select');
+    const ownerRows = await owners.count();
+    expect(ownerRows, 'the departments table shows no owner field at all').toBeGreaterThan(0);
+    for (let i = 0; i < ownerRows; i++) {
+      await expect(owners.nth(i), `department row ${i + 1} of ${ownerRows} has no owner`).not.toHaveValue('');
+    }
     await toApproval.click();
     await expect(page.locator('#set-approval')).toBeInViewport();
     const threeStep = page.getByTestId('chain-preset-p4');
