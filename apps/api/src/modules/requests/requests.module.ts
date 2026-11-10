@@ -23,6 +23,7 @@ import { pageFrom, parsePaging, Paging } from '../../common/http/paging';
 import { BudgetsModule, BudgetsService } from '../budgets/budgets.module';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
+import { resolveCategory } from '../../common/procurement/categories';
 import { AppConfig } from '../../common/config/config.service';
 import { nextDocumentNo } from '../../common/procurement/document-no';
 
@@ -155,28 +156,21 @@ export class RequestsService {
   }
 
   // «Нет в списке — заводится само» (решение владельца 10.11.2026: «заказы могут быть
-  // разными»). Заводится здесь, на сервере, а не на странице, по простой причине: POST
-  // /categories открыт только администратору, а заявки пишет обычный сотрудник — страница
-  // получила бы 403 и промолчала бы, то есть «само» не работало бы ровно у тех, кто и
-  // печатает категории.
+  // разными»). Заводится на сервере, а не на странице: POST /categories открыт только
+  // администратору, а заявки пишет обычный сотрудник — страница получила бы 403 и
+  // промолчала, то есть «само» не работало бы ровно у того, кто категории и печатает.
   //
-  // Форма кода та же, что у ручного заведения в «Параметрах»: буквы/цифры/дефис/подчёркивание
-  // до сорока знаков. Категория с пробелами («Офисная мебель») в справочник НЕ попадает и
-  // остаётся на заявке текстом — ровно как было до этой правки: справочник хранит коды, и
-  // тихо превратить фразу в код значило бы завести вторую сущность с тем же смыслом.
+  // Само правило — общее для заявок и бюджетов (common/procurement/categories.ts): пока оно
+  // жило в каждом своём месте, заявки принимали что угодно, а бюджеты отказывали всему, чего
+  // нет в справочнике, — и первая же заведённая заявкой категория молча переводила бюджеты
+  // в строгий режим. `strict: false` здесь значит: фраза с пробелами остаётся на заявке
+  // текстом, как было всегда, просто в справочник она не попадает.
   private async rememberCategory(code: string | undefined, orgId: string, requestId: string) {
-    const c = (code ?? '').trim();
-    if (!c || c === '*' || !/^[\p{L}\p{N}_-]{1,40}$/u.test(c)) return;
-    const row = (
-      await this.rc.manager.query(
-        `INSERT INTO procurement_categories(buyer_org_id, code) VALUES ($1,$2)
-         ON CONFLICT DO NOTHING RETURNING id`,
-        [orgId, c],
-      )
-    )[0];
+    const { createdId, code: resolved } = await resolveCategory(this.rc.manager, orgId, code, { strict: false });
     // Запись в журнал — только когда категория ДЕЙСТВИТЕЛЬНО завелась: на каждой заявке с
     // уже известной категорией запись была бы шумом, в котором не видно первого появления.
-    if (row) await this.audit.record('CATEGORY_CREATED', 'category', row.id, { code: c, from_request: requestId });
+    if (createdId) await this.audit.record('CATEGORY_CREATED', 'category', createdId, { code: resolved, from_request: requestId });
+    return resolved;
   }
 
   async update(id: string, dto: UpsertRequestDto, auth: AccessTokenPayload) {
