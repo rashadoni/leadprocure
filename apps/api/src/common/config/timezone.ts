@@ -54,7 +54,14 @@ export async function assertZoneKnownToPostgres(
   query: (sql: string, params: unknown[]) => Promise<unknown[]>,
   tz: string,
 ): Promise<void> {
-  const rows = await query(`SELECT 1 FROM pg_timezone_names WHERE name = $1`, [tz]);
+  // Регистр сверяется БЕЗ учёта регистра, и это не вольность. `pg_timezone_names` хранит
+  // имена в каноническом виде (`Asia/Baku`), а `AT TIME ZONE` понимает их в любом регистре —
+  // замерено: `AT TIME ZONE 'asia/baku'` даёт тот же день, что `'Asia/Baku'`, и `Intl` такое
+  // имя тоже принимает. Со сверкой по точному равенству приложение ОТКАЗЫВАЛОСЬ стартовать на
+  // рабочем значении, да ещё с сообщением, винящим Postgres: «is not a time zone this
+  // PostgreSQL knows». Для оператора это выкладка, которая не поднялась из-за регистра, и
+  // подсказка, уводящая не туда. Нашла это сессия, разбиравшая проверку настройки.
+  const rows = await query(`SELECT 1 FROM pg_timezone_names WHERE lower(name) = lower($1)`, [tz]);
   if (!rows.length) {
     throw new Error(`APP_TIMEZONE=${JSON.stringify(tz)} is not a time zone this PostgreSQL knows (pg_timezone_names)`);
   }

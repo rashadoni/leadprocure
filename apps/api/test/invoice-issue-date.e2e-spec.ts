@@ -257,6 +257,13 @@ describe('дата выставления счёта (API e2e)', () => {
       await expect(assertZoneKnownToPostgres(q, 'Asia/Baku')).resolves.toBeUndefined();
       await expect(assertZoneKnownToPostgres(q, ZONE)).resolves.toBeUndefined();
       await expect(assertZoneKnownToPostgres(q, '+04:00')).rejects.toThrow(/pg_timezone_names/);
-    });
+
+      // Регистр: `pg_timezone_names` хранит канонический вид, а `AT TIME ZONE` и `Intl`
+      // принимают любой. Сверка по точному равенству отказывала в старте на рабочем
+      // значении — и винила в сообщении Postgres.
+      await expect(assertZoneKnownToPostgres(q, 'asia/baku')).resolves.toBeUndefined();
+      await expect(assertZoneKnownToPostgres(q, 'ASIA/BAKU')).resolves.toBeUndefined();
+      // А несуществующая зона по-прежнему отвергается, в любом регистре.
+      await expect(assertZoneKnownToPostgres(q, 'asia/baki')).rejects.toThrow(/not a time zone/);    });
   });
 });

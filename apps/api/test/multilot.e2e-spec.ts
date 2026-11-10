@@ -5,7 +5,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 import { AppModule } from '../src/app.module';
-import { addApprover } from './helpers';
+import { addApprover, teardown } from './helpers';
 
 // Multi-lot sealed RFQ: two lots awarded to two different suppliers; the event only
 // becomes AWARDED once every lot is awarded.
@@ -43,14 +43,11 @@ describe('multi-lot RFQ', () => {
   });
 
   afterAll(async () => {
-    try {
-      // Delete the buyer/event/awards before suppliers/bids. A single multi-org DELETE
-      // can cascade supplier bids first and hit awards.winning_bid_id's RESTRICT FK.
-      if (buyerOrg) await db.query('DELETE FROM organizations WHERE id = $1', [buyerOrg]);
-      await db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`ML %${tag}%`]);
-    } finally {
-      try { await db.end(); } finally { await app.close(); }
-    }
+    // Порядок удаления больше не важен: до миграции 0053 `awards.winning_bid_id` стоял без
+    // `ON DELETE`, и одиночный DELETE по нескольким организациям мог каскадить ставки
+    // поставщика первыми и упереться в этот FK — отсюда и был обход, удалявший покупателя
+    // отдельно и раньше. Теперь связь каскадная, и обход снят.
+    await teardown(db, app, () => db.query(`DELETE FROM organizations WHERE legal_name LIKE $1`, [`ML %${tag}%`]));
   });
 
   it('buyer builds a 2-lot RFQ and both suppliers bid', async () => {
