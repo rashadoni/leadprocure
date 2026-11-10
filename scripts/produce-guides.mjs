@@ -991,7 +991,14 @@ const SECTIONS = {
         await h.moveTo(ops.locator('td').nth(1)); await h.holdUntil(0.7);
         await h.moveTo(ops.locator('td.num').first()); await h.holdUntil(0.95);
       } },
-    { az: 'Yanında templə müqayisə var: dövrün qırx üç faizi keçib, xərc isə otuz səkkiz. Yəni plandan geri deyil, qabağa da keçməyib. Təkcə faiz bunu demir — noyabrda səksən faiz adi haldır, mayda isə həyəcan siqnalıdır.',
+    // Здесь озвучка называла число: «dövrün qırx üç faizi keçib». Это доля ПРОШЕДШЕГО
+    // календарного срока, а сид ставит бюджет на текущий квартал — значит число растёт
+    // примерно на процент в день, и кадр расходится с голосом через сутки. 10.11.2026 он
+    // и разошёлся: в строке OPS стояло «Plan üzrə 44.6%», а голос говорил сорок три.
+    // Пересъёмка курса — обычный ход работы, поэтому у такой фразы срок жизни сутки.
+    // Правило: голос называет только то, что держит сид (суммы и доли от сумм), а всё,
+    // что отсчитывается от «сегодня», описывает словами — число зритель читает с экрана.
+    { az: 'Yanında templə müqayisə var: dövrün nə qədəri keçib və xərc ondan geri qalır, yoxsa qabağa keçir. Fərqi sistem özü yazır. Təkcə faiz bunu demir — noyabrda səksən faiz adi haldır, mayda isə həyəcan siqnalıdır.',
       do: async (p, l, h) => { const ops = p.locator('[data-testid=budget-rollup] tbody tr:has-text("OPS")'); await h.hover(ops.locator('[data-tip]').last(), 1400); await h.holdUntil(0.95); } },
     { az: 'Ödənilmiş məbləğ ayrıca durur və cəmə qatılmır: hesab artıq xərc kimi sayılmış sifarişi bağlayır, onu ikinci dəfə saymaq xərci iki dəfə göstərmək olardı.',
       do: async (p, l, h) => { await h.moveTo('[data-testid=rollup-total]'); await h.holdUntil(0.55); await h.moveTo('[data-testid=budget-rollup] thead th:last-child'); await h.holdUntil(0.95); } },
@@ -1003,7 +1010,17 @@ const SECTIONS = {
         await h.moveTo(list.locator('tbody tr:has-text("OPS")').first()); await h.holdUntil(0.95);
       } },
     { az: 'Həddlər: səksən faizdə xəbərdarlıq şöbənin sahibinə gedir, bağlama isə sönülüdür. Qoşulsa, həddi aşan təsdiq dayanır və yalnız administrator yazılı əsaslandırma ilə keçə bilər.',
-      do: async (p, l, h) => { await h.scrollTo('h1'); await h.moveTo(p.locator('.hint').filter({ hasText: '%' }).first()); await h.holdUntil(0.95); } },
+      must: true,
+      // «Xəbərdarlıq şöbənin sahibinə gedir» — утверждение про АДРЕСАТА, и на экране
+      // бюджетов его не было: строка порогов называла только проценты. Это тот же разрыв,
+      // который эта ветка чинила страницей левее, в «Параметрах», — разбор PR #174 нашёл
+      // его здесь. Строка теперь договаривает про владельца, и сцена этого требует.
+      do: async (p, l, h) => {
+        await h.scrollTo('h1');
+        const th = await h.need('[data-testid=bud-thresholds]', 'həddlər sətri');
+        await h.need('[data-testid=bud-warn-owner]', 'xəbərdarlığın ünvanı');
+        await h.moveTo(th); await h.holdUntil(0.95);
+      } },
     { az: 'İki ixrac var və onlar qəsdən ayrıdır: insan üçün bütöv mənzərə, mühasibat üçün isə aylara bölünmüş plan. Mühasibat sistemi planı dövr və ölçü üzrə yükləyir, faktları isə onsuz da özü saxlayır.',
       do: async (p, l, h) => { await h.scrollTo('[data-testid=budget-list]'); await h.hover(p.locator('button:has-text("CSV")').first(), 1200); await h.holdUntil(0.6); await h.hover(p.locator('button:has-text("1C"), button:has-text("1С")').first(), 1200); await h.holdUntil(0.95); } },
   ]},
@@ -1169,10 +1186,30 @@ const SECTIONS = {
       } },
     { az: 'Şöbələr: kim xərcləyir. Hər şöbənin sahibi var, və büdcə xəbərdarlığı məhz ona gedir — qırx nəfərə göndərilən həyəcan siqnalı heç kimin işi olmur.',
       must: true,
+      // Озвучка здесь утверждала то, чего на экране не было: владелец у отдела в продукте
+      // есть (`departments.owner_user_id`, и предупреждение адресуется именно ему), а в
+      // таблице отделов колонки с владельцем не стояло. Разбор PR #173 это нашёл и нарочно
+      // не стал чинить: правка интерфейса стоит полной пересъёмки курса. Колонка появилась
+      // 10.11.2026 — и сцена теперь не только показывает её, но и ПРОВЕРЯЕТ собственную
+      // озвучку: нет колонки или не выбран человек в первой строке — прогон обрывается.
+      // Без этой проверки пустая колонка сняла бы точно такой же кадр и ничего не сказала.
       do: async (p, l, h) => {
         const dep = await h.need('#set-departments', 'şöbələr bölməsi');
-        await h.scrollTo(dep); await h.holdUntil(0.5);
-        await h.moveTo(dep); await h.holdUntil(0.95);
+        await h.scrollTo(dep); await h.holdUntil(0.35);
+        const col = await h.need('[data-testid=dep-owner-col]', 'şöbə sahibi sütunu');
+        await h.moveTo(col); await h.holdUntil(0.6);
+        // ВСЕ строки, а не первая: голос говорит «у КАЖДОГО отдела есть владелец», и в
+        // кадре видны обе. Проверка одной первой строки пропустила бы отдел без владельца
+        // — разбор PR #174 нашёл этот зазор и здесь, и в приёмке.
+        const owners = p.locator('[data-testid=dep-owner] select');
+        const n = await owners.count();
+        if (!n) throw new Error('в таблице отделов нет ни одного поля владельца');
+        for (let i = 0; i < n; i++) {
+          if (!(await owners.nth(i).inputValue())) {
+            throw new Error(`у отдела №${i + 1} из ${n} не выбран владелец, а озвучка говорит «у каждого отдела есть владелец»`);
+          }
+        }
+        await h.moveTo(owners.first()); await h.holdUntil(0.95);
       } },
     { az: 'Büdcə həddləri: səksən faizdə xəbərdarlıq gedir, bağlama isə sönülüdür. Qoşulsa, həddi aşan təsdiq elə təsdiq anında dayanır və geri qaytarılır — sorğu göndərilmiş halda qalır.',
       must: true,
@@ -1201,10 +1238,35 @@ const SECTIONS = {
       } },
     { az: 'Təsdiq zənciri: hansı məbləğdən sonra kim təsdiqləyir. Bir addım da ola bilər, üç də — böyük məbləğ daha çox gözə görünsün deyə. Zəncir boş olanda sorğunu istənilən təsdiqləyən təsdiqləyir, və bunu siyahı açıq yazır.',
       must: true,
+      // Вторая находка того же разбора: «один шаг, а может три» — про готовые схемы, а среди
+      // них трёхшаговой не было (один, два и два). Движок цепочку любой длины держал всегда,
+      // но эти карточки — единственный способ задать её в продукте, то есть сказанное было
+      // правдой про сервер и недостижимым на экране. Трёхшаговая схема добавлена 10.11.2026;
+      // камера идёт по трём карточкам в порядке трёх фраз — один шаг, три шага, пустая
+      // цепочка, — и каждая обязана быть на месте, иначе прогон обрывается.
       do: async (p, l, h) => {
         const ap = await h.need('#set-approval', 'təsdiq zənciri');
-        await h.scrollTo(ap); await h.holdUntil(0.55);
-        await h.moveTo(ap); await h.holdUntil(0.95);
+        await h.scrollTo(ap);
+        // Прокрутка к СЕТКЕ, а не к отдельной карточке: их пять, на 1280 они ложатся в два
+        // ряда, и камера ходит между рядами — подводить каждую карточку отдельной прокруткой
+        // значило бы дёргать кадр посреди фразы. И делается она СРАЗУ: при прокрутке к
+        // самому разделу пятая карточка остаётся ниже кадра (проверено на записи от
+        // 10.11.2026 — на 100,5 с «Üç addım» обрезан нижней кромкой), а первая редакция
+        // сцены держала этот кадр до 0.3, то есть ровно под словами «üç də».
+        await h.scrollTo('[data-testid=chain-presets]');
+        // Доли считаны по паузам в самой озвучке (silencedetect по файлу кэша), с поправкой
+        // на LEAD=0,65 с и на 0,55 с хода курсора: «Bir addım da ola bilər» звучит с 4,62 с,
+        // «üç də» — 6,11–6,56, «Zəncir boş olanda» — с 9,66. Первая редакция ставила
+        // 0.55/0.80/0.95 и отставала на три-пять секунд: под «когда цепочка пустая» была
+        // подсвечена трёхшаговая цепочка. Промаха курсора тут нет и быть не может —
+        // расхождение видно только глазами, как и всё в этой главе.
+        await h.holdUntil(0.21);
+        const one = await h.need('[data-testid=chain-preset-p1]', 'bir addımlı sxem');
+        await h.moveTo(one); await h.holdUntil(0.31);
+        const three = await h.need('[data-testid=chain-preset-p4]', 'üç addımlı sxem');
+        await h.moveTo(three); await h.holdUntil(0.52);
+        await h.moveTo(await h.need('[data-testid=chain-preset-p0]', 'zəncirsiz sxem'));
+        await h.holdUntil(0.95);
       } },
   ]},
   // ГЛАВА «устройство»: панель поставщика в конце истории — она уже не пустая.

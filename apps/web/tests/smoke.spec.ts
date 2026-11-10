@@ -342,6 +342,10 @@ test.describe('buyer panel', () => {
   test('the rollup adds itself up, and the two spend tiles no longer share a word', async () => {
     await page.goto('/buyer/budgets');
     await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
+    // The thresholds line says WHO the warning reaches, not only at what percentage. The
+    // course says it out loud on this screen, and until now the line carried percentages
+    // alone — the same divergence between voice and frame this branch closes in Settings.
+    await expect(page.getByTestId('bud-warn-owner')).toContainText(/owner/i);
     const rollup = page.getByTestId('budget-rollup');
     const money = (text: string) => Number(text.replace(/[^\d.-]/g, '')) || 0;
     // Top-level rows only, read the way the component decides it: a parent's figures already
@@ -608,8 +612,41 @@ test.describe('buyer panel', () => {
     // the section links are what this change is about, and the jump moves them off frame.
     await expect(page.locator('table tbody tr').first()).toBeVisible();
     await page.screenshot({ path: 'test-results/settings.png' });
+    // Two things the section's narration asserts out loud, and neither was on this screen
+    // until now: the budget warning goes to the department's OWNER, and an approval chain
+    // can be one step or three. Both were true of the engine — `departments.owner_user_id`
+    // is who `modules/budgets` notifies, and `approval_steps` caps the chain at nothing —
+    // and both were unreachable here: no owner column, and presets of one and two steps
+    // only. A recording cannot be asserted, so what its cursor now points at is asserted
+    // here: lose either and the voice goes back to describing a screen that does not
+    // answer, which is exactly the class of defect no cursor miss and no length check sees.
+    await expect(page.getByTestId('dep-owner-col')).toBeVisible();
+    // Read across ALL rows, not just the first — but the claim asserted here is the one
+    // this stand can keep. «Every department has an owner» is true of the COURSE's stand
+    // and is guarded there, by the recorder, which refuses a run if any row is unowned.
+    // Here it is false by construction: the draft-request test above creates PW-SMOKE
+    // through the form, and the form does not ask for an owner, so the stand grows an
+    // unowned department every run. What matters on this screen is therefore the other
+    // half: a named owner is shown as a person, and one that is missing says so IN WORDS,
+    // because an empty cell reads as «failed to load» — the opposite of what it means.
+    const owners = page.getByTestId('dep-owner').locator('select');
+    const ownerRows = await owners.count();
+    expect(ownerRows, 'the departments table shows no owner field at all').toBeGreaterThan(0);
+    const ownerValues = await owners.evaluateAll((els) => els.map((e) => (e as HTMLSelectElement).value));
+    expect(ownerValues.filter(Boolean).length, 'not one department names an owner').toBeGreaterThan(0);
+    await expect(owners.first().locator('option[value=""]')).toHaveText(/no owner/i);
+    for (const [i, value] of ownerValues.entries()) {
+      if (value) continue;
+      await expect(owners.nth(i).locator('option:checked'),
+        `department row ${i + 1} is unowned and does not say so`).toHaveText(/no owner/i);
+    }
     await toApproval.click();
     await expect(page.locator('#set-approval')).toBeInViewport();
+    const threeStep = page.getByTestId('chain-preset-p4');
+    await expect(threeStep).toBeVisible();
+    // The claim is about the NUMBER of steps, not about the label, so it is read off the
+    // card's own top band: three roles joined by two arrows.
+    await expect(threeStep.locator('.hint').last()).toContainText(/→.+→/);
   });
 
   // The product's own dialogs replaced alert / prompt / confirm. What the native prompt

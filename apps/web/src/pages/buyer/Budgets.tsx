@@ -368,9 +368,16 @@ export default function Budgets() {
           next to the approval chain. What belongs here is their current state, where it
           takes effect — read-only, one line, with a way to go change it. */}
       {policy && (
-        <div className="hint" style={{ marginBottom: 14 }}>
+        /* Кому уходит предупреждение — часть состояния порога, а не подробность: процент
+           без адресата читается как «система кого-то предупредит», и этого «кого-то» на
+           экране не было ни одного слова. Тултип в «Параметрах» это говорил, здесь — нет.
+           Одна строка, и утверждение «уходит владельцу отдела» наконец видно там, где оно
+           действует. Пустой владелец у отдела — не пустая клетка: оговорка про всю
+           организацию стоит здесь же. */
+        <div className="hint" style={{ marginBottom: 14 }} data-testid="bud-thresholds">
           {t('bud_thresholds')}: {t('bud_warn_pct')} {policy.warnPct}% ·{' '}
           {t('bud_block_pct')} {policy.blockPct == null ? t('bud_block_off') : `${policy.blockPct}%`}
+          {' · '}<span data-testid="bud-warn-owner">{t('bud_warn_owner')}</span>
           {canManagePlans && <> · <Link to="/buyer/settings">{t('bud_thresholds_edit')}</Link></>}
         </div>
       )}

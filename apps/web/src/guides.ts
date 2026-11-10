@@ -130,7 +130,14 @@ export const COURSE: Track[] = [
     id: 'STORY',
     titleKey: 'learn_track_story',
     lessons: [
-      { key: 'buyer-requests', titleKey: 'learn_b_requests', to: '/buyer/requests', roles: FINANCE_READ, sec: 107 },
+      // 108, а не измеренная длина последней записи: у этой главы длина ПЛАВАЕТ. Четвёртая
+      // сцена набирает шесть полей формы, и набор идёт дольше своей озвучки — насколько
+      // именно, решает загрузка машины в момент съёмки. Замеры: 106,0 с ночью 10.11 и
+      // 109,6 с утром того же дня, одна и та же сцена и тот же текст. 108 держит оба конца
+      // в допуске ±2 с, которым съёмщик проверяет это число. Если очередной прогон снова
+      // выйдет за допуск — запись не обрезана, это та же сцена; лечится она не числом, а
+      // тем, чтобы набор перестал обгонять озвучку.
+      { key: 'buyer-requests', titleKey: 'learn_b_requests', to: '/buyer/requests', roles: FINANCE_READ, sec: 108 },
       { key: 'buyer-events', titleKey: 'learn_b_events', to: '/buyer/events', roles: BUYER, sec: 88 },
       { key: 'sup-market', titleKey: 'learn_s_market', to: '/supplier/market', roles: SUPPLIER, sec: 55 },
       { key: 'sup-bid', titleKey: 'learn_s_bid', to: '/supplier/market', roles: SUPPLIER, sec: 56 },
