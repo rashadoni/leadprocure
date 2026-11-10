@@ -1,4 +1,4 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect, Page, Request } from '@playwright/test';
 import { COURSE_LESSONS } from '../src/guides';
 
 /**
@@ -258,6 +258,51 @@ test.describe('buyer panel', () => {
     await assertRenders(page, '/buyer/verification', /Верификация|Verification|Yoxlama/);
     await assertRenders(page, '/buyer/settings', /Настройки|Settings|Parametr/);
     await assertRenders(page, '/learn', /Обучение|Learning|Təlim/);
+  });
+
+  // Одна загрузка страницы — один `/auth/me`.
+  //
+  // Проверка стоит ЗДЕСЬ, внутри этого describe, а не в своём файле: тут уже есть вход, а
+  // `/auth/login` ограничен 10 в минуту, и на прогоне 42879226779 его пик был 9 — отдельный
+  // файл со своим входом добрал бы ведро до предела (см. комментарий про «один вход на
+  // панель» выше).
+  //
+  // Что именно ловится. Начальная загрузка ходит `refresh` → `me`, и `me` зовётся РОВНО из
+  // одного места — `auth/auth.tsx`. Значит двойка означает одно из двух, и оба стоят этой
+  // проверки: либо в продукте появилось второе место, которое спрашивает профиль, либо
+  // браузеру отдали сборку РАЗРАБОТКИ React, где `<React.StrictMode>` нарочно вызывает
+  // каждый эффект дважды. Второе и было: `NODE_ENV: test` у джобы приёмки доходил до
+  // `vite build`, и на зелёном прогоне 42879226779 `/auth/me` был зван по два раза в 168
+  // загрузках из 168 — 336 вызовов на 191 загрузку, 206/мин из своих 300 вместо ~103.
+  // Саму сборку сторожит `apps/web/vite.config.ts`; это — тот же вопрос со стороны продукта:
+  // считает не окружение, а запросы, поэтому падает и на второй причине, которую сборочный
+  // сторож увидеть не может.
+  test('одна загрузка страницы — один /auth/me', async () => {
+    const asked: string[] = [];
+    const count = (r: Request) => {
+      // Только GET: предзапрос CORS к `/auth/me` — настоящий запрос браузера, и считать его
+      // вторым обращением было бы ошибкой измерения. В логе api их не видно (CORS-прослойка
+      // из `main.ts` отвечает на OPTIONS раньше журнала), и Playwright их тоже не отдаёт —
+      // то есть сегодня фильтр ничего не меняет. Он здесь, чтобы проверка не позеленела и не
+      // покраснела однажды по причине, к удвоению эффекта не относящейся. Замечание из
+      // разбора #186.
+      if (r.method() === 'GET' && new URL(r.url()).pathname === '/auth/me') {
+        asked.push(new Date().toISOString());
+      }
+    };
+    page.on('request', count);
+    try {
+      await visit(page, '/buyer/requests');
+      // Сначала — что страница вообще поднялась под сессией. Если начальная загрузка
+      // потеряла свой `refresh` (гонка ротации, см. комментарий к `settle`), `/auth/me` не
+      // будет вызван НИ РАЗУ, и падать надо с этой причиной, а не с «ноль вместо одного».
+      await expect(page.locator('h1').first())
+        .toContainText(/Заявки|Requests|Sifariş/, { timeout: 20_000 });
+    } finally {
+      page.off('request', count);
+    }
+    expect(asked, `/auth/me на одну загрузку страницы: ${asked.length} (${asked.join(', ')})`)
+      .toHaveLength(1);
   });
 
   // The course on /learn is the one screen a person meets before they know the product, so
