@@ -11,10 +11,22 @@ export default defineConfig({
   // walks every page cold can be slow (this is a dev-server trait, not the app).
   timeout: 90_000,
   retries: 1,
+  // Отчёт, а не только строчки в консоли. Шаг приёмки уже выкладывает
+  // `apps/web/playwright-report` в артефакт `acceptance-evidence` — а папки не было, потому
+  // что репортёр по умолчанию ничего не пишет на диск. Путь в воркфлоу был намерением.
+  reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: process.env.BASE_URL ?? 'http://localhost:5173',
     headless: true,
     viewport: { width: 1280, height: 900 },
+    // След падения. До этого от упавшего теста в артефакте оставался ОДИН файл —
+    // `error-context.md`, то есть снимок доступности страницы: по нему видно, что браузер
+    // стоит на форме входа, и ничего о том, почему. Четыре падения приёмки 10 ноября 2026
+    // перезапустили именно поэтому. Трасса несёт каждый запрос с кодом ответа — ровно то
+    // свидетельство, которого не хватало; снимок и видео читаются без инструментов.
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
   },
   webServer: undefined, // servers are managed externally (see header comment)
 });

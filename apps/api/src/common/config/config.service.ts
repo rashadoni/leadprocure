@@ -38,6 +38,12 @@ export class AppConfig {
   // treated as a benign race (SPA reload / StrictMode double-mount / concurrent 401s),
   // not theft. Only reuse older than this trips the "revoke the family" breach response.
   readonly refreshReuseLeewayMs = int('JWT_REFRESH_REUSE_LEEWAY_MS', 15000);
+
+  // Строка на запрос в логе api (`common/http/access-log.middleware.ts`). Выключено по
+  // умолчанию, включено на стенде приёмки: там это единственный способ узнать, почему
+  // браузер оказался на странице входа. См. запись «Приёмка падала на блоке поставщика без
+  // следа» в `docs/prod-release-path.md`.
+  readonly httpAccessLog = bool('HTTP_ACCESS_LOG', false);
   // Пауза между присуждением и контрактом: столько часов проигравший может возразить, пока
   // дверь ещё открыта (отмена присуждения после создания контракта уже невозможна).
   //
