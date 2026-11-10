@@ -1,4 +1,4 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, Logger, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
@@ -138,10 +138,32 @@ describe('auth flow (API e2e)', () => {
          AND user_id = (SELECT id FROM organization_users WHERE email = $1)`,
       [email],
     );
-    await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', oldCookie).expect(401);
-    // The whole chain dies, the just-issued token included: reuse proves two holders of it
-    // and there is no telling which is the thief.
-    await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', newCookie).expect(401);
+    // Сработавшая защита обязана оставить след. До 2026-11-10 жёсткий отзыв цепочки не писал
+    // НИЧЕГО: человек (и браузерный набор приёмки) оказывался на форме входа без сообщения,
+    // а в логе api этого события не было вовсе — запись в журнал откатилась бы вместе с
+    // транзакцией запроса, которую этот отказ и уронит. Проверяется строка в логе, а не
+    // только код 401: 401 здесь был и раньше, необъяснимым.
+    const warnings: string[] = [];
+    const spy = jest.spyOn(Logger.prototype, 'warn').mockImplementation((m: unknown) => { warnings.push(String(m)); });
+    try {
+      await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', oldCookie).expect(401);
+      // The whole chain dies, the just-issued token included: reuse proves two holders of it
+      // and there is no telling which is the thief.
+      await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', newCookie).expect(401);
+    } finally {
+      spy.mockRestore();
+    }
+    const reuse = warnings.filter((w) => w.includes('ПОВТОР ОТОЗВАННОГО ТОКЕНА'));
+    expect(reuse).toHaveLength(2);
+    // Названы цепочка, человек и момент ротации — по этим трём отказ отличают от любого
+    // другого 401 на том же адресе.
+    expect(reuse[0]).toMatch(/цепочка [0-9a-f-]{36} отозвана жёстко/);
+    expect(reuse[0]).toMatch(/user=[0-9a-f-]{36}/);
+    expect(reuse[0]).toMatch(/ротация была \d{4}-\d{2}-\d{2}T/);
+    // И НИ ОДНОГО токена в логе: иначе запись о краже сама становится кражей.
+    const secret = oldCookie.split('=')[1];
+    expect(secret.length).toBeGreaterThan(20);
+    for (const w of warnings) expect(w).not.toContain(secret);
 
     // …and the person's OTHER browser is untouched. It shares nothing with that chain but
     // a user id, and until migration 0046 that was enough to sign it out too — which a

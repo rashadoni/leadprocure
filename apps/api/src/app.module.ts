@@ -1,10 +1,11 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { DatabaseModule } from './common/db/database.module';
 import { MalformedIdFilter } from './common/http/malformed-id.filter';
+import { AccessLogMiddleware } from './common/http/access-log.middleware';
 import { TransactionInterceptor } from './common/db/transaction.interceptor';
 import { AuthModule } from './common/auth/auth.module';
 import { JwtAuthGuard } from './common/auth/jwt-auth.guard';
@@ -89,6 +90,13 @@ import { MailModule } from './common/mail/mail.module';
     // Опечатка в адресе — это 400, а не «мы сломались». Регистрируется здесь, а не в
     // `main.ts`, чтобы действовать и в проверках: они поднимают приложение этим модулем.
     { provide: APP_FILTER, useClass: MalformedIdFilter },
+    AccessLogMiddleware,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  // Самым внешним слоем, до guard'ов: иначе отказ ограничителя частоты (429) и отказ
+  // аутентификации (401) в лог не попадут — а именно они и нужны.
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(AccessLogMiddleware).forRoutes('*');
+  }
+}

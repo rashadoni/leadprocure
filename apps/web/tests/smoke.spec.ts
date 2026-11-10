@@ -15,6 +15,10 @@ async function login(page: Page, email: string): Promise<void> {
   // submit button only — the mode tabs are also .btn but carry type=button
   await page.click('form button.btn:not(.ghost):not([type=button])');
   await page.waitForURL(/\/(buyer|supplier)\//, { timeout: 15_000 });
+  // `waitForURL` отпускает, как только сменился адрес, — а начальная загрузка той страницы
+  // ещё идёт. Без этой строки ПЕРВЫЙ переход теста обрывал её собственный `/auth/refresh`,
+  // то есть помощник входа сам создавал ту самую гонку, от которой ниже `settle`.
+  await settle(page);
 }
 
 // Every `goto` here is a COLD load: the access token lives in memory only, so each one
@@ -44,10 +48,23 @@ async function login(page: Page, email: string): Promise<void> {
 async function settle(page: Page): Promise<void> {
   await page.waitForLoadState('networkidle').catch(() => { /* a page that never idles is the test's problem, not this helper's */ });
 }
+// Про это глотание стоит знать, и с `visit()` — тем более: оно касается уже не двух
+// переходов, а всех (замечание из разбора PR #182). Страница, которая никогда не затихает,
+// молча поедет дальше, потеряв до тридцати секунд. Так и задумано: `settle` — стабилизатор, а
+// не проверка, и падать он должен на том, что тест проверяет, а не на ожидании. Если набор
+// вдруг станет заметно дольше — искать надо здесь.
 
-async function assertRenders(page: Page, path: string, headingHint: RegExp): Promise<void> {
+// Единственный способ перейти на страницу в этом наборе. До 10 ноября 2026 `settle` стоял
+// ровно в двух помощниках, а остальные тридцать с лишним переходов шли голым `page.goto` —
+// то есть лечение из #133 не действовало там, где набор падал. Теперь забыть его нельзя:
+// переход один, и он ждёт.
+async function visit(page: Page, path: string): Promise<void> {
   await page.goto(path);
   await settle(page);
+}
+
+async function assertRenders(page: Page, path: string, headingHint: RegExp): Promise<void> {
+  await visit(page, path);
   await expect(page.locator('h1').first()).toContainText(headingHint, { timeout: 20_000 });
   await expect(page.locator('text=Unexpected Application Error')).toHaveCount(0);
 }
@@ -125,8 +142,7 @@ async function assertNoSidewaysScroll(page: Page, where: string): Promise<void> 
 // Resized, not revisited: four visits per page would spend this test's whole budget on
 // loading pages it has already loaded.
 async function assertFitsEveryWidth(page: Page, path: string): Promise<void> {
-  await page.goto(path);
-  await settle(page);
+  await visit(page, path);
   await expect(page.locator('h1').first()).toBeVisible({ timeout: 20_000 });
   // Then wait for the LISTS to have answered, not just for the heading to be painted. The
   // access token lives in memory only, so every visit is a cold load — bundle,
@@ -245,7 +261,7 @@ test.describe('buyer panel', () => {
   // to answer at all.
   test('the course offers every lesson and leads into the section it explains', async () => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('/learn');
+    await visit(page, '/learn');
     const rows = page.getByTestId('learn-row');
     // Counted FROM THE COURSE, never written out. The numbers and the first lesson stood
     // here as literals («20», «buyer-settings»), and re-cutting the course into a story
@@ -295,7 +311,7 @@ test.describe('buyer panel', () => {
   // in one frame, and both halves are asserted below: nothing visible-and-collapsed, and no
   // overflow left behind.
   test('a tooltip leaves without a ribbon and without sideways scroll', async () => {
-    await page.goto('/buyer/budgets');
+    await visit(page, '/buyer/budgets');
     await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
     const tip = page.locator('[data-tip]').first();
     await tip.hover();
@@ -326,7 +342,7 @@ test.describe('buyer panel', () => {
   });
 
   test('dashboard shows real KPI money', async () => {
-    await page.goto('/buyer/dashboard');
+    await visit(page, '/buyer/dashboard');
     await expect(page.locator('text=AZN').first()).toBeVisible({ timeout: 10_000 });
   });
 
@@ -340,7 +356,7 @@ test.describe('buyer panel', () => {
   // winning bids over all time, in analytics the accepted orders of the window. Both
   // honest, one word. The tooltips always said which was which; the labels never did.
   test('the rollup adds itself up, and the two spend tiles no longer share a word', async () => {
-    await page.goto('/buyer/budgets');
+    await visit(page, '/buyer/budgets');
     await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
     // The thresholds line says WHO the warning reaches, not only at what percentage. The
     // course says it out loud on this screen, and until now the line carried percentages
@@ -365,9 +381,9 @@ test.describe('buyer panel', () => {
       await expect(totalRow).toHaveCount(0);
     }
 
-    await page.goto('/buyer/dashboard');
+    await visit(page, '/buyer/dashboard');
     await expect(page.getByText('Awarded in tenders', { exact: true })).toBeVisible({ timeout: 10_000 });
-    await page.goto('/buyer/analytics');
+    await visit(page, '/buyer/analytics');
     await expect(page.getByText('Accepted orders', { exact: true }).first()).toBeVisible({ timeout: 10_000 });
     // the word that used to stand over both is now over neither
     await expect(page.getByText('Total spend', { exact: true })).toHaveCount(0);
@@ -391,7 +407,7 @@ test.describe('buyer panel', () => {
       document.scrollingElement!.scrollWidth - document.scrollingElement!.clientWidth);
     const seenAnywhere = { opened: 0, pulled: 0 };
     for (const path of ['/buyer/suppliers', '/buyer/dashboard']) {
-      await page.goto(path);
+      await visit(page, path);
       await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
       expect(await idle(), `${path} scrolls sideways with every hint shut — a different fault`)
         .toBeLessThanOrEqual(1);
@@ -449,7 +465,7 @@ test.describe('buyer panel', () => {
     const withRows: string[] = [];
     const besideAnEmptyList: string[] = [];
     for (const path of ['/buyer/events', '/buyer/contracts', '/buyer/logistics', '/buyer/catalogs']) {
-      await page.goto(path);
+      await visit(page, path);
       await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
       const origin = page.getByTestId('section-origin').first();
       await expect(origin, `${path} does not say where its things come from`).toBeVisible();
@@ -479,14 +495,14 @@ test.describe('buyer panel', () => {
   // company's name, which looks like a name — and a sentence under the table said so.
   // A sentence is not a button; the owner has said as much about icons and links before.
   test('a verification case is opened by a button, not by a company name', async () => {
-    await page.goto('/buyer/suppliers');
+    await visit(page, '/buyer/suppliers');
     await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
     // the stand has no case of its own — the registry's own button makes one
     const opened = page.waitForResponse((r) => r.url().endsWith('/verification/cases') && r.request().method() === 'POST');
     await page.getByRole('button', { name: /^🛡 Verification/ }).first().click();
     expect((await opened).status()).toBe(201);
 
-    await page.goto('/buyer/verification');
+    await visit(page, '/buyer/verification');
     // Waited FOR, not counted after a check that passes on an empty page: `[role=status]`
     // having count 0 is also true before React has drawn the loader, which is how this read
     // the list as empty while the case was still arriving.
@@ -512,7 +528,7 @@ test.describe('buyer panel', () => {
       if (!fail) return route.continue();
       await route.fulfill({ status: 503, contentType: 'application/json', body: '{"message":"down"}' });
     });
-    await page.goto('/buyer/dashboard');
+    await visit(page, '/buyer/dashboard');
     const alert = page.getByRole('alert').filter({ hasText: 'Could not load the data.' });
     await expect(alert).toBeVisible({ timeout: 20_000 });
     await expect(page.locator('h1')).toContainText(/Dashboard|Рабочий стол|İdarə paneli/);
@@ -538,14 +554,14 @@ test.describe('buyer panel', () => {
       await route.fulfill({ status, contentType: 'application/json', body: '{"message":"no"}' });
     });
     const denied = page.waitForResponse((r) => new URL(r.url()).pathname === '/budgets' && r.status() === 403);
-    await page.goto('/buyer/dashboard');
+    await visit(page, '/buyer/dashboard');
     await denied;
     await expect(page.locator('text=AZN').first()).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('alert')).toHaveCount(0);
 
     status = 503;
     const broken = page.waitForResponse((r) => new URL(r.url()).pathname === '/budgets' && r.status() === 503);
-    await page.goto('/buyer/dashboard');
+    await visit(page, '/buyer/dashboard');
     await broken;
     await expect(page.getByRole('alert').filter({ hasText: 'Could not load the data.' }))
       .toBeVisible({ timeout: 20_000 });
@@ -564,7 +580,7 @@ test.describe('buyer panel', () => {
       'writes disabled against a remote stand — set SMOKE_ALLOW_WRITES=1 to allow');
     // Fixed code, created once: a per-run code would pile up departments in the dev stand.
     const code = 'PW-SMOKE';
-    await page.goto('/buyer/settings');
+    await visit(page, '/buyer/settings');
     const dep = page.locator(`td:text-is("${code}")`);
     let justCreated = false;
     let pickedOwner = '';
@@ -601,7 +617,7 @@ test.describe('buyer panel', () => {
       await expect(depRow.getByTestId('dep-owner').locator('select')).toHaveValue(pickedOwner);
     }
 
-    await page.goto('/buyer/requests');
+    await visit(page, '/buyer/requests');
     // The form is behind a button now: the list of requests is what this screen opens on.
     await page.getByTestId('req-new').click();
     const title = `PW smoke ${Date.now()}`;
@@ -630,7 +646,7 @@ test.describe('buyer panel', () => {
   // Seven unrelated sections one under another, and an admin's new-user password typed in
   // the clear: the field had no `type`, so the browser gave it `text`.
   test('settings jumps to its sections and hides the password it asks for', async () => {
-    await page.goto('/buyer/settings');
+    await visit(page, '/buyer/settings');
     const toApproval = page.getByRole('link', { name: 'Approval chain', exact: true });
     await expect(toApproval).toBeVisible({ timeout: 20_000 });
     await expect(page.locator('#new-user-password')).toHaveAttribute('type', 'password');
@@ -694,7 +710,7 @@ test.describe('buyer panel', () => {
     const remote = !!process.env.BASE_URL && !/localhost|127\.0\.0\.1/.test(process.env.BASE_URL);
     test.skip(remote && !process.env.SMOKE_ALLOW_WRITES,
       'writes disabled against a remote stand — set SMOKE_ALLOW_WRITES=1 to allow');
-    await page.goto('/buyer/suppliers');
+    await visit(page, '/buyer/suppliers');
     // a prefix, not an exact name: [data-tip]::after lands in the accessible name
     await page.getByRole('button', { name: /^★ Scorecard\b/ }).first().click();
     const input = page.getByTestId('dialog-input');
@@ -720,7 +736,7 @@ test.describe('buyer panel', () => {
   // The section guide used to be a 190px card above every heading, dismissed per section:
   // clearing it from sight took twelve closes. One line now, and one switch for all of it.
   test('the section guide is one line, and hiding it hides it everywhere', async () => {
-    await page.goto('/buyer/requests');
+    await visit(page, '/buyer/requests');
     const bar = page.locator('.help-bar');
     await expect(bar).toBeVisible();
     const box = await bar.boundingBox();
@@ -773,7 +789,7 @@ test.describe('buyer panel', () => {
     // a prefix: [data-tip]::after lands in the accessible name
     await bar.getByRole('button', { name: /^✕/ }).click();
     await expect(bar).toHaveCount(0);
-    await page.goto('/buyer/budgets');
+    await visit(page, '/buyer/budgets');
     await expect(page.locator('.help-bar')).toHaveCount(0);
     // The way back lives in the sidebar, which a supplier has too — unlike Settings.
     await page.locator('.side-link').click();
@@ -801,7 +817,7 @@ test.describe('buyer panel', () => {
     // every run. The seed publishes no tender, so an empty list here is a fact about the
     // stand and not a failure — but it has to be the settled list that says so.
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('/buyer/events');
+    await visit(page, '/buyer/events');
     await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
     const tender = page.locator('a[href^="/buyer/events/"]').first();
     if (await tender.count()) await assertFitsEveryWidth(page, (await tender.getAttribute('href'))!);
@@ -809,7 +825,7 @@ test.describe('buyer panel', () => {
     // Below the breakpoint the page has the whole window and the way into the menu is a
     // button that says the word: an icon on its own is not read.
     await page.setViewportSize({ width: 375, height: 820 });
-    await page.goto('/buyer/budgets');
+    await visit(page, '/buyer/budgets');
     const rail = page.locator('.side');
     const menu = page.getByRole('button', { name: /^☰/ });
     await expect(rail).toBeHidden();
@@ -825,7 +841,7 @@ test.describe('buyer panel', () => {
     // heading: CSS cannot reach a header from the body, so components/narrow.ts puts it on
     // the cell. The settings page is where this is asked because its first table lists the
     // organization's users — it cannot be empty, whatever the other specs have left behind.
-    await page.goto('/buyer/settings');
+    await visit(page, '/buyer/settings');
     // The FIRST table, pinned — the organization's own users, which cannot be empty. Not
     // «the first table that has a row»: that one re-resolves on every poll, and the users
     // and the departments below them are filled by two independent requests, so whichever
@@ -890,7 +906,7 @@ test.describe('supplier panel', () => {
       if (!fail) return route.continue();
       await route.fulfill({ status: 503, contentType: 'application/json', body: '{"message":"down"}' });
     });
-    await page.goto('/supplier/market');
+    await visit(page, '/supplier/market');
     const alert = page.getByRole('alert').filter({ hasText: 'Could not load the data.' });
     await expect(alert).toBeVisible({ timeout: 20_000 });
     // By test id, not by the sentence: every list now says its own empty line (empty_market
@@ -916,7 +932,7 @@ test.describe('supplier panel', () => {
     await page.route('**/events?**', (route) => route.fulfill({
       status: 200, contentType: 'application/json', body: '{"items":[],"total":0}',
     }));
-    await page.goto('/supplier/market');
+    await visit(page, '/supplier/market');
     const empty = page.getByTestId('list-empty');
     await expect(empty).toBeVisible({ timeout: 20_000 });
     // What fills this section is now said by the section itself, above the list, so it is
@@ -937,7 +953,7 @@ test.describe('supplier panel', () => {
   // `auto 1px rgb(16,16,16)` on a tabbed link, so `width > 0 && style !== 'none'` passed
   // on main too — a check that could not fail. `solid 2px` mint is only ours.
   test('keyboard focus draws a ring, a mouse click does not', async () => {
-    await page.goto('/supplier/market');
+    await visit(page, '/supplier/market');
     // Tab until focus is on a rail link, and say so in the assertions. One press is not
     // enough: straight after a goto the focus sits on the document, and the first Tab was
     // measured landing on BODY in CI. The loop is safe here only because what it stops on
@@ -1035,7 +1051,7 @@ test.describe('supplier panel', () => {
   });
 
   test('role guard: supplier cannot open buyer pages', async () => {
-    await page.goto('/buyer/dashboard');
+    await visit(page, '/buyer/dashboard');
     // Protected redirects a supplier away from buyer routes
     await page.waitForURL((url) => !url.pathname.startsWith('/buyer'), { timeout: 10_000 });
   });
@@ -1053,7 +1069,7 @@ test.describe('supplier panel', () => {
   // watched, not one per row on the list — so each half has to open its lesson first. Rows
   // carry `data-lesson`, so neither half is picked by position or by translated text.
   test('the course offers a supplier only the doors a supplier may open', async () => {
-    await page.goto('/learn');
+    await visit(page, '/learn');
     await page.locator('[data-lesson="buyer-budgets"]').getByTestId('learn-play').click();
     await expect(page.getByTestId('learn-video')).toHaveAttribute('src', '/guides/buyer-budgets.az.webm');
     await expect(page.getByTestId('learn-goto'),
@@ -1071,7 +1087,7 @@ test.describe('supplier panel', () => {
   // reads them, so the actions column is not drawn at all rather than taking its width on
   // every row. The check is not vacuous on an empty list: the heading row renders anyway.
   test('contracts page has one heading and no actions column for a supplier', async () => {
-    await page.goto('/supplier/contracts');
+    await visit(page, '/supplier/contracts');
     await expect(page.getByRole('heading', { name: 'Orders', exact: true })).toBeVisible({ timeout: 20_000 });
     await expect(page.locator('h1')).toHaveCount(1);
     await expect(page.getByRole('columnheader', { name: 'Actions', exact: true })).toHaveCount(0);
@@ -1085,7 +1101,7 @@ test.describe('supplier panel', () => {
   // instruction rather than the presence of a particular sentence, because what must never
   // come back is being told to press something that is not there.
   test('the catalogs caption does not send a supplier to a buyer button', async () => {
-    await page.goto('/supplier/catalogs');
+    await visit(page, '/supplier/catalogs');
     const origin = page.getByTestId('section-origin');
     await expect(origin).toBeVisible({ timeout: 20_000 });
     // Both sides of the same claim: it is THIS caption, and it is not the other one. The
@@ -1106,7 +1122,7 @@ test.describe('supplier panel', () => {
   // row was opened. Asserted on the heading, which renders even on an empty market — how
   // many rows are open depends on what the other specs left behind.
   test('the market names the procedure of every tender', async () => {
-    await page.goto('/supplier/market');
+    await visit(page, '/supplier/market');
     await expect(page.getByRole('columnheader', { name: 'Method', exact: true }))
       .toBeVisible({ timeout: 20_000 });
   });
@@ -1116,7 +1132,7 @@ test.describe('supplier panel', () => {
   // tile — a standing condition among counts, taller than the other five and breaking the
   // grid. Counting the tiles is what catches it coming back.
   test('supplier panel explains its figures and states verification beside them', async () => {
-    await page.goto('/supplier/dashboard');
+    await visit(page, '/supplier/dashboard');
     const grid = page.getByTestId('sup-kpi');
     await expect(grid.locator('> div')).toHaveCount(5, { timeout: 20_000 });
     await expect(grid.locator('> div[data-tip]')).toHaveCount(5);
@@ -1144,13 +1160,13 @@ test.describe('supplier panel', () => {
       await assertFitsEveryWidth(page, path);
     }
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('/supplier/market');
+    await visit(page, '/supplier/market');
     await expect(page.locator('[role=status]')).toHaveCount(0, { timeout: 20_000 });
     const tender = page.locator('a[href^="/supplier/events/"]').first();
     if (await tender.count()) await assertFitsEveryWidth(page, (await tender.getAttribute('href'))!);
 
     await page.setViewportSize({ width: 375, height: 820 });
-    await page.goto('/supplier/orders');
+    await visit(page, '/supplier/orders');
     const rail = page.locator('.side');
     // The session first, and before the two checks below rather than after: on the login
     // page `.side` does not exist, so «the rail is hidden» passes vacuously and the failure

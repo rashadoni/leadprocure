@@ -149,6 +149,15 @@ jobs:
         run: pnpm --filter web exec playwright install --with-deps chromium
       - name: Start disposable API and web servers
         timeout-minutes: 2
+        # `HTTP_ACCESS_LOG` ставится ЗДЕСЬ, а не на джобе: иначе строку на запрос получил бы
+        # и прогон 483 проверок api выше, и лог шага распух бы на тысячи строк ни за чем.
+        # Нужен он ровно у того процесса, с которым разговаривает браузер. Без него
+        # `/tmp/leadprocure-api.log` в артефакте — это разбор маршрутов на старте и письма,
+        # и больше ничего: отказ 401 на `/auth/refresh`, отказ 429 от ограничителя частоты и
+        # запрос, не дошедший до api, выглядят в нём одинаково. Четыре падения 10 ноября
+        # 2026 перезапустили именно из-за этого.
+        env:
+          HTTP_ACCESS_LOG: '1'
         run: |
           node apps/api/dist/main.js > /tmp/leadprocure-api.log 2>&1 &
           pnpm --filter web exec vite preview --host 127.0.0.1 --port 5173 > /tmp/leadprocure-web.log 2>&1 &
@@ -158,6 +167,12 @@ jobs:
       - name: Native browser acceptance on disposable stack
         timeout-minutes: 10
         run: pnpm --filter web test:ui --workers=1 --max-failures=1
+      # Сводка по логу api — ДО выкладки артефакта и всегда: разбор красного прогона должен
+      # начинаться с цифр в логе шага, а не со скачивания зипа. Сводка ничего не проверяет и
+      # шаг не роняет.
+      - name: What the API was asked, and how often
+        if: always()
+        run: node scripts/acceptance/api-log-summary.mjs /tmp/leadprocure-api.log
       - name: Preserve acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4
