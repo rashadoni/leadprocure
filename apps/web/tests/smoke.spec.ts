@@ -280,7 +280,15 @@ test.describe('buyer panel', () => {
   test('одна загрузка страницы — один /auth/me', async () => {
     const asked: string[] = [];
     const count = (r: Request) => {
-      if (new URL(r.url()).pathname === '/auth/me') asked.push(new Date().toISOString());
+      // Только GET: предзапрос CORS к `/auth/me` — настоящий запрос браузера, и считать его
+      // вторым обращением было бы ошибкой измерения. В логе api их не видно (CORS-прослойка
+      // из `main.ts` отвечает на OPTIONS раньше журнала), и Playwright их тоже не отдаёт —
+      // то есть сегодня фильтр ничего не меняет. Он здесь, чтобы проверка не позеленела и не
+      // покраснела однажды по причине, к удвоению эффекта не относящейся. Замечание из
+      // разбора #186.
+      if (r.method() === 'GET' && new URL(r.url()).pathname === '/auth/me') {
+        asked.push(new Date().toISOString());
+      }
     };
     page.on('request', count);
     try {
