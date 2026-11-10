@@ -608,8 +608,26 @@ test.describe('buyer panel', () => {
     // the section links are what this change is about, and the jump moves them off frame.
     await expect(page.locator('table tbody tr').first()).toBeVisible();
     await page.screenshot({ path: 'test-results/settings.png' });
+    // Two things the section's narration asserts out loud, and neither was on this screen
+    // until now: the budget warning goes to the department's OWNER, and an approval chain
+    // can be one step or three. Both were true of the engine — `departments.owner_user_id`
+    // is who `modules/budgets` notifies, and `approval_steps` caps the chain at nothing —
+    // and both were unreachable here: no owner column, and presets of one and two steps
+    // only. A recording cannot be asserted, so what its cursor now points at is asserted
+    // here: lose either and the voice goes back to describing a screen that does not
+    // answer, which is exactly the class of defect no cursor miss and no length check sees.
+    await expect(page.getByTestId('dep-owner-col')).toBeVisible();
+    // A value, not a placeholder: the seed names an owner for both departments, and the
+    // empty option reads «no owner» in words precisely so that an unassigned one cannot be
+    // mistaken for a cell that failed to load.
+    await expect(page.getByTestId('dep-owner').first().locator('select')).not.toHaveValue('');
     await toApproval.click();
     await expect(page.locator('#set-approval')).toBeInViewport();
+    const threeStep = page.getByTestId('chain-preset-p4');
+    await expect(threeStep).toBeVisible();
+    // The claim is about the NUMBER of steps, not about the label, so it is read off the
+    // card's own top band: three roles joined by two arrows.
+    await expect(threeStep.locator('.hint').last()).toContainText(/→.+→/);
   });
 
   // The product's own dialogs replaced alert / prompt / confirm. What the native prompt

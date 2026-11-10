@@ -1169,10 +1169,23 @@ const SECTIONS = {
       } },
     { az: 'Şöbələr: kim xərcləyir. Hər şöbənin sahibi var, və büdcə xəbərdarlığı məhz ona gedir — qırx nəfərə göndərilən həyəcan siqnalı heç kimin işi olmur.',
       must: true,
+      // Озвучка здесь утверждала то, чего на экране не было: владелец у отдела в продукте
+      // есть (`departments.owner_user_id`, и предупреждение адресуется именно ему), а в
+      // таблице отделов колонки с владельцем не стояло. Разбор PR #173 это нашёл и нарочно
+      // не стал чинить: правка интерфейса стоит полной пересъёмки курса. Колонка появилась
+      // 10.11.2026 — и сцена теперь не только показывает её, но и ПРОВЕРЯЕТ собственную
+      // озвучку: нет колонки или не выбран человек в первой строке — прогон обрывается.
+      // Без этой проверки пустая колонка сняла бы точно такой же кадр и ничего не сказала.
       do: async (p, l, h) => {
         const dep = await h.need('#set-departments', 'şöbələr bölməsi');
-        await h.scrollTo(dep); await h.holdUntil(0.5);
-        await h.moveTo(dep); await h.holdUntil(0.95);
+        await h.scrollTo(dep); await h.holdUntil(0.35);
+        const col = await h.need('[data-testid=dep-owner-col]', 'şöbə sahibi sütunu');
+        await h.moveTo(col); await h.holdUntil(0.6);
+        const owner = await h.need('[data-testid=dep-owner] select', 'şöbə sahibi');
+        if (!(await owner.inputValue())) {
+          throw new Error('у первого отдела не выбран владелец, а озвучка говорит «у каждого отдела есть владелец»');
+        }
+        await h.moveTo(owner); await h.holdUntil(0.95);
       } },
     { az: 'Büdcə həddləri: səksən faizdə xəbərdarlıq gedir, bağlama isə sönülüdür. Qoşulsa, həddi aşan təsdiq elə təsdiq anında dayanır və geri qaytarılır — sorğu göndərilmiş halda qalır.',
       must: true,
@@ -1201,10 +1214,25 @@ const SECTIONS = {
       } },
     { az: 'Təsdiq zənciri: hansı məbləğdən sonra kim təsdiqləyir. Bir addım da ola bilər, üç də — böyük məbləğ daha çox gözə görünsün deyə. Zəncir boş olanda sorğunu istənilən təsdiqləyən təsdiqləyir, və bunu siyahı açıq yazır.',
       must: true,
+      // Вторая находка того же разбора: «один шаг, а может три» — про готовые схемы, а среди
+      // них трёхшаговой не было (один, два и два). Движок цепочку любой длины держал всегда,
+      // но эти карточки — единственный способ задать её в продукте, то есть сказанное было
+      // правдой про сервер и недостижимым на экране. Трёхшаговая схема добавлена 10.11.2026;
+      // камера идёт по трём карточкам в порядке трёх фраз — один шаг, три шага, пустая
+      // цепочка, — и каждая обязана быть на месте, иначе прогон обрывается.
       do: async (p, l, h) => {
         const ap = await h.need('#set-approval', 'təsdiq zənciri');
-        await h.scrollTo(ap); await h.holdUntil(0.55);
-        await h.moveTo(ap); await h.holdUntil(0.95);
+        await h.scrollTo(ap); await h.holdUntil(0.3);
+        // Прокрутка к СЕТКЕ, а не к отдельной карточке: их пять, на 1280 они ложатся в два
+        // ряда, и камера ходит между рядами — подводить каждую карточку отдельной прокруткой
+        // значило бы дёргать кадр посреди фразы.
+        await h.scrollTo('[data-testid=chain-presets]');
+        const one = await h.need('[data-testid=chain-preset-p1]', 'bir addımlı sxem');
+        await h.moveTo(one); await h.holdUntil(0.55);
+        const three = await h.need('[data-testid=chain-preset-p4]', 'üç addımlı sxem');
+        await h.moveTo(three); await h.holdUntil(0.8);
+        await h.moveTo(await h.need('[data-testid=chain-preset-p0]', 'zəncirsiz sxem'));
+        await h.holdUntil(0.95);
       } },
   ]},
   // ГЛАВА «устройство»: панель поставщика в конце истории — она уже не пустая.

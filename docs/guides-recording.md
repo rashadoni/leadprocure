@@ -529,6 +529,23 @@ docker exec leadprocure-demo-pg psql -U leadprocure_owner -d leadprocure_demo -A
 загрузку документов, то есть главы про проверку поставщика, и ломает молча (toast с ошибкой,
 пустой список).
 
+**Права `app_user` в свежей базе выдаются ДО миграций, и миграции их не выдают.** Семь таблиц
+(`budgets`, `channel_connections`, `document_counters`, `followup_*`, `whatsapp_delivery_receipts`)
+создаются без собственного `GRANT`, а живут они на умолчании, которое приёмка проставляет
+своей рукой (`.github/workflows/acceptance.yml`) — в чужой базе его нет, и сид падает на
+`permission denied for table budgets` посреди работы, оставив базу наполовину засеянной. То
+есть лечится это не повтором сида, а пересозданием базы. Те же четыре строки, что у приёмки,
+сразу после `CREATE DATABASE`:
+
+```sql
+GRANT CONNECT ON DATABASE <база> TO app_user;
+GRANT USAGE ON SCHEMA public TO app_user;
+ALTER DEFAULT PRIVILEGES FOR ROLE leadprocure_owner IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_user;
+ALTER DEFAULT PRIVILEGES FOR ROLE leadprocure_owner IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO app_user;
+```
+
 ```bash
 GUIDES_PG_CONTAINER=leadprocure_postgres GUIDES_DB=leadprocure_guides \
 FORCE=1 node scripts/produce-guides.mjs http://127.0.0.1:5179 az <ключи глав…>

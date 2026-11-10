@@ -73,6 +73,21 @@ export default function Settings() {
     try { await fn(); load(); } catch (e: any) { notifyError(e); }
   };
 
+  // `PUT /departments/:id` replaces the whole row, and an OMITTED field is read as «cleared»
+  // (`dto.ownerUserId ?? null` in departments.module.ts) — so every field this click is not
+  // about has to be sent back as it stands. The retire button used to send code, name,
+  // parent and isActive and nothing else, which quietly dropped the owner: the department
+  // whose head is the one person a budget warning is addressed to went back to notifying
+  // the whole organisation, and no screen said so because no screen showed the owner.
+  const depPut = (d: any, patch: Record<string, unknown>) => run(() => api.put(`/departments/${d.id}`, {
+    code: d.code,
+    name: d.name ?? undefined,
+    parentId: d.parent_id ?? undefined,
+    ownerUserId: d.owner_user_id ?? undefined,
+    isActive: d.is_active,
+    ...patch,
+  }));
+
   // Human-readable role name; falls back to the raw code if no translation exists.
   const roleLabel = (r: string) => { const l = t(`role_${r}`); return l === `role_${r}` ? r : l; };
 
@@ -101,6 +116,21 @@ export default function Settings() {
     p2: { label: t('chain_p2'), policies: [
       { minAmountMinor: 0, maxAmountMinor: 5_000_000, steps: [{ order: 1, role: 'BUYER_APPROVER' }] },
       { minAmountMinor: 5_000_000, maxAmountMinor: null, steps: [{ order: 1, role: 'BUYER_APPROVER' }, { order: 2, role: 'BUYER_ADMIN' }] },
+    ] },
+    // Three steps, and the reason it is here rather than left to the API: a chain of any
+    // length has always worked server-side (`approval_steps` is materialized from whatever
+    // `steps` the policy holds, with no cap), but these cards are the ONLY way the product
+    // offers to set a chain — so «a chain can be one step or three» was true of the engine
+    // and unreachable from the screen. The bands are the ones the money suggests: an
+    // approver alone up to the tender threshold, finance above it, and the admin as well
+    // once the amount is large enough to want a third pair of eyes. Three steps need three
+    // different people, which the segregation-of-duties rule already enforces.
+    p4: { label: t('chain_p4'), policies: [
+      { minAmountMinor: 0, maxAmountMinor: 5_000_000, steps: [{ order: 1, role: 'BUYER_APPROVER' }] },
+      { minAmountMinor: 5_000_000, maxAmountMinor: 50_000_000, steps: [{ order: 1, role: 'BUYER_APPROVER' }, { order: 2, role: 'BUYER_FINANCE' }] },
+      { minAmountMinor: 50_000_000, maxAmountMinor: null, steps: [
+        { order: 1, role: 'BUYER_APPROVER' }, { order: 2, role: 'BUYER_FINANCE' }, { order: 3, role: 'BUYER_ADMIN' },
+      ] },
     ] },
   };
   const setChain = (key: string) => run(() => api.put('/requests/approval-policies', { policies: CHAIN_PRESETS[key].policies }));
@@ -256,15 +286,35 @@ export default function Settings() {
         <table>
           <thead><tr>
             <th>{t('dep_code')}</th><th>{t('name')}</th><th>{t('dep_parent')}</th>
+            {/* The owner is not decoration: the budget warning is addressed to this person
+                (`departments.owner_user_id` → notify.notifyUser in modules/budgets), and
+                until this column existed the one screen that decides who gets told did not
+                say who that was. A department with nobody named says so in words — an empty
+                cell reads as «not loaded», and the fallback it stands for is «the whole
+                organisation gets the alarm», which is the opposite of nothing. */}
+            <th data-testid="dep-owner-col">{t('dep_owner')}</th>
             <th>{t('dep_usage')}</th><th>{t('status')}</th>{isAdmin && <th>{t('actions')}</th>}
           </tr></thead>
           <tbody>
-            {deps.length === 0 && <tr><td colSpan={isAdmin ? 6 : 5} className="hint">—</td></tr>}
+            {deps.length === 0 && <tr><td colSpan={isAdmin ? 7 : 6} className="hint">—</td></tr>}
             {deps.map((d) => (
               <tr key={d.id}>
                 <td>{d.code}</td>
                 <td>{d.name || '—'}</td>
                 <td className="hint">{d.parent_code ?? '—'}</td>
+                <td data-testid="dep-owner">
+                  {isAdmin ? (
+                    <select value={d.owner_user_id ?? ''}
+                      onChange={(e) => depPut(d, { ownerUserId: e.target.value || null })}>
+                      <option value="">{t('dep_owner_none')}</option>
+                      {users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                    </select>
+                  ) : d.owner_name ? (
+                    <span>{d.owner_name}</span>
+                  ) : (
+                    <span className="hint">{t('dep_owner_none')}</span>
+                  )}
+                </td>
                 <td className="hint">{d.usage_count}</td>
                 <td>{d.is_active ? <span className="badge is-good">{t('dep_active')}</span> : <span className="badge is-neutral">{t('dep_inactive')}</span>}</td>
                 {isAdmin && (
@@ -278,7 +328,7 @@ export default function Settings() {
                       )}
                     >
                       <button className="btn small ghost" data-tip={d.is_active ? t('dep_deactivate') : t('dep_activate')}
-                        onClick={() => run(() => api.put(`/departments/${d.id}`, { code: d.code, name: d.name ?? undefined, parentId: d.parent_id ?? undefined, isActive: !d.is_active }))}>
+                        onClick={() => depPut(d, { isActive: !d.is_active })}>
                         {d.is_active ? `⏸ ${t('dep_retire')}` : `▶ ${t('dep_restore')}`}
                       </button>
                     </Actions>
@@ -596,15 +646,21 @@ export default function Settings() {
         {isAdmin && (
           <div style={{ marginTop: 14 }}>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>{t('chain_presets')}</div>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {/* A grid rather than a wrapping flex row. With four cards the row filled and
+                nobody noticed; the fifth one wrapped, and a stretched `flex: 1 1 220px` made
+                it 340px wide under a row of 234px ones — one card visibly unlike its
+                neighbours, which reads as «this one is different» rather than «this one is
+                next». Equal columns say what is true: five ways to arrange the same thing. */}
+            <div data-testid="chain-presets"
+              style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
               {Object.entries(CHAIN_PRESETS).map(([key, preset]) => {
                 const active = activeChainKey === key;
                 return (
-                  <div key={key} role="button" tabIndex={0}
+                  <div key={key} role="button" tabIndex={0} data-testid={`chain-preset-${key}`}
                     onClick={() => chainKnown && !active && setChain(key)}
                     onKeyDown={(e) => e.key === 'Enter' && chainKnown && !active && setChain(key)}
                     style={{
-                      cursor: active || !chainKnown ? 'default' : 'pointer', minWidth: 220, flex: '1 1 220px', maxWidth: 340,
+                      cursor: active || !chainKnown ? 'default' : 'pointer', minWidth: 0,
                       border: `2px solid ${active ? 'var(--accent, #2f7050)' : '#e2e6ea'}`,
                       background: active ? '#f2faf5' : '#fff', borderRadius: 10, padding: '10px 12px',
                     }}>
