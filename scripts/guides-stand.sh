@@ -7,10 +7,31 @@
 # Свой api останавливается ПО НОМЕРУ процесса и только после проверки, что это он:
 # шаблонный `pkill -f node` на этой машине задел бы и api других сессий.
 set -euo pipefail
-ROOT=/home/rashad/projects/Leadprocure/.claude/worktrees/leadprocure-codex-handoff-0a9f68
-DB="$1"; LOG="$2"
+
+# Каталог берётся от самого скрипта, а не вписывается: он лежит в репозитории, и следующая
+# сессия возьмёт его из СВОЕГО воркитри. Прибитый путь либо не нашёлся бы, либо — хуже —
+# отработал бы в чужом дереве, которое та сессия считает расходным.
+ROOT=${GUIDES_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}
+DB="${1:?нужно имя базы стенда, например lp1111a_guides}"
+LOG="${2:?нужен путь для лога api стенда}"
+
+# Имя базы уходит в SQL подстановкой, а рядом в том же контейнере живут другие базы —
+# поэтому оно проверяется, а не принимается на слово.
+[[ "$DB" =~ ^[a-z][a-z0-9_]*$ ]] || { echo "плохое имя базы: $DB" >&2; exit 1; }
+
 cd "$ROOT"
-set -a; . /home/rashad/projects/Leadprocure/.env; set +a
+
+# Учётные данные базы живут в .env того дерева, где они есть: у воркитри свой .env (в нём
+# могут быть только ключи синтеза речи), а у канонического чекаута — полный. Путь задаётся
+# GUIDES_ENV, иначе берётся .env рядом с ROOT; если в нём нет DATABASE_OWNER_URL, скрипт
+# говорит об этом словами, а не падает позже на отказе подключения.
+ENV_FILE=${GUIDES_ENV:-$ROOT/.env}
+[ -f "$ENV_FILE" ] || { echo "нет файла окружения $ENV_FILE — укажите GUIDES_ENV" >&2; exit 1; }
+set -a; . "$ENV_FILE"; set +a
+[ -n "${DATABASE_OWNER_URL:-}" ] || {
+  echo "в $ENV_FILE нет DATABASE_OWNER_URL — укажите GUIDES_ENV на .env с доступом к базе" >&2
+  exit 1
+}
 
 docker exec leadprocure_postgres psql -U leadprocure_owner -d postgres \
   -c "CREATE DATABASE $DB OWNER leadprocure_owner" >/dev/null
