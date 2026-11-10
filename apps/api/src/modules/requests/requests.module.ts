@@ -150,7 +150,33 @@ export class RequestsService {
       )
     )[0];
     await this.insertItems(req.id, auth.org_id, dto.items);
+    await this.rememberCategory(dto.category, auth.org_id, req.id);
     return this.get(req.id);
+  }
+
+  // «Нет в списке — заводится само» (решение владельца 10.11.2026: «заказы могут быть
+  // разными»). Заводится здесь, на сервере, а не на странице, по простой причине: POST
+  // /categories открыт только администратору, а заявки пишет обычный сотрудник — страница
+  // получила бы 403 и промолчала бы, то есть «само» не работало бы ровно у тех, кто и
+  // печатает категории.
+  //
+  // Форма кода та же, что у ручного заведения в «Параметрах»: буквы/цифры/дефис/подчёркивание
+  // до сорока знаков. Категория с пробелами («Офисная мебель») в справочник НЕ попадает и
+  // остаётся на заявке текстом — ровно как было до этой правки: справочник хранит коды, и
+  // тихо превратить фразу в код значило бы завести вторую сущность с тем же смыслом.
+  private async rememberCategory(code: string | undefined, orgId: string, requestId: string) {
+    const c = (code ?? '').trim();
+    if (!c || c === '*' || !/^[\p{L}\p{N}_-]{1,40}$/u.test(c)) return;
+    const row = (
+      await this.rc.manager.query(
+        `INSERT INTO procurement_categories(buyer_org_id, code) VALUES ($1,$2)
+         ON CONFLICT DO NOTHING RETURNING id`,
+        [orgId, c],
+      )
+    )[0];
+    // Запись в журнал — только когда категория ДЕЙСТВИТЕЛЬНО завелась: на каждой заявке с
+    // уже известной категорией запись была бы шумом, в котором не видно первого появления.
+    if (row) await this.audit.record('CATEGORY_CREATED', 'category', row.id, { code: c, from_request: requestId });
   }
 
   async update(id: string, dto: UpsertRequestDto, auth: AccessTokenPayload) {
@@ -170,6 +196,7 @@ export class RequestsService {
     );
     await m.query(`DELETE FROM request_items WHERE request_id = $1`, [id]);
     await this.insertItems(id, auth.org_id, dto.items);
+    await this.rememberCategory(dto.category, auth.org_id, id);
     return this.get(id);
   }
 

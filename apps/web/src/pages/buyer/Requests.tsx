@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, useEffect, useState } from 'react';
+import { FormEvent, Fragment, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, fmtAmount, fmtDate, fmtMoney, tableCurrency } from '../../api/client';
 import { Cur } from '../../components/Cur';
@@ -10,6 +10,7 @@ import { Badge } from '../../components/Badge';
 import { isDenied, ListState, useLoad } from '../../components/ListState';
 import { Actions } from '../../components/Actions';
 import { RowMenu } from '../../components/RowMenu';
+import { Suggest } from '../../components/Suggest';
 
 const PAGE_SIZE = 20;
 
@@ -173,6 +174,17 @@ export default function Requests() {
     } catch (e: any) { notifyError(e); }
   };
 
+  // Категории: сперва заведённые в «Параметрах», затем те, что уже встречались в заявках.
+  // Второе важнее, чем кажется: курируемый список часто пуст, а заявки у компании уже есть,
+  // и подсказывать надо по ним — иначе поле «помнит» пустоту.
+  const categoryOptions = useMemo(() => {
+    const used = [...new Set(rows.map((r: any) => r.category).filter((c: any): c is string => !!c && c !== '*'))];
+    return [
+      ...cats.map((c) => ({ value: c, hint: t('suggest_curated') })),
+      ...used.filter((c) => !cats.includes(c)).map((c) => ({ value: c, hint: t('suggest_from_list') })),
+    ];
+  }, [cats, rows, t]);
+
   const create = async (e: FormEvent) => {
     e.preventDefault();
     setErr('');
@@ -190,6 +202,10 @@ export default function Requests() {
       setDepartment('');
       setItems([{ name: '', qty: 1, price: '' }]);
       load();
+      // Новая категория заводится сервером в момент создания заявки — перечитываем
+      // справочник, чтобы она подсказывалась уже со следующей заявки, а не после
+      // перезагрузки страницы.
+      loadRefs();
     } catch (e: any) { setErr(e.response?.data?.message?.toString() ?? t('error_generic')); }
   };
 
@@ -321,17 +337,17 @@ export default function Requests() {
         <form onSubmit={create}>
           <div className="row">
             <div style={{ flex: 2 }}><label htmlFor="request-title">{t('title')}</label>
-              <input id="request-title" data-testid="req-title" value={title} onChange={(e) => setTitle(e.target.value)} required /></div>
+              {/* Заголовки прежних заявок подсказываются: закупки повторяются, и человек,
+                  который третий раз заказывает те же стулья, не должен вспоминать, как он
+                  назвал это в прошлый раз. Своё пишется свободно — строки «создать» здесь
+                  нет, заголовок на то и заголовок. */}
+              <Suggest id="request-title" testid="req-title" value={title} onChange={setTitle} required
+                allowNew={false} tip={t('req_title_tip')}
+                options={[...new Set(rows.map((r: any) => r.title).filter(Boolean))].slice(0, 50)} /></div>
             <div style={{ flex: 1 }}><label htmlFor="request-category">{t('category')}</label>
               {/* category drives the method policy, budgets and per-category analytics */}
-              <input id="request-category" data-testid="req-category" value={category} onChange={(e) => setCategory(e.target.value)}
-                placeholder="IT, construction…" list="req-categories" />
-              <datalist id="req-categories">
-                {/* curated categories (Settings) first, plus any already used on requests */}
-                {[...new Set([...cats, ...rows.map((r) => r.category).filter((c) => c && c !== '*')])].map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist></div>
+              <Suggest id="request-category" testid="req-category" value={category} onChange={setCategory}
+                placeholder="IT, OFFICE…" tip={t('cat_tip')} options={categoryOptions} /></div>
             <div style={{ flex: 1 }}><label htmlFor="request-department">{t('department')}</label>
               {/* the department owns the budget this spend is charged to */}
               <select id="request-department" data-testid="req-department" value={department} onChange={(e) => setDepartment(e.target.value)}>

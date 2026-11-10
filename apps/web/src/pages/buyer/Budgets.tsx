@@ -11,6 +11,7 @@ import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import { useDialogs } from '../../components/Dialogs';
 import { isDenied, ListState } from '../../components/ListState';
+import { Suggest } from '../../components/Suggest';
 
 interface Budget {
   id: string;
@@ -61,6 +62,11 @@ export default function Budgets() {
   const [rows, setRows] = useState<Budget[]>([]);
   const [form, setForm] = useState({ ...empty });
   const [editId, setEditId] = useState<string | null>(null);
+  // Категории для подсказки: заведённые в «Параметрах» плюс те, что уже стоят на бюджетах.
+  // Поле раньше не подсказывало вовсе — человек должен был помнить, как категория пишется,
+  // а ошибка в написании заводит ВТОРУЮ категорию и тихо делит по ней расход.
+  const [cats, setCats] = useState<string[]>([]);
+  useEffect(() => { api.get('/categories').then((r) => setCats(r.data.map((c: any) => c.code))).catch(() => {}); }, []);
   // The plan form used to stand open above the table, eight fields wide, on every visit —
   // so the page opened on a form instead of on the plans. Same shape as Requests: a named
   // button, and the card appears when it is asked for.
@@ -314,10 +320,27 @@ export default function Budgets() {
             </button>
           </div>
           <form onSubmit={submit} className="row" style={{ alignItems: 'flex-end' }}>
-            <div><label>{t('name')}</label>
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
-            <div><label>{t('category')} </label>
-              <input placeholder="*" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></div>
+            {/* Имя и категория — два поля, про которые владелец сказал «непонятно, что это
+                такое»: подписи есть, а что в них писать, не говорит ничто. Теперь у каждого
+                своя подсказка, а под формой стоит строка, объясняющая все поля сразу. */}
+            <div><label data-tip={t('bud_name_tip')}>{t('name')}</label>
+              <input data-testid="bud-name" data-tip={t('bud_name_tip')} placeholder={t('bud_name_ph')}
+                value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
+            <div style={{ minWidth: 190 }}><label data-tip={t('bud_category_tip')}>{t('category')}</label>
+              {/* `*` остаётся значением, но больше не единственным объяснением себя: первой
+                  строкой списка стоит «Все категории (*)» словами. */}
+              {/* Выбранное «Все категории» кладёт в поле саму звёздочку, а не очищает его:
+                  пустое поле после щелчка читается как «ничего не произошло» — ровно та
+                  немота, на которую владелец и указал. Отправка и так считает пустое за
+                  `*`, так что значение от этого не меняется. */}
+              <Suggest testid="bud-category" value={form.category} onChange={(v) => setForm({ ...form, category: v })}
+                placeholder="*" tip={t('bud_category_tip')}
+                options={[
+                  { value: '*', label: `${t('suggest_any_category')} (*)`, hint: t('bud_any_hint') },
+                  ...cats.map((c) => ({ value: c, hint: t('suggest_curated') })),
+                  ...[...new Set(rows.map((b: any) => b.category).filter((c: any) => c && c !== '*'))]
+                    .filter((c: any) => !cats.includes(c)).map((c: any) => ({ value: c, hint: t('suggest_from_list') })),
+                ]} /></div>
             <div><label>{t('department')}</label>
               {/* empty = org-wide ceiling; a department budget always wins over it */}
               <select value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })}>
@@ -361,6 +384,7 @@ export default function Budgets() {
               {editId && <button type="button" className="btn ghost" onClick={() => { setEditId(null); setForm({ ...empty }); }} style={{ marginLeft: 6 }}>✕</button>}
             </div>
           </form>
+          <div className="hint" data-testid="bud-form-hint" style={{ marginTop: 10 }}>{t('bud_form_hint')}</div>
           {err && <div className="error">{err}</div>}
         </div>
       )}

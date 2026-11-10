@@ -60,6 +60,35 @@ describe('procurement categories (API e2e)', () => {
     expect(list.body.map((c: any) => c.code)).not.toContain('CONSTRUCTION');
   });
 
+  // «Нет в списке — заводится само» (решение владельца 10.11.2026). Проверяется именно
+  // обычным сотрудником: POST /categories ему запрещён, и если бы справочник пополняла
+  // страница, «само» не работало бы ровно у того, кто заявки и пишет.
+  it('a request with an unknown category remembers it, and a phrase stays a phrase', async () => {
+    await http().post('/settings/users').set(...bearer(buyerA))
+      .send({ email: `cr-${tag}@t.test`, fullName: 'Cat Requester', password: 'password123', role: 'BUYER_USER' }).expect(201);
+    const tok = (await http().post('/auth/login').send({ email: `cr-${tag}@t.test`, password: 'password123' }).expect(201)).body.accessToken;
+
+    await http().post('/requests').set(...bearer(tok))
+      .send({ title: `Avto ${tag}`, category: 'AVTOSERVIS', items: [{ name: 'Yağ', qty: 1, estUnitPriceMinor: 5000 }] })
+      .expect(201);
+    const codes = () => http().get('/categories').set(...bearer(tok)).expect(200).then((r) => r.body.map((c: any) => c.code));
+    expect(await codes()).toContain('AVTOSERVIS');
+
+    // Повтор не плодит дублей и не падает.
+    await http().post('/requests').set(...bearer(tok))
+      .send({ title: `Avto 2 ${tag}`, category: 'AVTOSERVIS', items: [{ name: 'Filtr', qty: 1, estUnitPriceMinor: 3000 }] })
+      .expect(201);
+    expect((await codes()).filter((c: string) => c === 'AVTOSERVIS')).toHaveLength(1);
+
+    // Фраза с пробелами кодом не становится: справочник хранит коды, а на заявке
+    // остаётся ровно то, что человек написал.
+    const req = await http().post('/requests').set(...bearer(tok))
+      .send({ title: `Mebel ${tag}`, category: 'Ofis mebeli', items: [{ name: 'Stol', qty: 1, estUnitPriceMinor: 9000 }] })
+      .expect(201);
+    expect(req.body.category).toBe('Ofis mebeli');
+    expect(await codes()).not.toContain('Ofis mebeli');
+  });
+
   it('only an admin can create/delete (BUYER_USER is refused)', async () => {
     // add a BUYER_USER under buyer A, then try to create a category as them
     await http().post('/settings/users').set(...bearer(buyerA))
