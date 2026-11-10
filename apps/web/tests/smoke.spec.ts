@@ -621,17 +621,24 @@ test.describe('buyer panel', () => {
     // here: lose either and the voice goes back to describing a screen that does not
     // answer, which is exactly the class of defect no cursor miss and no length check sees.
     await expect(page.getByTestId('dep-owner-col')).toBeVisible();
-    // A value, not a placeholder: the seed names an owner for both departments, and the
-    // empty option reads «no owner» in words precisely so that an unassigned one cannot be
-    // mistaken for a cell that failed to load.
-    // And EVERY row, not just the first: the sentence is «every department has an owner»,
-    // both rows are in frame, and a check of row one would let a department without an
-    // owner through — the recorder's own guard had the same gap and is fixed with it.
+    // Read across ALL rows, not just the first — but the claim asserted here is the one
+    // this stand can keep. «Every department has an owner» is true of the COURSE's stand
+    // and is guarded there, by the recorder, which refuses a run if any row is unowned.
+    // Here it is false by construction: the draft-request test above creates PW-SMOKE
+    // through the form, and the form does not ask for an owner, so the stand grows an
+    // unowned department every run. What matters on this screen is therefore the other
+    // half: a named owner is shown as a person, and one that is missing says so IN WORDS,
+    // because an empty cell reads as «failed to load» — the opposite of what it means.
     const owners = page.getByTestId('dep-owner').locator('select');
     const ownerRows = await owners.count();
     expect(ownerRows, 'the departments table shows no owner field at all').toBeGreaterThan(0);
-    for (let i = 0; i < ownerRows; i++) {
-      await expect(owners.nth(i), `department row ${i + 1} of ${ownerRows} has no owner`).not.toHaveValue('');
+    const ownerValues = await owners.evaluateAll((els) => els.map((e) => (e as HTMLSelectElement).value));
+    expect(ownerValues.filter(Boolean).length, 'not one department names an owner').toBeGreaterThan(0);
+    await expect(owners.first().locator('option[value=""]')).toHaveText(/no owner/i);
+    for (const [i, value] of ownerValues.entries()) {
+      if (value) continue;
+      await expect(owners.nth(i).locator('option:checked'),
+        `department row ${i + 1} is unowned and does not say so`).toHaveText(/no owner/i);
     }
     await toApproval.click();
     await expect(page.locator('#set-approval')).toBeInViewport();
