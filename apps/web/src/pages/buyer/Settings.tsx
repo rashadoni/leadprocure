@@ -89,19 +89,20 @@ export default function Settings() {
   }));
 
   // Who may be made the owner of a department, and what the row says about the one it has.
-  // The budget warning is addressed to this person ALONE (`departments.owner_user_id` →
+  // The budget warning is addressed to this person (`departments.owner_user_id` →
   // notify.notifyUser), and `NotifyEmailer.fanOut` mails only ACTIVE users — with a userId
-  // that filter does not fall back to the organisation, it empties the recipient list. So
-  // naming a deactivated person does not widen the alarm, it silences it, while the column
-  // goes on looking filled in. `/settings/users` answers with every membership regardless
-  // of status, because the users table above is where a person is read and their role
-  // changed; it is only this picker that must not offer them.
+  // that filter does not fall back to the organisation, it empties the recipient list, and
+  // `if (!users.length) return` sends nothing at all. So naming a deactivated person does
+  // not widen the mail, it stops it, while the column goes on looking filled in.
   //
-  // The one already named is KEPT in the list even when deactivated, and marked. A <select>
-  // whose value matches no option falls back to its first one, so dropping the option would
-  // make a department that HAS an owner read «No owner» — wrong in the other direction, and
-  // the natural fix for it (pick somebody) changes who gets told without anyone seeing that
-  // the row had been pointed at a switched-off person all along.
+  // Precisely: the MAIL stops. The in-app row is still written and is read org-wide —
+  // `notifications_rls` filters by `recipient_org_id` alone and `GET /notifications` has no
+  // recipient clause, so nothing in the product reads `recipient_user_id` today. Saying
+  // «nobody is told» here would send the next reader to fix a channel that is not broken.
+  //
+  // `/settings/users` answers with every membership regardless of status, because the users
+  // table above is where a person is read and their role changed; it is only this picker
+  // that must not offer them.
   const activeUsers = users.filter((u) => u.status === 'ACTIVE');
   const ownerStatus = (d: any) => users.find((u) => u.id === d.owner_user_id)?.status ?? d.owner_status ?? null;
   const ownerLabel = (name: string, status: string | null) =>
@@ -327,7 +328,23 @@ export default function Settings() {
                       onChange={(e) => depPut(d, { ownerUserId: e.target.value || null })}>
                       <option value="">{t('dep_owner_none')}</option>
                       {activeUsers.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-                      {d.owner_user_id && ownerStatus(d) !== 'ACTIVE' && (
+                      {/* The owner this row already has, whenever the list above does not
+                          offer them. A <select> whose value matches no option falls back to
+                          its first one, so without this a department that HAS an owner reads
+                          «No owner» — wrong in the other direction, and the natural fix for
+                          it (pick somebody) changes who gets told while nobody sees that the
+                          row was pointed elsewhere all along.
+                          Asked as «not among the people offered», not as «status is not
+                          ACTIVE»: those differ exactly while `users` is still in flight.
+                          /settings/users and /departments are separate requests and the
+                          departments land first, so for that moment every owner is missing
+                          from an empty `activeUsers` while `owner_status` says ACTIVE — and
+                          the old test rendered no option and showed «No owner» for an owner
+                          who is perfectly fine. It is not only a flicker: if /settings/users
+                          fails, `users` stays empty and that is the screen the admin keeps.
+                          (The owner's own name is shown unmarked there, because
+                          `ownerLabel` reads the real status and ACTIVE carries no mark.) */}
+                      {d.owner_user_id && !activeUsers.some((u) => u.id === d.owner_user_id) && (
                         <option value={d.owner_user_id}>{ownerLabel(d.owner_name || '—', ownerStatus(d))}</option>
                       )}
                     </select>

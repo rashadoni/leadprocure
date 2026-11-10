@@ -37,11 +37,14 @@ export class DepartmentsService {
       `SELECT d.id, d.code, d.name, d.parent_id, d.owner_user_id, d.is_active, d.created_at,
               (SELECT p.code FROM departments p WHERE p.id = d.parent_id) AS parent_code,
               (SELECT u.full_name FROM organization_users u WHERE u.id = d.owner_user_id) AS owner_name,
-              -- The owner's own state travels with the name. A budget warning addressed to
-              -- this person reaches NOBODY when they are deactivated: NotifyEmailer.fanOut
-              -- filters u.status='ACTIVE', and with a userId that filter empties the list
-              -- instead of falling back to the organisation. Without this column the screen
-              -- shows a filled-in owner and cannot say that the alarm is going nowhere.
+              -- The owner's own state travels with the name. A budget warning addressed to a
+              -- deactivated person is never MAILED: NotifyEmailer.fanOut filters
+              -- u.status='ACTIVE', and with a userId that filter empties the recipient list
+              -- instead of falling back to the organisation, so nothing is sent at all. (The
+              -- in-app row is still written and still read: notifications_rls filters by
+              -- recipient_org_id alone, so the whole organisation sees it. Mail is the
+              -- channel that goes quiet.) Without this column the screen shows a filled-in
+              -- owner and cannot say that the mail is going nowhere.
               (SELECT u.status FROM organization_users u WHERE u.id = d.owner_user_id) AS owner_status,
               (SELECT count(*)::int FROM procurement_requests pr WHERE pr.department_id = d.id) AS usage_count
        FROM departments d
