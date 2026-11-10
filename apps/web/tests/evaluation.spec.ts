@@ -167,6 +167,15 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
   // whose price it is IS sealed until the opening; only the price itself is public.
   await page.goto(`/buyer/events/${auction.id}`);
   await expect(page.getByText('The price is bid live', { exact: false })).toBeVisible({ timeout: 10_000 });
+  // The step is the one rule of the auction the panel used to leave off: a new bid must
+  // undercut the best by at least this much. It is a real field of the event and this
+  // endpoint always returned it, but nothing drew it, so the section's narration named a
+  // figure («the step is one per cent of it — six hundred manat») that was nowhere on the
+  // screen. `minDecrementMinor` here is 1000 minor units = 10.00. The tooltip is asserted
+  // too: a bare amount does not say in which direction it binds.
+  const step = page.getByTestId('auction-step');
+  await expect(step).toContainText('10.00');
+  await expect(step).toHaveAttribute('data-tip', /at least this much lower/i);
   // the sealed caption's own words, copied from the dictionary — «Amounts are hidden»
   // would have been a check that passed because that sentence never existed
   await expect(page.getByText('Amounts sealed until opening', { exact: false })).toHaveCount(0);

@@ -1196,6 +1196,12 @@ const SECTIONS = {
       do: async (p, l, h) => {
         const dep = await h.need('#set-departments', 'şöbələr bölməsi');
         await h.scrollTo(dep); await h.holdUntil(0.35);
+        // «У КАЖДОГО отдела есть владелец» держалось сидом: форма создания владельца не
+        // спрашивала, и любой отдел, заведённый в продукте, рождался «Sahibi yoxdur» —
+        // проверка ниже прошла бы на стенде курса и провалилась у зрителя, который завёл
+        // свой первый отдел. Поле появилось 10.11.2026; здесь оно только требуется — курсор
+        // к нему не идёт, потому что голос в этой сцене говорит про таблицу.
+        await h.need('[data-testid=dep-new-owner]', 'şöbə yaradılanda sahib seçimi');
         const col = await h.need('[data-testid=dep-owner-col]', 'şöbə sahibi sütunu');
         await h.moveTo(col); await h.holdUntil(0.6);
         // ВСЕ строки, а не первая: голос говорит «у КАЖДОГО отдела есть владелец», и в
@@ -1497,12 +1503,33 @@ const SECTIONS = {
     { as: 'buyer',
       az: 'Hərracda başlanğıc qiymət smetadır, addım isə onun bir faizi — altı yüz manat. Yəni hər yeni təklif əvvəlkindən ən azı bu qədər aşağı olmalıdır, yoxsa torq saniyədə bir manatla sürünərdi.',
       must: true,
+      // Третье место того же класса, что чинил разбор PR #174: озвучка называла шаг — «шесть
+      // сотен манат», — а на панели стояли только «Başlanğıc» и «Növbəti maks.», оба по
+      // 60 000. Шаг у события есть на самом деле (`auction_min_decrement_minor`, один
+      // процент от старта), и этот же запрос его всегда отдавал — его просто никто не
+      // рисовал. Плитка «Addım» появилась 10.11.2026, и сцена теперь ПРОВЕРЯЕТ её: уберут —
+      // прогон оборвётся, а не снимет кадр, в котором голос называет чего нет.
+      //
+      // Доли считаны по паузам в самом файле озвучки (silencedetect по кэшу, 14,09 с):
+      // «Hərracda başlanğıc qiymət smetadır» — 0,25–2,52 с; «addım isə onun bir faizi» —
+      // 2,95–4,54; «altı yüz manat» — 4,91–5,76; второе предложение — с 6,08 до 13,77.
+      // Поправка на LEAD=0,65 с: холд до 0.16 отпускает курсор к плитке шага на 2,90 с, то
+      // есть ровно к слову «addım». На плитке он и остаётся: всё остальное предложение —
+      // «каждая новая ставка должна быть ниже предыдущей хотя бы на столько» — про это же
+      // число, и уходить с него было бы тем самым расхождением. Вместо ухода — наведение:
+      // подсказка плитки говорит это правило словами, и зритель читает его с экрана.
       do: async (p, l, h) => {
         await h.needClick('.pick:has(input[value="AUCTION"])', 'dəvətlə hərrac', 700);
         await h.needClick('[data-testid=dialog-confirm]', 'təsdiq düyməsi', 1500);
         await p.waitForURL(/\/buyer\/events\/[0-9a-f-]{36}/, { timeout: 15000 });
         await h.need(`h1:has-text("${STORY.title2}")`, 'hərracın kartı');
-        await h.moveTo('h1'); await h.holdUntil(0.95);
+        const panel = await h.need('.card:has-text("REVERSE")', 'hərrac paneli');
+        await h.scrollTo(panel);
+        await h.moveTo(panel.locator('[data-testid=auction-start]'));
+        await h.holdUntil(0.16);
+        const step = await h.need('[data-testid=auction-step]', 'hərracın addımı');
+        await h.moveTo(step); await h.holdUntil(0.37);
+        await h.hover(step, 1500); await h.holdUntil(0.95);
       } },
     { as: 'buyer',
       az: 'Hər iki təchizatçını dəvət edirəm və elan edirəm — saat işləməyə başladı.',
