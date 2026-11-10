@@ -11,7 +11,12 @@ import { resolve } from 'node:path';
 // браузера, поэтому не стоит ни входа (их 10 в минуту), ни ожидания стенда.
 const read = (p: string) => readFileSync(resolve(p), 'utf8');
 const I18N = read('src/i18n.tsx');
-const PAGES = ['src/pages/supplier/SupplierEvent.tsx', 'src/pages/buyer/EventDetail.tsx'];
+// Панель аукциона здесь же, хотя это не страница: её читают обе стороны и на обеих
+// страницах, а подписей у неё больше, чем у иной страницы. Шаг торгов добавлен в неё
+// 10.11.2026, и его название с подсказкой — ровно тот случай, ради которого эта проверка
+// есть: голос курса называет шаг словами, а на экране вместо подписи стоял бы её ключ.
+const PAGES = ['src/pages/supplier/SupplierEvent.tsx', 'src/pages/buyer/EventDetail.tsx',
+  'src/components/AuctionPanel.tsx'];
 
 test('каждая подпись на страницах тендера переведена на все три языка', () => {
   const missing = new Set<string>();
