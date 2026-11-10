@@ -38,7 +38,7 @@ export default function Requests() {
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [hasPolicies, setHasPolicies] = useState(false);
-  const [cats, setCats] = useState<string[]>([]);
+  const [cats, setCats] = useState<Array<{ code: string; auto_created?: boolean }>>([]);
   // Departments (cost centres) — which budget this spend lands on. Only active ones can
   // be picked for new requests; retired ones stay on their historic requests.
   const [deps, setDeps] = useState<any[]>([]);
@@ -69,7 +69,7 @@ export default function Requests() {
   const loadRefs = () => {
     setRefFailed(false);
     const broken = () => setRefFailed(true);
-    api.get('/categories').then((r) => setCats(r.data.map((c: any) => c.code))).catch(broken);
+    api.get('/categories').then((r) => setCats(r.data)).catch(broken);
     api.get('/departments').then((r) => setDeps(r.data)).catch(broken);
     // Нужны не сами полосы, а только факт, что они заведены: без них `resolveMethod`
     // ставит OPEN_TENDER на КАЖДУЮ заявку (пробел политики идёт самым состязательным
@@ -180,8 +180,10 @@ export default function Requests() {
   const categoryOptions = useMemo(() => {
     const used = [...new Set(rows.map((r: any) => r.category).filter((c: any): c is string => !!c && c !== '*'))];
     return [
-      ...cats.map((c) => ({ value: c, hint: t('suggest_curated') })),
-      ...used.filter((c) => !cats.includes(c)).map((c) => ({ value: c, hint: t('suggest_from_list') })),
+      // Подсказка у строки должна быть правдой: «заведена в параметрах» — только про то,
+      // что завели рукой; остальное пришло из заявок, в том числе из этой же формы.
+      ...cats.map((c) => ({ value: c.code, hint: c.auto_created ? t('suggest_from_list') : t('suggest_curated') })),
+      ...used.filter((c) => !cats.some((k) => k.code === c)).map((c) => ({ value: c, hint: t('suggest_from_list') })),
     ];
   }, [cats, rows, t]);
 

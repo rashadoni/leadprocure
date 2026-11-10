@@ -65,8 +65,13 @@ export default function Budgets() {
   // Категории для подсказки: заведённые в «Параметрах» плюс те, что уже стоят на бюджетах.
   // Поле раньше не подсказывало вовсе — человек должен был помнить, как категория пишется,
   // а ошибка в написании заводит ВТОРУЮ категорию и тихо делит по ней расход.
-  const [cats, setCats] = useState<string[]>([]);
-  useEffect(() => { api.get('/categories').then((r) => setCats(r.data.map((c: any) => c.code))).catch(() => {}); }, []);
+  const [cats, setCats] = useState<Array<{ code: string; auto_created?: boolean }>>([]);
+  useEffect(() => { api.get('/categories').then((r) => setCats(r.data)).catch(() => {}); }, []);
+  // Можно ли ввести в бюджете НОВУЮ категорию, решает не форма, а сервер: пока справочник
+  // никто не вёл руками, он принимает любой код и заводит его; как только появилась первая
+  // ручная запись — принимает только существующие. Экран обязан обещать ровно это, иначе
+  // строка «+ создать» снова начнёт звать туда, где ответят отказом.
+  const curatedCats = cats.some((c) => !c.auto_created);
   // The plan form used to stand open above the table, eight fields wide, on every visit —
   // so the page opened on a form instead of on the plans. Same shape as Requests: a named
   // button, and the card appears when it is asked for.
@@ -339,13 +344,13 @@ export default function Budgets() {
                   экрана и поведения, ради которого всё это и делалось. Категории
                   появляются из заявок, то есть оттуда, где деньги действительно просят. */}
               <Suggest testid="bud-category" value={form.category} onChange={(v) => setForm({ ...form, category: v })}
-                placeholder="*" tip={t('bud_category_tip')} allowNew={false}
-                emptyHint={t('bud_cat_empty')}
+                placeholder="*" tip={t('bud_category_tip')} allowNew={!curatedCats}
+                emptyHint={curatedCats ? t('bud_cat_empty') : undefined}
                 options={[
                   { value: '*', label: `${t('suggest_any_category')} (*)`, hint: t('bud_any_hint') },
-                  ...cats.map((c) => ({ value: c, hint: t('suggest_curated') })),
+                  ...cats.map((c) => ({ value: c.code, hint: c.auto_created ? t('suggest_from_list') : t('suggest_curated') })),
                   ...[...new Set(rows.map((b: any) => b.category).filter((c: any) => c && c !== '*'))]
-                    .filter((c: any) => !cats.includes(c)).map((c: any) => ({ value: c, hint: t('suggest_from_list') })),
+                    .filter((c: any) => !cats.some((k) => k.code === c)).map((c: any) => ({ value: c, hint: t('suggest_from_list') })),
                 ]} /></div>
             <div><label>{t('department')}</label>
               {/* empty = org-wide ceiling; a department budget always wins over it */}

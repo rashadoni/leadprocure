@@ -286,11 +286,21 @@ export default function Settings() {
       <div className="card">
         <h3 id="set-categories">{t('cat_hdr')}</h3>
         <div className="hint" style={{ marginBottom: 10 }}>{t('cat_hint')}</div>
+        {/* Состояние, которое решает поведение бюджетов во всей организации, должно быть
+            ВИДНО. Оно зависит от одного: есть ли в списке хоть одна категория, заведённая
+            рукой. Пока таких нет — бюджет примет любой код и заведёт его; как только
+            появится первая — бюджет станет принимать только то, что в этом списке уже есть.
+            Человек менял этот режим, заводя первую категорию, и не узнавал об этом ни до,
+            ни после; поэтому режим назван словами, а автоматические записи помечены. */}
+        <div className="hint" data-testid="cat-mode" style={{ marginBottom: 10 }}>
+          {cats.some((c) => !c.auto_created) ? t('cat_mode_curated') : t('cat_mode_free')}
+        </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: isAdmin ? 12 : 0 }}>
           {cats.length === 0 && <span className="hint">—</span>}
           {cats.map((c) => (
-            <span key={c.id} className="badge is-info" data-tip={c.name || undefined}>
-              {c.code}{c.name ? ` · ${c.name}` : ''}
+            <span key={c.id} className={`badge ${c.auto_created ? 'is-neutral' : 'is-info'}`}
+              data-tip={c.auto_created ? t('cat_auto_tip') : (c.name || undefined)}>
+              {c.code}{c.name ? ` · ${c.name}` : ''}{c.auto_created ? ' ·' : ''}{c.auto_created ? <span className="hint" style={{ marginLeft: 4 }}>{t('cat_auto')}</span> : null}
               {isAdmin && (
                 <button className="btn small ghost" style={{ marginLeft: 6, padding: '0 6px' }}
                   onClick={() => run(() => api.delete(`/categories/${c.id}`))}>{t('delete')}</button>

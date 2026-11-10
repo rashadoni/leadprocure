@@ -706,6 +706,14 @@ test.describe('buyer panel', () => {
     // «Все категории» видно в поле звёздочкой: пустое поле после щелчка читалось бы как
     // «ничего не произошло». Отправка и так считает пустое за `*`.
     await expect(cat).toHaveValue('*');
+
+    // Состояние, которое решает, примет ли бюджет новую категорию, объяснено словами в
+    // «Параметрах». Раньше его не было видно нигде: администратор менял поведение бюджетов
+    // всей организации, заводя первую категорию руками, и не узнавал об этом.
+    await visit(page, '/buyer/settings');
+    const mode = page.getByTestId('cat-mode');
+    await expect(mode).toBeVisible();
+    await expect(mode).toContainText(/бюджет|büdcə|budget/i);
   });
 
   test('settings jumps to its sections and hides the password it asks for', async () => {
