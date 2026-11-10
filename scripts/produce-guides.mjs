@@ -132,6 +132,16 @@ const injectCursor = (page) => page.evaluate(CURSOR_JS).catch(() => {});
 // before each scene; MISSES is printed at the end, and makes the claim checkable.
 let SCENE = '?';
 let MISSES = 0;
+// Адрес карточки аукциона на стороне поставщика: его запоминает глава про аукцион, когда
+// покупатель объявляет событие. Поставщики открывают карточку по нему, а не ищут её в
+// витрине — иначе их первые секунды уходят на навигацию, а голос уже называет цену.
+let AUCTION_URL = null;
+// Каждая доля сцены: когда её ждали и когда она фактически случилась. Нужна не только
+// опоздавшая — по полному списку видно и обратное, чего отчёт сам поймать не может:
+// действие, сработавшее РАНЬШЕ своих слов. Пишется в файл по GUIDES_BEATS=<путь>.
+const BEATS = [];
+// Порог в полсекунды — не придирка: ниже него глаз не отделяет слово от показа.
+const BEAT_SLACK_MS = 500;
 const describe = (loc) => String(loc).replace(/^Locator@/, '').slice(0, 90);
 
 async function moveToLoc(page, loc, hold = 650) {
@@ -268,11 +278,28 @@ function makeHelpers(page) {
   let t0 = Date.now(), ms = 6000;
   return {
     sleep: P,
-    setSceneBudget(m) { t0 = Date.now(); ms = m || 6000; },
+    // `leadMs` — то, что озвучка уже проиграла к моменту вызова. Раньше его не было, и
+    // доли отсчитывались от момента, когда сцене отдали управление, то есть РОВНО НА LEAD
+    // позже слов: доля 0.2 у четырнадцатисекундной сцены означала не 2,8 с озвучки, а 3,45.
+    // Шестьсот пятьдесят миллисекунд — это заметно: курсор приходит на плитку, когда её уже
+    // назвали, и зритель ищет глазами то, о чём говорят, вместо того чтобы смотреть.
+    // Перекос был у КАЖДОЙ сцены курса, а не только у тех, где его заметили.
+    setSceneBudget(m, leadMs = 0) { t0 = Date.now() - leadMs; ms = m || 6000; },
+    // Доля — это место В ОЗВУЧКЕ: `holdUntil(f)` ждёт до `f × длительность` от её начала.
+    // Если к моменту вызова это время уже прошло, ждать нечего — но тогда действие идёт
+    // ПОСЛЕ своих слов, и сцена об этом молчала. Теперь такие доли считаются и печатаются
+    // в конце прогона: показ, отстающий от слов, виден без пересмотра всех двадцати двух
+    // записей глазами.
     async holdUntil(frac) {
       const target = t0 + Math.max(0, Math.min(1, frac)) * ms;
       const remain = target - Date.now();
-      if (remain > 0) await P(remain);
+      if (remain > 0) { await P(remain); return; }
+      // Записывается КАЖДАЯ доля, опоздавшая и нет. Какая из них «держать до конца
+      // озвучки», решается не числом, а порядком: последняя в сцене терминальная, и её
+      // опоздание значит «действия длиннее озвучки» — про это есть своя строка ⏱. По
+      // числу (frac < 0.9) это отсекалось неверно: у сцены объявления последняя доля
+      // 0.72, и отчёт назвал бы её, хотя это то же самое.
+      BEATS.push({ scene: SCENE, frac, atMs: Date.now() - t0, lateMs: Math.max(0, -remain) });
     },
     loc: (sel) => L(page, sel),
     // Строгий поиск: ЕСТЬ ли на экране то, без чего сцена бессмысленна. Обычный moveTo
@@ -1261,8 +1288,9 @@ const SECTIONS = {
         // 10.11.2026 — на 100,5 с «Üç addım» обрезан нижней кромкой), а первая редакция
         // сцены держала этот кадр до 0.3, то есть ровно под словами «üç də».
         await h.scrollTo('[data-testid=chain-presets]');
-        // Доли считаны по паузам в самой озвучке (silencedetect по файлу кэша), с поправкой
-        // на LEAD=0,65 с и на 0,55 с хода курсора: «Bir addım da ola bilər» звучит с 4,62 с,
+        // Доли считаны по паузам в самой озвучке (silencedetect по файлу кэша) и по 0,55 с
+        // хода курсора. **Поправку на LEAD делает сам движок** (`setSceneBudget` вычитает
+        // его), поэтому вычитать его здесь ещё раз нельзя: доля — это место в озвучке: «Bir addım da ola bilər» звучит с 4,62 с,
         // «üç də» — 6,11–6,56, «Zəncir boş olanda» — с 9,66. Первая редакция ставила
         // 0.55/0.80/0.95 и отставала на три-пять секунд: под «когда цепочка пустая» была
         // подсвечена трёхшаговая цепочка. Промаха курсора тут нет и быть не может —
@@ -1467,18 +1495,26 @@ const SECTIONS = {
         await h.needClick('[data-testid=req-new]', '«Yeni sorğu» düyməsi', 700);
         await h.needFill('[data-testid=req-title]', STORY.title2, 'Başlıq');
         await h.needFill('[data-testid=req-category]', STORY.category, 'Kateqoriya');
+        // Название товара набирается ЗДЕСЬ: голос в этой сцене как раз говорит «A4 kağız»,
+        // а у следующей сцены свои четыре секунды занимают создание и отправка — набор
+        // поверх них сдвигал её «пятьсот пакетов» на три секунды позже слов.
+        await h.needFill('[data-testid=item-name-0]', STORY.item2.name, 'mövqenin adı');
         await h.holdUntil(0.95);
       } },
     { as: 'requester',
       az: 'Beş yüz paket, hər biri yüz iyirmi manat — altmış min. Yaradıram və təsdiqə göndərirəm.',
       must: true,
       do: async (p, l, h) => {
-        await h.needFill('[data-testid=item-name-0]', STORY.item2.name, 'mövqenin adı');
+        // Имя позиции уже набрано предыдущей сценой — здесь только числа, о которых
+        // говорит голос: «пятьсот пакетов, по сто двадцать манат».
         await h.needFill('[data-testid=item-qty-0]', STORY.item2.qty, 'say');
         await h.needFill('[data-testid=item-price-0]', STORY.item2.price, 'qiymət');
         await h.holdUntil(0.5);
-        await h.needClick('form button.btn:not(.ghost):not([type=button])', '«Yarat» düyməsi', 1500);
-        await h.needClick(`${ROW2} [data-testid=req-submit]`, '«Göndər» düyməsi', 1500);
+        // Паузы после кликов укорочены с 1500: они нужны, чтобы результат успел попасть в
+        // кадр, и 900 мс для этого хватает, а полторы секунды уводили «создаю и отправляю»
+        // на две с лишним секунды позже самих слов.
+        await h.needClick('form button.btn:not(.ghost):not([type=button])', '«Yarat» düyməsi', 900);
+        await h.needClick(`${ROW2} [data-testid=req-submit]`, '«Göndər» düyməsi', 900);
         await h.need(`${ROW2} .badge.SUBMITTED`, 'göndərilmiş sorğu');
         await h.holdUntil(0.95);
       } },
@@ -1498,8 +1534,24 @@ const SECTIONS = {
       do: async (p, l, h) => {
         await h.needClick(`${ROW2} [data-testid=req-announce]`, '«Elan et» düyməsi', 1200);
         await h.need('[role=dialog] [data-testid=dialog-input]', 'prosedur seçimi');
-        await h.moveTo('.pick:has(input[value="AUCTION"])'); await h.holdUntil(0.6);
-        await h.moveTo('.pick:has(input[value="AUCTION_OPEN"])'); await h.holdUntil(0.95);
+        await h.moveTo('.pick:has(input[value="AUCTION"])'); await h.holdUntil(0.45);
+        await h.moveTo('.pick:has(input[value="AUCTION_OPEN"])'); await h.holdUntil(0.72);
+        // Выбор, подтверждение и переход на карточку перенесены СЮДА из следующей сцены.
+        // Там они съедали её первые четыре секунды, и курсор приходил на плитки «Başlanğıc»
+        // и «Addım» уже ПОСЛЕ того, как голос их назвал. Здесь они попадают ровно на свои
+        // слова: сцена кончается на «Dəvətlə olanı seçirəm» — «выбираю с приглашением», — и
+        // выбор происходит, пока это говорится.
+        await h.needClick('.pick:has(input[value="AUCTION"])', 'dəvətlə hərrac', 600);
+        await h.needClick('[data-testid=dialog-confirm]', 'təsdiq düyməsi', 1200);
+        await p.waitForURL(/\/buyer\/events\/[0-9a-f-]{36}/, { timeout: 15000 });
+        // Id события запоминается здесь, чтобы поставщики открывали карточку НАПРЯМУЮ.
+        // Через витрину это стоило им трёх-четырёх секунд на загрузку, клик по строке и
+        // ожидание адреса — а голос в это время уже называл цену, которой на экране ещё
+        // не было. Ровно та «асинхронность показа», на которую указал владелец.
+        AUCTION_URL = p.url().replace('/buyer/events/', '/supplier/events/');
+        await h.need(`h1:has-text("${STORY.title2}")`, 'hərracın kartı');
+        const panel = await h.need('.card:has-text("REVERSE")', 'hərrac paneli');
+        await h.scrollTo(panel);
       } },
     { as: 'buyer',
       az: 'Hərracda başlanğıc qiymət smetadır, addım isə onun bir faizi — altı yüz manat. Yəni hər yeni təklif əvvəlkindən ən azı bu qədər aşağı olmalıdır, yoxsa torq saniyədə bir manatla sürünərdi.',
@@ -1515,36 +1567,34 @@ const SECTIONS = {
       // «Hərracda başlanğıc qiymət smetadır» — 0,25–2,52 с; «addım isə onun bir faizi» —
       // 2,95–4,54; «altı yüz manat» — 4,91–5,76; второе предложение — с 6,08 до 13,77.
       //
-      // НО доли здесь ничего не связывают, и это измерено по готовой записи (оба разбора
-      // PR #175, независимо): первые ~4 с сцены съедают её собственные действия — выбор
-      // способа, подтверждение диалога, переход на карточку события, — поэтому и 0.16, и
-      // 0.37 к моменту вызова уже в прошлом, и `holdUntil` возвращается сразу. Курсор
-      // приходит на «Başlanğıc» около 49,5 с записи и на «Addım» около 50,0–50,3 с, то
-      // есть ПОСЛЕ слова «addım» (46,5) и около конца «altı yüz manat» (49,4).
-      //
-      // Почему это оставлено как есть, а не исправлено долями: расхождения, ради которого
-      // существует вся работа, тут нет — само число на экране с того момента, как панель
-      // появилась (~46 с), то есть ровно когда голос его называет; опаздывает указатель, а
-      // не факт. Чтобы курсор успевал, клик и переход надо перенести в предыдущую сцену, а
-      // это новый кадр, то есть ещё одна полная пересъёмка курса. Если будете её делать по
-      // другому поводу — перенесите заодно. Доли ниже оставлены как нижняя граница: они
-      // ничего не ломают и начнут работать, как только действия станут короче.
+      // Здесь курсор ОПАЗДЫВАЛ, и владелец это увидел: «слушатель не поймёт из-за
+      // асинхронности показа». Причина была не в долях, а в том, что первые ~4 с сцены
+      // съедали её собственные действия — выбор способа, подтверждение диалога, переход на
+      // карточку, — так что 0.16 и 0.37 к моменту вызова уже были в прошлом и `holdUntil`
+      // возвращался сразу: курсор приходил на «Başlanğıc» около 49,5 с записи и на «Addım»
+      // около 50,0–50,3, то есть ПОСЛЕ слова «addım» (46,5). Действия перенесены в
+      // предыдущую сцену (10.11.2026), и доли ниже снова значат то, что написано.
       //
       // На плитке курсор и остаётся: всё остальное предложение — «каждая новая ставка
       // должна быть ниже предыдущей хотя бы на столько» — про это же число, и уходить с
       // него было бы тем самым расхождением. Вместо ухода — наведение: подсказка плитки
       // говорит это правило словами, и зритель читает его с экрана.
       do: async (p, l, h) => {
-        await h.needClick('.pick:has(input[value="AUCTION"])', 'dəvətlə hərrac', 700);
-        await h.needClick('[data-testid=dialog-confirm]', 'təsdiq düyməsi', 1500);
-        await p.waitForURL(/\/buyer\/events\/[0-9a-f-]{36}/, { timeout: 15000 });
-        await h.need(`h1:has-text("${STORY.title2}")`, 'hərracın kartı');
+        // Сцена больше НИЧЕГО не создаёт и никуда не переходит — всё это сделала
+        // предыдущая, и экран уже стоит на карточке с панелью. Поэтому доли здесь
+        // наконец значат то, что должны, и считаны они по паузам в самом файле озвучки
+        // (silencedetect, 14,09 с): «başlanğıc qiymət» 0,25–2,52; «addım isə onun bir
+        // faizi» 2,95–4,54; «altı yüz manat» 4,91–5,76; второе предложение 6,08–13,77.
         const panel = await h.need('.card:has-text("REVERSE")', 'hərrac paneli');
-        await h.scrollTo(panel);
+        // Курсор на «Başlanğıc» к первым же словам о начальной цене.
         await h.moveTo(panel.locator('[data-testid=auction-start]'));
-        await h.holdUntil(0.16);
+        // Трогается до слова «addım» (2,95 с), чтобы ПРИЙТИ на него, а не выйти.
+        await h.holdUntil(0.18);
         const step = await h.need('[data-testid=auction-step]', 'hərracın addımı');
-        await h.moveTo(step); await h.holdUntil(0.37);
+        await h.moveTo(step);
+        // Подсказка плитки раскрывается на «altı yüz manat» и стоит, пока второе
+        // предложение объясняет правило — оно про это же число, уходить с него нельзя.
+        await h.holdUntil(0.33);
         await h.hover(step, 1500); await h.holdUntil(0.95);
       } },
     { as: 'buyer',
@@ -1564,43 +1614,43 @@ const SECTIONS = {
       az: 'Mən iştirakçıyam. Panel ən yaxşı qiyməti göstərir, amma kiminki olduğunu yox: hərracda görünən qiymətdir, ad deyil. Öz qiymətimi verirəm — yüz on beş manat.',
       must: true,
       do: async (p, l, h) => {
-        // Раздел открывается на странице заявок покупателя, а поставщика туда не пускают:
-        // его прогон начинается с перенаправления, и куда именно — решает роутер, а не
-        // сценарий. Поэтому витрина открывается явно.
-        await p.goto(`${BASE}/supplier/market`);
-        await h.needClick(`${ROW2} a`, 'hərracın başlığı', 1500);
-        await p.waitForURL(/\/supplier\/events\/[0-9a-f-]{36}/, { timeout: 15000 });
+        // Карточка аукциона открывается НАПРЯМУЮ по адресу, запомненному в сцене, где
+        // покупатель её объявил. Через витрину (загрузка, клик по строке, ожидание
+        // адреса) на это уходило три-четыре секунды, и цена, которую голос называет в
+        // первой же фразе, появлялась на экране уже после неё.
+        if (!AUCTION_URL) throw new Error('адрес карточки аукциона не запомнен предыдущей сценой');
+        await p.goto(AUCTION_URL);
         await h.need('.card:has-text("REVERSE")', 'hərrac paneli');
         await h.scrollTo('[data-testid=bid-price-0]');
         await h.needFill('[data-testid=bid-price-0]', STORY.auction[0], 'qiymət');
-        await h.needClick('[data-testid=bid-submit]', '«Təklif ver» düyməsi', 2000);
+        await h.needClick('[data-testid=bid-submit]', '«Təklif ver» düyməsi', 1200);
         await h.holdUntil(0.95);
       } },
     { as: 'sup2',
       az: 'İkinci iştirakçı qiyməti aşağı salır: yüz on iki. Son saniyədə atılan təklif saatı uzadır — başqalarına cavab şansı qalsın deyə, yoxsa hərracı sürət udardı, qiymət yox.',
       must: true,
       do: async (p, l, h) => {
-        // Раздел открывается на странице заявок покупателя, а поставщика туда не пускают:
-        // его прогон начинается с перенаправления, и куда именно — решает роутер, а не
-        // сценарий. Поэтому витрина открывается явно.
-        await p.goto(`${BASE}/supplier/market`);
-        await h.needClick(`${ROW2} a`, 'hərracın başlığı', 1500);
-        await p.waitForURL(/\/supplier\/events\/[0-9a-f-]{36}/, { timeout: 15000 });
+        // Карточка аукциона открывается НАПРЯМУЮ по адресу, запомненному в сцене, где
+        // покупатель её объявил. Через витрину (загрузка, клик по строке, ожидание
+        // адреса) на это уходило три-четыре секунды, и цена, которую голос называет в
+        // первой же фразе, появлялась на экране уже после неё.
+        if (!AUCTION_URL) throw new Error('адрес карточки аукциона не запомнен предыдущей сценой');
+        await p.goto(AUCTION_URL);
         await h.scrollTo('[data-testid=bid-price-0]');
         await h.needFill('[data-testid=bid-price-0]', STORY.auction[1], 'qiymət');
-        await h.needClick('[data-testid=bid-submit]', '«Təklif ver» düyməsi', 2000);
+        await h.needClick('[data-testid=bid-submit]', '«Təklif ver» düyməsi', 1200);
         await h.scrollTo('h1'); await h.holdUntil(0.95);
       } },
     { as: 'sup',
       az: 'Cavab verirəm: yüz doqquz. Hərracın bütün mahiyyəti budur — qiymət danışıqda deyil, rəqabətdə formalaşır, və hər addım jurnalda qalır.',
       must: true,
       do: async (p, l, h) => {
-        // Раздел открывается на странице заявок покупателя, а поставщика туда не пускают:
-        // его прогон начинается с перенаправления, и куда именно — решает роутер, а не
-        // сценарий. Поэтому витрина открывается явно.
-        await p.goto(`${BASE}/supplier/market`);
-        await h.needClick(`${ROW2} a`, 'hərracın başlığı', 1500);
-        await p.waitForURL(/\/supplier\/events\/[0-9a-f-]{36}/, { timeout: 15000 });
+        // Карточка аукциона открывается НАПРЯМУЮ по адресу, запомненному в сцене, где
+        // покупатель её объявил. Через витрину (загрузка, клик по строке, ожидание
+        // адреса) на это уходило три-четыре секунды, и цена, которую голос называет в
+        // первой же фразе, появлялась на экране уже после неё.
+        if (!AUCTION_URL) throw new Error('адрес карточки аукциона не запомнен предыдущей сценой');
+        await p.goto(AUCTION_URL);
         await h.scrollTo('[data-testid=bid-price-0]');
         await h.needFill('[data-testid=bid-price-0]', STORY.auction[2], 'qiymət');
         await h.needClick('[data-testid=bid-submit]', '«Təklif ver» düyməsi', 2200);
@@ -2174,7 +2224,9 @@ async function login(ctx, email, attempt = 1) {
             offsets.push(startMs);
             SCENE = `${key}/${lang} сцена ${parts.reduce((n, x) => n + x.offsets.length, 0) + offsets.length}`;
             await P(LEAD);                        // let the voice begin before the cursor moves
-            h.setSceneBudget(scene.sec * 1000);   // anchor holdUntil() to THIS narration
+            // Доли привязаны к началу ОЗВУЧКИ: LEAD уже проигран, и без этой поправки
+            // каждое действие сцены приходило на 650 мс позже своих слов.
+            h.setSceneBudget(scene.sec * 1000, LEAD);
             try { await scene.do?.(page, lang, h); }
             catch (e) {
               // `must` — это сцена, которая что-то СОЗДАЁТ. Её промах нельзя записать в
@@ -2300,6 +2352,31 @@ async function login(ctx, email, attempt = 1) {
     console.log(`\n⚠ промахов курсора: ${MISSES} — эти сцены играли по неподвижному экрану, смотрите ✗ выше`);
   } else {
     console.log('\nпромахов курсора: 0');
+  }
+  // Второй вид расхождения слова с кадром, и его не видит ни промах курсора, ни
+  // длительность: сцена показала то, о чём говорит, ПОСЛЕ того как сказала. Печатается
+  // худшее опоздание каждой сцены — по нему и правят доли (или переносят действие в
+  // предыдущую сцену, если его собственные клики съедают начало этой).
+  if (process.env.GUIDES_BEATS) {
+    writeFileSync(process.env.GUIDES_BEATS, JSON.stringify(BEATS, null, 1));
+    console.log(`доли сцен записаны: ${process.env.GUIDES_BEATS} (${BEATS.length} шт.)`);
+  }
+  // Последняя доля каждой сцены — терминальная: она стоит там как «держать до конца
+  // озвучки», и её опоздание уже названо строкой ⏱ «действия длиннее озвучки».
+  const lastOf = new Map();
+  for (const b of BEATS) lastOf.set(b.scene, b);
+  const LATE_BEATS = BEATS.filter((b) => b.lateMs > BEAT_SLACK_MS && lastOf.get(b.scene) !== b);
+  if (LATE_BEATS.length) {
+    const worst = new Map();
+    for (const b of LATE_BEATS) {
+      const cur = worst.get(b.scene);
+      if (!cur || b.lateMs > cur.lateMs) worst.set(b.scene, b);
+    }
+    const rows = [...worst.values()].sort((x, y) => y.lateMs - x.lateMs)
+      .map((b) => `${b.scene}: доля ${b.frac} опоздала на ${(b.lateMs / 1000).toFixed(1)}с`);
+    console.log(`\n⚠ показ отстаёт от слов в ${worst.size} сцен(ах):\n  ${rows.join('\n  ')}`);
+  } else {
+    console.log('показ не отстаёт от слов: все доли сцен успели');
   }
   // Loud, and last: every other line of the log is already printed, so the refusal is read
   // together with the run that produced it. The files are on disk — what is wrong is that
