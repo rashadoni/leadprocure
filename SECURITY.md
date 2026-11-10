@@ -37,7 +37,7 @@ integrity, authz, auction integrity, injection, auth, money, crypto, web, DoS.
 
 | Sev | Finding | Fix |
 |-----|---------|-----|
-| HIGH | No rate limiting → `/auth/login` brute-force + argon2 CPU-DoS | `@nestjs/throttler`: `/auth/login` 10/min, 300/min **per route handler** elsewhere. Verified: 11th rapid login → 429; 6th rapid `/auth/forgot-password` → 429 (`access-log.e2e-spec.ts`). **Not a global cap** — `@nestjs/throttler` keys its bucket per handler, so a client may make 300/min on each route. Measured 2026-11-10 on acceptance run `42857447484`: 1869 requests in 98 s, peak 1381/min, zero 429 — the busiest single route (`GET /auth/me`) peaked at 214 of its own 300. A true cap on total request volume is still [Deferred](#deferred-not-blocking-a-controlled-demo-do-before-production). |
+| HIGH | No rate limiting → `/auth/login` brute-force + argon2 CPU-DoS | `@nestjs/throttler`: `/auth/login` 10/min, 300/min **per route handler** elsewhere. Verified: 11th rapid login → 429; 6th rapid `/auth/forgot-password` → 429 (`access-log.e2e-spec.ts`). **Not a global cap** — `@nestjs/throttler` keys its bucket per route handler *plus client address*, so one client may make 300/min on each of ~160 handlers. Measured 2026-11-10 on acceptance run `42857447484`: 1869 requests in 98 s, peak 1381/min, zero 429 — the busiest single route (`GET /auth/me`) peaked at 214 of its own 300. A true cap on total request volume is still [Deferred](#deferred-not-blocking-a-controlled-demo-do-before-production). |
 | MED | CORS reflected any origin with credentials | `WEB_ORIGIN` allow-list; verified no `Access-Control-Allow-Origin` for unknown origins. |
 | MED | No security headers | `helmet()` (CSP, HSTS, nosniff, X-Frame-Options) — verified present. |
 | LOW | `documents/:id/download` read `@Query('id')` not `@Param` (broken, not a leak) | switched to `@Param`. |
@@ -58,5 +58,14 @@ integrity, authz, auction integrity, injection, auth, money, crypto, web, DoS.
   ≤200) returning a `{ items, total, page, pageSize }` envelope, with a shared `<Pager>` in
   the UI. Covered by `pagination.e2e-spec.ts`. The lower-cardinality lists (suppliers,
   invoices, catalogs, verification, logistics) remain capped at 200 — fine until those grow.
+- **No cap on total request volume per client.** `@nestjs/throttler` keys its bucket per
+  route handler plus client address, so the 300/min above is a per-handler budget: a client
+  may spend 300/min on each of ~160 handlers. Measured 2026-11-10 (acceptance run
+  `42857447484`): 1869 requests in 98 s, peak 1381/min, zero 429. The login handles are the
+  ones that matter for brute force and they are capped tightly (10/5/10), so this is a
+  volume/cost concern rather than an auth one — a reverse proxy limit or a `ThrottlerGuard`
+  subclass keyed on the address alone. `scripts/acceptance/api-log-summary.mjs` reports each
+  handler's peak against its own limit, and `throttle-limits.e2e-spec.ts` keeps its table
+  honest against the decorators.
 - **App DB user privileges**: confirm `app_user` has no DDL and cannot create the bid master
   key material; rotate the demo DB password off `app_pass`.
