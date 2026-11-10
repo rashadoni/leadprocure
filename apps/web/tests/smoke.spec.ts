@@ -38,11 +38,16 @@ async function login(page: Page, email: string): Promise<void> {
 // open a section, click a link before the bootstrap answers, come back a minute later — the
 // cookie the browser still holds is now older than the leeway (`JWT_REFRESH_REUSE_LEEWAY_MS`,
 // 15s by default in config.service.ts), so the product reads its own aborted request as
-// theft and runs `UPDATE sessions SET revoked = true, revoked_at = NULL WHERE user_id = $1`
-// (identity.service.ts) — every session that person has, on every device, hard-revoked.
-// Whether that is the right answer to a race the product itself lost is the owner's call,
-// not a test's: the options are not rotating twice inside the window, narrowing the response
-// to the one chain instead of the whole user, or widening the window (which only hides it).
+// theft and runs `UPDATE sessions SET revoked = true, revoked_at = NULL WHERE family_id = $1`
+// (identity.service.ts) — the whole chain that cookie belongs to, hard-revoked. Not every
+// session the person has: this said `WHERE user_id` until migration 0046 narrowed it, and
+// `auth.e2e-spec.ts` now asserts that the person's other device survives. Corrected on
+// 2026-11-10 — it had been describing behaviour the product no longer had, and offering
+// «narrow it to the one chain» as an open option when that was already done, which is the
+// one kind of error this file can least afford (second review of PR #182).
+// Whether a hard revoke is the right answer to a race the product itself lost is still the
+// owner's call, not a test's: what remains open is not rotating twice inside the window, or
+// widening it (which only hides it) — the blast radius is already one chain.
 // Measured here, not argued: the suite lost the supplier's session this way three times
 // today, and it is the lightest pages — the ones that answer fastest — that lose it.
 async function settle(page: Page): Promise<void> {
@@ -53,6 +58,11 @@ async function settle(page: Page): Promise<void> {
 // молча поедет дальше, потеряв до тридцати секунд. Так и задумано: `settle` — стабилизатор, а
 // не проверка, и падать он должен на том, что тест проверяет, а не на ожидании. Если набор
 // вдруг станет заметно дольше — искать надо здесь.
+//
+// Побочное, чтобы следующий читатель не обманулся: `expect('[role=status]').toHaveCount(0)`
+// сразу после `visit` стоит в семи местах и почти ничего уже не проверяет — тишина в сети
+// обычно снимает загрузчик сама. Почти, а не совсем: загрузчик может рисоваться и без
+// запросов, так что строки оставлены.
 
 // Единственный способ перейти на страницу в этом наборе. До 10 ноября 2026 `settle` стоял
 // ровно в двух помощниках, а остальные тридцать с лишним переходов шли голым `page.goto` —

@@ -150,7 +150,7 @@ jobs:
       - name: Start disposable API and web servers
         timeout-minutes: 2
         # `HTTP_ACCESS_LOG` ставится ЗДЕСЬ, а не на джобе: иначе строку на запрос получил бы
-        # и прогон 483 проверок api выше, и лог шага распух бы на тысячи строк ни за чем.
+        # и прогон всех проверок api выше (их 485), и лог шага распух бы на тысячи строк.
         # Нужен он ровно у того процесса, с которым разговаривает браузер. Без него
         # `/tmp/leadprocure-api.log` в артефакте — это разбор маршрутов на старте и письма,
         # и больше ничего: отказ 401 на `/auth/refresh`, отказ 429 от ограничителя частоты и
@@ -172,6 +172,10 @@ jobs:
       # шаг не роняет.
       - name: What the API was asked, and how often
         if: always()
+        # `continue-on-error` делает обещание «сводка не роняет шаг» СТРУКТУРНЫМ: без него это
+        # было свойством скрипта (чтение в try, дальше регулярки и арифметика), то есть
+        # обещанием автора. Свидетельство не имеет права решать судьбу гейта.
+        continue-on-error: true
         run: node scripts/acceptance/api-log-summary.mjs /tmp/leadprocure-api.log
       - name: Preserve acceptance evidence
         if: always()

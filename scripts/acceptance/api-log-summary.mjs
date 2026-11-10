@@ -19,7 +19,23 @@
 
 import { readFileSync } from 'node:fs';
 
-const LIMIT = Number(process.env.THROTTLE_LIMIT ?? 300); // предел одного маршрута, не общий
+// Предел у каждого маршрута свой, и он НЕ один на всех: три маршрута несут `@Throttle` и
+// стоят куда ниже умолчания. Сводка, сравнивающая их с 300, врёт ровно там, где важнее всего:
+// измерено на прогонах 42857447484 и 42862031424, `POST /auth/login` даёт пик 9 в минуту при
+// своём пределе 10 — 90 % ведра, — а против 300 это 3 %, и в пятёрку по абсолютному пику он
+// не попадал вовсе. То есть единственный маршрут, реально близкий к отказу, был не показан и
+// оценён как спокойный. Замечание из второго разбора PR #182.
+//
+// Таблица обязана совпадать с `@Throttle` в коде, и это не на совести читателя:
+// `throttle-limits.e2e-spec.ts` разбирает контроллеры и роняет проверку, если здесь чего-то
+// не хватает или стоит другое число.
+const DEFAULT_LIMIT = Number(process.env.THROTTLE_LIMIT ?? 300);
+const ROUTE_LIMITS = {
+  'POST /auth/login': 10,
+  'POST /auth/forgot-password': 5,
+  'POST /auth/reset-password': 10,
+};
+const limitOf = (handler) => ROUTE_LIMITS[handler] ?? DEFAULT_LIMIT;
 const file = process.argv[2];
 if (!file) { console.log('api-log-summary: не передан файл лога'); process.exit(0); }
 
@@ -39,7 +55,7 @@ const WHY = /\[Identity\]\s+(refresh отказан:.*)$/;
 const reqs = [];
 const refusals = [];
 let prev = -1, day = 0;
-for (const line of raw.split('\n')) {
+for (const line of raw.split('\n').map((l) => l.replace(/\r$/, ''))) {
   const w = WHY.exec(line);
   if (w) refusals.push(w[1].trim());
   const m = LINE.exec(line);
@@ -81,9 +97,15 @@ for (const r of reqs) {
   if (!byHandler.has(k)) byHandler.set(k, []);
   byHandler.get(k).push(r.t);
 }
+// Сортировка по ДОЛЕ своего ведра, а не по абсолютному пику: 9 входов из 10 важнее 214
+// обращений к `/auth/me` из 300, а по абсолютной величине вход не виден вовсе.
 const ranked = [...byHandler.entries()]
-  .map(([k, ts]) => ({ k, n: ts.length, ...peakOf(ts) }))
-  .sort((a, b) => b.peak - a.peak);
+  .map(([k, ts]) => {
+    const limit = limitOf(k);
+    const { peak, at } = peakOf(ts);
+    return { k, n: ts.length, peak, at, limit, share: peak / limit };
+  })
+  .sort((a, b) => b.share - a.share);
 
 const refused = reqs.filter((r) => r.status === 429);
 const bad = reqs.filter((r) => r.status >= 400 && r.status !== 429);
@@ -91,11 +113,18 @@ const bad = reqs.filter((r) => r.status >= 400 && r.status !== 429);
 console.log('── лог api браузерного шага ──────────────────────────────────────────');
 console.log(`запросов всего: ${reqs.length}, с ${clock(reqs[0].t)} по ${clock(reqs[reqs.length - 1].t)}`
   + ` (${peakOf(reqs.map((r) => r.t)).peak}/мин в пике — цифра справочная, общего предела нет)`);
-console.log(`предел ${LIMIT} запросов/мин у КАЖДОГО маршрута отдельно; самые нагруженные:`);
+console.log(`у каждого маршрута своё ведро (умолчание ${DEFAULT_LIMIT}/мин, у трёх ручек входа ниже);`
+  + ' ближе всех к своему пределу:');
 for (const h of ranked.slice(0, 5)) {
-  const pct = Math.round((h.peak / LIMIT) * 100);
-  const mark = h.peak >= LIMIT ? ' ←← СВОЙ ПРЕДЕЛ ИСЧЕРПАН' : pct >= 80 ? ` ← ${pct} % своего ведра` : '';
-  console.log(`  ${String(h.peak).padStart(4)}/мин  всего ${String(h.n).padStart(4)}  ${h.k}  (окно с ${clock(h.at)})${mark}`);
+  const pct = Math.round(h.share * 100);
+  const mark = h.peak >= h.limit ? ' ←← СВОЙ ПРЕДЕЛ ИСЧЕРПАН' : pct >= 80 ? ` ←← ${pct} % СВОЕГО ВЕДРА` : ` (${pct} %)`;
+  console.log(`  ${String(h.peak).padStart(4)}/мин из ${String(h.limit).padEnd(3)} всего ${String(h.n).padStart(4)}  ${h.k}`
+    + `  (окно с ${clock(h.at)})${mark}`);
+}
+// На проде ведро ключуется ещё и адресом клиента, а адреса в логе нарочно нет — значит доля
+// там считается как если бы все запросы пришли с одного адреса, то есть сверху.
+if (process.env.THROTTLE_SHARED_IP !== '0') {
+  console.log('  (доля считана как с одного адреса: ведро ключуется адресом, а его в логе нет)');
 }
 console.log(`отказов 429: ${refused.length}${refused.length ? ' ← ограничитель частоты сказал «нет»' : ''}`);
 for (const r of refused.slice(0, 20)) console.log(`  429 ${clock(r.t)} ${r.method} ${r.path}`);
