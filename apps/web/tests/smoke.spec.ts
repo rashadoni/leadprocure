@@ -567,6 +567,7 @@ test.describe('buyer panel', () => {
     await page.goto('/buyer/settings');
     const dep = page.locator(`td:text-is("${code}")`);
     let justCreated = false;
+    let pickedOwner = '';
     if (!(await dep.count())) {
       const depForm = page.locator('.card', { hasText: /Отделы|Departments|Şöbələr/ }).locator('form');
       await depForm.locator('input').first().fill(code);
@@ -579,18 +580,25 @@ test.describe('buyer panel', () => {
       const picker = depForm.getByTestId('dep-new-owner');
       await expect(picker.locator('option')).not.toHaveCount(1);
       await picker.selectOption({ index: 1 });
+      // Remember WHO was picked. Asserting only «came back with somebody» passes a form
+      // that ignores the choice and always sends the first active user — which is option 1,
+      // the very one picked here. The claim is that the chosen owner arrives, so the id has
+      // to be carried to the assertion.
+      pickedOwner = await picker.inputValue();
+      expect(pickedOwner, 'the owner picker holds no value after a selection').toBeTruthy();
       await depForm.locator('button.btn').click();
       justCreated = true;
     }
     await expect(dep).toBeVisible({ timeout: 10_000 });
-    // …and it came back owned. This is the round trip the form could not make before: the
-    // value is the owner's id as the API returned it, so an empty one would mean the field
-    // was collected on screen and dropped on the way. Asserted only for a department this
-    // run created — on a stand where PW-SMOKE was left behind by an older run it predates
-    // the field and is legitimately unowned.
+    // …and it came back owned BY THE PERSON PICKED. This is the round trip the form could
+    // not make before: the value is the owner's id as the API returned it, so an empty one
+    // would mean the field was collected on screen and dropped on the way, and a different
+    // one would mean the choice was replaced somewhere along it. Asserted only for a
+    // department this run created — on a stand where PW-SMOKE was left behind by an older
+    // run it predates the field and is legitimately unowned.
     if (justCreated) {
       const depRow = page.locator('tr').filter({ has: page.locator(`td:text-is("${code}")`) });
-      await expect(depRow.getByTestId('dep-owner').locator('select')).not.toHaveValue('');
+      await expect(depRow.getByTestId('dep-owner').locator('select')).toHaveValue(pickedOwner);
     }
 
     await page.goto('/buyer/requests');

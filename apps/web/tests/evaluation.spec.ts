@@ -176,6 +176,16 @@ test('current formal ranking and each lot survive re-evaluation and partial awar
   const step = page.getByTestId('auction-step');
   await expect(step).toContainText('10.00');
   await expect(step).toHaveAttribute('data-tip', /at least this much lower/i);
+  // And the hint is actually DRAWN. The attribute alone is green even if the `[data-tip]`
+  // rules leave styles.css — which is exactly the breakage the tile needs the hint for: a
+  // bare figure does not say in which direction it binds. The bubble is a ::after whose
+  // opacity goes 0 → 1 on hover (there is a .14s fade, hence the poll, and the attribute is
+  // read back off `content` so this fails if the two ever stop being the same text).
+  await step.hover();
+  await expect.poll(async () => step.evaluate((el) => {
+    const bubble = getComputedStyle(el, '::after');
+    return `${bubble.opacity}|${bubble.content.includes('at least this much lower')}`;
+  }), { timeout: 5_000 }).toBe('1|true');
   // the sealed caption's own words, copied from the dictionary — «Amounts are hidden»
   // would have been a check that passed because that sentence never existed
   await expect(page.getByText('Amounts sealed until opening', { exact: false })).toHaveCount(0);
