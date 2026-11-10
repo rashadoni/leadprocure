@@ -1,6 +1,7 @@
 import { returnedRows } from '../../common/procurement/invariants';
 import {
-  Body, ConflictException, Controller, Delete, Get, Injectable, Module, NotFoundException, Param, Post, Put,
+  BadRequestException, Body, ConflictException, Controller, Delete, Get, Injectable, Module,
+  NotFoundException, Param, Post, Put,
 } from '@nestjs/common';
 import { IsBoolean, IsOptional, IsString, IsUUID, Matches } from 'class-validator';
 import type { AccessTokenPayload } from '@leadprocure/shared';
@@ -36,24 +37,82 @@ export class DepartmentsService {
     return this.rc.manager.query(
       `SELECT d.id, d.code, d.name, d.parent_id, d.owner_user_id, d.is_active, d.created_at,
               (SELECT p.code FROM departments p WHERE p.id = d.parent_id) AS parent_code,
-              (SELECT u.full_name FROM organization_users u WHERE u.id = d.owner_user_id) AS owner_name,
-              -- The owner's own state travels with the name. A budget warning addressed to a
-              -- deactivated person is never MAILED: NotifyEmailer.fanOut filters
-              -- u.status='ACTIVE', and with a userId that filter empties the recipient list
-              -- instead of falling back to the organisation, so nothing is sent at all. (The
-              -- in-app row is still written and still read: notifications_rls filters by
-              -- recipient_org_id alone, so the whole organisation sees it. Mail is the
-              -- channel that goes quiet.) Without this column the screen shows a filled-in
-              -- owner and cannot say that the mail is going nowhere.
-              (SELECT u.status FROM organization_users u WHERE u.id = d.owner_user_id) AS owner_status,
+              -- Only if that person is actually in THIS organisation. organization_users is
+              -- global and carries no RLS at all, so an owner id pointing outside the buyer
+              -- org — a row written before the check below existed, or straight in SQL —
+              -- used to answer with a stranger's name and state. The membership condition is
+              -- the read side of the same promise: deactivation keeps the membership, so a
+              -- switched-off owner still reads normally; only somebody who is not here at
+              -- all goes unnamed.
+              (SELECT u.full_name FROM organization_users u
+                WHERE u.id = d.owner_user_id
+                  AND EXISTS (SELECT 1 FROM memberships m
+                                WHERE m.user_id = u.id AND m.org_id = d.buyer_org_id)) AS owner_name,
+              -- The owner's own state travels with the name, because a filled-in owner alone
+              -- cannot say whether the budget warning addressed to them still reaches the
+              -- person answerable for it.
+              --
+              -- What it used to mean, and no longer does: mail was the channel that went
+              -- quiet. NotifyEmailer.fanOut filters u.status='ACTIVE' and ANDs that with the
+              -- addressed user, so a deactivated owner emptied the recipient list and
+              -- an empty recipient list sent nothing at all. The in-app row was never
+              -- the problem — notifications_rls filters by recipient_org_id alone and
+              -- GET /notifications has no recipient clause, so the whole organisation could
+              -- always see it.
+              --
+              -- Now neither channel goes silent: NotifyService widens an unreachable
+              -- recipient back to the organisation, records the widening in the audit trail
+              -- and writes recipient_user_id NULL. But «the one person answerable for this
+              -- budget» and «everybody» are still different things — a warning forty people
+              -- receive is one nobody acts on — and this screen is where that difference is
+              -- noticed in time to name somebody new.
+              (SELECT u.status FROM organization_users u
+                WHERE u.id = d.owner_user_id
+                  AND EXISTS (SELECT 1 FROM memberships m
+                                WHERE m.user_id = u.id AND m.org_id = d.buyer_org_id)) AS owner_status,
               (SELECT count(*)::int FROM procurement_requests pr WHERE pr.department_id = d.id) AS usage_count
        FROM departments d
        ORDER BY d.code`,
     );
   }
 
+  // The owner is who a budget warning is ADDRESSED to — `departments.owner_user_id` reaches
+  // `notify.notifyUser` in modules/budgets — so the column has to hold somebody who can act
+  // on it: a member of THIS organisation, not switched off. Nothing checked it. The picker
+  // on screen stopped offering anybody else, but a picker is not a check: the id arrives in
+  // the request body, and `PUT` took any well-formed uuid, including a stranger's.
+  //
+  // `current` is admitted whatever their state, deliberately. People are deactivated long
+  // after they were named; the row then legitimately goes on pointing at them (the screen
+  // marks it «deaktiv», and NotifyService widens the warning to the organisation and records
+  // that it did). `PUT /departments/:id` replaces the WHOLE row, so every unrelated edit
+  // resends the owner as it stands — refusing it would make renaming or retiring such a
+  // department impossible until somebody also picked a new owner, which is how a rule gets
+  // worked around instead of obeyed. Clearing the owner stays free.
+  private async assertOwnerCanBeNamed(
+    ownerUserId: string | null,
+    current: string | null,
+    orgId: string,
+  ): Promise<void> {
+    if (!ownerUserId || ownerUserId === current) return;
+    const rows = await this.rc.manager.query(
+      `SELECT u.status, u.full_name FROM memberships m JOIN organization_users u ON u.id = m.user_id
+        WHERE m.org_id = $1 AND m.user_id = $2`,
+      [orgId, ownerUserId],
+    );
+    // Nothing about the stranger is echoed back: outside this organisation, their very
+    // existence is not this caller's business.
+    if (!rows.length) throw new BadRequestException('The owner must be a member of your organization');
+    if (rows[0].status !== 'ACTIVE') {
+      throw new BadRequestException(
+        `${rows[0].full_name} is deactivated and cannot be made owner of a department — a budget warning addressed to them would reach the whole organization instead`,
+      );
+    }
+  }
+
   async create(dto: UpsertDepartmentDto, auth: AccessTokenPayload) {
     const code = dto.code.trim();
+    await this.assertOwnerCanBeNamed(dto.ownerUserId ?? null, null, auth.org_id);
     let id: string;
     try {
       id = (
@@ -71,12 +130,19 @@ export class DepartmentsService {
     return this.getOne(id);
   }
 
-  async update(id: string, dto: UpsertDepartmentDto) {
+  async update(id: string, dto: UpsertDepartmentDto, auth: AccessTokenPayload) {
     const code = dto.code.trim();
     // A department cannot be its own parent — the tree walk in reporting would never end.
     if (dto.parentId && dto.parentId === id) {
       throw new ConflictException('A department cannot be its own parent');
     }
+    // The owner it already has decides whether the submitted one is a change at all. RLS
+    // scopes this read, so another organisation's department is simply not found.
+    const existing = (
+      await this.rc.manager.query(`SELECT owner_user_id FROM departments WHERE id = $1`, [id])
+    )[0] as { owner_user_id: string | null } | undefined;
+    if (!existing) throw new NotFoundException('Department not found');
+    await this.assertOwnerCanBeNamed(dto.ownerUserId ?? null, existing.owner_user_id, auth.org_id);
     let res: Array<{ id: string }>;
     try {
       res = returnedRows(await this.rc.manager.query(
@@ -147,8 +213,12 @@ export class DepartmentsController {
 
   @Put(':id')
   @Roles('BUYER_ADMIN')
-  update(@Param('id') id: string, @Body() dto: UpsertDepartmentDto) {
-    return this.departments.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpsertDepartmentDto,
+    @CurrentUser() auth: AccessTokenPayload,
+  ) {
+    return this.departments.update(id, dto, auth);
   }
 
   @Delete(':id')

@@ -266,6 +266,10 @@ export const AUDIT_ACTIONS = [
   'BUDGET_REOPENED',
   'BUDGET_PHASING_SET',
   'BUDGET_PHASING_CLEARED',
+  // An addressed notification that had to be widened to the whole organisation because the
+  // person it names cannot receive it. Recorded so that "everybody was told" and "nobody
+  // was told" are not the same silence afterwards — see NotifyService.reachableRecipient.
+  'NOTIFICATION_WIDENED_TO_ORG',
 ] as const;
 
 // ---------------- Invoices (P2P) ----------------

@@ -90,15 +90,23 @@ export default function Settings() {
 
   // Who may be made the owner of a department, and what the row says about the one it has.
   // The budget warning is addressed to this person (`departments.owner_user_id` →
-  // notify.notifyUser), and `NotifyEmailer.fanOut` mails only ACTIVE users — with a userId
-  // that filter does not fall back to the organisation, it empties the recipient list, and
-  // `if (!users.length) return` sends nothing at all. So naming a deactivated person does
-  // not widen the mail, it stops it, while the column goes on looking filled in.
+  // notify.notifyUser), and nobody else is told while that address holds.
   //
-  // Precisely: the MAIL stops. The in-app row is still written and is read org-wide —
-  // `notifications_rls` filters by `recipient_org_id` alone and `GET /notifications` has no
-  // recipient clause, so nothing in the product reads `recipient_user_id` today. Saying
-  // «nobody is told» here would send the next reader to fix a channel that is not broken.
+  // Neither channel goes silent any more, and this paragraph used to say otherwise. The mail
+  // DID stop: `NotifyEmailer.fanOut` mails only ACTIVE users and ANDs that with the
+  // addressed one, so a deactivated owner emptied the recipient list and
+  // `if (!users.length) return` sent nothing at all. `NotifyService` now widens a recipient
+  // who cannot receive back to the whole organisation — the same fallback as «nobody is
+  // named» — and records the widening in the audit trail (`NOTIFICATION_WIDENED_TO_ORG`).
+  // The in-app row was never the broken part: `notifications_rls` filters by
+  // `recipient_org_id` alone and `GET /notifications` has no recipient clause, so the whole
+  // organisation could always see it; on a widening it is now written with
+  // `recipient_user_id` NULL, so it stops naming somebody who will not read it.
+  //
+  // So this picker is no longer the difference between «told» and «not told». It is the
+  // difference between «the one person answerable for this budget» and «everybody» — and a
+  // warning forty people receive is one nobody acts on, which is the whole reason the
+  // address exists. That is what the mark on a switched-off owner is for.
   //
   // `/settings/users` answers with every membership regardless of status, because the users
   // table above is where a person is read and their role changed; it is only this picker
