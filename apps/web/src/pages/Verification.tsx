@@ -99,17 +99,17 @@ export default function Verification() {
           ))}
           {!isBuyer && (
             <div className="row" style={{ marginTop: 10, maxWidth: 460 }}>
-              <select value={docType} onChange={(e) => setDocType(e.target.value)}>
+              <select data-testid="verif-doctype" value={docType} onChange={(e) => setDocType(e.target.value)}>
                 {/* the enum was the label: VOEN, LICENSE, BANK… in all three languages */}
                 {VERIFICATION_DOC_TYPES.map((dt) => <option key={dt} value={dt}>{t(`vd_${dt}`)}</option>)}
               </select>
-              <input ref={fileRef} type="file" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(c.id, f); }} />
+              <input ref={fileRef} data-testid="verif-file" type="file" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(c.id, f); }} />
             </div>
           )}
           {isBuyer && !['APPROVED', 'REJECTED'].includes(c.status) && (
             <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
-              <button className="btn small" data-tip={t('tip_verify_approve')} onClick={() => decide(c.id, 'APPROVED')}>{t('approve')}</button>
-              <button className="btn small ghost" data-tip={t('tip_verify_reject')} onClick={() => decide(c.id, 'REJECTED')}>{t('reject')}</button>
+              <button className="btn small" data-testid="verif-approve" data-tip={t('tip_verify_approve')} onClick={() => decide(c.id, 'APPROVED')}>{t('approve')}</button>
+              <button className="btn small ghost" data-testid="verif-reject" data-tip={t('tip_verify_reject')} onClick={() => decide(c.id, 'REJECTED')}>{t('reject')}</button>
             </div>
           )}
         </div>

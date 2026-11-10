@@ -135,7 +135,7 @@ export default function Invoices() {
           <tbody>
             {rows.map((i) => (
               <tr key={i.id}>
-                <td><a href="#" onClick={(e) => { e.preventDefault(); expand(i.id); }}>{i.invoice_no}</a></td>
+                <td><a href="#" data-testid="inv-no" onClick={(e) => { e.preventDefault(); expand(i.id); }}>{i.invoice_no}</a></td>
                 <td className="nowrap"><Link to={orderHref(isBuyer, i.po_id)}>{i.po_no}</Link></td>
                 <td>{isBuyer ? i.supplier_name : i.buyer_name}</td>
                 {/* Тот же день, что уйдёт в УБЛ/e-qaimə и в реестр для 1С: он зафиксирован
@@ -157,14 +157,14 @@ export default function Invoices() {
                   <Actions>
                     {canDecide && ['MATCHED', 'DISPUTED', 'SUBMITTED'].includes(i.status) && (
                       <>
-                        <button className="btn small"
+                        <button className="btn small" data-testid="inv-approve"
                           data-tip={i.status === 'DISPUTED' ? t('tip_inv_approve_disputed') : t('tip_inv_approve')}
                           onClick={() => approveInvoice(i)}>{t('approve')}</button>
-                        <button className="btn small ghost" data-tip={t('tip_inv_reject')} onClick={() => act(i.id, () => api.post(`/invoices/${i.id}/reject`))}>{t('reject')}</button>
+                        <button className="btn small ghost" data-testid="inv-reject" data-tip={t('tip_inv_reject')} onClick={() => act(i.id, () => api.post(`/invoices/${i.id}/reject`))}>{t('reject')}</button>
                       </>
                     )}
                     {canDecide && i.status === 'APPROVED' && (
-                      <button className="btn small" data-tip={t('tip_pay')} onClick={() => act(i.id, () => api.post(`/invoices/${i.id}/pay`))}>💳 {t('pay')}</button>
+                      <button className="btn small" data-testid="inv-pay" data-tip={t('tip_pay')} onClick={() => act(i.id, () => api.post(`/invoices/${i.id}/pay`))}>💳 {t('pay')}</button>
                     )}
                   </Actions>
                 </td>

@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { COURSE_LESSONS } from '../src/guides';
 
 /**
  * Browser smoke of the whole SPA: every section of both panels renders without an
@@ -246,26 +247,35 @@ test.describe('buyer panel', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/learn');
     const rows = page.getByTestId('learn-row');
-    await expect(rows).toHaveCount(20);
+    // Counted FROM THE COURSE, never written out. The numbers and the first lesson stood
+    // here as literals («20», «buyer-settings»), and re-cutting the course into a story
+    // track reddened this test for naming yesterday's order — which is not what it exists
+    // to catch. `learn-course.spec.ts` already reads the same source; this does too, so
+    // the next reordering of the chapters leaves it alone.
+    const first = COURSE_LESSONS[0];
+    await expect(rows).toHaveCount(COURSE_LESSONS.length);
     // A fresh context has watched nothing, so the count is the whole course and the first
     // lesson is the one offered to carry on with.
-    await expect(page.getByTestId('learn-count')).toContainText('0 / 20');
+    await expect(page.getByTestId('learn-count')).toContainText(`0 / ${COURSE_LESSONS.length}`);
     await expect(rows.first()).toHaveClass(/is-next/);
 
     await rows.first().getByTestId('learn-play').click();
     const video = page.getByTestId('learn-video');
-    await expect(video).toHaveAttribute('src', '/guides/buyer-settings.az.webm');
-    const poster = await page.request.get('/guides/buyer-settings.az.png');
+    await expect(video).toHaveAttribute('src', `/guides/${first.key}.az.webm`);
+    const poster = await page.request.get(`/guides/${first.key}.az.png`);
     expect(poster.status(), 'the lesson poster is not served').toBe(200);
     expect((await poster.body()).length,
       'the poster is a 132-byte LFS pointer, not a picture — git lfs pull').toBeGreaterThan(1000);
-    expect((await page.request.get('/guides/buyer-settings.az.webm')).status(),
+    expect((await page.request.get(`/guides/${first.key}.az.webm`)).status(),
       'the lesson recording is not served at all').toBe(200);
 
-    // The way back into the product. The lesson is about Settings, the viewer is a buyer
-    // admin, so the door is drawn and the route behind it opens.
+    // The way back into the product. The viewer is a buyer admin, and every lesson's
+    // `roles` is the same array the router guards its `to` with (asserted in
+    // learn-course.spec.ts), so the door is drawn and the route behind it opens.
     await page.getByTestId('learn-goto').click();
-    await expect(page).toHaveURL(/\/buyer\/settings$/);
+    // Путь уходит в регулярку, поэтому экранируется: сегодня в нём только буквы и косые,
+    // но «/buyer/events/:id» или точка в сегменте сделали бы проверку шире, чем она читается.
+    await expect(page).toHaveURL(new RegExp(`${first.to!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
     await expect(page.getByTestId('learn-video')).toHaveCount(0);
   });
 

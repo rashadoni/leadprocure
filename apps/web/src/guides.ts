@@ -114,52 +114,71 @@ export interface Lesson {
   sec: number;
 }
 
-export interface Track { id: 'BUYER' | 'SUPPLIER'; titleKey: string; lessons: Lesson[] }
+export interface Track { id: 'STORY' | 'BUYER' | 'SUPPLIER'; titleKey: string; lessons: Lesson[] }
 
 export const COURSE: Track[] = [
+  // ПЕРВЫЙ трек — сквозная история: одна закупка от заявки до оплаты, тринадцать глав на
+  // ОДНИХ данных. Каждая запись продолжает предыдущую: заявка, которую завёл сотрудник,
+  // становится тендером, тендер — двумя запечатанными ставками, ставки — присуждением,
+  // договором, заказом, отгрузкой, приёмкой, счётом и платежом. Поэтому порядок здесь не
+  // «как удобнее объяснять», а «как это произошло», и обе стороны идут вперемешку: после
+  // приглашения смотрят глазами поставщика, после ставок — снова глазами закупщика.
+  //
+  // Оба трека видны всем (см. Learn.tsx), и это ровно то, что история требует: закупщику
+  // полезно знать, что видит поставщик, а поставщику — откуда у закупщика берётся тендер.
+  {
+    id: 'STORY',
+    titleKey: 'learn_track_story',
+    lessons: [
+      { key: 'buyer-requests', titleKey: 'learn_b_requests', to: '/buyer/requests', roles: FINANCE_READ, sec: 107 },
+      { key: 'buyer-events', titleKey: 'learn_b_events', to: '/buyer/events', roles: BUYER, sec: 88 },
+      { key: 'sup-market', titleKey: 'learn_s_market', to: '/supplier/market', roles: SUPPLIER, sec: 55 },
+      { key: 'sup-bid', titleKey: 'learn_s_bid', to: '/supplier/market', roles: SUPPLIER, sec: 56 },
+      // Вскрытие живёт на /buyer/events/:id — своего маршрута у него нет, как и у
+      // `sup-auction`, поэтому карта маршрутов ведёт туда `buyer-events`, а эта глава
+      // достаётся зрителю по имени, отсюда. Переход — к списку тендеров: адреса
+      // конкретного вскрытия без id события не существует.
+      { key: 'buyer-opening', titleKey: 'learn_b_opening', to: '/buyer/events', roles: BUYER, sec: 105 },
+      { key: 'buyer-contracts', titleKey: 'learn_b_contracts', to: '/buyer/contracts', roles: BUYER, sec: 64 },
+      { key: 'sup-orders', titleKey: 'learn_s_orders', to: '/supplier/orders', roles: SUPPLIER, sec: 57 },
+      { key: 'buyer-logistics', titleKey: 'learn_b_logistics', to: '/buyer/logistics', roles: BUYER, sec: 52 },
+      { key: 'sup-invoices', titleKey: 'learn_s_invoices', to: '/supplier/invoices', roles: SUPPLIER, sec: 44 },
+      { key: 'buyer-invoices', titleKey: 'learn_b_invoices', to: '/buyer/invoices', roles: BUYER, sec: 57 },
+      { key: 'buyer-budgets', titleKey: 'learn_b_budgets', to: '/buyer/budgets', roles: FINANCE_READ, sec: 96 },
+      { key: 'buyer-analytics', titleKey: 'learn_b_analytics', to: '/buyer/analytics', roles: FINANCE_READ, sec: 85 },
+      // Последней — и это та же причина, по которой она была последней раньше: панель
+      // показывает, что требует внимания, а «требует внимания» ничего не значит, пока не
+      // знаешь, что это за вещи. В истории она закрывает круг: тот же новый сотрудник
+      // открывает её и видит, чем кончилась его заявка.
+      { key: 'buyer-dashboard', titleKey: 'learn_b_dashboard', to: '/buyer/dashboard', roles: FINANCE_READ, sec: 82 },
+    ],
+  },
+  // Разделы «про устройство»: они не на пути одной закупки, но на её данных. Реестр
+  // поставщиков открывают, когда в нём уже кто-то есть; каталог делают из договора,
+  // который история подписала; параметры объясняют, почему всё предыдущее произошло
+  // именно так, — поэтому они идут ПОСЛЕ истории, а не перед ней.
   {
     id: 'BUYER',
     titleKey: 'learn_track_buyer',
     lessons: [
-      { key: 'buyer-settings', titleKey: 'learn_b_settings', to: '/buyer/settings', roles: FINANCE_READ, sec: 238 },
-      { key: 'buyer-suppliers', titleKey: 'learn_b_suppliers', to: '/buyer/suppliers', roles: BUYER, sec: 148 },
-      { key: 'buyer-verification', titleKey: 'learn_b_verification', to: '/buyer/verification', roles: BUYER, sec: 113 },
-      { key: 'buyer-budgets', titleKey: 'learn_b_budgets', to: '/buyer/budgets', roles: FINANCE_READ, sec: 347 },
-      { key: 'buyer-requests', titleKey: 'learn_b_requests', to: '/buyer/requests', roles: FINANCE_READ, sec: 298 },
-      { key: 'buyer-events', titleKey: 'learn_b_events', to: '/buyer/events', roles: BUYER, sec: 328 },
-      { key: 'buyer-contracts', titleKey: 'learn_b_contracts', to: '/buyer/contracts', roles: BUYER, sec: 198 },
-      { key: 'buyer-logistics', titleKey: 'learn_b_logistics', to: '/buyer/logistics', roles: BUYER, sec: 111 },
-      { key: 'buyer-invoices', titleKey: 'learn_b_invoices', to: '/buyer/invoices', roles: BUYER, sec: 204 },
-      { key: 'buyer-catalogs', titleKey: 'learn_b_catalogs', to: '/buyer/catalogs', roles: BUYER, sec: 145 },
-      { key: 'buyer-analytics', titleKey: 'learn_b_analytics', to: '/buyer/analytics', roles: FINANCE_READ, sec: 253 },
-      // Last on purpose, though it is the first page in the rail: a dashboard is a list of
-      // what needs attention, and «needs attention» means nothing until you know what the
-      // things are. Shown first it reads as noise; shown last it reads as a summary.
-      { key: 'buyer-dashboard', titleKey: 'learn_b_dashboard', to: '/buyer/dashboard', roles: FINANCE_READ, sec: 182 },
+      { key: 'buyer-suppliers', titleKey: 'learn_b_suppliers', to: '/buyer/suppliers', roles: BUYER, sec: 87 },
+      { key: 'buyer-verification', titleKey: 'learn_b_verification', to: '/buyer/verification', roles: BUYER, sec: 59 },
+      { key: 'buyer-catalogs', titleKey: 'learn_b_catalogs', to: '/buyer/catalogs', roles: BUYER, sec: 69 },
+      { key: 'buyer-settings', titleKey: 'learn_b_settings', to: '/buyer/settings', roles: FINANCE_READ, sec: 116 },
     ],
   },
   {
     id: 'SUPPLIER',
     titleKey: 'learn_track_supplier',
     lessons: [
-      { key: 'sup-verification', titleKey: 'learn_s_verification', to: '/supplier/verification', roles: SUPPLIER, sec: 88 },
-      { key: 'sup-market', titleKey: 'learn_s_market', to: '/supplier/market', roles: SUPPLIER, sec: 190 },
-      // The one recording the product could not show until now. A reverse auction has no
-      // route of its own — it lives on /supplier/events/:id, the same path as a sealed
-      // tender — so the per-section bar on that page always played `sup-market` and this
-      // file sat unreachable (see the note at the top). Played by name from a list, it
-      // finally runs. The jump goes to the open tenders, which is where an auction is
-      // found; there is no auction URL to send anyone to without an event id.
-      { key: 'sup-auction', titleKey: 'learn_s_auction', to: '/supplier/market', roles: SUPPLIER, sec: 104 },
-      // Winning is where the supplier's money starts, so the contract comes before the
-      // deliveries it pays for — the same place `buyer-contracts` sits in the track above.
-      { key: 'sup-contracts', titleKey: 'learn_s_contracts', to: '/supplier/contracts', roles: SUPPLIER, sec: 224 },
-      { key: 'sup-orders', titleKey: 'learn_s_orders', to: '/supplier/orders', roles: SUPPLIER, sec: 171 },
-      { key: 'sup-invoices', titleKey: 'learn_s_invoices', to: '/supplier/invoices', roles: SUPPLIER, sec: 126 },
-      // And last before the panel, for the reason the buyer's catalogue lesson is late too:
-      // it is the route AROUND the tender, and it only makes sense once the tender does.
-      { key: 'sup-catalogs', titleKey: 'learn_s_catalogs', to: '/supplier/catalogs', roles: SUPPLIER, sec: 140 },
-      { key: 'sup-dashboard', titleKey: 'learn_s_dashboard', to: '/supplier/dashboard', roles: SUPPLIER, sec: 119 },
+      { key: 'sup-verification', titleKey: 'learn_s_verification', to: '/supplier/verification', roles: SUPPLIER, sec: 51 },
+      { key: 'sup-catalogs', titleKey: 'learn_s_catalogs', to: '/supplier/catalogs', roles: SUPPLIER, sec: 36 },
+      { key: 'sup-contracts', titleKey: 'learn_s_contracts', to: '/supplier/contracts', roles: SUPPLIER, sec: 45 },
+      { key: 'sup-dashboard', titleKey: 'learn_s_dashboard', to: '/supplier/dashboard', roles: SUPPLIER, sec: 55 },
+      // Живые торги — вторая, короткая история: своя заявка, своё утверждение, своя
+      // процедура. Она стоит последней, потому что аукцион понятен только тому, кто уже
+      // видел обычный тендер и знает, чем они отличаются.
+      { key: 'sup-auction', titleKey: 'learn_s_auction', to: '/supplier/market', roles: SUPPLIER, sec: 120 },
     ],
   },
 ];

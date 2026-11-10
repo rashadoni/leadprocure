@@ -423,22 +423,22 @@ export default function Requests() {
                       end. Rejecting is not destructive — it is one half of a binary decision —
                       so it stays beside Approve where an approver expects it. */}
                   <Actions>
-                    {r.status === 'DRAFT' && !isFinance && <button className="btn small" data-tip={t('tip_submit')} onClick={() => act(r.id, 'submit')}>{t('submit')}</button>}
+                    {r.status === 'DRAFT' && !isFinance && <button className="btn small" data-testid="req-submit" data-tip={t('tip_submit')} onClick={() => act(r.id, 'submit')}>{t('submit')}</button>}
                     {r.status === 'SUBMITTED' && (canApprove || (isFinance && r.current_role === 'BUYER_FINANCE')) && (
                       <>
-                        <button className="btn small" aria-label={preview[r.id] ? t('confirm_approve') : t('approve')} data-tip={t('tip_approve')} onClick={() => approveGuard(r.id)}>
+                        <button className="btn small" data-testid="req-approve" aria-label={preview[r.id] ? t('confirm_approve') : t('approve')} data-tip={t('tip_approve')} onClick={() => approveGuard(r.id)}>
                           {preview[r.id] ? `✔ ${t('confirm_approve')}` : t('approve')}
                         </button>
-                        <button className="btn small ghost" data-tip={t('tip_reject')} onClick={() => act(r.id, 'reject')}>{t('reject')}</button>
+                        <button className="btn small ghost" data-testid="req-reject" data-tip={t('tip_reject')} onClick={() => act(r.id, 'reject')}>{t('reject')}</button>
                       </>
                     )}
                     {/* One decision, one control: the procedure is picked inside the dialog
                         this button opens, where each one is explained. */}
                     {r.status === 'APPROVED' && r.method_resolved !== 'DIRECT' && canApprove && (
-                      <button className="btn small" data-tip={t('tip_announce')} onClick={() => announce(r)}>{t('announce')}</button>
+                      <button className="btn small" data-testid="req-announce" data-tip={t('tip_announce')} onClick={() => announce(r)}>{t('announce')}</button>
                     )}
                     {r.status === 'APPROVED' && r.method_resolved === 'DIRECT' && canApprove && (
-                      <button className="btn small" data-tip={t('tip_direct')} onClick={() => placeDirect(r)}>📦 {t('direct_order')}</button>
+                      <button className="btn small" data-testid="req-direct" data-tip={t('tip_direct')} onClick={() => placeDirect(r)}>📦 {t('direct_order')}</button>
                     )}
                     {/* Cancelling an approved request is the one destructive thing here and
                         the one nobody does by default: it belongs behind the named button,

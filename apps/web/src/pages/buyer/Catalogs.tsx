@@ -85,7 +85,7 @@ export default function Catalogs() {
                 <td>
                   <Actions>
                     {canActivate && c.status === 'DRAFT' && (
-                      <button className="btn small" data-tip={t('tip_catalog_activate')}
+                      <button className="btn small" data-testid="catalog-activate" data-tip={t('tip_catalog_activate')}
                         onClick={() => run(() => api.post(`/catalogs/${c.id}/activate`))}>{t('activate')}</button>
                     )}
                   </Actions>
@@ -113,7 +113,7 @@ export default function Catalogs() {
                   <td className="num">{Number(i.moq)}</td>
                   <td className="num">{fmtMoney(i.unit_price_minor, cat.currency)}</td>
                   {canOrder && cat.status === 'ACTIVE' && (
-                    <td><input style={{ width: 80 }} type="number" min={0} value={qty[i.id] ?? ''} onChange={(e) => setQty({ ...qty, [i.id]: e.target.value })} /></td>
+                    <td><input style={{ width: 80 }} data-testid={`catalog-qty-${i.id}`} type="number" min={0} value={qty[i.id] ?? ''} onChange={(e) => setQty({ ...qty, [i.id]: e.target.value })} /></td>
                   )}
                 </tr>
               ))}
@@ -123,14 +123,14 @@ export default function Catalogs() {
             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginTop: 10 }}>
               <div>
                 <label>{t('department')}</label>
-                <select value={orderDep} onChange={(e) => setOrderDep(e.target.value)} style={{ maxWidth: 220 }}>
+                <select data-testid="catalog-dep" value={orderDep} onChange={(e) => setOrderDep(e.target.value)} style={{ maxWidth: 220 }}>
                   <option value="">{t('dep_default')}</option>
                   {deps.filter((d) => d.is_active).map((d) => (
                     <option key={d.id} value={d.id}>{d.code}</option>
                   ))}
                 </select>
               </div>
-              <button className="btn" data-tip={t('tip_quick_order')} onClick={() => order(cat.id, cat.items)}>📦 {t('quick_order')}</button>
+              <button className="btn" data-testid="catalog-order" data-tip={t('tip_quick_order')} onClick={() => order(cat.id, cat.items)}>📦 {t('quick_order')}</button>
             </div>
           )}
         </div>

@@ -96,7 +96,10 @@ export default function Learn() {
         {COURSE.map((track) => {
           const trackMin = minutes(track.lessons.reduce((s, l) => s + l.sec, 0));
           return (
-            <div className="card learn-track" key={track.id}>
+            /* Сквозная история — одна колонка во всю ширину, а не половина рядом с
+               четырьмя уроками: в ней тринадцать глав, и это ПУТЬ, который читают сверху
+               вниз. Два трека «про устройство» встают под ней рядом. */
+            <div className={`card learn-track${track.id === 'STORY' ? ' learn-track-wide' : ''}`} key={track.id}>
               <h3 className="learn-track-title">{t(track.titleKey)}</h3>
               <div className="muted learn-track-sub">
                 {t('learn_count')}: {track.lessons.length} · {trackMin} {t('learn_min')}

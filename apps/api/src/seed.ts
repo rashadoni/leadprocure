@@ -48,9 +48,15 @@ async function main(): Promise<void> {
   const admin = await user('admin@acme.test', 'Acme Admin');
   const approver = await user('approver@acme.test', 'Acme Approver');
   const buyerUser = await user('user@acme.test', 'Acme User');
+  // Финансист. Роль `BUYER_FINANCE` существует в продукте и именно она открывает бюджеты
+  // (25 ручек в `budgets.module.ts`) и сверку счетов — а в демо-наполнении её не было, то
+  // есть ни один стенд ни разу не показывал того, что видит финансист. Для записи подсказок
+  // это дыра: роль нельзя снять, не имея под неё учётной записи.
+  const finance = await user('finance@acme.test', 'Acme Finance');
   await member(admin, acme, 'BUYER_ADMIN');
   await member(approver, acme, 'BUYER_APPROVER');
   await member(buyerUser, acme, 'BUYER_USER');
+  await member(finance, acme, 'BUYER_FINANCE');
   await as(acme, 'BUYER_ADMIN');
   await db.query(`INSERT INTO buyer_profiles(org_id, default_currency) VALUES ($1,'AZN')`, [acme]);
   // 0–50k AZN direct, above → sealed RFQ (etender.gov.az reference threshold)
@@ -117,10 +123,16 @@ async function main(): Promise<void> {
   ) => {
     const id = (
       await db.query(
+        // В СИЛЕ, а не черновик. Колонка `status` по умолчанию DRAFT, а деньги держат
+        // только APPROVED и CLOSED (packages/shared), поэтому засеянные планы ничего не
+        // ловили: `/budgets/rollup` на свежем стенде отвечал пустым списком, и главный
+        // экран финансиста открывался пустым — ровно то, против чего эти строки здесь и
+        // написаны. Утверждающий и время утверждения проставлены, иначе план «в силе» без
+        // следа о том, кто его ввёл.
         `INSERT INTO budgets(buyer_org_id, name, category, department_id, period_type,
-           period_start, period_end, amount_minor, currency)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'AZN') RETURNING id`,
-        [acme, name, category, departmentId, type, start, end, amountMinor],
+           period_start, period_end, amount_minor, currency, status, approved_by, approved_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'AZN','APPROVED',$9,now()) RETURNING id`,
+        [acme, name, category, departmentId, type, start, end, amountMinor, admin],
       )
     ).rows[0].id as string;
     // the ledger starts with the opening plan, same as it would through the API
@@ -133,9 +145,18 @@ async function main(): Promise<void> {
   };
   // No two budgets may cover the same (department, category, period) — the scopes below are
   // deliberately disjoint: an org-wide ceiling, IT for the year, OPS for this quarter.
-  await budget('Ümumi büdcə', null, '*', 'YEAR', `${year}-01-01`, `${year}-12-31`, 50_000_00);
-  await budget('IT büdcəsi', it, 'IT', 'YEAR', `${year}-01-01`, `${year}-12-31`, 20_000_00);
-  await budget('OPS rüblük', ops, 'OFFICE', 'QUARTER', iso(qStart), iso(qEnd), 6_000_00);
+  //
+  // The AMOUNTS are chosen so that a purchase big enough to become a TENDER still fits the
+  // plan it is charged to. The previous numbers could not: the method policy above turns
+  // anything over 50 000 ₼ into a sealed RFQ, while the largest plan was exactly 50 000 ₼
+  // for the whole organization and the departmental ones were 20 000 and 6 000. So on a demo
+  // stand every tender was, by construction, several times its own department's plan — the
+  // budget screens read as a department overspending by 800%, which is a property of the
+  // seed and not of the product. A walkthrough that carries one purchase from a request to
+  // payment hits this in its first chapter, which is how it was found.
+  await budget('Ümumi büdcə', null, '*', 'YEAR', `${year}-01-01`, `${year}-12-31`, 1_200_000_00);
+  await budget('IT büdcəsi', it, 'IT', 'YEAR', `${year}-01-01`, `${year}-12-31`, 400_000_00);
+  await budget('OPS rüblük', ops, 'OFFICE', 'QUARTER', iso(qStart), iso(qEnd), 150_000_00);
   await db.query(
     `INSERT INTO budget_policies(buyer_org_id, warn_pct, block_pct) VALUES ($1, 80, NULL)`,
     [acme],
@@ -146,6 +167,7 @@ async function main(): Promise<void> {
   console.log('  admin@acme.test / ' + password + '  (BUYER_ADMIN)');
   console.log('  approver@acme.test / ' + password + '  (BUYER_APPROVER)');
   console.log('  user@acme.test / ' + password + '  (BUYER_USER)');
+  console.log('  finance@acme.test / ' + password + '  (BUYER_FINANCE — бюджеты и сверка счетов)');
   console.log('Departments: IT (owner: approver), OPS (owner: admin) — user@acme.test sits in OPS');
   console.log(`Budgets    : org-wide ${year} · IT ${year} · OPS ${year} Q${quarter}; warn at 80%, block off`);
   console.log('Suppliers  :');

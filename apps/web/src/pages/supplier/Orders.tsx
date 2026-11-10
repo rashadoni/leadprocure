@@ -140,9 +140,9 @@ export default function Orders() {
                         cannot both be true — an invoice follows DELIVERED/ACCEPTED, change
                         orders exist while ISSUED/CONFIRMED — so the cell never holds more
                         than the forward step and one of them. */}
-                    {next && <button className="btn small" onClick={() => advance(p.id, next)}>→ {t(`po_act_${next}`)}</button>}
+                    {next && <button className="btn small" data-testid={`sup-po-next-${next}`} onClick={() => advance(p.id, next)}>→ {t(`po_act_${next}`)}</button>}
                     {['DELIVERED', 'ACCEPTED'].includes(p.status) && (
-                      <button className="btn small ghost" onClick={() => submitInvoice(p.id)}>🧾 {t('invoice')}</button>
+                      <button className="btn small ghost" data-testid="sup-po-invoice" onClick={() => submitInvoice(p.id)}>🧾 {t('invoice')}</button>
                     )}
                     {['ISSUED', 'CONFIRMED'].includes(p.status) && (
                       <button className="btn small ghost" onClick={() => loadAmends(p.id)}>✎ {t('amendments')}</button>
@@ -171,9 +171,9 @@ export default function Orders() {
                   </td>
                   <td>
                     {/* was a bare 🚚 — an icon on its own does not say what pressing it does */}
-                    {s === undefined && <button className="btn small ghost" data-tip={t('tip_logistics_open')} onClick={() => loadShip(p.id)}>🚚 {t('logistics')}</button>}
+                    {s === undefined && <button className="btn small ghost" data-testid="sup-logistics" data-tip={t('tip_logistics_open')} onClick={() => loadShip(p.id)}>🚚 {t('logistics')}</button>}
                     {s && !s.shipment && ['CONFIRMED', 'PACKED', 'SHIPPED'].includes(p.status) && (
-                      <button className="btn small" onClick={() => startShipment(p.id)}>{t('create_shipment')}</button>
+                      <button className="btn small" data-testid="sup-create-shipment" onClick={() => startShipment(p.id)}>{t('create_shipment')}</button>
                     )}
                     {s && s.shipment && (
                       <div style={{ fontSize: 12 }}>
@@ -184,7 +184,7 @@ export default function Orders() {
                             already says the same statuses in the reader's language. */}
                         <div className="hint">{s.events.map((e: any) =>
                           [statusLabel(t, e.status), e.location].filter(Boolean).join(' · ')).join(' → ')}</div>
-                        <select style={{ width: 150, marginTop: 4 }} value="" onChange={(e) => e.target.value && addEvent(p.id, e.target.value)}>
+                        <select data-testid="sup-ship-event" style={{ width: 150, marginTop: 4 }} value="" onChange={(e) => e.target.value && addEvent(p.id, e.target.value)}>
                           <option value="">+ {t('history')}…</option>
                           {/* The same rule the API enforces, and only that one: a
                               delivered shipment cannot become an undelivered one, which

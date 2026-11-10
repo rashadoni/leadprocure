@@ -22,7 +22,7 @@ export function QnaCard({ eventId, isBuyer }: { eventId: string; isBuyer: boolea
   };
 
   return (
-    <div className="card">
+    <div className="card" data-testid="qna-card">
       <h3>💬 {t('qna')}</h3>
       {rows.map((r) => (
         <div key={r.id} style={{ borderBottom: '1px solid var(--border)', padding: '8px 0' }}>
