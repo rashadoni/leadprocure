@@ -192,6 +192,13 @@ export class IdentityService {
     try {
       payload = this.tokens.verifyRefresh(refreshToken);
     } catch {
+      // Две разные истории под одним кодом 401, и последняя молчавшая ветвь. «Cookie не
+      // предъявлена» — это обычный заход на `/login` (в браузерном наборе так бывает
+      // десяток раз за прогон), поэтому обычной строкой, не предупреждением. «Подпись не
+      // прошла» нормальной не бывает: истёкший, подделанный или подписанный другим ключом
+      // токен. Самого токена в логе нет.
+      if (!refreshToken) this.log.log('refresh отказан: cookie не предъявлена (обычный заход без сессии)');
+      else this.log.warn('refresh отказан: подпись не прошла (истёк, подделан или другой ключ)');
       throw new UnauthorizedException('Invalid refresh token');
     }
     const m = this.rc.manager;
