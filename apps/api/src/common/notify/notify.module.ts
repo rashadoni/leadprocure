@@ -77,8 +77,12 @@ export class NotifyEmailer {
       // records the widening in the audit trail; this guard keeps the invariant of the
       // fan-out itself, for any caller, and says so in the log.
       if (!users.length && userId) {
+        // `unaudited` on purpose: this runs AFTER the request transaction has committed, so
+        // there is no transaction to append an audit row to. NotifyService writes that row
+        // before committing, which covers every widening but one — somebody deactivated in
+        // the window between that check and this send. The log is all that case leaves.
         this.logger.warn(
-          `fan-out ${type} → org ${orgId}: addressed user ${userId} has no active mailbox here; widening to the organization`,
+          `fan-out ${type} → org ${orgId}: addressed user ${userId} has no active mailbox here; widening to the organization (unaudited)`,
         );
         users = await recipients(null);
       }
@@ -140,17 +144,30 @@ export class NotifyService {
     type: string,
     payload: Record<string, unknown>,
   ): Promise<void> {
+    const m = this.rc.manager;
+    // SAVEPOINT, because `catch` on its own does NOT make this best-effort: in Postgres a
+    // failed statement aborts the whole transaction, so a swallowed notification error would
+    // kill the business action on its next query with "current transaction is aborted" — the
+    // opposite of what the comment promises, and hardest to read exactly here, where
+    // `enforceOnApproval` aborts the approval transaction ON PURPOSE. Three statements now
+    // run under this guard (the recipient lookup, the audit row for a widening, and the
+    // notification itself), two of them under RLS. Same pattern as the best-effort PO steps
+    // in contracts/logistics, and the rule is in CLAUDE.md.
     try {
+      await m.query(`SAVEPOINT notify`);
       const recipient = await this.reachableRecipient(orgId, userId, type);
-      await this.rc.manager.query(`SELECT app_notify($1, $2, $3, $4::jsonb)`, [
+      await m.query(`SELECT app_notify($1, $2, $3, $4::jsonb)`, [
         orgId,
         recipient,
         type,
         JSON.stringify(payload),
       ]);
+      await m.query(`RELEASE SAVEPOINT notify`);
+      // Queued only once the notification itself is safely recorded: no in-app row, no mail.
       this.rc.onCommit(() => this.emailer.fanOut(orgId, type, payload, recipient));
     } catch {
-      /* best-effort */
+      // best-effort: undo just this notification and leave the business action standing
+      await m.query(`ROLLBACK TO SAVEPOINT notify`).catch(() => { /* nothing left to undo */ });
     }
   }
 

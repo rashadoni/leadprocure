@@ -37,13 +37,27 @@ export class DepartmentsService {
     return this.rc.manager.query(
       `SELECT d.id, d.code, d.name, d.parent_id, d.owner_user_id, d.is_active, d.created_at,
               (SELECT p.code FROM departments p WHERE p.id = d.parent_id) AS parent_code,
-              (SELECT u.full_name FROM organization_users u WHERE u.id = d.owner_user_id) AS owner_name,
-              -- The owner's own state travels with the name. A budget warning addressed to
-              -- this person reaches NOBODY when they are deactivated: NotifyEmailer.fanOut
-              -- filters u.status='ACTIVE', and with a userId that filter empties the list
-              -- instead of falling back to the organisation. Without this column the screen
-              -- shows a filled-in owner and cannot say that the alarm is going nowhere.
-              (SELECT u.status FROM organization_users u WHERE u.id = d.owner_user_id) AS owner_status,
+              -- Only if that person is actually in THIS organisation. organization_users is
+              -- global and carries no RLS at all, so an owner id pointing outside the buyer
+              -- org — a row written before the check below existed, or straight in SQL —
+              -- used to answer with a stranger's name and state. The membership condition is
+              -- the read side of the same promise: deactivation keeps the membership, so a
+              -- switched-off owner still reads normally; only somebody who is not here at
+              -- all goes unnamed.
+              (SELECT u.full_name FROM organization_users u
+                WHERE u.id = d.owner_user_id
+                  AND EXISTS (SELECT 1 FROM memberships m
+                                WHERE m.user_id = u.id AND m.org_id = d.buyer_org_id)) AS owner_name,
+              -- The owner's own state travels with the name, because a filled-in owner alone
+              -- cannot say whether the budget warning addressed to them still reaches that
+              -- person. It no longer goes nowhere — NotifyService widens it to the whole
+              -- organisation and records that it did — but «the one person answerable for
+              -- this budget» and «everybody» are different things, and the screen is where
+              -- that difference is noticed in time to name somebody new.
+              (SELECT u.status FROM organization_users u
+                WHERE u.id = d.owner_user_id
+                  AND EXISTS (SELECT 1 FROM memberships m
+                                WHERE m.user_id = u.id AND m.org_id = d.buyer_org_id)) AS owner_status,
               (SELECT count(*)::int FROM procurement_requests pr WHERE pr.department_id = d.id) AS usage_count
        FROM departments d
        ORDER BY d.code`,

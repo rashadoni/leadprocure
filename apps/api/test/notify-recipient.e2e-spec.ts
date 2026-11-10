@@ -81,11 +81,16 @@ describe('addressed notifications: a recipient who cannot receive widens to the 
       [budgetName],
     )).rows;
 
-  const widenings = async () =>
+  // Filtered by WHO the notice was meant for, never counted: a count makes each test depend
+  // on the ones before it, so `--testNamePattern` or a reordering would turn an honest pass
+  // into a puzzling failure.
+  const widenings = async (intendedUserId?: string) =>
     (await db.query(
       `SELECT payload FROM audit_events
-        WHERE action='NOTIFICATION_WIDENED_TO_ORG' AND org_id=$1 ORDER BY seq`,
-      [org],
+        WHERE action='NOTIFICATION_WIDENED_TO_ORG' AND org_id=$1
+          AND ($2::uuid IS NULL OR payload->>'intended_user_id' = $2::text)
+        ORDER BY seq`,
+      [org, intendedUserId ?? null],
     )).rows;
 
   beforeAll(async () => {
@@ -146,7 +151,8 @@ describe('addressed notifications: a recipient who cannot receive widens to the 
     const rows = await noteFor(budget);
     expect(rows).toHaveLength(1);
     expect(rows[0].recipient_user_id).toBe(liveOwnerId);
-    expect(await widenings()).toHaveLength(0);
+    // Nothing recorded about THIS owner, whichever order the tests run in.
+    expect(await widenings(liveOwnerId)).toHaveLength(0);
   });
 
   // The defect. Before the fix the assertions below fail on the FIRST one: no mail at all.
@@ -157,7 +163,7 @@ describe('addressed notifications: a recipient who cannot receive widens to the 
     const toAdmin = await waitForMail((m) => m.to === adminEmail && threshold(m));
     expect(toAdmin).toBeTruthy();
     expect(toAdmin!.text).toContain('85%');
-    expect(await waitForMail((m) => m.to === approverEmail && threshold(m), 500)).toBeTruthy();
+    expect(await waitForMail((m) => m.to === approverEmail && threshold(m))).toBeTruthy();
     // The switched-off owner is not mailed: they cannot sign in to act on it either.
     expect(sent.some((m) => m.to === deadOwnerEmail)).toBe(false);
 
@@ -166,18 +172,17 @@ describe('addressed notifications: a recipient who cannot receive widens to the 
     const rows = await noteFor(budget);
     expect(rows).toHaveLength(1);
     expect(rows[0].recipient_user_id).toBeNull();
-  });
 
-  // "Reached everyone" and "reached nobody" must not look the same in hindsight.
-  it('the widening is in the audit trail, naming who was meant to get it and why', async () => {
-    const rows = await widenings();
-    expect(rows).toHaveLength(1);
-    expect(rows[0].payload).toMatchObject({
+    // …and "reached everyone" does not look like "reached nobody" in hindsight. Asserted in
+    // the same test that caused the widening, so it does not read state left by another one.
+    const audited = await widenings(deadOwnerId);
+    expect(audited).toHaveLength(1);
+    expect(audited[0].payload).toMatchObject({
       type: 'BUDGET_THRESHOLD_CROSSED',
       intended_user_id: deadOwnerId,
       recipient_org_id: org,
     });
-    expect(String(rows[0].payload.reason)).toMatch(/active member/i);
+    expect(String(audited[0].payload.reason)).toMatch(/active member/i);
   });
 
   // A member removed from the organisation is the same case as a deactivated one: the id on
@@ -196,6 +201,6 @@ describe('addressed notifications: a recipient who cannot receive widens to the 
     expect(await waitForMail((m) => m.to === adminEmail && threshold(m) && m.text!.includes('95%'))).toBeTruthy();
     expect(sent.slice(before).some((m) => m.to === `str-${tag}@t.test`)).toBe(false);
     expect((await noteFor(budget))[0].recipient_user_id).toBeNull();
-    expect(await widenings()).toHaveLength(2);
+    expect(await widenings(strangerId)).toHaveLength(1);
   });
 });

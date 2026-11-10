@@ -201,6 +201,26 @@ describe('departments (API e2e)', () => {
       expect(renamed.body.is_active).toBe(false);
     });
 
+    // The read side of the same promise. The check above closes the door, but rows written
+    // before it existed — or straight in SQL — can still point outside the organisation, and
+    // `organization_users` has no RLS of its own: the owner subqueries used to answer with a
+    // stranger's name and state to anyone who can open the settings page.
+    it("does not report the name or state of an owner outside the organisation", async () => {
+      const foreign = (await http().get('/settings/users').set(...bearer(buyerB)).expect(200)).body[0];
+      const dep = (await http().get('/departments').set(...bearer(buyerA))).body
+        .find((d: any) => d.code === `OWNED-${tag}`);
+      await db.query(`UPDATE departments SET owner_user_id=$2 WHERE id=$1`, [dep.id, foreign.id]);
+      const row = (await http().get('/departments').set(...bearer(buyerA)).expect(200)).body
+        .find((d: any) => d.code === `OWNED-${tag}`);
+      // The id is still there — it is the buyer's own column and the screen needs to show
+      // that the row points somewhere — but nothing about the person is disclosed.
+      expect(row.owner_user_id).toBe(foreign.id);
+      expect(row.owner_name).toBeNull();
+      expect(row.owner_status).toBeNull();
+      // back to the owner the rest of this block is about
+      await db.query(`UPDATE departments SET owner_user_id=$2 WHERE id=$1`, [dep.id, ownerId]);
+    });
+
     it('clearing the owner is always allowed', async () => {
       const dep = (await http().get('/departments').set(...bearer(buyerA))).body
         .find((d: any) => d.code === `OWNED-${tag}`);
