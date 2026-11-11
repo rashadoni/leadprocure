@@ -16,7 +16,10 @@ export function resolveStatusFilter<T extends string>(
   all: readonly T[],
 ): T[] | null {
   if (!raw) return null;
-  const set = named[raw];
+  // `hasOwnProperty`, а не `named[raw]`: через объект видны и свойства ПРОТОТИПА, так что
+  // `?status=toString` находило функцию, проходило проверку и падало на разборе в массив —
+  // 500 на пользовательский ввод там, где обещано 400 (разбор PR #190).
+  const set = Object.prototype.hasOwnProperty.call(named, raw) ? named[raw] : undefined;
   if (set) return [...set];
   // Точное имя статуса тоже годится: список отбирается не только из карточек.
   if ((all as readonly string[]).includes(raw)) return [raw as T];
@@ -36,4 +39,15 @@ export function monthStart(d?: string | null): string | null {
   if (/^\d{4}-(0[1-9]|1[0-2])$/.test(d)) return `${d}-01`;
   if (/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(d)) return d;
   throw new BadRequestException(`Expected YYYY-MM, got "${d}"`);
+}
+
+// Валюта, по которой посчитана карточка на /buyer/analytics. Она входит в отбор КАРТОЧКИ
+// (`spendAnalytics` считает по `p.currency`/`i.currency`), поэтому должна входить и в
+// отбор списка, который карточка открывает: иначе на переключателе USD карточка скажет
+// «0,00», а список покажет манатный заказ — ровно тот разъезд, против которого вся эта
+// работа (блокирующее замечание из разбора PR #190).
+export function resolveCurrency(raw?: string | null): string | null {
+  if (!raw) return null;
+  if (!/^[A-Z]{3}$/.test(raw)) throw new BadRequestException(`Expected a 3-letter currency code, got "${raw}"`);
+  return raw;
 }

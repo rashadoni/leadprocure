@@ -11,6 +11,9 @@ import { isDenied } from '../components/ListState';
 import { orderHref } from './OrderDetail';
 import { FilterChip, useClearUrlFilters, useUrlFilter } from '../components/StatCard';
 
+// Потолок выдачи списка счетов на сервере (`LIMIT 200` в modules/invoices).
+const INVOICE_PAGE_CAP = 200;
+
 export default function Invoices() {
   const { t } = useI18n();
   const { notify, notifyError, ask } = useDialogs();
@@ -39,13 +42,18 @@ export default function Invoices() {
   const [statusFilter] = useUrlFilter('status');
   const [fromFilter] = useUrlFilter('from');
   const [toFilter] = useUrlFilter('to');
+  // Валюта тоже часть отбора: карточки «оплачено» / «не оплачено» на /buyer/analytics
+  // считаются по выбранной там валюте, и без неё число и список разошлись бы на первом же
+  // заказе в другой валюте (блокирующее замечание из разбора PR #190).
+  const [curFilter] = useUrlFilter('currency');
   const filterLabel = [
     statusFilter === 'outstanding' ? t('inv_f_outstanding') : statusFilter === 'paid' ? t('inv_f_paid') : statusLabel(t, statusFilter),
     fromFilter || toFilter ? `${t('inv_f_period')} ${fromFilter || '…'} — ${toFilter || '…'}` : '',
+    curFilter,
   ].filter(Boolean).join(' · ');
   // Разом, а не тремя вызовами: каждый из них строит адрес из того, что видел при
   // отрисовке, и до этой правки «Показать все» снимало только последний.
-  const clearFilter = useClearUrlFilters('status', 'from', 'to');
+  const clearFilter = useClearUrlFilters('status', 'from', 'to', 'currency');
 
   const load = async () => {
     const request = ++listRequest.current;
@@ -56,6 +64,7 @@ export default function Invoices() {
       const { data } = await api.get('/invoices', { params: {
         ...(statusFilter ? { status: statusFilter } : {}),
         ...(fromFilter ? { from: fromFilter } : {}), ...(toFilter ? { to: toFilter } : {}),
+        ...(curFilter ? { currency: curFilter } : {}),
       } });
       if (request === listRequest.current) setRows(data.map((row: any) => {
         const fresher = fresherRow.current[row.id];
@@ -77,7 +86,7 @@ export default function Invoices() {
       detailIntent.current = {}; mutationVersion.current = {}; fresherRow.current = {};
       listRequest.current++;
     };
-  }, [statusFilter, fromFilter, toFilter]);
+  }, [statusFilter, fromFilter, toFilter, curFilter]);
 
   const act = async (id: string, fn: () => Promise<{ data: any } | undefined>) => {
     try {
@@ -153,9 +162,15 @@ export default function Invoices() {
           <span>{t('invoice_list_error')}</span>{' '}
           <button className="btn small ghost" onClick={() => load()}>{t('invoice_list_retry')}</button>
         </div>}
-        {/* Счета не разбиты на страницы (сервер отдаёт до 200), поэтому итог — длина
-            выдачи: то же число, что посчитал отбор на сервере. */}
-        {filterLabel && <FilterChip label={filterLabel} total={rows.length} onClear={clearFilter} testid="inv-filter" />}
+        {/* Счета не разбиты на страницы: сервер отдаёт до 200 строк, поэтому итог — длина
+            выдачи. Ровно на потолке число не называется, а говорится «первые 200»: иначе
+            карточка сказала бы «240», подпись — «200», и обещание «числа сходятся»
+            сломалось бы молча (замечание из разбора PR #190). */}
+        {filterLabel && (
+          <FilterChip label={filterLabel} onClear={clearFilter} testid="inv-filter"
+            total={rows.length < INVOICE_PAGE_CAP ? rows.length : undefined}
+            note={rows.length < INVOICE_PAGE_CAP ? undefined : t('inv_capped').replace('%n', String(INVOICE_PAGE_CAP))} />
+        )}
         <table>
           <thead><tr><th>#</th><th>{t('order_no')}</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="nowrap">{t('due_date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th>{invoiceActions && <th className="acts">{t('actions')}</th>}</tr></thead>
           <tbody>

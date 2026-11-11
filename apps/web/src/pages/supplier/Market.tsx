@@ -36,8 +36,8 @@ export default function Market() {
       <div className="card">
         <ListState of={market} empty={!rows.length} emptyKey="empty_market" />
         {statusFilter && (
-          <FilterChip label={statusFilter === 'active' ? t('ev_f_active') : statusLabel(t, statusFilter)}
-            total={market.data.total ?? 0} onClear={() => setStatusFilter('')} testid="market-filter" />
+          <FilterChip label={statusFilter === 'open' ? t('ev_f_open') : statusFilter === 'active' ? t('ev_f_active') : statusLabel(t, statusFilter)}
+            total={market.data.total ?? 0} onClear={() => { setPage(1); setStatusFilter(''); }} testid="market-filter" />
         )}
         <table>
           {/* The buyer's own tender list has carried this column since PR #71, and the

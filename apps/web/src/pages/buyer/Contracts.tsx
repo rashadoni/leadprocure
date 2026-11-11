@@ -47,16 +47,23 @@ export default function Contracts() {
   const [poFilter] = useUrlFilter('po');
   const [fromFilter] = useUrlFilter('from');
   const [toFilter] = useUrlFilter('to');
-  // Разом: три отдельных снятия строят адрес каждый из того, что видели при отрисовке, и
-  // «Показать все» сняло бы только последний из трёх.
-  const clearPoFilter = useClearUrlFilters('po', 'from', 'to');
+  // Валюта — часть отбора карточки «Расход», а не украшение: на /buyer/analytics все
+  // четыре числа считаются по выбранной валюте.
+  const [curFilter] = useUrlFilter('currency');
+  // Разом: отдельные снятия строят адрес каждое из того, что видели при отрисовке, и
+  // «Показать все» сняло бы только последнее из них.
+  const clearAll = useClearUrlFilters('po', 'from', 'to', 'currency');
+  // И страница возвращается на первую: отбор снят — прежняя третья страница может уже не
+  // существовать, а рядом, у отбора по отделу на заявках, сброс стоит.
+  const clearPoFilter = () => { setOPage(1); clearAll(); };
   const orderList = useLoad(
     () => api.get('/orders', { params: {
       page: oPage, pageSize: PAGE_SIZE,
       ...(poFilter ? { status: poFilter } : {}),
       ...(fromFilter ? { from: fromFilter } : {}), ...(toFilter ? { to: toFilter } : {}),
+      ...(curFilter ? { currency: curFilter } : {}),
     } }).then((r) => r.data),
-    [oPage, poFilter, fromFilter, toFilter], { items: [] as any[], total: 0 },
+    [oPage, poFilter, fromFilter, toFilter, curFilter], { items: [] as any[], total: 0 },
   );
   // A failed page change must not leave the PREVIOUS page's rows sitting under the new
   // page number: on failure the alert stands alone.
@@ -196,6 +203,7 @@ export default function Contracts() {
             label={[
               poFilter === 'open' ? t('po_f_open') : poFilter === 'accepted' ? t('po_f_accepted') : statusLabel(t, poFilter),
               fromFilter || toFilter ? `${t('inv_f_period')} ${fromFilter || '…'} — ${toFilter || '…'}` : '',
+              curFilter,
             ].filter(Boolean).join(' · ')}
             total={oTotal} onClear={clearPoFilter} testid="po-filter" />
         )}

@@ -228,23 +228,25 @@ export default function Analytics() {
             under the figure says in words what was counted and on what basis. Each `tip` is
             written from the query in dashboard.module.ts, not from the label above it. */}
         {[
-          // Адрес у карточки несёт ТОТ ЖЕ отбор, по которому посчитано её число: статус и
-          // то же окно месяцев. Иначе список покажет не то, что на карточке, и человек
-          // решит, что одно из двух врёт.
+          // Адрес у карточки несёт ТОТ ЖЕ отбор, по которому посчитано её число: статус,
+          // то же окно месяцев И ТУ ЖЕ ВАЛЮТУ. Валюту видно в переключателе над страницей, и
+          // все четыре числа считаются по ней; без неё в ссылке карточка на USD говорила
+          // «0,00» и открывала список с манатным заказом — ровно тот экран, против которого
+          // вся эта работа (блокирующее замечание из разбора PR #190).
           { label: t('kpi_accepted'), value: money(d.monthly.reduce((s, m) => s + m.totalMinor, 0)),
             note: t('net_label'), tip: t('spend_hint'), testid: 'kpi-accepted',
             // Расход — это ПРИНЯТЫЕ заказы за то же окно месяцев: `po=accepted` и те же
             // `from`/`to`, по тому же столбцу `created_at`, каким их считает сервер.
-            to: `/buyer/contracts?po=accepted&from=${win.from}&to=${win.to}` },
+            to: `/buyer/contracts?po=accepted&from=${win.from}&to=${win.to}&currency=${currency}` },
           { label: t('savings'), value: `${money(d.savings.savedMinor)} (${savingsPct}%)`,
             note: `${t('events')}: ${d.savings.events} · ${t('net_label')}`, tip: t('savings_hint'),
             to: '/buyer/events', testid: 'kpi-savings' },
           { label: t(paidBasis), value: money(d.invoices.paidMinor),
             note: `${t('invoices')}: ${d.invoices.paidCount} · ${t('gross_label')}`, tip: t(paidBasisTip),
-            to: `/buyer/invoices?status=paid&from=${win.from}&to=${win.to}`, testid: 'kpi-paid' },
+            to: `/buyer/invoices?status=paid&from=${win.from}&to=${win.to}&currency=${currency}`, testid: 'kpi-paid' },
           { label: t('inv_outstanding'), value: money(d.invoices.outstandingMinor),
             note: `${t('invoices')}: ${d.invoices.outstandingCount} · ${t('gross_label')}`, tip: t('inv_outstanding_hint'),
-            to: `/buyer/invoices?status=outstanding&from=${win.from}&to=${win.to}`, testid: 'kpi-outstanding' },
+            to: `/buyer/invoices?status=outstanding&from=${win.from}&to=${win.to}&currency=${currency}`, testid: 'kpi-outstanding' },
         ].map((c) => (
           /* `hintOf`: these four texts run to 230 characters, and a 240px bubble turns that
              into a ten-line slab over the charts below. The bubble keeps the first

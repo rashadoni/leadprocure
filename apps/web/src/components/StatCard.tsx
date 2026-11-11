@@ -88,14 +88,17 @@ export function useClearUrlFilters(...names: string[]): () => void {
 // указатель прячется, когда всё уместилось на одной странице, — то есть на малых числах
 // список не называл свой итог ВООБЩЕ, и сверить было не с чем. Берётся из того же конверта
 // (`total`), который посчитал сервер по тому же отбору.
-export function FilterChip({ label, total, onClear, testid }: {
-  label: string; total?: number; onClear: () => void; testid?: string;
+export function FilterChip({ label, total, note, onClear, testid }: {
+  label: string; total?: number; note?: string; onClear: () => void; testid?: string;
 }) {
   const { t } = useI18n();
   return (
     <div className="hint filter-chip" data-testid={testid ?? 'list-filter'}>
       {t('filtered_by')}: <b>{label}</b>
       {total != null && <> · <b data-testid="list-filter-total">{total}</b></>}
+      {/* Там, где точное число назвать нельзя, стоит оговорка, а не число: «первые 200»
+          честнее, чем «200», когда счетов 240. */}
+      {note && <> · <span data-testid="list-filter-note">{note}</span></>}
       <button type="button" className="btn small ghost" onClick={onClear}>✕ {t('filter_clear')}</button>
     </div>
   );

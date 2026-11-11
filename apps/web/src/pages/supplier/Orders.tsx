@@ -130,7 +130,7 @@ export default function Orders() {
         <ListState of={orderList} empty={!orders.length} emptyKey="empty_sup_orders" />
         {poFilter && (
           <FilterChip label={poFilter === 'open' ? t('po_f_open') : statusLabel(t, poFilter)}
-            total={total} onClear={() => setPoFilter('')} testid="po-filter" />
+            total={total} onClear={() => { setPage(1); setPoFilter(''); }} testid="po-filter" />
         )}
         <table>
           <thead><tr><th>#</th><th>{t('buyer_org')}</th><th className="num">{t('total')}</th><th>{t('status')}</th><th className="acts">{t('actions')}</th><th>{t('logistics')}</th></tr></thead>

@@ -65,7 +65,10 @@ describe('карточка и список считают одно и то же'
     app.use(cookieParser());
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
-    db = new Client({ connectionString: process.env.DATABASE_URL });
+    // Владельческое подключение: ниже им сдвигается срок закупки, чтобы она закрылась, —
+    // под `app_user` этот UPDATE отобрало бы RLS (0 строк), и проверка молча мерила бы
+    // прежнее состояние.
+    db = new Client({ connectionString: process.env.DATABASE_OWNER_URL ?? process.env.DATABASE_URL });
     await db.connect();
     const reg = async (path: string, name: string, email: string) => {
       const r = await http().post(path).send({ legalName: name, email, password: 'password123', fullName: name }).expect(201);
@@ -109,6 +112,17 @@ describe('карточка и список считают одно и то же'
     await http().post(`/events/${openEvent.id}/publish`).set(...bearer(buyer)).expect(201);  // OPEN
     await http().post(`/events/from-request/${(await approved('Черновой закупки')).id}`)
       .set(...bearer(buyer)).send({ closeAt, visibility: 'INVITED' }).expect(201);           // DRAFT
+
+    // И ещё одна закупка, которую поставщик ВИДИТ, но которая уже не объявлена: иначе
+    // проверка витрины сравнивала бы «один тендер» с «одним тендером» и прошла бы со
+    // сломанным отбором — у поставщика черновик невидим под RLS, так что отсекать было бы
+    // нечего (замечание из разбора PR #190).
+    const closing = (await http().post(`/events/from-request/${(await approved('Закрытого')).id}`)
+      .set(...bearer(buyer)).send({ closeAt, visibility: 'INVITED' }).expect(201)).body;
+    await http().post(`/events/${closing.id}/invite`).set(...bearer(buyer)).send({ supplierOrgId: supplierOrg }).expect(201);
+    await http().post(`/events/${closing.id}/publish`).set(...bearer(buyer)).expect(201);
+    await db.query(`UPDATE sourcing_events SET close_at = now() - interval '1 second' WHERE id = $1`, [closing.id]);
+    await db.query(`SELECT * FROM close_due_events()`);                                      // CLOSED
   }, 120_000);
 
   afterAll(async () => {
@@ -178,17 +192,60 @@ describe('карточка и список считают одно и то же'
 
   it('«Витрина» открывает поставщику ровно объявленные тендеры', async () => {
     const supKpi = (await http().get('/dashboard/supplier').set(...bearer(supplier)).expect(200)).body;
-    const open = await list('/events', supplier, { status: 'OPEN' });
+    const open = await list('/events', supplier, { status: 'open' });
+    const all = await list('/events', supplier);
     expect(open.total).toBe(supKpi.openTenders);
+    // Отбор действительно отсекает: поставщик видит и закрытую закупку, в которую его звали.
+    expect(all.total).toBeGreaterThan(open.total);
     for (const e of open.items) expect(e.status).toBe('OPEN');
+  });
+
+  // Валюта — часть отбора карточек на /buyer/analytics: все четыре числа там считаются по
+  // выбранной валюте. Значит, она обязана быть и в отборе списка, который карточка
+  // открывает. Без неё карточка на USD говорит «0,00» и открывает манатный заказ.
+  it('карточки аналитики и их списки согласны ещё и в валюте', async () => {
+    const month = new Date().toISOString().slice(0, 7);
+    const win = { from: month, to: month };
+    const analytics = async (currency: string) =>
+      (await http().get('/dashboard/spend-analytics').query({ ...win, currency })
+        .set(...bearer(buyer)).expect(200)).body;
+
+    const azn = await analytics('AZN');
+    const usd = await analytics('USD');
+    // Данные этого набора манатные, поэтому в USD карточки пусты — и список по ссылке
+    // такой карточки обязан быть пуст тоже.
+    expect(usd.invoices.paidCount).toBe(0);
+    expect(usd.invoices.outstandingCount).toBe(0);
+    expect(azn.invoices.paidCount).toBe(1);
+    expect(azn.invoices.outstandingCount).toBe(1);
+
+    const ordersUsd = await list('/orders', buyer, { status: 'accepted', ...win, currency: 'USD' });
+    expect(ordersUsd.total).toBe(0);
+    const ordersAzn = await list('/orders', buyer, { status: 'accepted', ...win, currency: 'AZN' });
+    expect(ordersAzn.total).toBe(2);
+
+    expect((await list('/invoices', buyer, { status: 'paid', ...win, currency: 'USD' })).length).toBe(0);
+    expect((await list('/invoices', buyer, { status: 'outstanding', ...win, currency: 'USD' })).length).toBe(0);
+    expect((await list('/invoices', buyer, { status: 'paid', ...win, currency: 'AZN' })).length)
+      .toBe(azn.invoices.paidCount);
+    expect((await list('/invoices', buyer, { status: 'outstanding', ...win, currency: 'AZN' })).length)
+      .toBe(azn.invoices.outstandingCount);
   });
 
   // Опечатка в адресе — это 400, а не молча снятый отбор: «неоплаченные», понятые как «все»,
   // показали бы оплаченные счета под заголовком «не оплачено».
   it('неизвестное имя отбора отвергается, а не понимается как «без отбора»', async () => {
-    for (const [path, token] of [['/requests', buyer], ['/events', buyer], ['/orders', buyer], ['/invoices', buyer]] as const) {
-      await http().get(path).query({ status: 'oustanding' }).set(...bearer(token)).expect(400);
+    for (const path of ['/requests', '/events', '/orders', '/invoices']) {
+      await http().get(path).query({ status: 'oustanding' }).set(...bearer(buyer)).expect(400);
+      // Имя со ПРОТОТИПА объекта — тоже неизвестное имя. `named[raw]` находило `toString`
+      // и падало на разборе в массив: 500 на пользовательский ввод там, где обещано 400
+      // (блокирующее замечание из разбора PR #190).
+      for (const inherited of ['toString', 'constructor', 'hasOwnProperty']) {
+        await http().get(path).query({ status: inherited }).set(...bearer(buyer)).expect(400);
+      }
     }
     await http().get('/orders').query({ from: '2026-13' }).set(...bearer(buyer)).expect(400);
+    await http().get('/orders').query({ currency: 'манат' }).set(...bearer(buyer)).expect(400);
+    await http().get('/invoices').query({ currency: 'azn' }).set(...bearer(buyer)).expect(400);
   });
 });

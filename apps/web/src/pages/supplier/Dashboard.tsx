@@ -58,7 +58,7 @@ export default function SupplierDashboard() {
     // «Контракты» — без отбора, и это тоже совпадение с числом: карточка считает ВСЕ
     // контракты (так сказано в её подсказке), сколько их и показывает список.
     { label: t('market'), value: kpi.data.openTenders, tip: t('tip_sup_market'),
-      to: '/supplier/market?status=OPEN', testid: 'sup-kpi-market' },
+      to: '/supplier/market?status=open', testid: 'sup-kpi-market' },
     { label: t('my_bids'), value: kpi.data.myActiveBids, tip: t('tip_sup_bids'),
       to: '/supplier/market', testid: 'sup-kpi-bids' },
     { label: t('contracts'), value: kpi.data.contractsWon, tip: t('tip_sup_contracts'),

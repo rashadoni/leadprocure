@@ -343,7 +343,7 @@ export default function Requests() {
           empty={!rows.length} />
         {statusFilter && (
           <FilterChip label={statusFilter === 'pending' ? t('req_f_pending') : statusLabel(t, statusFilter)}
-            total={total} onClear={() => setStatusFilter('')} testid="req-filter" />
+            total={total} onClear={() => { setPage(1); setStatusFilter(''); }} testid="req-filter" />
         )}
         <table>
           <thead><tr><th className="nowrap">#</th><th className="grow">{t('title')}</th><th>{t('category')}</th><th>{t('department')}</th><th className="nowrap">{t('date')}</th><th>{t('requester')}</th><th className="num">{t('total')}<Cur of={cur} /></th><th>{t('status')}</th><th>{t('method')}</th><th className="acts">{t('actions')}</th></tr></thead>

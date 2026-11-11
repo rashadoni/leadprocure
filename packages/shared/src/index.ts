@@ -389,6 +389,8 @@ export interface AccessTokenPayload {
 // попадёт в «незакрытые» сам, как он попадает в `NOT IN (...)`, и ни один список
 // обновлять не придётся.
 export const ACTIVE_EVENT_STATUSES: SourcingEventStatus[] = ['OPEN', 'CLOSED', 'OPENING', 'EVALUATION'];
+// Объявлен и принимает ставки — витрина поставщика.
+export const OPEN_EVENT_STATUSES: SourcingEventStatus[] = ['OPEN'];
 export const PENDING_REQUEST_STATUSES: RequestStatus[] = ['SUBMITTED'];
 const PO_CLOSED_STATUSES: PoStatus[] = ['ACCEPTED', 'REJECTED', 'CANCELLED'];
 export const OPEN_PO_STATUSES: PoStatus[] = PO_STATUSES.filter((s) => !PO_CLOSED_STATUSES.includes(s));
@@ -401,7 +403,10 @@ export const LIVE_BID_STATES: BidState[] = ['SUBMITTED', 'OPENED'];
 // Имена, под которыми отбор ездит в адресе страницы и в параметре запроса. Список имён
 // один на клиент и сервер: опечатка в адресе становится 400, а не молча пустым отбором.
 export const LIST_FILTER_SETS = {
-  events: { active: ACTIVE_EVENT_STATUSES },
+  // `open` — то, что считает карточка «Витрина» у поставщика. Отдельным именем, а не
+  // строкой 'OPEN' в адресе: выписанное дважды множество и есть тот способ разойтись, от
+  // которого эта таблица защищает (замечание из разбора PR #190).
+  events: { active: ACTIVE_EVENT_STATUSES, open: OPEN_EVENT_STATUSES },
   requests: { pending: PENDING_REQUEST_STATUSES },
   orders: { open: OPEN_PO_STATUSES, accepted: ['ACCEPTED'] as PoStatus[] },
   invoices: { outstanding: OUTSTANDING_INVOICE_STATUSES, paid: ['PAID'] as InvoiceStatus[] },

@@ -1,9 +1,14 @@
 import { BadRequestException, Controller, Get, Injectable, Module, Query } from '@nestjs/common';
 import type { PaidBasis } from '@leadprocure/shared';
 import {
-  ACTIVE_EVENT_STATUSES, LIVE_BID_STATES, OPEN_PO_STATUSES,
+  ACTIVE_EVENT_STATUSES, LIST_FILTER_SETS, LIVE_BID_STATES, OPEN_EVENT_STATUSES, OPEN_PO_STATUSES,
   OUTSTANDING_INVOICE_STATUSES, PENDING_REQUEST_STATUSES,
 } from '@leadprocure/shared';
+
+// «Оплачено» и «не оплачено» на /buyer/analytics — те же два множества, какими отбирается
+// список счетов по ссылке карточки. Выписанные здесь строкой, они разошлись бы с ним
+// первым же новым статусом счёта (замечание из разбора PR #190).
+const PAID_INVOICE_STATUSES = LIST_FILTER_SETS.invoices.paid;
 import { monthStart } from '../../common/http/list-filter';
 import { Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
@@ -74,7 +79,8 @@ export class DashboardService {
     const one = async (sql: string, params: unknown[] = []) => Number((await m.query(sql, params))[0]?.v ?? 0);
 
     const [openTenders, myActiveBids, contractsWon, ordersInProgress, invoicesPending, unread] = await Promise.all([
-      one(`SELECT count(*)::int AS v FROM sourcing_events WHERE status = 'OPEN'`),
+      one(`SELECT count(*)::int AS v FROM sourcing_events WHERE status::text = ANY($1::text[])`,
+        [OPEN_EVENT_STATUSES]),
       one(`SELECT count(*)::int AS v FROM bids WHERE state::text = ANY($1::text[])`, [LIVE_BID_STATES]),
       one(`SELECT count(*)::int AS v FROM contracts`),
       one(`SELECT count(*)::int AS v FROM purchase_orders WHERE status::text = ANY($1::text[])`, [OPEN_PO_STATUSES]),
@@ -222,11 +228,12 @@ export class DashboardService {
       // measure, and neither is summed into spend above (PO totals are net, invoice
       // gross carries VAT).
       m.query(`
-        SELECT COALESCE(sum(gross_minor) FILTER (WHERE status = 'PAID'), 0)::bigint AS paid,
-               COALESCE(sum(gross_minor) FILTER (WHERE status NOT IN ('PAID','REJECTED')), 0)::bigint AS outstanding,
-               count(*) FILTER (WHERE status = 'PAID')::int AS paid_count,
-               count(*) FILTER (WHERE status NOT IN ('PAID','REJECTED'))::int AS outstanding_count
-        FROM invoices WHERE currency=$3 AND created_at >= $1::date AND created_at < ($2::date + interval '1 month')`, [from, to, currency]),
+        SELECT COALESCE(sum(gross_minor) FILTER (WHERE status::text = ANY($4::text[])), 0)::bigint AS paid,
+               COALESCE(sum(gross_minor) FILTER (WHERE status::text = ANY($5::text[])), 0)::bigint AS outstanding,
+               count(*) FILTER (WHERE status::text = ANY($4::text[]))::int AS paid_count,
+               count(*) FILTER (WHERE status::text = ANY($5::text[]))::int AS outstanding_count
+        FROM invoices WHERE currency=$3 AND created_at >= $1::date AND created_at < ($2::date + interval '1 month')`,
+        [from, to, currency, PAID_INVOICE_STATUSES, OUTSTANDING_INVOICE_STATUSES]),
       // last year's same window
       m.query(`
         SELECT to_char(gs.m + interval '1 year', 'YYYY-MM') AS month,
