@@ -3823,7 +3823,7 @@ grep -c ' 429 ' tmp/leadprocure-api.log        # 0
 |---|---|
 | Что выложено | `2076b263afde517588c68ee963f6c555bd1a1283`, вершина `main` |
 | Точка отката | образы `1f7d3625e373fed3fcfca2a1ae5eb85e158fbd26` (api `sha256:59286842dadd419be0b0b607e03b2633a3c655a772b939e395c101e63ce00356`, web `sha256:8e80afdfacba38ad1fa4d0e754458226fca30d69c3c6110f482b9511eddf105b`), проверены до загрузки новых. Миграций в релизе нет — откат это подмена образов назад |
-| Резервная копия | `/home/rashad/backups/leadprocure/leadprocure-prod-20261111T061703Z.dump`, 757 627 байт, sha256 `a5b0d10b9bde8f1048cacab0c98479f40ae4913812a414662a08335f9657231b`, права 600 |
+| Резервная копия | `/home/rashad/backups/leadprocure/leadprocure-prod-20261111T065811Z.dump`, 757 627 байт, sha256 `a5b0d10b9bde8f1048cacab0c98479f40ae4913812a414662a08335f9657231b`, права 600 |
 | Разворот копии | `pg_restore --exit-on-error` код 0, ноль строк в stderr; двенадцать счётчиков с копии и с прода совпали, 5/5 запечатанных ставок целы, 3242/3242 записи журнала с хешем |
 | Preflight | на живом проде, read-only, до подмены: три блокирующих счётчика и три проверки пространств имён по нулям, `installed_licenses` 0, `legacy_invoice_lines_requiring_tax_review` 5 при `invoice_lines_total` 5 |
 | Новых миграций | **ни одной**; api на старте сказал `No migrations are pending` |
