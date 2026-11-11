@@ -24,6 +24,7 @@ import { BudgetsModule, BudgetsService } from '../budgets/budgets.module';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
 import { resolveCategory } from '../../common/procurement/categories';
+import { resolveDepartment } from '../../common/procurement/departments';
 import { AppConfig } from '../../common/config/config.service';
 import { nextDocumentNo } from '../../common/procurement/document-no';
 
@@ -361,6 +362,15 @@ export class RequestsService {
     return this.getPolicies();
   }
 
+  // Тот же расчёт, но до создания заявки: мастер показывает, прямая это закупка или
+  // тендер, пока человек ещё набирает позиции. Считает его СЕРВЕР тем же запросом, что и
+  // при подаче: политика живёт в базе, у неё есть «ничейная» категория `*` и порядок
+  // перекрытия полос, и переписать это на странице значило бы завести второй ответ,
+  // который однажды разойдётся с первым.
+  async previewMethod(category: string | undefined, totalMinor: number): Promise<{ method: ProcurementMethod }> {
+    return { method: await this.resolveMethod((category ?? '').trim() || '*', Math.max(0, Math.round(totalMinor))) };
+  }
+
   private async resolveMethod(category: string, total: number): Promise<ProcurementMethod> {
     const rows = await this.rc.manager.query(
       `SELECT method FROM procurement_method_policies
@@ -377,19 +387,10 @@ export class RequestsService {
   // An explicit department must exist for THIS buyer (RLS makes another org's department
   // invisible, so a missing row is either a typo or a cross-org probe — both are 400).
   // With none given, fall back to the author's home department; NULL stays NULL.
-  private async resolveDepartment(departmentId: string | undefined, auth: AccessTokenPayload): Promise<string | null> {
-    const m = this.rc.manager;
-    if (departmentId) {
-      const found = await m.query(`SELECT id, is_active FROM departments WHERE id = $1`, [departmentId]);
-      if (!found.length) throw new BadRequestException('Unknown department');
-      if (!found[0].is_active) throw new BadRequestException('Department is inactive');
-      return departmentId;
-    }
-    const home = await m.query(
-      `SELECT department_id FROM memberships WHERE user_id = $1 AND org_id = $2 AND department_id IS NOT NULL LIMIT 1`,
-      [auth.sub, auth.org_id],
-    );
-    return home[0]?.department_id ?? null;
+  // Разрешитель общий с предпросмотром мастера (common/procurement/departments.ts): второй
+  // ответ на тот же вопрос однажды разошёлся — именно так мастер назвал не тот бюджет.
+  private resolveDepartment(departmentId: string | undefined, auth: AccessTokenPayload): Promise<string | null> {
+    return resolveDepartment(this.rc.manager, auth, departmentId);
   }
 
   private computeTotal(items: ItemDto[]): number {
@@ -434,6 +435,14 @@ export class RequestsController {
     @Query('departmentId') departmentId?: string,
   ) {
     return this.requests.list(q, parsePaging(page, pageSize), departmentId || undefined);
+  }
+
+  // Что выйдет из этой суммы — прямая закупка или тендер, — до того как заявка создана.
+  @Get('method-preview') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER', 'BUYER_FINANCE')
+  methodPreview(@Query('category') category?: string, @Query('amountMinor') amountMinor?: string) {
+    const total = Number(amountMinor ?? 0);
+    if (!Number.isFinite(total) || total < 0) throw new BadRequestException('amountMinor must be a non-negative number');
+    return this.requests.previewMethod(category, total);
   }
 
   @Get('method-policies') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER', 'BUYER_FINANCE')

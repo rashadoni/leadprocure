@@ -678,8 +678,15 @@ test.describe('buyer panel', () => {
     // The form is behind a button now: the list of requests is what this screen opens on.
     await page.getByTestId('req-new').click();
     const title = `PW smoke ${Date.now()}`;
+
+    // Шаг 1 — что покупаем. Дальше нельзя, пока нет заголовка: это и проверяем, потому что
+    // «Дальше», уводящая с пустого шага, возвращает человека сюда же, но позже.
+    await expect(page.getByTestId('req-next')).toBeDisabled();
     await page.fill('[data-testid=req-title]', title);
     await page.selectOption('[data-testid=req-department]', { label: code });
+    await page.getByTestId('req-next').click();
+
+    // Шаг 2 — позиции.
     await page.fill('[data-testid=item-name-0]', 'Playwright item');
     await page.fill('[data-testid=item-qty-0]', '2');
     await page.fill('[data-testid=item-price-0]', '10');
@@ -691,6 +698,16 @@ test.describe('buyer panel', () => {
     // exists to answer for — field widths against what each field holds, labels level
     // across inputs and a select — cannot be read off empty fields.
     await page.screenshot({ path: 'test-results/request-form.png' });
+    await page.getByTestId('req-next').click();
+
+    // Шаг 3 — проверка: сводка и ДВА последствия, посчитанные сервером. Именно ради них
+    // мастер и появился: метод и бюджет человек узнавал от согласующего, когда менять
+    // что-либо было поздно. Поэтому проверяется не «блок нарисован», а что в нём стоит
+    // название метода — пустая строка значила бы, что предпросмотр молча не сработал.
+    await expect(page.getByTestId('req-summary')).toContainText(title);
+    await expect(page.getByTestId('req-method-preview'))
+      .toContainText(/Birbaşa|Прямой|Direct|tender|Тендер|Qapalı|Açıq/i, { timeout: 15_000 });
+    await expect(page.getByTestId('req-budget-preview')).not.toBeEmpty();
     await page.click('form button.btn:not(.ghost):not([type=button])');
 
     const row = page.locator(`tr:has-text("${title}")`);

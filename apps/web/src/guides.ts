@@ -137,7 +137,7 @@ export const COURSE: Track[] = [
       // в допуске ±2 с, которым съёмщик проверяет это число. Если очередной прогон снова
       // выйдет за допуск — запись не обрезана, это та же сцена; лечится она не числом, а
       // тем, чтобы набор перестал обгонять озвучку.
-      { key: 'buyer-requests', titleKey: 'learn_b_requests', to: '/buyer/requests', roles: FINANCE_READ, sec: 108 },
+      { key: 'buyer-requests', titleKey: 'learn_b_requests', to: '/buyer/requests', roles: FINANCE_READ, sec: 107 },
       { key: 'buyer-events', titleKey: 'learn_b_events', to: '/buyer/events', roles: BUYER, sec: 88 },
       { key: 'sup-market', titleKey: 'learn_s_market', to: '/supplier/market', roles: SUPPLIER, sec: 55 },
       { key: 'sup-bid', titleKey: 'learn_s_bid', to: '/supplier/market', roles: SUPPLIER, sec: 56 },
@@ -185,7 +185,16 @@ export const COURSE: Track[] = [
       // Живые торги — вторая, короткая история: своя заявка, своё утверждение, своя
       // процедура. Она стоит последней, потому что аукцион понятен только тому, кто уже
       // видел обычный тендер и знает, чем они отличаются.
-      { key: 'sup-auction', titleKey: 'learn_s_auction', to: '/supplier/market', roles: SUPPLIER, sec: 120 },
+      // 118 — длительность файла, который лежит рядом (118,04 с). У этой главы длина
+      // ПЛАВАЕТ сильнее всех: её сцены делают переходы между страницами, а они идут то
+      // быстрее, то медленнее. Три замера одного дня на одном и том же сценарии: 123,9 /
+      // 120,1 / 118,0. Допуск ±2 с такой разброс не держит, поэтому здесь всегда стоит
+      // число ПОСЛЕДНЕЙ съёмки; если очередной прогон выйдет за допуск, съёмщик об этом
+      // скажет — надо поправить число, а не искать поломку.
+      //
+      // И почему не «с запасом»: 120 при файле 118,04 проходит проверку с разницей 1,96 —
+      // то есть гейт держался на четырёх сотых. Нашла это сессия, разбиравшая мастер.
+      { key: 'sup-auction', titleKey: 'learn_s_auction', to: '/supplier/market', roles: SUPPLIER, sec: 118 },
     ],
   },
 ];

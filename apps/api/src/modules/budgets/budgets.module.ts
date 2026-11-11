@@ -1,5 +1,6 @@
 import { returnedRows, safeMoney } from '../../common/procurement/invariants';
 import { resolveCategory } from '../../common/procurement/categories';
+import { resolveDepartment } from '../../common/procurement/departments';
 import {
   BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get,
   Injectable, Module, NotFoundException, Param, Post, Put, Query, Res,
@@ -444,6 +445,49 @@ export class BudgetsService {
       )
     )[0];
     if (!req) throw new NotFoundException('Request not found');
+    return this.projectImpact({
+      category: req.category,
+      departmentId: req.department_id,
+      currency: req.currency,
+      // Уже одобренная заявка сидит внутри usedMinor — второй раз её считать нельзя.
+      amountMinor: req.status === 'APPROVED' ? 0 : Number(req.estimated_total_minor),
+      requestMinor: Number(req.estimated_total_minor),
+    });
+  }
+
+  // То же самое, но для заявки, которой ЕЩЁ НЕТ: мастер создания спрашивает «что будет,
+  // если я это создам» до того, как нажата кнопка. Сопоставление обязано быть тем же —
+  // поэтому оно одно на оба случая, а не переписано на странице. Два ответа, разошедшиеся
+  // в мелочи, хуже отсутствия второго: человек поверит первому, а решение примет второй.
+  // Предпросмотр для мастера: разворачивает отдел ТЕМ ЖЕ разрешителем, что и создание
+  // заявки, и только потом подбирает бюджет. Пустой отдел в форме — это «мой отдел», и
+  // пока предпросмотр уходил с `NULL`, подбор оставлял только общеорганизационные планы:
+  // мастер называл не тот план, на который заявка ляжет, и терял предупреждение о пороге.
+  async previewFor(
+    auth: AccessTokenPayload,
+    input: { category: string; departmentId: string | null; amountMinor: number },
+  ): Promise<BudgetImpact | null> {
+    const department = await resolveDepartment(this.rc.manager, auth, input.departmentId);
+    return this.projectImpact({
+      category: input.category,
+      departmentId: department,
+      currency: BUDGET_CURRENCY,
+      amountMinor: input.amountMinor,
+    });
+  }
+
+  async projectImpact(input: {
+    category: string | null; departmentId: string | null; currency: string;
+    amountMinor: number; requestMinor?: number;
+  }): Promise<BudgetImpact | null> {
+    const m = this.rc.manager;
+    const req = {
+      category: input.category ?? '*',
+      department_id: input.departmentId,
+      currency: input.currency,
+    };
+    const addMinor = input.amountMinor;
+    const shownMinor = input.requestMinor ?? input.amountMinor;
 
     const budget = (
       await m.query(
@@ -464,9 +508,8 @@ export class BudgetsService {
     const current = (await this.list()).find((b: any) => b.id === budget.id);
     if (!current) return null;
     const policy = await this.getPolicy();
-    const amount = Number(req.estimated_total_minor);
-    // An already-APPROVED request is inside usedMinor; don't count it twice.
-    const projected = current.usedMinor + (req.status === 'APPROVED' ? 0 : amount);
+    const amount = shownMinor;
+    const projected = current.usedMinor + addMinor;
     const pct = current.amountMinor > 0 ? Math.round((projected / current.amountMinor) * 1000) / 10 : 0;
     return {
       budgetId: current.id, budgetName: current.name,
@@ -1698,6 +1741,42 @@ export class BudgetsController {
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_FINANCE', 'BUYER_USER')
   impact(@Param('requestId') requestId: string) {
     return this.budgets.impactFor(requestId);
+  }
+
+  // То же, но для заявки, которой ещё нет: мастер создания показывает, какой бюджет эта
+  // покупка заденет и сколько в нём останется, ДО того как её создали. Считает тот же
+  // метод, что и диалог одобрения, — иначе два ответа разойдутся в мелочи, и человек
+  // поверит первому, а решение примет второй.
+  //
+  // Отказ доступа здесь — не ошибка и НЕ «бюджета нет»: обычный сотрудник видит только
+  // бюджеты своего отдела, а общий план организации — нет, и именно он чаще всего и
+  // покрывает его заявку. Первая редакция отвечала на это `null`, то есть ровно тем же,
+  // чем отвечает «ни один план не подходит», и мастер писал «под этот расход нет бюджета»
+  // там, где бюджет есть. Это утверждение о мире вместо утверждения о видимости, и поймал
+  // его кадр из курса, а не тест.
+  //
+  // Поэтому два разных ответа: `null` — не подошёл ни один план; `{ visible: false }` —
+  // план есть, но этому человеку его не показывают.
+  @Get('impact-preview')
+  @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_FINANCE', 'BUYER_USER')
+  async impactPreview(
+    @CurrentUser() auth: AccessTokenPayload,
+    @Query('category') category?: string,
+    @Query('departmentId') departmentId?: string,
+    @Query('amountMinor') amountMinor?: string,
+  ) {
+    const amount = Number(amountMinor ?? 0);
+    if (!Number.isFinite(amount) || amount < 0) throw new BadRequestException('amountMinor must be a non-negative number');
+    try {
+      return await this.budgets.previewFor(auth, {
+        category: category?.trim() || '*',
+        departmentId: departmentId?.trim() || null,
+        amountMinor: Math.round(amount),
+      });
+    } catch (e: any) {
+      if (e instanceof ForbiddenException) return { visible: false };
+      throw e;
+    }
   }
 
   @Post()

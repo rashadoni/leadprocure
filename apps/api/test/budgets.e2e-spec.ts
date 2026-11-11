@@ -866,6 +866,46 @@ describe('budgets & commitment control (API e2e)', () => {
     expect(lines[0].split(';')).toHaveLength(13);
   });
 
+  // Предпросмотр мастера обязан отвечать ровно то же, что потом сделает подача. Проверка
+  // написана по разбору: мастер уходил без отдела, когда человек оставлял «мой отдел», а
+  // подбор при NULL оставляет только общеорганизационные планы — экран называл не тот
+  // бюджет и терял предупреждение о пороге. Сравнивается не текст, а ИМЕННО подобранный
+  // план: предпросмотр до создания и влияние после создания должны сойтись.
+  it('the wizard preview names the same budget the request will actually hit', async () => {
+    const dep = (await http().post('/departments').set(...bearer(buyerA)).send({ code: `WIZ-${tag}` }).expect(201)).body;
+    // Сотрудник, у которого этот отдел — домашний: именно он оставляет «мой отдел» пустым.
+    await http().post('/settings/users').set(...bearer(buyerA))
+      .send({ email: `wiz-${tag}@t.test`, fullName: 'Wiz User', password: 'password123', role: 'BUYER_USER' })
+      .expect(201);
+    // id берётся из списка: создание его не отдаёт (так же делают соседние проверки).
+    const wizId = (await http().get('/settings/users').set(...bearer(buyerA))).body
+      .find((u: any) => u.email === `wiz-${tag}@t.test`).id;
+    // Домашний отдел ставится отдельной ручкой — той же, что и в «Параметрах».
+    await http().post(`/settings/users/${wizId}/department`).set(...bearer(buyerA))
+      .send({ departmentId: dep.id }).expect(201);
+    const tok = (await http().post('/auth/login').send({ email: `wiz-${tag}@t.test`, password: 'password123' }).expect(201)).body.accessToken;
+
+    // План у отдела — и только у него: общеорганизационный здесь заводить нельзя, он
+    // ловил бы чужие расходы соседних проверок (одна из них как раз о том, что заказ без
+    // отдела не попадает ни в один план). Этого плана достаточно: до починки предпросмотр
+    // уходил с пустым отделом, а при пустом отделе подбор отдельские планы не видит вовсе.
+    const depBudget = (await mkBudget({ name: `Wiz dep ${tag}`, departmentId: dep.id, periodYear: YEAR, amountMinor: 500_000 })).body;
+
+    const preview = await http().get('/budgets/impact-preview').set(...bearer(tok))
+      .query({ category: '*', amountMinor: 100_000 }).expect(200);
+    // (в jest у expect нет сообщения вторым аргументом — это vitest)
+    expect(preview.body).toBeTruthy();
+    expect(preview.body.budgetId).toBe(depBudget.id);
+
+    // А теперь то же самое, но по-настоящему: создаём заявку без отдела и спрашиваем
+    // влияние у уже созданной. Ответы обязаны совпасть.
+    const req = (await http().post('/requests').set(...bearer(tok))
+      .send({ title: `Wiz ${tag}`, items: [{ name: 'x', qty: 1, estUnitPriceMinor: 100_000 }] }).expect(201)).body;
+    const real = await http().get(`/budgets/impact/${req.id}`).set(...bearer(tok)).expect(200);
+    expect(real.body.budgetId).toBe(preview.body.budgetId);
+    expect(real.body.projectedUsedMinor).toBe(preview.body.projectedUsedMinor);
+  });
+
   it('a budget in a category the buyer never curated is refused', async () => {
     // buyer A has a category directory by now only if one was created — make it explicit
     await http().post('/categories').set(...bearer(buyerA)).send({ code: `CUR-${tag}` }).expect(201);

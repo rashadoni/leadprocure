@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, fmtAmount, fmtDate, fmtMoney, tableCurrency } from '../../api/client';
 import { Cur } from '../../components/Cur';
@@ -11,10 +11,10 @@ import { isDenied, ListState, useLoad } from '../../components/ListState';
 import { Actions } from '../../components/Actions';
 import { RowMenu } from '../../components/RowMenu';
 import { Suggest } from '../../components/Suggest';
+import { RequestWizard } from './RequestWizard';
 
 const PAGE_SIZE = 20;
 
-interface Item { name: string; qty: number; price: string }
 
 /** «Отменил» — не то же, что «причина не нужна»: склеив их в undefined, мы объявили бы
  *  тендер после отказа объяснять. */
@@ -25,9 +25,6 @@ export default function Requests() {
   const { notifyError, notify, ask } = useDialogs();
   const { session } = useAuth();
   const nav = useNavigate();
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('');
-  const [items, setItems] = useState<Item[]>([{ name: '', qty: 1, price: '' }]);
   // The form used to be the first thing on the screen, so arriving at «Заявки» showed a
   // blank form and pushed the list of requests — the reason to come here — below the fold.
   // It opens on a worded button now. It does NOT close after a successful create: the
@@ -42,7 +39,6 @@ export default function Requests() {
   // Departments (cost centres) — which budget this spend lands on. Only active ones can
   // be picked for new requests; retired ones stay on their historic requests.
   const [deps, setDeps] = useState<any[]>([]);
-  const [department, setDepartment] = useState('');
   const [depFilter, setDepFilter] = useState('');
   // These two fill the category and department selects, and the department decides whose
   // budget the spend lands on. A fresh org legitimately has neither (and may be denied
@@ -187,29 +183,6 @@ export default function Requests() {
     ];
   }, [cats, rows, t]);
 
-  const create = async (e: FormEvent) => {
-    e.preventDefault();
-    setErr('');
-    try {
-      await api.post('/requests', {
-        title,
-        ...(category.trim() ? { category: category.trim() } : {}),
-        ...(department ? { departmentId: department } : {}),
-        items: items
-          .filter((i) => i.name)
-          .map((i) => ({ name: i.name, qty: Number(i.qty), estUnitPriceMinor: Math.round(Number(i.price) * 100) })),
-      });
-      setTitle('');
-      setCategory('');
-      setDepartment('');
-      setItems([{ name: '', qty: 1, price: '' }]);
-      load();
-      // Новая категория заводится сервером в момент создания заявки — перечитываем
-      // справочник, чтобы она подсказывалась уже со следующей заявки, а не после
-      // перезагрузки страницы.
-      loadRefs();
-    } catch (e: any) { setErr(e.response?.data?.message?.toString() ?? t('error_generic')); }
-  };
 
   const act = async (id: string, action: string) => {
     try { await api.post(`/requests/${id}/${action}`); load(); }
@@ -326,67 +299,21 @@ export default function Requests() {
           + {t('new_request')}
         </button>
       )}
-      {!isFinance && formOpen && <div className="card">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-          <h3 style={{ margin: 0 }}>{t('new_request')}</h3>
-          {/* Ошибку надо погасить вместе с формой: она рисуется ВНУТРИ этой карточки, и
-              без сброса повторное открытие встречало сообщением от прошлой попытки —
-              рядом с полями, которые человек с тех пор мог поменять. */}
-          <button type="button" className="btn small ghost" onClick={() => { setErr(''); setFormOpen(false); }}>
-            ✕ {t('form_hide')}
-          </button>
-        </div>
-        <form onSubmit={create}>
-          <div className="row">
-            <div style={{ flex: 2 }}><label htmlFor="request-title">{t('title')}</label>
-              {/* Заголовки прежних заявок подсказываются: закупки повторяются, и человек,
-                  который третий раз заказывает те же стулья, не должен вспоминать, как он
-                  назвал это в прошлый раз. Своё пишется свободно — строки «создать» здесь
-                  нет, заголовок на то и заголовок. */}
-              <Suggest id="request-title" testid="req-title" value={title} onChange={setTitle} required
-                allowNew={false} tip={t('req_title_tip')}
-                options={[...new Set(rows.map((r: any) => r.title).filter(Boolean))].slice(0, 50)} /></div>
-            <div style={{ flex: 1 }}><label htmlFor="request-category">{t('category')}</label>
-              {/* category drives the method policy, budgets and per-category analytics */}
-              <Suggest id="request-category" testid="req-category" value={category} onChange={setCategory}
-                placeholder="IT, OFFICE…" tip={t('cat_tip')} options={categoryOptions} /></div>
-            <div style={{ flex: 1 }}><label htmlFor="request-department">{t('department')}</label>
-              {/* the department owns the budget this spend is charged to */}
-              <select id="request-department" data-testid="req-department" value={department} onChange={(e) => setDepartment(e.target.value)}>
-                <option value="">{t('dep_default')}</option>
-                {deps.filter((d) => d.is_active).map((d) => (
-                  <option key={d.id} value={d.id}>{d.code}{d.name ? ` · ${d.name}` : ''}</option>
-                ))}
-              </select></div>
-          </div>
-          <h3>{t('items')}</h3>
-          {items.map((it, idx) => (
-            <div className="row" key={idx}>
-              <div style={{ flex: 3 }}><label htmlFor={`request-item-${idx}-name`}>{t('name')}</label>
-                <input id={`request-item-${idx}-name`} data-testid={`item-name-${idx}`} value={it.name} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))} /></div>
-              <div style={{ flex: '0 0 110px' }}><label htmlFor={`request-item-${idx}-qty`}>{t('qty')}</label>
-                <input id={`request-item-${idx}-qty`} data-testid={`item-qty-${idx}`} type="number" min={1} value={it.qty} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, qty: Number(e.target.value) } : x)))} /></div>
-              <div style={{ flex: '0 0 170px' }}><label htmlFor={`request-item-${idx}-price`}>{t('unit_price')} (AZN)</label>
-                <input id={`request-item-${idx}-price`} data-testid={`item-price-${idx}`} type="number" step="0.01" min={0} value={it.price} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, price: e.target.value } : x)))} /></div>
-            </div>
-          ))}
-          {/* What it adds up to, while it is still being typed. The sum existed only on the
-              server and appeared only in the list afterwards — yet it is the sum that decides
-              whether this becomes a direct purchase or a tender (the value bands behind
-              «Политика метода») and which budget it will charge. Counted exactly as the
-              request is sent, minor units and all, so the line cannot drift from what the
-              server will store. */}
-          <div className="hint" data-testid="req-total" style={{ marginTop: 12 }}>
-            {t('total')}: <b>{fmtMoney(items.reduce((sum, i) =>
-              sum + Math.round(Number(i.price) * 100 || 0) * Number(i.qty || 0), 0), 'AZN')}</b>
-          </div>
-          <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-            <button type="button" className="btn ghost small" onClick={() => setItems([...items, { name: '', qty: 1, price: '' }])}>+ {t('items')}</button>
-            <button className="btn">{t('create')}</button>
-          </div>
-          {err && <div className="error">{err}</div>}
-        </form>
-      </div>}
+      {!isFinance && formOpen && (
+        <RequestWizard
+          categoryOptions={categoryOptions}
+          titleOptions={[...new Set(rows.map((r: any) => r.title).filter(Boolean))].slice(0, 50) as string[]}
+          deps={deps}
+          onCancel={() => { setErr(''); setFormOpen(false); }}
+          onCreated={() => {
+            setFormOpen(false);
+            load();
+            // Новая категория заводится сервером в момент создания заявки — перечитываем
+            // справочник, чтобы она подсказывалась уже со следующей заявки.
+            loadRefs();
+          }}
+        />
+      )}
       <div className="card">
         <div style={{ display: 'flex', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
           <input placeholder={`🔎 ${t('title')}…`} value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} style={{ maxWidth: 320 }} />
