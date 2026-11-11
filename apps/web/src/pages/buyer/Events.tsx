@@ -37,7 +37,8 @@ export default function Events() {
       <div className="card">
         <ListState of={events} empty={!rows.length} emptyKey="empty_events" />
         {statusFilter && (
-          <FilterChip label={statusFilter === 'active' ? t('ev_f_active') : statusLabel(t, statusFilter)}
+          <FilterChip label={statusFilter === 'active' ? t('ev_f_active')
+            : statusFilter === 'open' ? t('ev_f_open') : statusLabel(t, statusFilter)}
             total={events.data.total ?? 0} onClear={() => { setPage(1); setStatusFilter(''); }} testid="ev-filter" />
         )}
         <table>

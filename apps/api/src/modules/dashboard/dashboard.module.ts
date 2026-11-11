@@ -4,11 +4,6 @@ import {
   ACTIVE_EVENT_STATUSES, LIST_FILTER_SETS, LIVE_BID_STATES, OPEN_EVENT_STATUSES, OPEN_PO_STATUSES,
   OUTSTANDING_INVOICE_STATUSES, PENDING_REQUEST_STATUSES,
 } from '@leadprocure/shared';
-
-// «Оплачено» и «не оплачено» на /buyer/analytics — те же два множества, какими отбирается
-// список счетов по ссылке карточки. Выписанные здесь строкой, они разошлись бы с ним
-// первым же новым статусом счёта (замечание из разбора PR #190).
-const PAID_INVOICE_STATUSES = LIST_FILTER_SETS.invoices.paid;
 import { monthStart } from '../../common/http/list-filter';
 import { Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
@@ -17,6 +12,14 @@ const lineNet = (amount: string) => `(CASE WHEN e.vat_mode='INCLUSIVE' THEN ${am
 const poNet = `(CASE WHEN p.vat_mode='INCLUSIVE' THEN (SELECT sum(poi.line_total_minor-round(poi.line_total_minor*poi.vat_rate_bp::numeric/(10000+poi.vat_rate_bp))) FROM purchase_order_items poi WHERE poi.po_id=p.id) ELSE p.total_minor END)`;
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+// Множества, по которым считаются карточки этого эндпоинта, — те же, какими отбираются
+// списки по их ссылкам. Выписанные здесь строками в SQL, они разошлись бы со списком
+// первым же новым статусом, а разъезд числа и списка — это экран, который врёт (оба
+// прохода разбора PR #190). Стоят ПОД импортами: между ними это читалось как опечатка,
+// и на `import/first` ругаются линтеры.
+const PAID_INVOICE_STATUSES = LIST_FILTER_SETS.invoices.paid;
+const SPEND_PO_STATUSES = LIST_FILTER_SETS.orders.accepted;
 
 // Which of the two settlement measures this endpoint reports. The union it is checked
 // against carries both definitions: see PAID_BASES in @leadprocure/shared.
@@ -145,7 +148,7 @@ export class DashboardService {
       LEFT JOIN contracts c ON c.id = p.contract_id
       LEFT JOIN sourcing_events e ON e.id = c.event_id
       LEFT JOIN procurement_requests pr ON pr.id = e.request_id
-      WHERE p.status = 'ACCEPTED' AND p.currency=$3
+      WHERE p.status::text = ANY($4::text[]) AND p.currency=$3
         AND ($1::date IS NULL OR p.created_at >= $1::timestamptz)
         AND ($2::date IS NULL OR p.created_at < ($2::date + interval '1 month')::timestamptz)
       GROUP BY 1 ORDER BY 2 DESC`;
@@ -159,7 +162,7 @@ export class DashboardService {
              sum(${poNet})::bigint AS total, count(*)::int AS po_count
       FROM purchase_orders p
       LEFT JOIN departments d ON d.id = p.department_id
-      WHERE p.status = 'ACCEPTED' AND p.currency=$3
+      WHERE p.status::text = ANY($4::text[]) AND p.currency=$3
         AND ($1::date IS NULL OR p.created_at >= $1::timestamptz)
         AND ($2::date IS NULL OR p.created_at < ($2::date + interval '1 month')::timestamptz)
       GROUP BY 1 ORDER BY 2 DESC`;
@@ -191,17 +194,17 @@ export class DashboardService {
                COALESCE($1::date, date_trunc('month', now()) - interval '11 months'),
                COALESCE($2::date, date_trunc('month', now())), interval '1 month') gs(m)
         LEFT JOIN purchase_orders p
-          ON date_trunc('month', p.created_at) = gs.m AND p.status = 'ACCEPTED' AND p.currency=$3
-        GROUP BY gs.m ORDER BY gs.m`, [from, to, currency]),
-      m.query(CATEGORY_SQL, [from, to, currency]),
+          ON date_trunc('month', p.created_at) = gs.m AND p.status::text = ANY($4::text[]) AND p.currency=$3
+        GROUP BY gs.m ORDER BY gs.m`, [from, to, currency, SPEND_PO_STATUSES]),
+      m.query(CATEGORY_SQL, [from, to, currency, SPEND_PO_STATUSES]),
       m.query(`
         SELECT o.legal_name AS name, sum(${poNet})::bigint AS total, count(*)::int AS po_count
         FROM purchase_orders p JOIN organizations o ON o.id = p.supplier_org_id
-        WHERE p.status = 'ACCEPTED' AND p.currency=$3
+        WHERE p.status::text = ANY($4::text[]) AND p.currency=$3
           AND ($1::date IS NULL OR p.created_at >= $1::timestamptz)
           AND ($2::date IS NULL OR p.created_at < ($2::date + interval '1 month')::timestamptz)
-        GROUP BY o.id, o.legal_name ORDER BY 2 DESC LIMIT 5`, [from, to, currency]),
-      m.query(DEPARTMENT_SQL, [from, to, currency]),
+        GROUP BY o.id, o.legal_name ORDER BY 2 DESC LIMIT 5`, [from, to, currency, SPEND_PO_STATUSES]),
+      m.query(DEPARTMENT_SQL, [from, to, currency, SPEND_PO_STATUSES]),
       m.query(`
         WITH awarded AS (
           SELECT e.id, sum(${lineNet('ei.qty*ei.est_unit_price_minor')})::bigint AS est,
@@ -242,10 +245,10 @@ export class DashboardService {
                COALESCE($1::date, date_trunc('month', now()) - interval '11 months') - interval '1 year',
                COALESCE($2::date, date_trunc('month', now())) - interval '1 year', interval '1 month') gs(m)
         LEFT JOIN purchase_orders p
-          ON date_trunc('month', p.created_at) = gs.m AND p.status = 'ACCEPTED' AND p.currency=$3
-        GROUP BY gs.m ORDER BY gs.m`, [from, to, currency]),
-      m.query(CATEGORY_SQL, [prevFrom, prevTo, currency]),
-      m.query(DEPARTMENT_SQL, [prevFrom, prevTo, currency]),
+          ON date_trunc('month', p.created_at) = gs.m AND p.status::text = ANY($4::text[]) AND p.currency=$3
+        GROUP BY gs.m ORDER BY gs.m`, [from, to, currency, SPEND_PO_STATUSES]),
+      m.query(CATEGORY_SQL, [prevFrom, prevTo, currency, SPEND_PO_STATUSES]),
+      m.query(DEPARTMENT_SQL, [prevFrom, prevTo, currency, SPEND_PO_STATUSES]),
     ]);
 
     // Merge this window with the same window a year earlier. A key that only appears in the
