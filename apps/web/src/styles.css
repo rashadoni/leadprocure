@@ -693,3 +693,18 @@ th.acts, td.acts { text-align: right; }
    вариантов — его видно как отдельный ход. */
 .suggest-new { border-top: 1px solid var(--border); border-radius: 0 0 7px 7px; margin-top: 3px; }
 .suggest-empty { cursor: default; }
+
+/* Шаги мастера создания заявки. Названы словами, а не точками: полоска говорит «их три»,
+   но не «о чём они», а человеку важно знать, что спросят дальше. */
+.wiz-steps { display: flex; gap: 8px; flex-wrap: wrap; list-style: none; padding: 0; margin: 0 0 14px; }
+.wiz-steps li { display: flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 20px;
+  border: 1px solid var(--border); color: var(--muted); font-size: 12.5px; }
+.wiz-steps li b { display: inline-flex; align-items: center; justify-content: center; width: 19px; height: 19px;
+  border-radius: 50%; background: var(--panel2); font-size: 11px; }
+.wiz-steps li.on { border-color: var(--accent); color: var(--text); }
+.wiz-steps li.on b { background: var(--accent); color: #fff; }
+.wiz-steps li.done { color: var(--text); }
+.wiz-steps li.done b { background: rgba(4, 120, 87, .12); color: var(--accent); }
+.wiz-sum { width: auto; }
+.wiz-sum td { padding: 4px 18px 4px 0; border: 0; }
+.wiz-sum td:first-child { color: var(--muted); font-size: 12.5px; }

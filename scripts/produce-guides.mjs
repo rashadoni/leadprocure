@@ -625,7 +625,17 @@ const SECTIONS = {
       do: async (p, l, h) => { await h.needClick('[data-testid=req-new]', '«Yeni sorğu» düyməsi', 700); await h.holdUntil(0.35); await h.needFill('[data-testid=req-title]', STORY.title, 'Başlıq'); await h.holdUntil(0.95); } },
     { az: 'Kateqoriya iki şeyi həll edir: pul hansı büdcədən gedəcək və satınalma hansı metodla olacaq. Şöbəni boş buraxıram — sistem mənim öz şöbəmi qoyur.',
       must: true,
-      do: async (p, l, h) => { await h.needFill('[data-testid=req-category]', STORY.category, 'Kateqoriya'); await h.holdUntil(0.55); await h.need('[data-testid=req-department]', 'Şöbə sahəsi'); await h.moveTo('[data-testid=req-department]'); await h.holdUntil(0.95); } },
+      do: async (p, l, h) => {
+        await h.needFill('[data-testid=req-category]', STORY.category, 'Kateqoriya');
+        await h.holdUntil(0.55);
+        await h.need('[data-testid=req-department]', 'Şöbə sahəsi');
+        await h.moveTo('[data-testid=req-department]');
+        await h.holdUntil(0.9);
+        // Форма стала пошаговой (11.11.2026): первый шаг — что покупаем, и «Дальше»
+        // переводит на позиции. Клик здесь, а не в начале следующей сцены: там он съел бы
+        // её первые секунды, и голос заговорил бы о позициях раньше, чем они появятся.
+        await h.needClick('[data-testid=req-next]', '«Növbəti» düyməsi', 700);
+      } },
     { az: 'Mövqelər: ad, say və vahid qiymətin smetası. İkinci sətri «Mövqelər» düyməsi əlavə edir. Cəm aşağıda özü yığılır — mən onu yazmıram, server hesablayır.',
       must: true,
       do: async (p, l, h) => {
@@ -637,15 +647,24 @@ const SECTIONS = {
         await h.needFill('[data-testid=item-name-1]', STORY.items[1].name, 'ikinci mövqenin adı');
         await h.needFill('[data-testid=item-qty-1]', STORY.items[1].qty, 'ikinci mövqenin sayı');
         await h.needFill('[data-testid=item-price-1]', STORY.items[1].price, 'ikinci mövqenin qiyməti');
-        await h.moveTo('[data-testid=req-total]'); await h.holdUntil(0.96);
+        await h.moveTo('[data-testid=req-total]'); await h.holdUntil(0.9);
+        // На шаг проверки — здесь же, по той же причине: следующая сцена говорит о том,
+        // что увидит на нём, и экран должен успеть его показать.
+        await h.needClick('[data-testid=req-next]', '«Növbəti» düyməsi', 900);
       } },
     { az: 'Yarat — sorğu qaralama kimi yazılır və nömrə alır. Altmış dörd min manat: bu rəqəm sorğunun taleyini həll edir, çünki metodu məbləğ seçir.',
       must: true,
       do: async (p, l, h) => {
-        await h.needClick('form button.btn:not(.ghost):not([type=button])', '«Yarat» düyməsi', 1500);
+        // Сцена начинается на шаге проверки, и это редкий случай, когда экран догнал
+        // голос без правки текста: фраза «эта цифра решает судьбу заявки, потому что метод
+        // выбирает сумма» теперь написана на экране словами — «с этой суммой: закрытый
+        // тендер». Показываем ДО нажатия, пока про неё говорят.
+        await h.need('[data-testid=req-summary]', 'yoxlama cədvəli');
+        await h.moveTo('[data-testid=req-method-preview]'); await h.holdUntil(0.45);
+        await h.needClick('form button.btn:not(.ghost):not([type=button])', '«Yarat» düyməsi', 1300);
         const row = await h.need(ROW, 'yeni sorğunun sətri');
-        await h.scrollTo(row); await h.holdUntil(0.5);
-        await h.moveTo(row.locator('td').nth(0)); await h.holdUntil(0.7);
+        await h.scrollTo(row); await h.holdUntil(0.72);
+        await h.moveTo(row.locator('td').nth(0)); await h.holdUntil(0.85);
         await h.moveTo(row.locator('td.num').first()); await h.holdUntil(0.96);
       } },
     { az: 'Göndər — sorğu təsdiqə gedir. Mənim sətirimdə təsdiq düyməsi yoxdur: öz sorğusunu heç kim təsdiqləyə bilməz, bu qayda sistemin özündədir.',
@@ -1495,9 +1514,11 @@ const SECTIONS = {
         await h.needClick('[data-testid=req-new]', '«Yeni sorğu» düyməsi', 700);
         await h.needFill('[data-testid=req-title]', STORY.title2, 'Başlıq');
         await h.needFill('[data-testid=req-category]', STORY.category, 'Kateqoriya');
-        // Название товара набирается ЗДЕСЬ: голос в этой сцене как раз говорит «A4 kağız»,
-        // а у следующей сцены свои четыре секунды занимают создание и отправка — набор
-        // поверх них сдвигал её «пятьсот пакетов» на три секунды позже слов.
+        await h.holdUntil(0.72);
+        // Форма пошаговая: на позиции переводит «Dalşa»/«Növbəti». Название товара
+        // набирается сразу за переходом — голос в этой сцене как раз говорит «A4 kağız», а
+        // у следующей свои секунды занимают создание и отправка.
+        await h.needClick('[data-testid=req-next]', '«Növbəti» düyməsi', 600);
         await h.needFill('[data-testid=item-name-0]', STORY.item2.name, 'mövqenin adı');
         await h.holdUntil(0.95);
       } },
@@ -1509,7 +1530,9 @@ const SECTIONS = {
         // говорит голос: «пятьсот пакетов, по сто двадцать манат».
         await h.needFill('[data-testid=item-qty-0]', STORY.item2.qty, 'say');
         await h.needFill('[data-testid=item-price-0]', STORY.item2.price, 'qiymət');
-        await h.holdUntil(0.5);
+        await h.holdUntil(0.42);
+        // На шаг проверки, и только потом «Yarat»: кнопка создания живёт там.
+        await h.needClick('[data-testid=req-next]', '«Növbəti» düyməsi', 700);
         // Паузы после кликов укорочены с 1500: они нужны, чтобы результат успел попасть в
         // кадр, и 900 мс для этого хватает, а полторы секунды уводили «создаю и отправляю»
         // на две с лишним секунды позже самих слов.

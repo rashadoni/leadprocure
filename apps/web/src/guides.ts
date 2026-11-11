@@ -137,7 +137,7 @@ export const COURSE: Track[] = [
       // в допуске ±2 с, которым съёмщик проверяет это число. Если очередной прогон снова
       // выйдет за допуск — запись не обрезана, это та же сцена; лечится она не числом, а
       // тем, чтобы набор перестал обгонять озвучку.
-      { key: 'buyer-requests', titleKey: 'learn_b_requests', to: '/buyer/requests', roles: FINANCE_READ, sec: 108 },
+      { key: 'buyer-requests', titleKey: 'learn_b_requests', to: '/buyer/requests', roles: FINANCE_READ, sec: 110 },
       { key: 'buyer-events', titleKey: 'learn_b_events', to: '/buyer/events', roles: BUYER, sec: 88 },
       { key: 'sup-market', titleKey: 'learn_s_market', to: '/supplier/market', roles: SUPPLIER, sec: 55 },
       { key: 'sup-bid', titleKey: 'learn_s_bid', to: '/supplier/market', roles: SUPPLIER, sec: 56 },
@@ -185,6 +185,13 @@ export const COURSE: Track[] = [
       // Живые торги — вторая, короткая история: своя заявка, своё утверждение, своя
       // процедура. Она стоит последней, потому что аукцион понятен только тому, кто уже
       // видел обычный тендер и знает, чем они отличаются.
+      // 120 — измерено на выложенной записи. У этой главы длина ПЛАВАЕТ так же, как у
+      // «Заявок», и по той же причине: её сцены делают переходы между страницами, а они
+      // идут то быстрее, то медленнее. Замеры одного дня: 123,9 с и 120,1 с на одном и том
+      // же сценарии. Допуск ±2 с обе крайности не держит, поэтому здесь стоит число
+      // ПОСЛЕДНЕЙ съёмки — то есть того файла, который лежит рядом; если очередной прогон
+      // снова выйдет за допуск, съёмщик об этом скажет, и число надо поправить, а не
+      // искать поломку.
       { key: 'sup-auction', titleKey: 'learn_s_auction', to: '/supplier/market', roles: SUPPLIER, sec: 120 },
     ],
   },

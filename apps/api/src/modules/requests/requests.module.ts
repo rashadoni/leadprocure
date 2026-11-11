@@ -361,6 +361,15 @@ export class RequestsService {
     return this.getPolicies();
   }
 
+  // Тот же расчёт, но до создания заявки: мастер показывает, прямая это закупка или
+  // тендер, пока человек ещё набирает позиции. Считает его СЕРВЕР тем же запросом, что и
+  // при подаче: политика живёт в базе, у неё есть «ничейная» категория `*` и порядок
+  // перекрытия полос, и переписать это на странице значило бы завести второй ответ,
+  // который однажды разойдётся с первым.
+  async previewMethod(category: string | undefined, totalMinor: number): Promise<{ method: ProcurementMethod }> {
+    return { method: await this.resolveMethod((category ?? '').trim() || '*', Math.max(0, Math.round(totalMinor))) };
+  }
+
   private async resolveMethod(category: string, total: number): Promise<ProcurementMethod> {
     const rows = await this.rc.manager.query(
       `SELECT method FROM procurement_method_policies
@@ -434,6 +443,14 @@ export class RequestsController {
     @Query('departmentId') departmentId?: string,
   ) {
     return this.requests.list(q, parsePaging(page, pageSize), departmentId || undefined);
+  }
+
+  // Что выйдет из этой суммы — прямая закупка или тендер, — до того как заявка создана.
+  @Get('method-preview') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER', 'BUYER_FINANCE')
+  methodPreview(@Query('category') category?: string, @Query('amountMinor') amountMinor?: string) {
+    const total = Number(amountMinor ?? 0);
+    if (!Number.isFinite(total) || total < 0) throw new BadRequestException('amountMinor must be a non-negative number');
+    return this.requests.previewMethod(category, total);
   }
 
   @Get('method-policies') @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_USER', 'BUYER_FINANCE')
