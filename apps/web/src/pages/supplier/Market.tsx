@@ -6,6 +6,8 @@ import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
 import { ProcedureChip } from '../../components/ProcedureChip';
 import { ListState, useLoad } from '../../components/ListState';
+import { FilterChip, useUrlFilter } from '../../components/StatCard';
+import { statusLabel } from '../../components/humanize';
 
 const PAGE_SIZE = 20;
 
@@ -14,9 +16,14 @@ export default function Market() {
   const [page, setPage] = useState(1);
   // A supplier who cannot see a tender does not bid on it, so a failed load must say so
   // rather than render an empty market.
+  // Отбор из адреса — его ставит карточка «Витрина» на рабочем столе поставщика. Она
+  // считает ОБЪЯВЛЕННЫЕ тендеры, а витрина показывает и закрытые, на которые его звали, —
+  // без отбора число на карточке и длина списка расходились по построению.
+  const [statusFilter, setStatusFilter] = useUrlFilter('status');
   const market = useLoad(
-    () => api.get('/events', { params: { page, pageSize: PAGE_SIZE } }).then((r) => r.data),
-    [page],
+    () => api.get('/events', { params: { page, pageSize: PAGE_SIZE, ...(statusFilter ? { status: statusFilter } : {}) } })
+      .then((r) => r.data),
+    [page, statusFilter],
     { items: [] as any[], total: 0 },
   );
   // A failed page change must not leave the PREVIOUS page's rows sitting under the new
@@ -28,6 +35,10 @@ export default function Market() {
       <div className="hint" data-testid="section-origin">{t('origin_market')}</div>
       <div className="card">
         <ListState of={market} empty={!rows.length} emptyKey="empty_market" />
+        {statusFilter && (
+          <FilterChip label={statusFilter === 'open' ? t('ev_f_open') : statusFilter === 'active' ? t('ev_f_active') : statusLabel(t, statusFilter)}
+            total={market.data.total ?? 0} onClear={() => { setPage(1); setStatusFilter(''); }} testid="market-filter" />
+        )}
         <table>
           {/* The buyer's own tender list has carried this column since PR #71, and the
               market — the one screen where the procedure decides whether to bid at all —

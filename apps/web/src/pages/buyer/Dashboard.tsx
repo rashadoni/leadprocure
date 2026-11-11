@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { StatCard } from '../../components/StatCard';
 import { Link } from 'react-router-dom';
 import { api, fmtDate, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
@@ -62,11 +63,21 @@ export default function Dashboard() {
     // «Присуждено», not «Объём закупок»: this is the sum of winning bids over all time,
     // which the tooltip always said and the label never did — while Аналитика printed a
     // different number under the very same word.
-    { label: t('kpi_awarded'), value: fmtMoney(kpi.data.awardedSpend), tip: t('tip_spend') },
-    { label: t('savings'), value: fmtMoney(kpi.data.savings), tip: t('tip_savings') },
-    { label: t('active_events'), value: kpi.data.activeEvents, tip: t('tip_active_events') },
-    { label: t('pending'), value: kpi.data.pendingApprovals, tip: t('tip_pending') },
-    { label: t('orders'), value: kpi.data.openPos, tip: t('tip_orders') },
+    // У каждой считающей карточки есть адрес, и он несёт тот же отбор, по которому
+    // посчитано число: «в работе», «ждут одобрения», «незакрытые». Что в них входит,
+    // решает одно место на сервере (LIST_FILTER_SETS в @leadprocure/shared) — и оно же
+    // считает эти числа, так что длина списка равна числу на карточке по построению.
+    // Две верхние карточки — суммы за всё время: они ведут в раздел без отбора.
+    { label: t('kpi_awarded'), value: fmtMoney(kpi.data.awardedSpend), tip: t('tip_spend'),
+      to: '/buyer/events', testid: 'kpi-awarded' },
+    { label: t('savings'), value: fmtMoney(kpi.data.savings), tip: t('tip_savings'),
+      to: '/buyer/events', testid: 'kpi-dash-savings' },
+    { label: t('active_events'), value: kpi.data.activeEvents, tip: t('tip_active_events'),
+      to: '/buyer/events?status=active', testid: 'kpi-active-events' },
+    { label: t('pending'), value: kpi.data.pendingApprovals, tip: t('tip_pending'),
+      to: '/buyer/requests?status=pending', testid: 'kpi-pending' },
+    { label: t('orders'), value: kpi.data.openPos, tip: t('tip_orders'),
+      to: '/buyer/contracts?po=open', testid: 'kpi-open-pos' },
   ];
 
   return (
@@ -77,10 +88,8 @@ export default function Dashboard() {
         { loading: false, failed: budgetsFailed, reload: loadOverBudgets }]} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
         {cards.map((c) => (
-          <div className="card" key={c.label} style={{ marginBottom: 0 }} data-tip={hintOf(c.tip)}>
-            <div style={{ color: 'var(--muted)', fontSize: 12 }}>{c.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 800, marginTop: 6 }}>{c.value}</div>
-          </div>
+          <StatCard key={c.label} label={c.label} value={c.value} tip={hintOf(c.tip)}
+            to={c.to} testid={c.testid} />
         ))}
       </div>
 

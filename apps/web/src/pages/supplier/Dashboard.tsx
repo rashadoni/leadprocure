@@ -1,3 +1,4 @@
+import { StatCard } from '../../components/StatCard';
 import { Link } from 'react-router-dom';
 import { api, fmtDate, fmtMoney } from '../../api/client';
 import { useI18n } from '../../i18n';
@@ -46,11 +47,26 @@ export default function SupplierDashboard() {
   // explanation: "Контракты: 3" counts drafts and finished ones too, and "Открытые
   // тендеры" counts the closed ones you were invited to. The bare numbers said neither.
   const cards = [
-    { label: t('market'), value: kpi.data.openTenders, tip: t('tip_sup_market') },
-    { label: t('my_bids'), value: kpi.data.myActiveBids, tip: t('tip_sup_bids') },
-    { label: t('contracts'), value: kpi.data.contractsWon, tip: t('tip_sup_contracts') },
-    { label: t('my_orders'), value: kpi.data.ordersInProgress, tip: t('tip_sup_orders') },
-    { label: t('invoices'), value: kpi.data.invoicesPending, tip: t('tip_sup_invoices') },
+    // Адрес несёт тот же отбор, по которому посчитано число: витрина — объявленные
+    // тендеры, заказы — незакрытые, счета — неоплаченные. Иначе человек приходит сверить
+    // «3» и видит список из одиннадцати строк.
+    //
+    // «Мои ставки» ведут на витрину осознанно: отдельного списка ставок в продукте нет,
+    // ставка видна внутри своего тендера. Выдумывать для карточки страницу, которой нет,
+    // было бы хуже, чем привести к ближайшему месту, где эти тендеры и лежат.
+    //
+    // «Контракты» — без отбора, и это тоже совпадение с числом: карточка считает ВСЕ
+    // контракты (так сказано в её подсказке), сколько их и показывает список.
+    { label: t('market'), value: kpi.data.openTenders, tip: t('tip_sup_market'),
+      to: '/supplier/market?status=open', testid: 'sup-kpi-market' },
+    { label: t('my_bids'), value: kpi.data.myActiveBids, tip: t('tip_sup_bids'),
+      to: '/supplier/market', testid: 'sup-kpi-bids' },
+    { label: t('contracts'), value: kpi.data.contractsWon, tip: t('tip_sup_contracts'),
+      to: '/supplier/contracts', testid: 'sup-kpi-contracts' },
+    { label: t('my_orders'), value: kpi.data.ordersInProgress, tip: t('tip_sup_orders'),
+      to: '/supplier/orders?po=open', testid: 'sup-kpi-orders' },
+    { label: t('invoices'), value: kpi.data.invoicesPending, tip: t('tip_sup_invoices'),
+      to: '/supplier/invoices?status=outstanding', testid: 'sup-kpi-invoices' },
   ];
   // Verification is a standing condition, not a figure. Sitting as the sixth tile in a row
   // of numbers it broke the grid's rhythm and stood taller than the rest, and it answers a
@@ -82,10 +98,8 @@ export default function SupplierDashboard() {
 
       <div data-testid="sup-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
         {cards.map((c) => (
-          <div className="card" key={c.label} style={{ marginBottom: 0 }} data-tip={hintOf(c.tip)}>
-            <div style={{ color: 'var(--muted)', fontSize: 12 }}>{c.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 800, marginTop: 6 }}>{c.value}</div>
-          </div>
+          <StatCard key={c.label} label={c.label} value={c.value} tip={hintOf(c.tip)}
+            to={c.to} testid={c.testid} />
         ))}
       </div>
 

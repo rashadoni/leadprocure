@@ -9,10 +9,13 @@ import {
   NotFoundException,
   Param,
   Post,
+  Query,
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import type { AccessTokenPayload, InvoiceStatus } from '@leadprocure/shared';
+import { INVOICE_STATUSES, LIST_FILTER_SETS } from '@leadprocure/shared';
+import { monthStart, resolveCurrency, resolveStatusFilter } from '../../common/http/list-filter';
 import { IsArray, IsInt, IsISO8601, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
@@ -138,7 +141,16 @@ export class InvoicesService {
     return this.get(inv.id);
   }
 
-  async list() {
+  // Отбор, с которым список счетов открывают из карточки «Оплачено» или «Не оплачено»
+  // (OUTSTANDING_INVOICE_STATUSES: всё, кроме оплаченных и отклонённых — отклонённый счёт
+  // не долг). Окно месяцев — по `i.created_at`, тем же столбцом, каким его считает
+  // карточка на /buyer/analytics.
+  async list(
+    statuses: string[] | null = null,
+    from: string | null = null,
+    to: string | null = null,
+    currency: string | null = null,
+  ) {
     return this.rc.manager.query(
       // `due_date` отдаётся ОТДЕЛЬНОЙ строковой колонкой. Так сделано, когда драйвер
       // возвращал `date` объектом Date: на клиенте он становился полуночью UTC, а в поясе
@@ -153,7 +165,12 @@ export class InvoicesService {
        JOIN organizations ob ON ob.id = i.buyer_org_id
        JOIN organizations os ON os.id = i.supplier_org_id
        JOIN purchase_orders p ON p.id = i.po_id
+       WHERE ($1::text[] IS NULL OR i.status::text = ANY($1::text[]))
+         AND ($2::date IS NULL OR i.created_at >= $2::timestamptz)
+         AND ($3::date IS NULL OR i.created_at < ($3::date + interval '1 month')::timestamptz)
+         AND ($4::char(3) IS NULL OR i.currency = $4)
        ORDER BY i.created_at DESC LIMIT 200`,
+      [statuses, from, to, currency],
     );
   }
 
@@ -312,8 +329,16 @@ export class InvoicesController {
   constructor(private readonly invoices: InvoicesService) {}
 
   @Get()
-  list() {
-    return this.invoices.list();
+  list(
+    @Query('status') status?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('currency') currency?: string,
+  ) {
+    return this.invoices.list(
+      resolveStatusFilter(status, LIST_FILTER_SETS.invoices, INVOICE_STATUSES),
+      monthStart(from), monthStart(to), resolveCurrency(currency),
+    );
   }
 
   // Integrations → 1C: download all invoices as a CSV 1C can import.

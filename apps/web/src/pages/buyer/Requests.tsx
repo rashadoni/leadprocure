@@ -7,10 +7,12 @@ import { useI18n } from '../../i18n';
 import { useDialogs } from '../../components/Dialogs';
 import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
+import { statusLabel } from '../../components/humanize';
 import { isDenied, ListState, useLoad } from '../../components/ListState';
 import { Actions } from '../../components/Actions';
 import { RowMenu } from '../../components/RowMenu';
 import { Suggest } from '../../components/Suggest';
+import { FilterChip, useUrlFilter } from '../../components/StatCard';
 import { RequestWizard } from './RequestWizard';
 
 const PAGE_SIZE = 20;
@@ -40,6 +42,11 @@ export default function Requests() {
   // be picked for new requests; retired ones stay on their historic requests.
   const [deps, setDeps] = useState<any[]>([]);
   const [depFilter, setDepFilter] = useState('');
+  // Отбор из адреса — его ставит карточка «Ждут одобрения» на панели. Уходит в запрос
+  // вместе с номером страницы: что значит «ждут одобрения», решает один
+  // PENDING_REQUEST_STATUSES на сервере, а отбор по уже показанной странице дал бы
+  // «ждут одобрения: 5» над списком из двух строк.
+  const [statusFilter, setStatusFilter] = useUrlFilter('status');
   // These two fill the category and department selects, and the department decides whose
   // budget the spend lands on. A fresh org legitimately has neither (and may be denied
   // them), but a dead request must not quietly leave the author with no choice to make.
@@ -80,9 +87,9 @@ export default function Requests() {
   const isAdmin = session?.org.role === 'BUYER_ADMIN';
 
   const requests = useLoad(
-    () => api.get('/requests', { params: { ...(q ? { q } : {}), ...(depFilter ? { departmentId: depFilter } : {}), page, pageSize: PAGE_SIZE } })
+    () => api.get('/requests', { params: { ...(q ? { q } : {}), ...(depFilter ? { departmentId: depFilter } : {}), ...(statusFilter ? { status: statusFilter } : {}), page, pageSize: PAGE_SIZE } })
       .then((r) => r.data),
-    [q, page, depFilter], { items: [] as any[], total: 0 },
+    [q, page, depFilter, statusFilter], { items: [] as any[], total: 0 },
   );
   // A failed page change must not leave the PREVIOUS page's rows sitting under the new
   // page number: on failure the alert stands alone.
@@ -334,6 +341,10 @@ export default function Requests() {
           { loading: false, failed: impactFailed.length > 0,
             reload: () => impactFailed.forEach((id) => loadImpact(id)) }]}
           empty={!rows.length} />
+        {statusFilter && (
+          <FilterChip label={statusFilter === 'pending' ? t('req_f_pending') : statusLabel(t, statusFilter)}
+            total={total} onClear={() => { setPage(1); setStatusFilter(''); }} testid="req-filter" />
+        )}
         <table>
           <thead><tr><th className="nowrap">#</th><th className="grow">{t('title')}</th><th>{t('category')}</th><th>{t('department')}</th><th className="nowrap">{t('date')}</th><th>{t('requester')}</th><th className="num">{t('total')}<Cur of={cur} /></th><th>{t('status')}</th><th>{t('method')}</th><th className="acts">{t('actions')}</th></tr></thead>
           <tbody>

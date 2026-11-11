@@ -5,9 +5,14 @@ import { Link } from 'react-router-dom';
 import { useI18n } from '../i18n';
 import { useDialogs } from '../components/Dialogs';
 import { Badge } from '../components/Badge';
+import { statusLabel } from '../components/humanize';
 import { Actions } from '../components/Actions';
 import { isDenied } from '../components/ListState';
 import { orderHref } from './OrderDetail';
+import { FilterChip, useClearUrlFilters, useUrlFilter } from '../components/StatCard';
+
+// Потолок выдачи списка счетов на сервере (`LIMIT 200` в modules/invoices).
+const INVOICE_PAGE_CAP = 200;
 
 export default function Invoices() {
   const { t } = useI18n();
@@ -29,13 +34,38 @@ export default function Invoices() {
   const fresherRow = useRef<Record<string, { version: number; data: any }>>({});
   const listRequest = useRef(0);
 
+  // Отбор приходит из адреса — его ставит карточка-показатель, которая это число и
+  // посчитала, — и уходит В ЗАПРОС. Что значит «не оплачен», решает одно место на сервере
+  // (OUTSTANDING_INVOICE_STATUSES: всё, кроме оплаченных и отклонённых), и период там же
+  // отмеряется тем же столбцом, каким его считала карточка. Повтори это условие здесь — и
+  // однажды поправят одно место из двух: человек придёт сверить число и увидит другое.
+  const [statusFilter] = useUrlFilter('status');
+  const [fromFilter] = useUrlFilter('from');
+  const [toFilter] = useUrlFilter('to');
+  // Валюта тоже часть отбора: карточки «оплачено» / «не оплачено» на /buyer/analytics
+  // считаются по выбранной там валюте, и без неё число и список разошлись бы на первом же
+  // заказе в другой валюте (блокирующее замечание из разбора PR #190).
+  const [curFilter] = useUrlFilter('currency');
+  const filterLabel = [
+    statusFilter === 'outstanding' ? t('inv_f_outstanding') : statusFilter === 'paid' ? t('inv_f_paid') : statusLabel(t, statusFilter),
+    fromFilter || toFilter ? `${t('inv_f_period')} ${fromFilter || '…'} — ${toFilter || '…'}` : '',
+    curFilter,
+  ].filter(Boolean).join(' · ');
+  // Разом, а не тремя вызовами: каждый из них строит адрес из того, что видел при
+  // отрисовке, и до этой правки «Показать все» снимало только последний.
+  const clearFilter = useClearUrlFilters('status', 'from', 'to', 'currency');
+
   const load = async () => {
     const request = ++listRequest.current;
     const readAt = detailSequence.current;
     setListLoading(true);
     setListError(false);
     try {
-      const { data } = await api.get('/invoices');
+      const { data } = await api.get('/invoices', { params: {
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...(fromFilter ? { from: fromFilter } : {}), ...(toFilter ? { to: toFilter } : {}),
+        ...(curFilter ? { currency: curFilter } : {}),
+      } });
       if (request === listRequest.current) setRows(data.map((row: any) => {
         const fresher = fresherRow.current[row.id];
         return fresher && fresher.version > readAt ? { ...row, ...fresher.data } : row;
@@ -48,13 +78,15 @@ export default function Invoices() {
       if (request === listRequest.current) setListLoading(false);
     }
   };
+  // Отбор в зависимостях: снял его в подписи — и список перезапрашивается без него.
+  // Пустой список после «Показать все» был бы ровно тем же экраном, который врёт.
   useEffect(() => {
     load();
     return () => {
       detailIntent.current = {}; mutationVersion.current = {}; fresherRow.current = {};
       listRequest.current++;
     };
-  }, []);
+  }, [statusFilter, fromFilter, toFilter, curFilter]);
 
   const act = async (id: string, fn: () => Promise<{ data: any } | undefined>) => {
     try {
@@ -130,6 +162,15 @@ export default function Invoices() {
           <span>{t('invoice_list_error')}</span>{' '}
           <button className="btn small ghost" onClick={() => load()}>{t('invoice_list_retry')}</button>
         </div>}
+        {/* Счета не разбиты на страницы: сервер отдаёт до 200 строк, поэтому итог — длина
+            выдачи. Ровно на потолке число не называется, а говорится «первые 200»: иначе
+            карточка сказала бы «240», подпись — «200», и обещание «числа сходятся»
+            сломалось бы молча (замечание из разбора PR #190). */}
+        {filterLabel && (
+          <FilterChip label={filterLabel} onClear={clearFilter} testid="inv-filter"
+            total={rows.length < INVOICE_PAGE_CAP ? rows.length : undefined}
+            note={rows.length < INVOICE_PAGE_CAP ? undefined : t('inv_capped').replace('%n', String(INVOICE_PAGE_CAP))} />
+        )}
         <table>
           <thead><tr><th>#</th><th>{t('order_no')}</th><th>{isBuyer ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="nowrap">{t('due_date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th>{invoiceActions && <th className="acts">{t('actions')}</th>}</tr></thead>
           <tbody>

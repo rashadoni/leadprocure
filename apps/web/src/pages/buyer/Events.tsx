@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { FilterChip, useUrlFilter } from '../../components/StatCard';
 import { Link } from 'react-router-dom';
 import { api, fmtDateTime } from '../../api/client';
 import { useI18n } from '../../i18n';
+import { statusLabel } from '../../components/humanize';
 import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
 import { ListState, useLoad } from '../../components/ListState';
@@ -12,9 +14,15 @@ const PAGE_SIZE = 20;
 export default function Events() {
   const { t } = useI18n();
   const [page, setPage] = useState(1);
+  // Отбор, с которым сюда приходят с карточки «Тендеров в работе». Уходит В ЗАПРОС, а не
+  // режет показанную страницу: страница — это 20 строк из, скажем, сорока, и «в работе: 7»
+  // привело бы на список, где их две. Какие статусы считаются «в работе», решает
+  // ACTIVE_EVENT_STATUSES на сервере — здесь только имя отбора.
+  const [statusFilter, setStatusFilter] = useUrlFilter('status');
   const events = useLoad(
-    () => api.get('/events', { params: { page, pageSize: PAGE_SIZE } }).then((r) => r.data),
-    [page],
+    () => api.get('/events', { params: { page, pageSize: PAGE_SIZE, ...(statusFilter ? { status: statusFilter } : {}) } })
+      .then((r) => r.data),
+    [page, statusFilter],
     { items: [] as any[], total: 0 },
   );
   // A failed page change must not leave the PREVIOUS page's rows sitting under the new
@@ -28,6 +36,11 @@ export default function Events() {
       <div className="hint" data-testid="section-origin">{t('origin_events')}</div>
       <div className="card">
         <ListState of={events} empty={!rows.length} emptyKey="empty_events" />
+        {statusFilter && (
+          <FilterChip label={statusFilter === 'active' ? t('ev_f_active')
+            : statusFilter === 'open' ? t('ev_f_open') : statusLabel(t, statusFilter)}
+            total={events.data.total ?? 0} onClear={() => { setPage(1); setStatusFilter(''); }} testid="ev-filter" />
+        )}
         <table>
           <thead><tr><th>{t('title')}</th><th>{t('method')}</th><th>{t('status')}</th><th>{t('deadline')}</th><th>{t('bids_received')}</th></tr></thead>
           <tbody>

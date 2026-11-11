@@ -9,6 +9,7 @@ import { Badge } from '../../components/Badge';
 import { statusLabel, amendedQty, amendedPrice } from '../../components/humanize';
 import { Actions } from '../../components/Actions';
 import { ListState, useLoad } from '../../components/ListState';
+import { FilterChip, useUrlFilter } from '../../components/StatCard';
 import { orderHref } from '../OrderDetail';
 
 const PAGE_SIZE = 20;
@@ -22,9 +23,14 @@ export default function Orders() {
   const nav = useNavigate();
   const [page, setPage] = useState(1);
 
+  // Отбор из адреса — его ставит карточка «Заказы в работе» на рабочем столе
+  // поставщика. Уходит в запрос, а не режет показанную страницу: карточка считает по
+  // ВСЕМ заказам, а на странице их двадцать.
+  const [poFilter, setPoFilter] = useUrlFilter('po');
   const orderList = useLoad(
-    () => api.get('/orders', { params: { page, pageSize: PAGE_SIZE } }).then((r) => r.data),
-    [page], { items: [] as any[], total: 0 },
+    () => api.get('/orders', { params: { page, pageSize: PAGE_SIZE, ...(poFilter ? { status: poFilter } : {}) } })
+      .then((r) => r.data),
+    [page, poFilter], { items: [] as any[], total: 0 },
   );
   // A failed page change must not leave the PREVIOUS page's rows sitting under the new
   // page number: on failure the alert stands alone.
@@ -122,6 +128,10 @@ export default function Orders() {
       <div className="hint" data-testid="section-origin">{t('origin_orders_sup')}</div>
       <div className="card">
         <ListState of={orderList} empty={!orders.length} emptyKey="empty_sup_orders" />
+        {poFilter && (
+          <FilterChip label={poFilter === 'open' ? t('po_f_open') : statusLabel(t, poFilter)}
+            total={total} onClear={() => { setPage(1); setPoFilter(''); }} testid="po-filter" />
+        )}
         <table>
           <thead><tr><th>#</th><th>{t('buyer_org')}</th><th className="num">{t('total')}</th><th>{t('status')}</th><th className="acts">{t('actions')}</th><th>{t('logistics')}</th></tr></thead>
           <tbody>

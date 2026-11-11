@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FilterChip, useClearUrlFilters, useUrlFilter } from '../../components/StatCard';
 import { Link } from 'react-router-dom';
 import { api, fmtDate, fmtMoney } from '../../api/client';
 import { useAuth } from '../../auth/auth';
@@ -8,6 +9,7 @@ import { useDialogs } from '../../components/Dialogs';
 import { PO_BUYER_NEXT } from '@leadprocure/shared';
 import Pager from '../../components/Pager';
 import { Badge } from '../../components/Badge';
+import { statusLabel } from '../../components/humanize';
 import { Actions } from '../../components/Actions';
 import { MenuSep, RowMenu } from '../../components/RowMenu';
 import { ListState, useLoad } from '../../components/ListState';
@@ -37,9 +39,31 @@ export default function Contracts() {
     () => api.get('/contracts', { params: { page: cPage, pageSize: PAGE_SIZE } }).then((r) => r.data),
     [cPage], { items: [] as any[], total: 0 },
   );
+  // Отбор заказов приходит из адреса: `po=open` с рабочего стола («Незакрытые заказы»),
+  // `po=accepted` вместе с окном месяцев — из расходов на /buyer/analytics. Имя параметра
+  // в адресе своё, потому что на этой странице два списка, и `status` не сказал бы, о чьём
+  // статусе речь. Уходит в запрос, а не режет страницу: иначе число на карточке и длина
+  // списка разойдутся на всём, что не попало в первые 20 строк.
+  const [poFilter] = useUrlFilter('po');
+  const [fromFilter] = useUrlFilter('from');
+  const [toFilter] = useUrlFilter('to');
+  // Валюта — часть отбора карточки «Расход», а не украшение: на /buyer/analytics все
+  // четыре числа считаются по выбранной валюте.
+  const [curFilter] = useUrlFilter('currency');
+  // Разом: отдельные снятия строят адрес каждое из того, что видели при отрисовке, и
+  // «Показать все» сняло бы только последнее из них.
+  const clearAll = useClearUrlFilters('po', 'from', 'to', 'currency');
+  // И страница возвращается на первую: отбор снят — прежняя третья страница может уже не
+  // существовать, а рядом, у отбора по отделу на заявках, сброс стоит.
+  const clearPoFilter = () => { setOPage(1); clearAll(); };
   const orderList = useLoad(
-    () => api.get('/orders', { params: { page: oPage, pageSize: PAGE_SIZE } }).then((r) => r.data),
-    [oPage], { items: [] as any[], total: 0 },
+    () => api.get('/orders', { params: {
+      page: oPage, pageSize: PAGE_SIZE,
+      ...(poFilter ? { status: poFilter } : {}),
+      ...(fromFilter ? { from: fromFilter } : {}), ...(toFilter ? { to: toFilter } : {}),
+      ...(curFilter ? { currency: curFilter } : {}),
+    } }).then((r) => r.data),
+    [oPage, poFilter, fromFilter, toFilter, curFilter], { items: [] as any[], total: 0 },
   );
   // A failed page change must not leave the PREVIOUS page's rows sitting under the new
   // page number: on failure the alert stands alone.
@@ -174,6 +198,15 @@ export default function Contracts() {
         <h3>{t('orders')}</h3>
         <div className="hint" data-testid="section-origin">{t(isBuyerSide ? 'origin_orders' : 'origin_orders_sup')}</div>
         <ListState of={orderList} empty={!orders.length} emptyKey="empty_orders" />
+        {poFilter && (
+          <FilterChip
+            label={[
+              poFilter === 'open' ? t('po_f_open') : poFilter === 'accepted' ? t('po_f_accepted') : statusLabel(t, poFilter),
+              fromFilter || toFilter ? `${t('inv_f_period')} ${fromFilter || '…'} — ${toFilter || '…'}` : '',
+              curFilter,
+            ].filter(Boolean).join(' · ')}
+            total={oTotal} onClear={clearPoFilter} testid="po-filter" />
+        )}
         <table>
           <thead><tr><th>#</th><th>{isBuyerSide ? t('supplier_org') : t('buyer_org')}</th><th className="nowrap">{t('date')}</th><th className="num">{t('total')}</th><th>{t('status')}</th>{orderActions && <th className="acts">{t('actions')}</th>}</tr></thead>
           <tbody>

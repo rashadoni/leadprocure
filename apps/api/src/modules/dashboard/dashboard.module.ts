@@ -1,5 +1,10 @@
 import { BadRequestException, Controller, Get, Injectable, Module, Query } from '@nestjs/common';
 import type { PaidBasis } from '@leadprocure/shared';
+import {
+  ACTIVE_EVENT_STATUSES, LIST_FILTER_SETS, LIVE_BID_STATES, OPEN_EVENT_STATUSES, OPEN_PO_STATUSES,
+  OUTSTANDING_INVOICE_STATUSES, PENDING_REQUEST_STATUSES,
+} from '@leadprocure/shared';
+import { monthStart } from '../../common/http/list-filter';
 import { Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 
@@ -7,6 +12,14 @@ const lineNet = (amount: string) => `(CASE WHEN e.vat_mode='INCLUSIVE' THEN ${am
 const poNet = `(CASE WHEN p.vat_mode='INCLUSIVE' THEN (SELECT sum(poi.line_total_minor-round(poi.line_total_minor*poi.vat_rate_bp::numeric/(10000+poi.vat_rate_bp))) FROM purchase_order_items poi WHERE poi.po_id=p.id) ELSE p.total_minor END)`;
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+// Множества, по которым считаются карточки этого эндпоинта, — те же, какими отбираются
+// списки по их ссылкам. Выписанные здесь строками в SQL, они разошлись бы со списком
+// первым же новым статусом, а разъезд числа и списка — это экран, который врёт (оба
+// прохода разбора PR #190). Стоят ПОД импортами: между ними это читалось как опечатка,
+// и на `import/first` ругаются линтеры.
+const PAID_INVOICE_STATUSES = LIST_FILTER_SETS.invoices.paid;
+const SPEND_PO_STATUSES = LIST_FILTER_SETS.orders.accepted;
 
 // Which of the two settlement measures this endpoint reports. The union it is checked
 // against carries both definitions: see PAID_BASES in @leadprocure/shared.
@@ -20,7 +33,7 @@ export class DashboardService {
 
   async buyer() {
     const m = this.rc.manager;
-    const one = async (sql: string) => Number((await m.query(sql))[0]?.v ?? 0);
+    const one = async (sql: string, params: unknown[] = []) => Number((await m.query(sql, params))[0]?.v ?? 0);
 
     const [awardedSpend, savings, activeEvents, pendingApprovals, unreadNotifications, openPos] =
       await Promise.all([
@@ -31,12 +44,18 @@ export class DashboardService {
              JOIN procurement_requests pr ON pr.id = e.request_id
              JOIN awards a ON a.event_id = e.id
              JOIN bids b ON b.id = a.winning_bid_id WHERE a.cancelled_at IS NULL AND b.currency='AZN' AND e.evaluation_currency='AZN'`),
-        one(`SELECT count(*)::int AS v FROM sourcing_events
-             WHERE status IN ('OPEN','CLOSED','OPENING','EVALUATION')`),
-        one(`SELECT count(*)::int AS v FROM procurement_requests WHERE status = 'SUBMITTED'`),
+        // Множества — из @leadprocure/shared, а не выписаны здесь: по этим же трём
+        // определениям отбираются списки, которые открывают карточки с этими числами
+        // (`/events?status=active`, `/requests?status=pending`, `/orders?status=open`).
+        // Выпиши их дважды — и однажды поправят одно место: карточка скажет «пять», а в
+        // списке будет четыре строки, и человек поверит не тому.
+        one(`SELECT count(*)::int AS v FROM sourcing_events WHERE status::text = ANY($1::text[])`,
+          [ACTIVE_EVENT_STATUSES]),
+        one(`SELECT count(*)::int AS v FROM procurement_requests WHERE status::text = ANY($1::text[])`,
+          [PENDING_REQUEST_STATUSES]),
         one(`SELECT count(*)::int AS v FROM notifications WHERE read_at IS NULL`),
-        one(`SELECT count(*)::int AS v FROM purchase_orders
-             WHERE status NOT IN ('ACCEPTED','REJECTED','CANCELLED')`),
+        one(`SELECT count(*)::int AS v FROM purchase_orders WHERE status::text = ANY($1::text[])`,
+          [OPEN_PO_STATUSES]),
       ]);
 
     // Actionable tasks: what needs a human decision right now. ref/amount let the UI
@@ -60,14 +79,16 @@ export class DashboardService {
   // Supplier KPIs — all RLS-scoped to the supplier org.
   async supplier() {
     const m = this.rc.manager;
-    const one = async (sql: string) => Number((await m.query(sql))[0]?.v ?? 0);
+    const one = async (sql: string, params: unknown[] = []) => Number((await m.query(sql, params))[0]?.v ?? 0);
 
     const [openTenders, myActiveBids, contractsWon, ordersInProgress, invoicesPending, unread] = await Promise.all([
-      one(`SELECT count(*)::int AS v FROM sourcing_events WHERE status = 'OPEN'`),
-      one(`SELECT count(*)::int AS v FROM bids WHERE state IN ('SUBMITTED','OPENED')`),
+      one(`SELECT count(*)::int AS v FROM sourcing_events WHERE status::text = ANY($1::text[])`,
+        [OPEN_EVENT_STATUSES]),
+      one(`SELECT count(*)::int AS v FROM bids WHERE state::text = ANY($1::text[])`, [LIVE_BID_STATES]),
       one(`SELECT count(*)::int AS v FROM contracts`),
-      one(`SELECT count(*)::int AS v FROM purchase_orders WHERE status NOT IN ('ACCEPTED','REJECTED','CANCELLED')`),
-      one(`SELECT count(*)::int AS v FROM invoices WHERE status NOT IN ('PAID','REJECTED')`),
+      one(`SELECT count(*)::int AS v FROM purchase_orders WHERE status::text = ANY($1::text[])`, [OPEN_PO_STATUSES]),
+      one(`SELECT count(*)::int AS v FROM invoices WHERE status::text = ANY($1::text[])`,
+        [OUTSTANDING_INVOICE_STATUSES]),
       one(`SELECT count(*)::int AS v FROM notifications WHERE read_at IS NULL`),
     ]);
     const ver = await m.query(`SELECT status FROM supplier_verification_cases ORDER BY created_at DESC LIMIT 1`);
@@ -104,15 +125,9 @@ export class DashboardService {
     const currency = filter.currency ?? 'AZN';
     if (!/^[A-Z]{3}$/.test(currency)) throw new BadRequestException('Invalid currency');
     const m = this.rc.manager;
-    // The page sends 'YYYY-MM' (an <input type="month">), which Postgres cannot cast to a
-    // date — every windowed request answered 500, and no test had ever passed a window.
-    // Anything else is refused here rather than reaching the query as a cast error.
-    const monthStart = (d?: string): string | null => {
-      if (!d) return null;
-      if (/^\d{4}-(0[1-9]|1[0-2])$/.test(d)) return `${d}-01`;
-      if (/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(d)) return d;
-      throw new BadRequestException(`Expected YYYY-MM, got "${d}"`);
-    };
+    // 'YYYY-MM' из `<input type="month">` Postgres в дату не приводит — когда-то каждый
+    // запрос с окном отвечал 500. Разбор этой строки живёт в common/http/list-filter.ts:
+    // списки, которые открывают отсюда карточки, отмеряют окно тем же кодом.
     // Resolved here, not left as NULL for the SQL to default: the chart defaulted to the
     // last twelve months while the splits defaulted to all time, and once a year-earlier
     // window exists an unbounded "previous year" would simply mean "everything".
@@ -133,7 +148,7 @@ export class DashboardService {
       LEFT JOIN contracts c ON c.id = p.contract_id
       LEFT JOIN sourcing_events e ON e.id = c.event_id
       LEFT JOIN procurement_requests pr ON pr.id = e.request_id
-      WHERE p.status = 'ACCEPTED' AND p.currency=$3
+      WHERE p.status::text = ANY($4::text[]) AND p.currency=$3
         AND ($1::date IS NULL OR p.created_at >= $1::timestamptz)
         AND ($2::date IS NULL OR p.created_at < ($2::date + interval '1 month')::timestamptz)
       GROUP BY 1 ORDER BY 2 DESC`;
@@ -147,7 +162,7 @@ export class DashboardService {
              sum(${poNet})::bigint AS total, count(*)::int AS po_count
       FROM purchase_orders p
       LEFT JOIN departments d ON d.id = p.department_id
-      WHERE p.status = 'ACCEPTED' AND p.currency=$3
+      WHERE p.status::text = ANY($4::text[]) AND p.currency=$3
         AND ($1::date IS NULL OR p.created_at >= $1::timestamptz)
         AND ($2::date IS NULL OR p.created_at < ($2::date + interval '1 month')::timestamptz)
       GROUP BY 1 ORDER BY 2 DESC`;
@@ -179,17 +194,17 @@ export class DashboardService {
                COALESCE($1::date, date_trunc('month', now()) - interval '11 months'),
                COALESCE($2::date, date_trunc('month', now())), interval '1 month') gs(m)
         LEFT JOIN purchase_orders p
-          ON date_trunc('month', p.created_at) = gs.m AND p.status = 'ACCEPTED' AND p.currency=$3
-        GROUP BY gs.m ORDER BY gs.m`, [from, to, currency]),
-      m.query(CATEGORY_SQL, [from, to, currency]),
+          ON date_trunc('month', p.created_at) = gs.m AND p.status::text = ANY($4::text[]) AND p.currency=$3
+        GROUP BY gs.m ORDER BY gs.m`, [from, to, currency, SPEND_PO_STATUSES]),
+      m.query(CATEGORY_SQL, [from, to, currency, SPEND_PO_STATUSES]),
       m.query(`
         SELECT o.legal_name AS name, sum(${poNet})::bigint AS total, count(*)::int AS po_count
         FROM purchase_orders p JOIN organizations o ON o.id = p.supplier_org_id
-        WHERE p.status = 'ACCEPTED' AND p.currency=$3
+        WHERE p.status::text = ANY($4::text[]) AND p.currency=$3
           AND ($1::date IS NULL OR p.created_at >= $1::timestamptz)
           AND ($2::date IS NULL OR p.created_at < ($2::date + interval '1 month')::timestamptz)
-        GROUP BY o.id, o.legal_name ORDER BY 2 DESC LIMIT 5`, [from, to, currency]),
-      m.query(DEPARTMENT_SQL, [from, to, currency]),
+        GROUP BY o.id, o.legal_name ORDER BY 2 DESC LIMIT 5`, [from, to, currency, SPEND_PO_STATUSES]),
+      m.query(DEPARTMENT_SQL, [from, to, currency, SPEND_PO_STATUSES]),
       m.query(`
         WITH awarded AS (
           SELECT e.id, sum(${lineNet('ei.qty*ei.est_unit_price_minor')})::bigint AS est,
@@ -216,11 +231,12 @@ export class DashboardService {
       // measure, and neither is summed into spend above (PO totals are net, invoice
       // gross carries VAT).
       m.query(`
-        SELECT COALESCE(sum(gross_minor) FILTER (WHERE status = 'PAID'), 0)::bigint AS paid,
-               COALESCE(sum(gross_minor) FILTER (WHERE status NOT IN ('PAID','REJECTED')), 0)::bigint AS outstanding,
-               count(*) FILTER (WHERE status = 'PAID')::int AS paid_count,
-               count(*) FILTER (WHERE status NOT IN ('PAID','REJECTED'))::int AS outstanding_count
-        FROM invoices WHERE currency=$3 AND created_at >= $1::date AND created_at < ($2::date + interval '1 month')`, [from, to, currency]),
+        SELECT COALESCE(sum(gross_minor) FILTER (WHERE status::text = ANY($4::text[])), 0)::bigint AS paid,
+               COALESCE(sum(gross_minor) FILTER (WHERE status::text = ANY($5::text[])), 0)::bigint AS outstanding,
+               count(*) FILTER (WHERE status::text = ANY($4::text[]))::int AS paid_count,
+               count(*) FILTER (WHERE status::text = ANY($5::text[]))::int AS outstanding_count
+        FROM invoices WHERE currency=$3 AND created_at >= $1::date AND created_at < ($2::date + interval '1 month')`,
+        [from, to, currency, PAID_INVOICE_STATUSES, OUTSTANDING_INVOICE_STATUSES]),
       // last year's same window
       m.query(`
         SELECT to_char(gs.m + interval '1 year', 'YYYY-MM') AS month,
@@ -229,10 +245,10 @@ export class DashboardService {
                COALESCE($1::date, date_trunc('month', now()) - interval '11 months') - interval '1 year',
                COALESCE($2::date, date_trunc('month', now())) - interval '1 year', interval '1 month') gs(m)
         LEFT JOIN purchase_orders p
-          ON date_trunc('month', p.created_at) = gs.m AND p.status = 'ACCEPTED' AND p.currency=$3
-        GROUP BY gs.m ORDER BY gs.m`, [from, to, currency]),
-      m.query(CATEGORY_SQL, [prevFrom, prevTo, currency]),
-      m.query(DEPARTMENT_SQL, [prevFrom, prevTo, currency]),
+          ON date_trunc('month', p.created_at) = gs.m AND p.status::text = ANY($4::text[]) AND p.currency=$3
+        GROUP BY gs.m ORDER BY gs.m`, [from, to, currency, SPEND_PO_STATUSES]),
+      m.query(CATEGORY_SQL, [prevFrom, prevTo, currency, SPEND_PO_STATUSES]),
+      m.query(DEPARTMENT_SQL, [prevFrom, prevTo, currency, SPEND_PO_STATUSES]),
     ]);
 
     // Merge this window with the same window a year earlier. A key that only appears in the

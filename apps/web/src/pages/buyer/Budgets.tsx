@@ -466,7 +466,15 @@ export default function Budgets() {
                     {/* where the period lands at the current rate — the question that follows "how much is left" */}
                     <td className={`num ${d.forecastOverMinor > 0 ? 'error' : 'hint'}`} data-tip={t('forecast_hint')}>
                       {fmtMoney(d.forecastMinor, d.currency)}
-                      {d.forecastOverMinor > 0 && <span> · +{fmtMoney(d.forecastOverMinor, d.currency)}</span>}
+                      {/* Перерасход — ПОД прогнозом, а не рядом. Денежные столбцы не
+                          переносятся (иначе цифры не сравнить глазом), поэтому две суммы в
+                          одну строку задавали столбцу минимум в 223px: таблица сводки
+                          становилась шире своей карточки на 20px, и вся страница ехала
+                          вбок на 15px при ширине окна 1280. Поймала это браузерная
+                          проверка на стенде с живыми данными — на посевных числах короче и
+                          запас ещё хватал. И читается так лучше: «прогноз» и «сверх плана»
+                          это две величины, а не одна строка через точку. */}
+                      {d.forecastOverMinor > 0 && <span className="num-sub">+{fmtMoney(d.forecastOverMinor, d.currency)}</span>}
                     </td>
                     {/* The figure under the bar is in the bubble, as it is in the plans
                          table below — one page should not show one quantity two ways. The
