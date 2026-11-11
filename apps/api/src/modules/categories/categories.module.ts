@@ -14,13 +14,34 @@ export class CategoriesService {
   constructor(private readonly rc: RequestContextService, private readonly audit: AuditService) {}
 
   list() {
+    // `auto_created` отдаётся наружу не для красоты: от того, есть ли в списке хоть одна
+    // заведённая РУКОЙ запись, зависит, примет ли бюджет незнакомую категорию. Пока флага
+    // не было, администратор видел плоский ряд плашек и менял поведение бюджетов всей
+    // организации, заводя первую категорию, — не узнав об этом ни до, ни после.
     return this.rc.manager.query(
-      `SELECT id, code, name, created_at FROM procurement_categories ORDER BY code`,
+      `SELECT id, code, name, auto_created, created_at FROM procurement_categories ORDER BY code`,
     );
   }
 
   async create(dto: UpsertCategoryDto, auth: AccessTokenPayload) {
     const code = dto.code.trim();
+    // Пара «IT» и «it» рождается именно здесь, и единое правило её не покрывало: заявка
+    // потом молча приведётся к одному написанию, а бюджет на второе ответит «отличается
+    // только регистром» — то есть справочник сам создаёт положение, в котором половина
+    // продукта ругается, а половина молчит. Поэтому сверка без учёта регистра стоит и
+    // на ручном заведении: уникальный индекс её не ловит, он по точному значению.
+    const twin = (
+      await this.rc.manager.query(
+        `SELECT code FROM procurement_categories WHERE lower(code) = lower($1)`,
+        [code],
+      )
+    )[0];
+    if (twin) {
+      throw new ConflictException(
+        `Category "${twin.code}" already exists — "${code}" differs only in case, `
+        + 'and two spellings would split the same spend in two',
+      );
+    }
     try {
       const row = (
         await this.rc.manager.query(

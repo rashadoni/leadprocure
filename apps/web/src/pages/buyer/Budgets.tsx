@@ -11,6 +11,7 @@ import { useAuth } from '../../auth/auth';
 import { useI18n } from '../../i18n';
 import { useDialogs } from '../../components/Dialogs';
 import { isDenied, ListState } from '../../components/ListState';
+import { Suggest } from '../../components/Suggest';
 
 interface Budget {
   id: string;
@@ -61,6 +62,26 @@ export default function Budgets() {
   const [rows, setRows] = useState<Budget[]>([]);
   const [form, setForm] = useState({ ...empty });
   const [editId, setEditId] = useState<string | null>(null);
+  // Категории для подсказки: заведённые в «Параметрах» плюс те, что уже стоят на бюджетах.
+  // Поле раньше не подсказывало вовсе — человек должен был помнить, как категория пишется,
+  // а ошибка в написании заводит ВТОРУЮ категорию и тихо делит по ней расход.
+  const [cats, setCats] = useState<Array<{ code: string; auto_created?: boolean }>>([]);
+  // Загрузился ли справочник — отдельный вопрос от того, что в нём. Пустой массив значит
+  // «ещё не пришло» ровно так же, как «никто не курировал», и пока их не различали, форма
+  // в первые миллисекунды (и навсегда, если запрос упал) обещала «создать» в организации,
+  // где сервер это отвергает. То же расхождение экрана и сервера, только с другим знаком:
+  // неизвестность читалась как самый разрешительный режим.
+  const [catsLoaded, setCatsLoaded] = useState(false);
+  useEffect(() => {
+    api.get('/categories').then((r) => { setCats(r.data); setCatsLoaded(true); }).catch(() => {});
+  }, []);
+  // Можно ли ввести в бюджете НОВУЮ категорию, решает не форма, а сервер: пока справочник
+  // никто не вёл руками, он принимает любой код и заводит его; как только появилась первая
+  // ручная запись — принимает только существующие. Экран обязан обещать ровно это, иначе
+  // строка «+ создать» снова начнёт звать туда, где ответят отказом.
+  // Пока неизвестно — не обещаем: «создать» предлагается, только если справочник
+  // действительно пришёл и в нём нет ни одной ручной записи.
+  const mayCreateCat = catsLoaded && !cats.some((c) => !c.auto_created);
   // The plan form used to stand open above the table, eight fields wide, on every visit —
   // so the page opened on a form instead of on the plans. Same shape as Requests: a named
   // button, and the card appears when it is asked for.
@@ -314,10 +335,33 @@ export default function Budgets() {
             </button>
           </div>
           <form onSubmit={submit} className="row" style={{ alignItems: 'flex-end' }}>
-            <div><label>{t('name')}</label>
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
-            <div><label>{t('category')} </label>
-              <input placeholder="*" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></div>
+            {/* Имя и категория — два поля, про которые владелец сказал «непонятно, что это
+                такое»: подписи есть, а что в них писать, не говорит ничто. Теперь у каждого
+                своя подсказка, а под формой стоит строка, объясняющая все поля сразу. */}
+            <div><label data-tip={t('bud_name_tip')}>{t('name')}</label>
+              <input data-testid="bud-name" data-tip={t('bud_name_tip')} placeholder={t('bud_name_ph')}
+                value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
+            <div style={{ minWidth: 190 }}><label data-tip={t('bud_category_tip')}>{t('category')}</label>
+              {/* `*` остаётся значением, но больше не единственным объяснением себя: первой
+                  строкой списка стоит «Все категории (*)» словами. */}
+              {/* Выбранное «Все категории» кладёт в поле саму звёздочку, а не очищает его:
+                  пустое поле после щелчка читается как «ничего не произошло» — ровно та
+                  немота, на которую владелец и указал. Отправка и так считает пустое за
+                  `*`, так что значение от этого не меняется. */}
+              {/* `allowNew={false}` — не мелочь, а соответствие серверу: бюджет НЕ заводит
+                  категорий, он отвергает незнакомые. Строка «+ создать "AZNCAT"» здесь
+                  обещала бы то, на что сервер отвечает отказом, — ровно то расхождение
+                  экрана и поведения, ради которого всё это и делалось. Категории
+                  появляются из заявок, то есть оттуда, где деньги действительно просят. */}
+              <Suggest testid="bud-category" value={form.category} onChange={(v) => setForm({ ...form, category: v })}
+                placeholder="*" tip={t('bud_category_tip')} allowNew={mayCreateCat}
+                emptyHint={mayCreateCat ? undefined : t('bud_cat_empty')}
+                options={[
+                  { value: '*', label: `${t('suggest_any_category')} (*)`, hint: t('bud_any_hint') },
+                  ...cats.map((c) => ({ value: c.code, hint: c.auto_created ? t('suggest_from_list') : t('suggest_curated') })),
+                  ...[...new Set(rows.map((b: any) => b.category).filter((c: any) => c && c !== '*'))]
+                    .filter((c: any) => !cats.some((k) => k.code === c)).map((c: any) => ({ value: c, hint: t('suggest_from_list') })),
+                ]} /></div>
             <div><label>{t('department')}</label>
               {/* empty = org-wide ceiling; a department budget always wins over it */}
               <select value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })}>
@@ -361,6 +405,7 @@ export default function Budgets() {
               {editId && <button type="button" className="btn ghost" onClick={() => { setEditId(null); setForm({ ...empty }); }} style={{ marginLeft: 6 }}>✕</button>}
             </div>
           </form>
+          <div className="hint" data-testid="bud-form-hint" style={{ marginTop: 10 }}>{t('bud_form_hint')}</div>
           {err && <div className="error">{err}</div>}
         </div>
       )}

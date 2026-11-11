@@ -1,4 +1,5 @@
 import { returnedRows, safeMoney } from '../../common/procurement/invariants';
+import { resolveCategory } from '../../common/procurement/categories';
 import {
   BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get,
   Injectable, Module, NotFoundException, Param, Post, Put, Query, Res,
@@ -895,25 +896,28 @@ export class BudgetsService {
     };
   }
 
-  // A budget on category "it" never matches requests filed under "IT", and the mismatch is
-  // silent — the budget just sits at 0%. Once the buyer curates a category list, hold
-  // budgets to it. Orgs with an empty directory keep the old free-text behaviour.
-  private async assertKnownCategory(category: string): Promise<void> {
-    if (category === '*') return;
-    const known = await this.rc.manager.query(`SELECT code FROM procurement_categories`);
-    if (!known.length) return;
-    if (!known.some((c: { code: string }) => c.code === category)) {
-      throw new BadRequestException(
-        `Unknown category "${category}". Use one of: ${known.map((c: any) => c.code).join(', ')} (or leave it empty for all categories)`,
-      );
-    }
+  // Категория бюджета проходит то же правило, что и категория заявки
+  // (common/procurement/categories.ts), и `strict: true` отличает бюджет от заявки в одном:
+  // фраза с пробелами здесь отвергается с объяснением, а не записывается как есть. Причина
+  // не в аккуратности, а в том, что бюджет по категории СЧИТАЕТ: категория, которой нет в
+  // справочнике и которая не станет кодом, дала бы бюджет, не ловящий ничего и молча
+  // стоящий на нуле — ровно тот дефект, ради которого строгость когда-то и завели.
+  //
+  // Что при этом ушло: прежнее «справочник пуст — принимаем всё, непуст — отвергаем
+  // незнакомое». Оно означало, что поведение сервера менялось у всех разом в тот момент,
+  // когда кто-то первым завёл категорию, и форма бюджета, предлагающая «создать», получала
+  // в ответ 400.
+  private async resolveBudgetCategory(raw: string | undefined, auth: AccessTokenPayload): Promise<string> {
+    const { code, createdId } = await resolveCategory(this.rc.manager, auth.org_id, raw, { strict: true });
+    if (createdId) await this.audit.record('CATEGORY_CREATED', 'category', createdId, { code, from_budget: true });
+    return code;
   }
 
   async create(dto: UpsertBudgetDto, auth: AccessTokenPayload) {
     await this.lockPlans();
     safeMoney(dto.amountMinor);
     const period = resolveBudgetPeriod(dto);
-    await this.assertKnownCategory(dto.category?.trim() || '*');
+    const category = await this.resolveBudgetCategory(dto.category, auth);
     await this.assertMayWrite(auth, dto.departmentId ?? null);
     let row: { id: string };
     try {
@@ -923,7 +927,7 @@ export class BudgetsService {
              period_start, period_end, amount_minor, currency, created_by)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
           [
-            auth.org_id, dto.name, dto.category?.trim() || '*', dto.departmentId ?? null,
+            auth.org_id, dto.name, category, dto.departmentId ?? null,
             period.type, period.start, period.end, dto.amountMinor, BUDGET_CURRENCY, auth.sub,
           ],
         )
@@ -947,7 +951,14 @@ export class BudgetsService {
     await this.assertBudgetAccess(id, true);
     safeMoney(dto.amountMinor);
     const period = resolveBudgetPeriod(dto);
-    await this.assertKnownCategory(dto.category?.trim() || '*');
+    // Категория проверяется, только если её МЕНЯЮТ. Иначе правка суммы у бюджета, который
+    // завели во времена свободного текста, отвечала бы 400 на значение, которое человек
+    // в этот раз и не трогал, — правило о будущих значениях не должно запирать прошлые.
+    const current = (await this.rc.manager.query(`SELECT category FROM budgets WHERE id=$1`, [id]))[0];
+    const asked = (dto.category ?? '').trim() || '*';
+    const category = asked === current?.category
+      ? asked
+      : await this.resolveBudgetCategory(dto.category, auth);
     await this.assertMayWrite(auth, dto.departmentId ?? null);
     // The amount is money, not a field: changing it writes a revision so "the plan was
     // 500k until March" stays answerable.
@@ -967,7 +978,7 @@ export class BudgetsService {
       const same = (await this.rc.manager.query(
         `SELECT 1 FROM budgets WHERE id=$1 AND name=$2 AND category=$3
            AND department_id IS NOT DISTINCT FROM $4 AND period_start=$5 AND period_end=$6`,
-        [id, dto.name, dto.category?.trim() || '*', dto.departmentId ?? null, period.start, period.end],
+        [id, dto.name, category, dto.departmentId ?? null, period.start, period.end],
       ))[0];
       if (!same) {
         throw new ConflictException(
@@ -986,7 +997,7 @@ export class BudgetsService {
            period_start=$6, period_end=$7, amount_minor=$8, currency=$9, updated_at=now()
          WHERE id=$1 RETURNING id`,
         [
-          id, dto.name, dto.category?.trim() || '*', dto.departmentId ?? null,
+          id, dto.name, category, dto.departmentId ?? null,
           period.type, period.start, period.end, dto.amountMinor, BUDGET_CURRENCY,
         ],
       ));

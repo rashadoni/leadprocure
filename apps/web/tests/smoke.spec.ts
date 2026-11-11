@@ -702,6 +702,65 @@ test.describe('buyer panel', () => {
 
   // Seven unrelated sections one under another, and an admin's new-user password typed in
   // the clear: the field had no `type`, so the browser gave it `text`.
+  // Поле категории: оно подсказывает из уже известного и само говорит, что своё можно
+  // ввести. До этого здесь стоял нативный `<datalist>`: браузер рисовал его своим чёрным
+  // пузырём, похожим на подсказку, и владелец прочитал его как «поиск не такой».
+  test('the category field suggests what exists and offers to create what does not', async () => {
+    await visit(page, '/buyer/requests');
+    await page.getByTestId('req-new').click();
+    const cat = page.getByTestId('req-category');
+    await cat.click();
+    const pop = page.locator('.suggest-pop');
+    // Список рисует ПРИЛОЖЕНИЕ: у нативного datalist нет узла в DOM страницы, поэтому это
+    // же утверждение и ловит возврат к нему.
+    await expect(pop).toBeVisible();
+    const known = await pop.locator('[role=option]').count();
+    expect(known, 'стенд не знает ни одной категории — подсказывать нечем').toBeGreaterThan(0);
+
+    // Набранного нет среди известных — предлагается создать, и это СКАЗАНО, а не угадано.
+    await cat.fill('zzz-belə-kateqoriya-yoxdur');
+    await expect(pop.getByTestId('req-category-create')).toBeVisible();
+    expect(await pop.locator('[role=option]').count()).toBe(1);
+
+    // Выбор мышью кладёт в поле именно выбранное, а не первое попавшееся.
+    await cat.fill('');
+    const rows2 = pop.locator('[role=option]');
+    const second = rows2.nth(Math.min(1, (await rows2.count()) - 1));
+    const picked = (await second.locator('b').innerText()).trim();
+    await second.click();
+    await expect(cat).toHaveValue(picked);
+    await expect(pop).toBeHidden();
+  });
+
+  // Два поля, про которые владелец сказал «непонятно, что это такое». Проверяется не
+  // наличие подсказки в разметке, а то, что она объясняет оба поля и что `*` названо
+  // словами: подпись `*` в пустом поле была единственным объяснением себя.
+  test('the budget form explains its fields, and the category offers «all» in words', async () => {
+    await visit(page, '/buyer/budgets');
+    await page.getByTestId('bud-new').click();
+    const hint = page.getByTestId('bud-form-hint');
+    await expect(hint).toBeVisible();
+    await expect(hint).toContainText(/категор|kateqoriya|categor/i);
+    await expect(page.getByTestId('bud-name')).toHaveAttribute('data-tip', /.{20,}/);
+
+    const cat = page.getByTestId('bud-category');
+    await cat.click();
+    const first = page.locator('.suggest-pop [role=option]').first();
+    await expect(first).toContainText('(*)');
+    await first.click();
+    // «Все категории» видно в поле звёздочкой: пустое поле после щелчка читалось бы как
+    // «ничего не произошло». Отправка и так считает пустое за `*`.
+    await expect(cat).toHaveValue('*');
+
+    // Состояние, которое решает, примет ли бюджет новую категорию, объяснено словами в
+    // «Параметрах». Раньше его не было видно нигде: администратор менял поведение бюджетов
+    // всей организации, заводя первую категорию руками, и не узнавал об этом.
+    await visit(page, '/buyer/settings');
+    const mode = page.getByTestId('cat-mode');
+    await expect(mode).toBeVisible();
+    await expect(mode).toContainText(/бюджет|büdcə|budget/i);
+  });
+
   test('settings jumps to its sections and hides the password it asks for', async () => {
     await visit(page, '/buyer/settings');
     const toApproval = page.getByRole('link', { name: 'Approval chain', exact: true });

@@ -23,6 +23,7 @@ import { pageFrom, parsePaging, Paging } from '../../common/http/paging';
 import { BudgetsModule, BudgetsService } from '../budgets/budgets.module';
 import { RequestContextService } from '../../common/context/request-context.service';
 import { AuditService } from '../../common/audit/audit.service';
+import { resolveCategory } from '../../common/procurement/categories';
 import { AppConfig } from '../../common/config/config.service';
 import { nextDocumentNo } from '../../common/procurement/document-no';
 
@@ -141,15 +142,25 @@ export class RequestsService {
     const requestNo = await nextDocumentNo(m, auth.org_id, 'REQ', this.cfg.appTimezone);
     const total = this.computeTotal(dto.items);
     const departmentId = await this.resolveDepartment(dto.departmentId, auth);
+    // Категория решается ДО вставки, и в заявку идёт ПРИВЕДЁННОЕ значение. Первая
+    // редакция звала `rememberCategory` после вставки и выбрасывала её ответ: в заявке
+    // оставалось набранное «it», а сопоставление с бюджетом — точное равенство строк
+    // (`b.category = pr.category`), так что бюджет «IT» эту заявку не ловил и стоял на
+    // нуле. Комментарий при этом уверял, что приведение происходит. Нашла это сессия,
+    // разбиравшая правку.
+    const { code: category, createdId } = await resolveCategory(m, auth.org_id, dto.category, { strict: false });
     const req = (
       await m.query(
         `INSERT INTO procurement_requests(owner_org_id, request_no, title, category, department_id, vat_mode,
            estimated_total_minor, created_by)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-        [auth.org_id, requestNo, dto.title, dto.category ?? '*', departmentId, dto.vatMode ?? 'EXCLUSIVE', total, auth.sub],
+        [auth.org_id, requestNo, dto.title, category, departmentId, dto.vatMode ?? 'EXCLUSIVE', total, auth.sub],
       )
     )[0];
     await this.insertItems(req.id, auth.org_id, dto.items);
+    // Журнал — только о ПЕРВОМ появлении категории: запись на каждой заявке была бы шумом,
+    // в котором не видно, когда категория завелась.
+    if (createdId) await this.audit.record('CATEGORY_CREATED', 'category', createdId, { code: category, from_request: req.id });
     return this.get(req.id);
   }
 
@@ -157,19 +168,24 @@ export class RequestsService {
     const m = this.rc.manager;
     const req = await this.requireStatus(id, ['DRAFT']);
     const total = this.computeTotal(dto.items);
+    // Как и в create: приведённая категория идёт В ЗАПИСЬ, а не выбрасывается.
+    const { code: category, createdId } = dto.category === undefined
+      ? { code: req.category as string, createdId: null }
+      : await resolveCategory(m, auth.org_id, dto.category, { strict: false });
     await m.query(
       `UPDATE procurement_requests
        SET title=$2, category=$3, department_id=$4, vat_mode=$5, estimated_total_minor=$6,
            version=version+1, updated_at=now()
        WHERE id=$1`,
       [
-        id, dto.title, dto.category ?? req.category,
+        id, dto.title, category,
         dto.departmentId ?? req.department_id,
         dto.vatMode ?? req.vat_mode, total,
       ],
     );
     await m.query(`DELETE FROM request_items WHERE request_id = $1`, [id]);
     await this.insertItems(id, auth.org_id, dto.items);
+    if (createdId) await this.audit.record('CATEGORY_CREATED', 'category', createdId, { code: category, from_request: id });
     return this.get(id);
   }
 

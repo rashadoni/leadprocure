@@ -674,3 +674,22 @@ label { display: block; font-size: 12px; color: var(--muted); font-weight: 500; 
 /* The action column's heading sits over right-aligned buttons, so it is right-aligned too;
    a left heading over a right-hand stack read as two different columns. */
 th.acts, td.acts { text-align: right; }
+
+/* Поле с подсказками (components/Suggest.tsx).
+   Список рисует приложение, а не браузер: нативный `<datalist>` выглядит чужим — в Chrome
+   это чёрный пузырь, который владелец принял за подсказку, а не за список, — и не умеет
+   сказать ни сколько совпадений, ни что своё значение тоже можно ввести. */
+.suggest { position: relative; }
+.suggest-pop { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 70;
+  max-height: 264px; overflow-y: auto; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: var(--shadow-lg); padding: 5px; }
+.suggest-row { display: flex; flex-direction: column; gap: 1px; width: 100%; text-align: left;
+  background: none; border: 0; border-radius: 7px; padding: 7px 10px; cursor: pointer;
+  color: var(--text); font-size: 13px; }
+.suggest-row b { font-weight: 600; }
+.suggest-row .hint { font-size: 11px; margin: 0; }
+.suggest-row.on { background: var(--panel2); }
+/* «Создать» отделено линией, а не цветом: это не опасное действие, но и не один из
+   вариантов — его видно как отдельный ход. */
+.suggest-new { border-top: 1px solid var(--border); border-radius: 0 0 7px 7px; margin-top: 3px; }
+.suggest-empty { cursor: default; }

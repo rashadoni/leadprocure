@@ -22,6 +22,11 @@ export default function Settings() {
   const approvals = approvalList.data;
   const standstills = standstillList.data;
   const [cats, setCats] = useState<any[]>([]);
+  // Пустой справочник и НЕ ПРИШЕДШИЙ справочник — разные вещи, а выглядят одинаково.
+  // Строка про режим утверждает факт об организации, поэтому до ответа она молчит:
+  // сказать «вы ещё ничего не заводили руками», не зная этого, — то же враньё экрана,
+  // которое эта строка и пришла лечить.
+  const [catsLoaded, setCatsLoaded] = useState(false);
   const [newCat, setNewCat] = useState({ code: '', name: '' });
   const [deps, setDeps] = useState<any[]>([]);
   const [newDep, setNewDep] = useState({ code: '', name: '', parentId: '', ownerUserId: '' });
@@ -53,7 +58,7 @@ export default function Settings() {
     // real one and there is no denial to exempt.
     const broken = () => setRefFailed(true);
     const quiet = (e: any) => { if (!isDenied(e)) setRefFailed(true); };
-    api.get('/categories').then((r) => setCats(r.data)).catch(broken);
+    api.get('/categories').then((r) => { setCats(r.data); setCatsLoaded(true); }).catch(broken);
     api.get('/departments').then((r) => setDeps(r.data)).catch(broken);
     api.get('/budgets/policy').then((r) => {
       setPolicy(r.data);
@@ -286,11 +291,23 @@ export default function Settings() {
       <div className="card">
         <h3 id="set-categories">{t('cat_hdr')}</h3>
         <div className="hint" style={{ marginBottom: 10 }}>{t('cat_hint')}</div>
+        {/* Состояние, которое решает поведение бюджетов во всей организации, должно быть
+            ВИДНО. Оно зависит от одного: есть ли в списке хоть одна категория, заведённая
+            рукой. Пока таких нет — бюджет примет любой код и заведёт его; как только
+            появится первая — бюджет станет принимать только то, что в этом списке уже есть.
+            Человек менял этот режим, заводя первую категорию, и не узнавал об этом ни до,
+            ни после; поэтому режим назван словами, а автоматические записи помечены. */}
+        {catsLoaded && (
+          <div className="hint" data-testid="cat-mode" style={{ marginBottom: 10 }}>
+            {cats.some((c) => !c.auto_created) ? t('cat_mode_curated') : t('cat_mode_free')}
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: isAdmin ? 12 : 0 }}>
           {cats.length === 0 && <span className="hint">—</span>}
           {cats.map((c) => (
-            <span key={c.id} className="badge is-info" data-tip={c.name || undefined}>
-              {c.code}{c.name ? ` · ${c.name}` : ''}
+            <span key={c.id} className={`badge ${c.auto_created ? 'is-neutral' : 'is-info'}`}
+              data-tip={c.auto_created ? t('cat_auto_tip') : (c.name || undefined)}>
+              {c.code}{c.name ? ` · ${c.name}` : ''}{c.auto_created ? ' ·' : ''}{c.auto_created ? <span className="hint" style={{ marginLeft: 4 }}>{t('cat_auto')}</span> : null}
               {isAdmin && (
                 <button className="btn small ghost" style={{ marginLeft: 6, padding: '0 6px' }}
                   onClick={() => run(() => api.delete(`/categories/${c.id}`))}>{t('delete')}</button>
