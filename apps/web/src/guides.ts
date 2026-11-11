@@ -137,7 +137,7 @@ export const COURSE: Track[] = [
       // в допуске ±2 с, которым съёмщик проверяет это число. Если очередной прогон снова
       // выйдет за допуск — запись не обрезана, это та же сцена; лечится она не числом, а
       // тем, чтобы набор перестал обгонять озвучку.
-      { key: 'buyer-requests', titleKey: 'learn_b_requests', to: '/buyer/requests', roles: FINANCE_READ, sec: 110 },
+      { key: 'buyer-requests', titleKey: 'learn_b_requests', to: '/buyer/requests', roles: FINANCE_READ, sec: 107 },
       { key: 'buyer-events', titleKey: 'learn_b_events', to: '/buyer/events', roles: BUYER, sec: 88 },
       { key: 'sup-market', titleKey: 'learn_s_market', to: '/supplier/market', roles: SUPPLIER, sec: 55 },
       { key: 'sup-bid', titleKey: 'learn_s_bid', to: '/supplier/market', roles: SUPPLIER, sec: 56 },

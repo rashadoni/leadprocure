@@ -1,5 +1,6 @@
 import { returnedRows, safeMoney } from '../../common/procurement/invariants';
 import { resolveCategory } from '../../common/procurement/categories';
+import { resolveDepartment } from '../../common/procurement/departments';
 import {
   BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get,
   Injectable, Module, NotFoundException, Param, Post, Put, Query, Res,
@@ -458,6 +459,23 @@ export class BudgetsService {
   // если я это создам» до того, как нажата кнопка. Сопоставление обязано быть тем же —
   // поэтому оно одно на оба случая, а не переписано на странице. Два ответа, разошедшиеся
   // в мелочи, хуже отсутствия второго: человек поверит первому, а решение примет второй.
+  // Предпросмотр для мастера: разворачивает отдел ТЕМ ЖЕ разрешителем, что и создание
+  // заявки, и только потом подбирает бюджет. Пустой отдел в форме — это «мой отдел», и
+  // пока предпросмотр уходил с `NULL`, подбор оставлял только общеорганизационные планы:
+  // мастер называл не тот план, на который заявка ляжет, и терял предупреждение о пороге.
+  async previewFor(
+    auth: AccessTokenPayload,
+    input: { category: string; departmentId: string | null; amountMinor: number },
+  ): Promise<BudgetImpact | null> {
+    const department = await resolveDepartment(this.rc.manager, auth, input.departmentId);
+    return this.projectImpact({
+      category: input.category,
+      departmentId: department,
+      currency: BUDGET_CURRENCY,
+      amountMinor: input.amountMinor,
+    });
+  }
+
   async projectImpact(input: {
     category: string | null; departmentId: string | null; currency: string;
     amountMinor: number; requestMinor?: number;
@@ -1742,6 +1760,7 @@ export class BudgetsController {
   @Get('impact-preview')
   @Roles('BUYER_ADMIN', 'BUYER_APPROVER', 'BUYER_FINANCE', 'BUYER_USER')
   async impactPreview(
+    @CurrentUser() auth: AccessTokenPayload,
     @Query('category') category?: string,
     @Query('departmentId') departmentId?: string,
     @Query('amountMinor') amountMinor?: string,
@@ -1749,10 +1768,9 @@ export class BudgetsController {
     const amount = Number(amountMinor ?? 0);
     if (!Number.isFinite(amount) || amount < 0) throw new BadRequestException('amountMinor must be a non-negative number');
     try {
-      return await this.budgets.projectImpact({
+      return await this.budgets.previewFor(auth, {
         category: category?.trim() || '*',
         departmentId: departmentId?.trim() || null,
-        currency: BUDGET_CURRENCY,
         amountMinor: Math.round(amount),
       });
     } catch (e: any) {
