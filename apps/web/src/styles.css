@@ -67,6 +67,10 @@ th.grow, td.grow { width: 100%; min-width: 120px; white-space: normal; }
    against 100,000.00 told the reader nothing while they were all flush left. Tabular
    figures keep the digits in columns too. */
 .num, td.num, th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* Вторая величина в денежной ячейке — своей строкой. Столбец без переноса шириной со всё
+   своё содержимое, поэтому «прогноз · +перерасход» в одну строку делал его вдвое шире и
+   выдавливал таблицу за карточку. */
+.num-sub { display: block; font-size: 11px; }
 tbody tr:last-child td { border-bottom: 0; }
 tr:hover td { background: rgba(4, 120, 87, .05); }
 
@@ -708,3 +712,14 @@ th.acts, td.acts { text-align: right; }
 .wiz-sum { width: auto; }
 .wiz-sum td { padding: 4px 18px 4px 0; border: 0; }
 .wiz-sum td:first-child { color: var(--muted); font-size: 12.5px; }
+
+/* Карточка-показатель, которая открывает то, что посчитала (components/StatCard.tsx).
+   Выглядит как прежняя карточка — меняется только поведение под курсором и строка «Открыть»
+   внизу: карточка с крупным числом и так читается как кнопка, и молчание в ответ на
+   нажатие читается как поломка. */
+a.stat-card { display: block; text-decoration: none; color: inherit; transition: border-color .12s, transform .12s; }
+a.stat-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+a.stat-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.stat-open { margin-top: 8px; font-size: 11px; font-weight: 600; color: var(--accent); }
+/* Строка о том, что список показан не весь: молча показанная часть — тот же врущий экран. */
+.filter-chip { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }

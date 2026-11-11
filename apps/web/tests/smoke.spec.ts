@@ -278,6 +278,13 @@ test.describe('buyer panel', () => {
   // считает не окружение, а запросы, поэтому падает и на второй причине, которую сборочный
   // сторож увидеть не может.
   test('одна загрузка страницы — один /auth/me', async () => {
+    // На ДЕВ-сборке этот замер бессмыслен: React в режиме разработки монтирует дважды
+    // нарочно, и именно это выдавали за дефект продукта в #186. Приёмка поднимает стенд
+    // прод-сборкой, а человек, запускающий набор локально, обычно держит `vite dev` — и
+    // получал бы красное по причине, к продукту не относящейся. Признак дев-сервера —
+    // его собственный клиентский скрипт на странице.
+    const devServer = await page.locator('script[src*="/@vite/client"]').count();
+    test.skip(devServer > 0, 'дев-сборка: StrictMode монтирует дважды — замер относится к прод-сборке');
     const asked: string[] = [];
     const count = (r: Request) => {
       // Только GET: предзапрос CORS к `/auth/me` — настоящий запрос браузера, и считать его
@@ -536,15 +543,22 @@ test.describe('buyer panel', () => {
       if (await page.locator('[data-testid=list-empty], .state-empty').count()) besideAnEmptyList.push(path);
     }
     // The old behaviour cannot pass the loop above: there was no caption element at all —
-    // the sentence lived inside the empty state and nowhere else. This last line pins the
-    // other half of that, and it is the half this stand can actually show: on a section
-    // with no rows the caption and the empty line are BOTH on screen, two elements, not one
-    // sentence wearing a new name. (The seed makes no tenders, contracts, shipments or
-    // catalogues for this organisation, so `withRows` is usually empty here; where a
-    // section does have rows the same caption is above them, by construction — it is drawn
-    // outside the list, not by it.)
-    expect(besideAnEmptyList, 'no section was empty — this check proves nothing on this stand')
-      .not.toEqual([]);
+    // the sentence lived inside the empty state and nowhere else. The caption is drawn
+    // OUTSIDE the list, so it must be there in both cases: above rows, and beside the empty
+    // line as a second element rather than one sentence wearing a new name.
+    //
+    // Which of the two a section shows depends on the stand, and that is the point of this
+    // last line. The dev seed leaves these four sections empty, while the stand the guides
+    // are recorded on has rows in all four — the check used to demand an empty section and
+    // so went red on the fuller stand, for a reason that said nothing about the product.
+    // What must hold on EVERY stand is that each section showed one of the two: a section
+    // that showed neither drew no list at all, and the caption above it was measured over
+    // nothing.
+    const accounted = [...withRows, ...besideAnEmptyList];
+    for (const path of ['/buyer/events', '/buyer/contracts', '/buyer/logistics', '/buyer/catalogs']) {
+      expect(accounted, `${path} drew neither rows nor an empty line — nothing was measured`)
+        .toContain(path);
+    }
   });
 
   // A decision is reached by a button that says what it does. The verification list had no
@@ -776,6 +790,63 @@ test.describe('buyer panel', () => {
     const mode = page.getByTestId('cat-mode');
     await expect(mode).toBeVisible();
     await expect(mode).toContainText(/бюджет|büdcə|budget/i);
+  });
+
+  // Карточка-показатель открывает то, что посчитала. Владелец: «нажимаю на
+  // „неоплаченные" — он должен мне открывать, а не искать, где это находится».
+  // Проверяется не то, что ссылка есть, а что список после перехода показывает ИМЕННО
+  // посчитанное: отбор назван на экране, и ни одной оплаченной строки в нём нет.
+  test('a stat card opens the list it counted, already narrowed', async () => {
+    await visit(page, '/buyer/analytics');
+    const card = page.getByTestId('kpi-outstanding');
+    await expect(card).toBeVisible();
+    // Сколько счетов обещает карточка. Число в примечании под суммой — «Счета: N», и
+    // именно столько строк должно оказаться в списке: открыть мало, число обязано сойтись.
+    const promised = Number((await card.innerText()).match(/(\d+)/g)?.slice(-1)[0] ?? NaN);
+    // Отбор уходит в ЗАПРОС, а не режет показанную страницу, — это видно по самому
+    // запросу, и видно здесь, потому что иначе проверка прошла бы и на отборе по странице.
+    const asked = page.waitForRequest((r) => r.url().includes('/invoices?') && r.url().includes('status=outstanding'));
+    await card.click();
+    await expect(page).toHaveURL(/\/buyer\/invoices\?.*status=outstanding/);
+    await asked;
+    await expect(page.getByTestId('inv-filter')).toBeVisible();
+    // Ни одной оплаченной или отклонённой строки: статус подписан локализованно, поэтому
+    // смотрим на КЛАСС значка, а не на его текст.
+    await expect(page.locator('tbody .badge.PAID')).toHaveCount(0);
+    await expect(page.locator('tbody .badge.REJECTED')).toHaveCount(0);
+    if (Number.isFinite(promised)) {
+      await expect(page.locator('tbody tr'),
+        'карточка обещала одно число, а список показал другое — человек решит, что врёт одно из двух')
+        .toHaveCount(promised);
+    }
+    // И отбор снимается одним нажатием — список, который нельзя вернуть целиком, хуже
+    // несужённого. Снятие тоже уходит в запрос: без него вернулась бы прежняя, суженная
+    // выдача, и «Показать все» ничего бы не показало.
+    const reasked = page.waitForRequest((r) => /\/invoices(\?|$)/.test(r.url()) && !r.url().includes('status='));
+    await page.getByTestId('inv-filter').locator('button').click();
+    await expect(page).not.toHaveURL(/status=outstanding/);
+    await reasked;
+  });
+
+  // Карточка «Ждут одобрения» — тот же договор на списке, который отдаётся СТРАНИЦАМИ.
+  // Отбор по показанной странице дал бы здесь «5» над двумя строками, и именно это
+  // проверяется: число на карточке против числа, которое список называет сам.
+  test('a dashboard count card opens a page-by-page list and the two numbers agree', async () => {
+    await visit(page, '/buyer/dashboard');
+    const card = page.getByTestId('kpi-pending');
+    await expect(card).toBeVisible({ timeout: 20_000 });
+    const promised = Number((await card.innerText()).match(/\d+/)?.[0] ?? NaN);
+    expect(Number.isFinite(promised)).toBe(true);
+    await card.click();
+    await expect(page).toHaveURL(/\/buyer\/requests\?.*status=pending/);
+    await expect(page.getByTestId('req-filter')).toBeVisible({ timeout: 20_000 });
+    // Список называет свой итог сам — в подписи отбора, числом из того же конверта, что
+    // посчитал сервер. От страницы он не зависит, поэтому сравнивать надо с ним, а не с
+    // числом видимых строк.
+    const listed = page.getByTestId('list-filter-total');
+    await expect(listed).toBeVisible();
+    expect(Number(await listed.innerText()),
+      'карточка и список называют разные числа одного и того же').toBe(promised);
   });
 
   test('settings jumps to its sections and hides the password it asks for', async () => {
@@ -1267,8 +1338,11 @@ test.describe('supplier panel', () => {
   test('supplier panel explains its figures and states verification beside them', async () => {
     await visit(page, '/supplier/dashboard');
     const grid = page.getByTestId('sup-kpi');
-    await expect(grid.locator('> div')).toHaveCount(5, { timeout: 20_000 });
-    await expect(grid.locator('> div[data-tip]')).toHaveCount(5);
+    // `> *`, а не `> div`: с 11.11.2026 карточка-показатель — ссылка (она открывает то,
+    // что посчитала), и проверка по типу узла краснела бы на изменении, которое ничего не
+    // обещает читателю. Считается то, что важно: пять карточек, и у каждой есть пояснение.
+    await expect(grid.locator('> *')).toHaveCount(5, { timeout: 20_000 });
+    await expect(grid.locator('> *[data-tip]')).toHaveCount(5);
     await expect(page.getByTestId('sup-verification')).toBeVisible();
   });
 

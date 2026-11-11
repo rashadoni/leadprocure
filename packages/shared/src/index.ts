@@ -376,5 +376,36 @@ export interface AccessTokenPayload {
 // a ledger of invoices, the other is settlement of commitments measured like the plan. The
 // two are not comparable to EACH OTHER — the budget figure is comparable to the commitment
 // and actual beside it, which is why it exists — and neither is summed into actual spend.
+// ---------------- Что посчитала карточка, то и показывает список ----------------
+//
+// Карточка-показатель на рабочем столе открывает список, уже суженный до того, что она
+// посчитала («неоплаченные» — значит именно их, а не все счета). Значит, одно и то же
+// подмножество называют ДВА запроса: тот, что считает число, и тот, что отдаёт строки.
+// Определение здесь одно, потому что разойдись эти два — число на карточке и длина списка
+// перестанут совпадать, и человек решит, что врёт одно из двух. А разойтись им легко:
+// достаточно добавить статус заказа и поправить только один запрос.
+//
+// Отрицания выведены из самих перечислений, а не выписаны руками: новый статус заказа
+// попадёт в «незакрытые» сам, как он попадает в `NOT IN (...)`, и ни один список
+// обновлять не придётся.
+export const ACTIVE_EVENT_STATUSES: SourcingEventStatus[] = ['OPEN', 'CLOSED', 'OPENING', 'EVALUATION'];
+export const PENDING_REQUEST_STATUSES: RequestStatus[] = ['SUBMITTED'];
+const PO_CLOSED_STATUSES: PoStatus[] = ['ACCEPTED', 'REJECTED', 'CANCELLED'];
+export const OPEN_PO_STATUSES: PoStatus[] = PO_STATUSES.filter((s) => !PO_CLOSED_STATUSES.includes(s));
+const INVOICE_SETTLED_STATUSES: InvoiceStatus[] = ['PAID', 'REJECTED'];
+export const OUTSTANDING_INVOICE_STATUSES: InvoiceStatus[] =
+  INVOICE_STATUSES.filter((s) => !INVOICE_SETTLED_STATUSES.includes(s));
+// Ставка, которая ещё в игре: по ней поставщик ждёт исхода.
+export const LIVE_BID_STATES: BidState[] = ['SUBMITTED', 'OPENED'];
+
+// Имена, под которыми отбор ездит в адресе страницы и в параметре запроса. Список имён
+// один на клиент и сервер: опечатка в адресе становится 400, а не молча пустым отбором.
+export const LIST_FILTER_SETS = {
+  events: { active: ACTIVE_EVENT_STATUSES },
+  requests: { pending: PENDING_REQUEST_STATUSES },
+  orders: { open: OPEN_PO_STATUSES, accepted: ['ACCEPTED'] as PoStatus[] },
+  invoices: { outstanding: OUTSTANDING_INVOICE_STATUSES, paid: ['PAID'] as InvoiceStatus[] },
+} as const;
+
 export const PAID_BASES = ['invoice_ledger', 'budget_obligation'] as const;
 export type PaidBasis = (typeof PAID_BASES)[number];

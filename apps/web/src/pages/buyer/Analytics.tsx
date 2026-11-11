@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { StatCard } from '../../components/StatCard';
 import { api, fmtMoney, fmtNumShort } from '../../api/client';
 import type { PaidBasis } from '@leadprocure/shared';
 import { useI18n } from '../../i18n';
@@ -227,24 +228,30 @@ export default function Analytics() {
             under the figure says in words what was counted and on what basis. Each `tip` is
             written from the query in dashboard.module.ts, not from the label above it. */}
         {[
+          // Адрес у карточки несёт ТОТ ЖЕ отбор, по которому посчитано её число: статус и
+          // то же окно месяцев. Иначе список покажет не то, что на карточке, и человек
+          // решит, что одно из двух врёт.
           { label: t('kpi_accepted'), value: money(d.monthly.reduce((s, m) => s + m.totalMinor, 0)),
-            note: t('net_label'), tip: t('spend_hint') },
+            note: t('net_label'), tip: t('spend_hint'), testid: 'kpi-accepted',
+            // Расход — это ПРИНЯТЫЕ заказы за то же окно месяцев: `po=accepted` и те же
+            // `from`/`to`, по тому же столбцу `created_at`, каким их считает сервер.
+            to: `/buyer/contracts?po=accepted&from=${win.from}&to=${win.to}` },
           { label: t('savings'), value: `${money(d.savings.savedMinor)} (${savingsPct}%)`,
-            note: `${t('events')}: ${d.savings.events} · ${t('net_label')}`, tip: t('savings_hint') },
+            note: `${t('events')}: ${d.savings.events} · ${t('net_label')}`, tip: t('savings_hint'),
+            to: '/buyer/events', testid: 'kpi-savings' },
           { label: t(paidBasis), value: money(d.invoices.paidMinor),
-            note: `${t('invoices')}: ${d.invoices.paidCount} · ${t('gross_label')}`, tip: t(paidBasisTip) },
+            note: `${t('invoices')}: ${d.invoices.paidCount} · ${t('gross_label')}`, tip: t(paidBasisTip),
+            to: `/buyer/invoices?status=paid&from=${win.from}&to=${win.to}`, testid: 'kpi-paid' },
           { label: t('inv_outstanding'), value: money(d.invoices.outstandingMinor),
-            note: `${t('invoices')}: ${d.invoices.outstandingCount} · ${t('gross_label')}`, tip: t('inv_outstanding_hint') },
+            note: `${t('invoices')}: ${d.invoices.outstandingCount} · ${t('gross_label')}`, tip: t('inv_outstanding_hint'),
+            to: `/buyer/invoices?status=outstanding&from=${win.from}&to=${win.to}`, testid: 'kpi-outstanding' },
         ].map((c) => (
           /* `hintOf`: these four texts run to 230 characters, and a 240px bubble turns that
              into a ten-line slab over the charts below. The bubble keeps the first
              sentence; the whole text is under the row, in the open, where it can be read
              without holding the mouse still. */
-          <div className="card" key={c.label} style={{ marginBottom: 0 }} data-tip={hintOf(c.tip)}>
-            <div style={{ color: 'var(--muted)', fontSize: 12 }}>{c.label}</div>
-            <div style={{ fontSize: 20, fontWeight: 800, marginTop: 6 }}>{c.value}</div>
-            <div className="hint" style={{ fontSize: 11, marginTop: 4 }}>{c.note}</div>
-          </div>
+          <StatCard key={c.label} label={c.label} value={c.value} note={c.note}
+            tip={hintOf(c.tip)} to={c.to} testid={c.testid} />
         ))}
       </div>
       <div className="hint" style={{ marginBottom: 10 }}>

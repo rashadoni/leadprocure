@@ -1,5 +1,10 @@
 import { BadRequestException, Controller, Get, Injectable, Module, Query } from '@nestjs/common';
 import type { PaidBasis } from '@leadprocure/shared';
+import {
+  ACTIVE_EVENT_STATUSES, LIVE_BID_STATES, OPEN_PO_STATUSES,
+  OUTSTANDING_INVOICE_STATUSES, PENDING_REQUEST_STATUSES,
+} from '@leadprocure/shared';
+import { monthStart } from '../../common/http/list-filter';
 import { Roles } from '../../common/auth/decorators';
 import { RequestContextService } from '../../common/context/request-context.service';
 
@@ -20,7 +25,7 @@ export class DashboardService {
 
   async buyer() {
     const m = this.rc.manager;
-    const one = async (sql: string) => Number((await m.query(sql))[0]?.v ?? 0);
+    const one = async (sql: string, params: unknown[] = []) => Number((await m.query(sql, params))[0]?.v ?? 0);
 
     const [awardedSpend, savings, activeEvents, pendingApprovals, unreadNotifications, openPos] =
       await Promise.all([
@@ -31,12 +36,18 @@ export class DashboardService {
              JOIN procurement_requests pr ON pr.id = e.request_id
              JOIN awards a ON a.event_id = e.id
              JOIN bids b ON b.id = a.winning_bid_id WHERE a.cancelled_at IS NULL AND b.currency='AZN' AND e.evaluation_currency='AZN'`),
-        one(`SELECT count(*)::int AS v FROM sourcing_events
-             WHERE status IN ('OPEN','CLOSED','OPENING','EVALUATION')`),
-        one(`SELECT count(*)::int AS v FROM procurement_requests WHERE status = 'SUBMITTED'`),
+        // Множества — из @leadprocure/shared, а не выписаны здесь: по этим же трём
+        // определениям отбираются списки, которые открывают карточки с этими числами
+        // (`/events?status=active`, `/requests?status=pending`, `/orders?status=open`).
+        // Выпиши их дважды — и однажды поправят одно место: карточка скажет «пять», а в
+        // списке будет четыре строки, и человек поверит не тому.
+        one(`SELECT count(*)::int AS v FROM sourcing_events WHERE status::text = ANY($1::text[])`,
+          [ACTIVE_EVENT_STATUSES]),
+        one(`SELECT count(*)::int AS v FROM procurement_requests WHERE status::text = ANY($1::text[])`,
+          [PENDING_REQUEST_STATUSES]),
         one(`SELECT count(*)::int AS v FROM notifications WHERE read_at IS NULL`),
-        one(`SELECT count(*)::int AS v FROM purchase_orders
-             WHERE status NOT IN ('ACCEPTED','REJECTED','CANCELLED')`),
+        one(`SELECT count(*)::int AS v FROM purchase_orders WHERE status::text = ANY($1::text[])`,
+          [OPEN_PO_STATUSES]),
       ]);
 
     // Actionable tasks: what needs a human decision right now. ref/amount let the UI
@@ -60,14 +71,15 @@ export class DashboardService {
   // Supplier KPIs — all RLS-scoped to the supplier org.
   async supplier() {
     const m = this.rc.manager;
-    const one = async (sql: string) => Number((await m.query(sql))[0]?.v ?? 0);
+    const one = async (sql: string, params: unknown[] = []) => Number((await m.query(sql, params))[0]?.v ?? 0);
 
     const [openTenders, myActiveBids, contractsWon, ordersInProgress, invoicesPending, unread] = await Promise.all([
       one(`SELECT count(*)::int AS v FROM sourcing_events WHERE status = 'OPEN'`),
-      one(`SELECT count(*)::int AS v FROM bids WHERE state IN ('SUBMITTED','OPENED')`),
+      one(`SELECT count(*)::int AS v FROM bids WHERE state::text = ANY($1::text[])`, [LIVE_BID_STATES]),
       one(`SELECT count(*)::int AS v FROM contracts`),
-      one(`SELECT count(*)::int AS v FROM purchase_orders WHERE status NOT IN ('ACCEPTED','REJECTED','CANCELLED')`),
-      one(`SELECT count(*)::int AS v FROM invoices WHERE status NOT IN ('PAID','REJECTED')`),
+      one(`SELECT count(*)::int AS v FROM purchase_orders WHERE status::text = ANY($1::text[])`, [OPEN_PO_STATUSES]),
+      one(`SELECT count(*)::int AS v FROM invoices WHERE status::text = ANY($1::text[])`,
+        [OUTSTANDING_INVOICE_STATUSES]),
       one(`SELECT count(*)::int AS v FROM notifications WHERE read_at IS NULL`),
     ]);
     const ver = await m.query(`SELECT status FROM supplier_verification_cases ORDER BY created_at DESC LIMIT 1`);
@@ -104,15 +116,9 @@ export class DashboardService {
     const currency = filter.currency ?? 'AZN';
     if (!/^[A-Z]{3}$/.test(currency)) throw new BadRequestException('Invalid currency');
     const m = this.rc.manager;
-    // The page sends 'YYYY-MM' (an <input type="month">), which Postgres cannot cast to a
-    // date — every windowed request answered 500, and no test had ever passed a window.
-    // Anything else is refused here rather than reaching the query as a cast error.
-    const monthStart = (d?: string): string | null => {
-      if (!d) return null;
-      if (/^\d{4}-(0[1-9]|1[0-2])$/.test(d)) return `${d}-01`;
-      if (/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(d)) return d;
-      throw new BadRequestException(`Expected YYYY-MM, got "${d}"`);
-    };
+    // 'YYYY-MM' из `<input type="month">` Postgres в дату не приводит — когда-то каждый
+    // запрос с окном отвечал 500. Разбор этой строки живёт в common/http/list-filter.ts:
+    // списки, которые открывают отсюда карточки, отмеряют окно тем же кодом.
     // Resolved here, not left as NULL for the SQL to default: the chart defaulted to the
     // last twelve months while the splits defaulted to all time, and once a year-earlier
     // window exists an unbounded "previous year" would simply mean "everything".

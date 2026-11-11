@@ -7,7 +7,9 @@ import { IsArray, IsIn, IsInt, IsISO8601, IsOptional, IsString, IsUUID, Max, Min
 import { Type } from 'class-transformer';
 import { CurrentUser, RequiresFeature, Roles } from '../../common/auth/decorators';
 import type { AccessTokenPayload } from '@leadprocure/shared';
+import { LIST_FILTER_SETS, SOURCING_EVENT_STATUSES } from '@leadprocure/shared';
 import { parsePaging } from '../../common/http/paging';
+import { resolveStatusFilter } from '../../common/http/list-filter';
 import { SourcingService } from './sourcing.service';
 import { AuctionService, QnaService } from './auction.service';
 
@@ -144,8 +146,15 @@ export class SourcingController {
   constructor(private readonly sourcing: SourcingService) {}
 
   @Get()
-  list(@CurrentUser() auth: AccessTokenPayload, @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
-    return this.sourcing.list(auth, parsePaging(page, pageSize));
+  list(
+    @CurrentUser() auth: AccessTokenPayload,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.sourcing.list(auth, parsePaging(page, pageSize), resolveStatusFilter(
+      status, LIST_FILTER_SETS.events, SOURCING_EVENT_STATUSES,
+    ));
   }
 
   // Политика паузы: читают все роли покупателя (срок касается всех, кто ведёт закупку),

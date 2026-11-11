@@ -25,3 +25,7 @@ apps/web/.playwright/
 *-az-sample.*
 buyer-requests-az-gemini.mp4
 scripts/.tts-cache/
+
+# файл с номером процесса стенда подсказок (scripts/guides-stand.sh) — локальный след,
+# в репозиторий ему незачем
+.stand-api.pid

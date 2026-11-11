@@ -228,7 +228,10 @@ export class SourcingService {
 
   // ---------- shared: list & detail (RLS decides visibility) ----------
 
-  async list(auth: AccessTokenPayload, paging: Paging = parsePaging()) {
+  // `statuses` — отбор, с которым список открывают из карточки «Тендеров в работе»:
+  // считает и отбирает одно и то же множество (ACTIVE_EVENT_STATUSES), поэтому число на
+  // карточке равно `total` этого запроса. NULL значит «без отбора».
+  async list(auth: AccessTokenPayload, paging: Paging = parsePaging(), statuses: string[] | null = null) {
     const m = this.rc.manager;
     const rows = await m.query(
       `SELECT e.id, e.title, e.type, e.format, e.status, e.visibility, e.evaluation_currency,
@@ -236,8 +239,9 @@ export class SourcingService {
               count(*) OVER()::int AS total_count,
               (SELECT count(*)::int FROM bids b WHERE b.event_id = e.id AND b.state <> 'DRAFT') AS bid_count
        FROM sourcing_events e JOIN organizations o ON o.id = e.buyer_org_id
+       WHERE ($3::text[] IS NULL OR e.status::text = ANY($3::text[]))
        ORDER BY e.created_at DESC LIMIT $1 OFFSET $2`,
-      [paging.limit, paging.offset],
+      [paging.limit, paging.offset, statuses],
     );
     const page = pageFrom(rows, paging);
     if (auth.role === 'SUPPLIER_USER') {

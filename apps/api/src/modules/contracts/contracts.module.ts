@@ -13,7 +13,8 @@ import {
   Query,
 } from '@nestjs/common';
 import type { AccessTokenPayload, PoStatus } from '@leadprocure/shared';
-import { PO_STATUSES } from '@leadprocure/shared';
+import { LIST_FILTER_SETS, PO_STATUSES } from '@leadprocure/shared';
+import { monthStart, resolveStatusFilter } from '../../common/http/list-filter';
 import { pageFrom, parsePaging, Paging } from '../../common/http/paging';
 import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Min, MinLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -279,15 +280,27 @@ export class ContractsService {
       : order;
   }
 
-  async listOrders(paging: Paging = parsePaging()) {
+  // Отбор, с которым список заказов открывают из карточки: «незакрытые» (OPEN_PO_STATUSES)
+  // с рабочего стола и «принятые» за окно месяцев — из расходов на /buyer/analytics. Окно
+  // отмеряется по `p.created_at`, тем же столбцом, по которому расходы раскладывает по
+  // месяцам `spendAnalytics`; возьми другой — и список перестанет отвечать карточке.
+  async listOrders(
+    paging: Paging = parsePaging(),
+    statuses: string[] | null = null,
+    from: string | null = null,
+    to: string | null = null,
+  ) {
     const rows = await this.rc.manager.query(
       `SELECT p.*, ob.legal_name AS buyer_name, os.legal_name AS supplier_name,
               count(*) OVER()::int AS total_count
        FROM purchase_orders p
        JOIN organizations ob ON ob.id = p.buyer_org_id
        JOIN organizations os ON os.id = p.supplier_org_id
+       WHERE ($3::text[] IS NULL OR p.status::text = ANY($3::text[]))
+         AND ($4::date IS NULL OR p.created_at >= $4::timestamptz)
+         AND ($5::date IS NULL OR p.created_at < ($5::date + interval '1 month')::timestamptz)
        ORDER BY p.created_at DESC LIMIT $1 OFFSET $2`,
-      [paging.limit, paging.offset],
+      [paging.limit, paging.offset, statuses, from, to],
     );
     return pageFrom(rows, paging);
   }
@@ -641,8 +654,18 @@ export class ContractsController {
   }
 
   @Get('orders')
-  listOrders(@Query('page') page?: string, @Query('pageSize') pageSize?: string) {
-    return this.contracts.listOrders(parsePaging(page, pageSize));
+  listOrders(
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('status') status?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.contracts.listOrders(
+      parsePaging(page, pageSize),
+      resolveStatusFilter(status, LIST_FILTER_SETS.orders, PO_STATUSES),
+      monthStart(from), monthStart(to),
+    );
   }
 
   @Get('orders/:id')

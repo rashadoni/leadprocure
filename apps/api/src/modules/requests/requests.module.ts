@@ -19,6 +19,8 @@ import { Type } from 'class-transformer';
 import type { ProcurementMethod } from '@leadprocure/shared';
 import { CurrentUser, Roles } from '../../common/auth/decorators';
 import type { AccessTokenPayload } from '@leadprocure/shared';
+import { LIST_FILTER_SETS, REQUEST_STATUSES } from '@leadprocure/shared';
+import { resolveStatusFilter } from '../../common/http/list-filter';
 import { pageFrom, parsePaging, Paging } from '../../common/http/paging';
 import { BudgetsModule, BudgetsService } from '../budgets/budgets.module';
 import { RequestContextService } from '../../common/context/request-context.service';
@@ -73,7 +75,9 @@ export class RequestsService {
     private readonly cfg: AppConfig,
   ) {}
 
-  async list(q?: string, paging: Paging = parsePaging(), departmentId?: string) {
+  // `statuses` — отбор карточки «Ждут одобрения» (PENDING_REQUEST_STATUSES). Считается и
+  // отбирается одно множество, поэтому `total` здесь равен числу на карточке.
+  async list(q?: string, paging: Paging = parsePaging(), departmentId?: string, statuses: string[] | null = null) {
     const rows = await this.rc.manager.query(
       `SELECT pr.id, pr.request_no, pr.title, pr.status, pr.estimated_total_minor, pr.currency, pr.category,
               pr.method_resolved, pr.created_at, pr.department_id,
@@ -87,8 +91,9 @@ export class RequestsService {
        FROM procurement_requests pr
        WHERE ($1::text IS NULL OR pr.title ILIKE '%' || $1 || '%' OR pr.request_no ILIKE '%' || $1 || '%')
          AND ($4::uuid IS NULL OR pr.department_id = $4)
+         AND ($5::text[] IS NULL OR pr.status::text = ANY($5::text[]))
        ORDER BY pr.created_at DESC LIMIT $2 OFFSET $3`,
-      [q ?? null, paging.limit, paging.offset, departmentId ?? null],
+      [q ?? null, paging.limit, paging.offset, departmentId ?? null, statuses],
     );
     return pageFrom(rows, paging);
   }
@@ -433,8 +438,10 @@ export class RequestsController {
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @Query('departmentId') departmentId?: string,
+    @Query('status') status?: string,
   ) {
-    return this.requests.list(q, parsePaging(page, pageSize), departmentId || undefined);
+    return this.requests.list(q, parsePaging(page, pageSize), departmentId || undefined,
+      resolveStatusFilter(status, LIST_FILTER_SETS.requests, REQUEST_STATUSES));
   }
 
   // Что выйдет из этой суммы — прямая закупка или тендер, — до того как заявка создана.
